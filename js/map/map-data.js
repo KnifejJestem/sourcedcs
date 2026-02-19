@@ -104,6 +104,22 @@ function collectData(ato) {
     }
   });
 
+  // 5. SAM / Threat rings from targets list
+  (ato.targets || []).forEach(tgt => {
+    if (!tgt.coords) return;
+    const p = parseCoord(tgt.coords);
+    if (!p) return;
+    points.push({
+      ...p,
+      kind: 'threat',
+      label: tgt.name || tgt.id || '?',
+      sub: [tgt.type, tgt.elevation, tgt.engagement_range_nm ? `ER ${tgt.engagement_range_nm}nm` : null].filter(Boolean).join(' · '),
+      threatType: tgt.type,
+      engagementRange: tgt.engagement_range_nm,
+      maxAlt: tgt.max_alt_ft,
+    });
+  });
+
   return { points, routes };
 }
 

@@ -276,10 +276,30 @@ function selectMission(idx) {
       const f = el('div', 'detail-field');
       f.appendChild(el('div', 'dk', `AIM POINTS (${aim.length})`));
       aim.forEach(p => {
-        const text = (p && typeof p === 'object')
-          ? [p.name, p.coords].filter(Boolean).join(' — ')
-          : p;
-        f.appendChild(el('div', 'dmpi-entry', text));
+        if (p && typeof p === 'object') {
+          const ref = p._resolved_target;
+          let text = [p.name, p.coords].filter(Boolean).join(' — ');
+          if (p.elevation) text += ` · ${p.elevation}`;
+          const entry = el('div', 'dmpi-entry', text);
+
+          if (ref) {
+            const badge = el('span', 'target-type-badge', ref.type);
+            entry.prepend(badge);
+
+            if (ref.type === 'SAM' || ref.type === 'EWR') {
+              const samInfo = [];
+              if (ref.engagement_range_nm) samInfo.push(`ER: ${ref.engagement_range_nm}nm`);
+              if (ref.max_alt_ft) samInfo.push(`Max Alt: ${ref.max_alt_ft}ft`);
+              if (samInfo.length) {
+                entry.appendChild(el('div', 'sam-info', samInfo.join(' · ')));
+              }
+            }
+          }
+
+          f.appendChild(entry);
+        } else {
+          f.appendChild(el('div', 'dmpi-entry', p));
+        }
       });
       c.appendChild(f);
     }

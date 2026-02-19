@@ -95,6 +95,7 @@ class ATO:
     extra_flags: list = field(default_factory=list)  # ["IRL","INGAME",...]
     global_control: Optional[GlobalControl] = None
     missions: list = field(default_factory=list)
+    targets: list = field(default_factory=list)  # YAML-only target definitions
 
 # ---------------------------------------------------------------------------
 # KNOWN MISSION TYPES
@@ -350,6 +351,8 @@ def ato_to_yaml(ato: ATO) -> str:
         'global_control': gc_to_dict(ato.global_control) if ato.global_control else {},
         'missions': [mission_to_dict(m) for m in ato.missions],
     }}
+    if ato.targets:
+        doc['ato']['targets'] = ato.targets
     return yaml.dump(doc, allow_unicode=True, sort_keys=False, default_flow_style=False)
 
 # ---------------------------------------------------------------------------
@@ -382,7 +385,7 @@ def yaml_to_ato(text: str) -> ATO:
         missions.append(m)
     return ATO(irl_date=doc.get('irl_date',''), irl_time=doc.get('irl_time_zulu',''),
                ingame_start_local=doc.get('ingame_start_local'), extra_flags=doc.get('ae_flags',[]),
-               global_control=gc, missions=missions)
+               global_control=gc, missions=missions, targets=doc.get('targets', []))
 
 # ---------------------------------------------------------------------------
 # SERIALIZER
