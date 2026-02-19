@@ -284,7 +284,12 @@ function selectMission(idx) {
     if (aim?.length) {
       const f = el('div', 'detail-field');
       f.appendChild(el('div', 'dk', `AIM POINTS (${aim.length})`));
-      aim.forEach(p => f.appendChild(el('div', 'dmpi-entry', p)));
+      aim.forEach(p => {
+        const text = (p && typeof p === 'object')
+          ? [p.name, p.coords].filter(Boolean).join(' — ')
+          : p;
+        f.appendChild(el('div', 'dmpi-entry', text));
+      });
       c.appendChild(f);
     }
   });

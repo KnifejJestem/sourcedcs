@@ -131,9 +131,9 @@ function parseLoadout(raw) {
   const plusIdx = str.indexOf('+');
   const hasGun  = plusIdx !== -1;
 
-  // Air-to-air prefix: up to '+' or full string if no '+'
-  const aaStr = hasGun ? str.slice(0, plusIdx) : str;
-  const agStr = hasGun ? str.slice(plusIdx + 1) : '';
+  // Air-to-air prefix: always 3 digits; AG part follows '+' or starts at position 3
+  const aaStr = hasGun ? str.slice(0, plusIdx) : str.slice(0, 3);
+  const agStr = hasGun ? str.slice(plusIdx + 1) : str.slice(3);
 
   // Parse AA: each character is a count
   const aa = AA_SLOTS.map((slot, i) => ({
