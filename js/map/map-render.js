@@ -133,6 +133,24 @@ function drawMap(container, points, routes, geoData) {
   });
   content.appendChild(cityG);
 
+  // ── Engagement zones (drawn first, behind routes and markers) ──
+  const threatCol = movie ? '#ff4444' : '#c0392b';
+  const nmToSvg = nm => nm / 60 / vLat * H;
+  const engZoneG = svgEl('g');
+  points.filter(p => p.kind === 'threat' && p.engagementRange).forEach(p => {
+    const circ = svgEl('circle');
+    circ.setAttribute('cx', bx(p.lon).toFixed(1));
+    circ.setAttribute('cy', by(p.lat).toFixed(1));
+    circ.setAttribute('r', nmToSvg(p.engagementRange).toFixed(1));
+    circ.setAttribute('fill', movie ? 'rgba(255,68,68,0.08)' : 'rgba(192,57,43,0.07)');
+    circ.setAttribute('stroke', threatCol);
+    circ.setAttribute('stroke-width', '1.5');
+    circ.setAttribute('stroke-dasharray', '6,3');
+    circ.setAttribute('pointer-events', 'none');
+    engZoneG.appendChild(circ);
+  });
+  content.appendChild(engZoneG);
+
   // ── Per-mission route groups (lines + markers together) ──
   // Each mission gets ONE <g data-msn="key"> so we can toggle opacity atomically
   const msnGroups = {}; // key → SVGElement
@@ -174,6 +192,8 @@ function drawMap(container, points, routes, geoData) {
         cd.setAttribute('fill','#fff'); cd.setAttribute('opacity','0.9'); mg.appendChild(cd);
         mapLabel(mg, p.sub, p.label, col, 10);
       }
+      mg.style.cursor = 'pointer';
+      mg.addEventListener('click', e => { e.stopPropagation(); showPopup(p); });
       g.appendChild(mg);
     });
 
@@ -225,6 +245,28 @@ function drawMap(container, points, routes, geoData) {
   });
   content.appendChild(sharedG);
 
+  // ── Threat markers ──────────────────────────────────────
+  const threatG = svgEl('g');
+  points.filter(p => p.kind === 'threat').forEach(p => {
+    const g = svgEl('g');
+    g.setAttribute('transform', `translate(${bx(p.lon).toFixed(1)},${by(p.lat).toFixed(1)})`);
+    g.style.cursor = 'pointer';
+    [[-7,-7,7,7],[7,-7,-7,7]].forEach(([x1,y1,x2,y2]) => {
+      const l = svgEl('line');
+      l.setAttribute('x1',x1); l.setAttribute('y1',y1);
+      l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+      l.setAttribute('stroke', threatCol); l.setAttribute('stroke-width','2.5');
+      l.setAttribute('stroke-linecap','round'); g.appendChild(l);
+    });
+    const cd = svgEl('circle'); cd.setAttribute('r','5');
+    cd.setAttribute('fill','none'); cd.setAttribute('stroke',threatCol);
+    cd.setAttribute('stroke-width','1.2'); g.appendChild(cd);
+    mapLabel(g, p.label, p.sub, threatCol, 9);
+    g.addEventListener('click', e => { e.stopPropagation(); showPopup(p); });
+    threatG.appendChild(g);
+  });
+  content.appendChild(threatG);
+
   // ── Grid labels (in a separate overlay outside clip, anchored to screen edges) ──
   // Redrawn on every pan/zoom tick so they stay at canvas edges
   const lblOverlay = svgEl('g'); lblOverlay.setAttribute('pointer-events','none');
@@ -266,6 +308,52 @@ function drawMap(container, points, routes, geoData) {
   }
 
   container.appendChild(svg);
+
+  // ── Info popup ──────────────────────────────────────────
+  const popup = el('div', 'map-popup');
+  popup.style.display = 'none';
+  container.appendChild(popup);
+
+  function fmtCoord(lat, lon) {
+    const la = lat >= 0 ? `${lat.toFixed(4)}°N` : `${Math.abs(lat).toFixed(4)}°S`;
+    const lo = lon >= 0 ? `${lon.toFixed(4)}°E` : `${Math.abs(lon).toFixed(4)}°W`;
+    return `${la}  ${lo}`;
+  }
+
+  function showPopup(p) {
+    popup.innerHTML = '';
+    const kindLabel = {steer:'WAYPOINT', target:'AIM POINT', threat:'THREAT'}[p.kind] || p.kind.toUpperCase();
+    popup.appendChild(el('div', 'mp-head', kindLabel));
+    const rows = [];
+    if (p.kind === 'steer') {
+      rows.push(['NAME', p.sub]);
+      rows.push(['MISSION', p.label]);
+      if (p.msnType) rows.push(['TYPE', p.msnType]);
+    } else if (p.kind === 'target') {
+      rows.push(['NAME', p.sub]);
+      rows.push(['MISSION', p.label]);
+      if (p.msnType) rows.push(['TYPE', p.msnType]);
+    } else if (p.kind === 'threat') {
+      rows.push(['NAME', p.label]);
+      if (p.threatType) rows.push(['TYPE', p.threatType]);
+      if (p.engagementRange) rows.push(['ENG RANGE', `${p.engagementRange} NM`]);
+      if (p.maxAlt) rows.push(['MAX ALT', `${p.maxAlt.toLocaleString()} FT`]);
+    }
+    rows.push(['COORDS', fmtCoord(p.lat, p.lon)]);
+    rows.forEach(([k, v]) => {
+      const row = el('div', 'mp-row');
+      row.appendChild(el('span', 'mp-k', k));
+      row.appendChild(el('span', 'mp-v', String(v)));
+      popup.appendChild(row);
+    });
+    const closeBtn = el('button', 'mp-close', '×');
+    closeBtn.addEventListener('click', () => { popup.style.display = 'none'; });
+    popup.appendChild(closeBtn);
+    popup.style.display = 'block';
+  }
+
+  // Close popup when clicking the map background
+  svg.addEventListener('click', () => { popup.style.display = 'none'; });
 
   // ── Sidebar for route filtering ──────────────────────────
   const sidebar = el('div','map-sidebar');
@@ -314,6 +402,22 @@ function drawMap(container, points, routes, geoData) {
   const sep = el('div','map-sidebar-sep');
   sidebar.appendChild(sep);
 
+  // Overlays toggle (engagement zones)
+  const hasEngZones = points.some(p => p.kind === 'threat' && p.engagementRange);
+  if (hasEngZones) {
+    sidebar.appendChild(el('div','map-sidebar-title','OVERLAYS'));
+    let engVisible = true;
+    const engBtn = el('button','map-msn-btn map-msn-active','◯ ENG ZONES');
+    engBtn.addEventListener('click', () => {
+      engVisible = !engVisible;
+      engZoneG.setAttribute('display', engVisible ? '' : 'none');
+      engBtn.classList.toggle('map-msn-active', engVisible);
+    });
+    sidebar.appendChild(engBtn);
+    const sep2 = el('div','map-sidebar-sep');
+    sidebar.appendChild(sep2);
+  }
+
   // Legend
   sidebar.appendChild(el('div','map-sidebar-title','LEGEND'));
   const seenTypes=[...new Set(points.filter(p=>p.msnType).map(p=>p.msnType))];
@@ -327,6 +431,8 @@ function drawMap(container, points, routes, geoData) {
     [points.some(p=>p.kind==='bullseye'),'#ffb020','BULLSEYE'],
     [points.some(p=>p.kind==='airfield'),C.af,'AIRFIELD'],
     [points.some(p=>p.kind==='carrier'), C.cv,'CARRIER (EST)'],
+    [points.some(p=>p.kind==='threat'), threatCol,'THREAT'],
+    [hasEngZones, threatCol,'ENG ZONE'],
   ].forEach(([show,col,lbl])=>{
     if (!show) return;
     const row=el('div','map-legend-item');
