@@ -39,7 +39,6 @@ const WEAPON_DB = {
   // ── Air-to-Ground Missiles (AGM) ────────────────────────
   '62':  { name: 'AGM-62',  full: 'AGM-62 Walleye',                 cat: 'agm', color: '#c084fc' },
   '65':  { name: 'AGM-65',  full: 'AGM-65 Maverick',                cat: 'agm', color: '#c084fc' },
-  '84':  { name: 'AGM-84',  full: 'AGM-84 Harpoon / SLAM',          cat: 'agm', color: '#c084fc' },
   '88':  { name: 'AGM-88',  full: 'AGM-88 HARM (Anti-Radiation)',    cat: 'agm', color: '#ff8c00' },
   '114': { name: 'AGM-114', full: 'AGM-114 Hellfire',                cat: 'agm', color: '#c084fc' },
   '122': { name: 'AGM-122', full: 'AGM-122 Sidearm (Anti-Radiation)',cat: 'agm', color: '#ff8c00' },
@@ -77,7 +76,6 @@ const WEAPON_DB = {
 
   // ── Rockets (LAU pods) ───────────────────────────────────
   '3':   { name: 'LAU-3',   full: 'LAU-3 (19× Hydra 70mm)',        cat: 'rkt', color: '#ffb020' },
-  '10':  { name: 'LAU-10',  full: 'LAU-10 (4× Zuni 5in)',           cat: 'rkt', color: '#ffb020' },
   '61':  { name: 'LAU-61',  full: 'LAU-61 (19× Hydra 70mm)',        cat: 'rkt', color: '#ffb020' },
   '68':  { name: 'LAU-68',  full: 'LAU-68 (7× Hydra 70mm)',         cat: 'rkt', color: '#ffb020' },
   '131': { name: 'LAU-131', full: 'LAU-131 (7× Hydra 70mm)',        cat: 'rkt', color: '#ffb020' },
