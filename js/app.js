@@ -60,6 +60,13 @@ function setTheme(t) {
   document.querySelectorAll('.theme-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.theme === t);
   });
+  // Re-render views that use theme-dependent colors
+  if (STATE.pkg) {
+    if (STATE.pkg.ato) {
+      renderATO(STATE.pkg.ato);
+      renderMAP(STATE.pkg.ato);
+    }
+  }
 }
 
 // ── Tab routing ───────────────────────────────────────────────

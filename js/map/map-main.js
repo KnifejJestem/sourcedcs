@@ -12,12 +12,13 @@ async function renderMAP(ato) {
 
   const geoData = await loadGeoData();
 
-  const { points, routes } = collectData(ato);
+  const aco = STATE.pkg?.aco || null;
+  const { points, routes, airspaces } = collectData(ato, aco);
 
-  if (points.length === 0) {
+  if (points.length === 0 && airspaces.length === 0) {
     container.innerHTML = '<div class="map-no-coords">No coordinate data found in ATO.<br>Add <code>aim_points</code>, <code>steer_points</code>, or <code>airfields</code> to your YAML.</div>';
     return;
   }
   container.innerHTML = '';
-  drawMap(container, points, routes, geoData);
+  drawMap(container, points, routes, geoData, airspaces);
 }

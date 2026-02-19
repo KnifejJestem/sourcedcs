@@ -15,7 +15,8 @@
 //
 // Per-mission <g data-msn> groups allow opacity toggling for route filter.
 
-function drawMap(container, points, routes, geoData) {
+function drawMap(container, points, routes, geoData, airspaces) {
+  airspaces = airspaces || [];
   const movie = STATE.theme === 'movie';
   const C = movie ? {
     sea:'#06111e', land:'#131f11', border:'#2a5438',
@@ -31,6 +32,9 @@ function drawMap(container, points, routes, geoData) {
 
   const W = 1400, H = 780;
 
+  // Markers that should stay constant size when zooming
+  const constantSizeMarkers = [];
+
   // ── Bounding box of all data ──────────────────────────────
   let minLon=Infinity,maxLon=-Infinity,minLat=Infinity,maxLat=-Infinity;
   const expand = p => {
@@ -39,6 +43,15 @@ function drawMap(container, points, routes, geoData) {
   };
   points.forEach(expand);
   routes.forEach(r => r.pts.forEach(expand));
+  airspaces.forEach(a => {
+    if (a.shape === 'circle') {
+      const degOffset = (a.radiusNm || 5) / 60;
+      expand({ lon: a.lon - degOffset, lat: a.lat - degOffset });
+      expand({ lon: a.lon + degOffset, lat: a.lat + degOffset });
+    } else if (a.shape === 'polygon' && a.boundary) {
+      a.boundary.forEach(expand);
+    }
+  });
 
   const lSpan = Math.max(maxLon-minLon,1.5), aSpan = Math.max(maxLat-minLat,1.5);
   const lMarg = Math.max(lSpan*0.28,1.5),    aMarg = Math.max(aSpan*0.28,1.5);
@@ -151,6 +164,96 @@ function drawMap(container, points, routes, geoData) {
   });
   content.appendChild(engZoneG);
 
+  // ── ACO airspace zones (orbits, ROZ, restricted zones, etc.) ──
+  const airspaceColors = {
+    ROZ:   movie ? '#ff4444' : '#c0392b',
+    ORBIT: movie ? '#4fc3f7' : '#1a3a6b',
+    MEZ:   movie ? '#c084fc' : '#4a1a6b',
+    NFZ:   movie ? '#ff4444' : '#9b1c1c',
+    TRA:   movie ? '#ffb020' : '#7c5000',
+  };
+  const defaultAirspaceCol = movie ? '#6aaa7a' : '#5a6a60';
+  const airspaceG = svgEl('g');
+  airspaces.forEach(a => {
+    const col = airspaceColors[(a.type || '').toUpperCase()] || defaultAirspaceCol;
+    if (a.shape === 'circle') {
+      const fillOpacity = movie ? 0.08 : 0.07;
+      // Semi-transparent fill circle
+      const fillCirc = svgEl('circle');
+      fillCirc.setAttribute('cx', bx(a.lon).toFixed(1));
+      fillCirc.setAttribute('cy', by(a.lat).toFixed(1));
+      fillCirc.setAttribute('r', nmToSvg(a.radiusNm || 5).toFixed(1));
+      fillCirc.setAttribute('fill', col);
+      fillCirc.setAttribute('opacity', String(fillOpacity));
+      fillCirc.style.cursor = 'pointer';
+      fillCirc.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
+      airspaceG.appendChild(fillCirc);
+      // Stroke-only circle on top
+      const circ = svgEl('circle');
+      circ.setAttribute('cx', bx(a.lon).toFixed(1));
+      circ.setAttribute('cy', by(a.lat).toFixed(1));
+      circ.setAttribute('r', nmToSvg(a.radiusNm || 5).toFixed(1));
+      circ.setAttribute('fill', 'none');
+      circ.setAttribute('stroke', col);
+      circ.setAttribute('stroke-width', '1.8');
+      circ.setAttribute('stroke-dasharray', '8,4');
+      circ.style.cursor = 'pointer';
+      circ.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
+      airspaceG.appendChild(circ);
+      // Label at center
+      const lbl = svgEl('text');
+      lbl.setAttribute('x', bx(a.lon).toFixed(1));
+      lbl.setAttribute('y', by(a.lat).toFixed(1));
+      lbl.setAttribute('text-anchor', 'middle');
+      lbl.setAttribute('dominant-baseline', 'central');
+      lbl.setAttribute('font-size', '8');
+      lbl.setAttribute('font-family', 'IBM Plex Mono,monospace');
+      lbl.setAttribute('font-weight', '600');
+      lbl.setAttribute('fill', col);
+      lbl.setAttribute('opacity', '0.8');
+      lbl.setAttribute('pointer-events', 'none');
+      lbl.textContent = `${a.name || '?'} (${(a.type || '?').toUpperCase()})`;
+      airspaceG.appendChild(lbl);
+    } else if (a.shape === 'polygon' && a.boundary) {
+      const fillOpacity = movie ? 0.08 : 0.07;
+      const pathD = a.boundary.map((pt, i) =>
+        `${i ? 'L' : 'M'}${bx(pt.lon).toFixed(1)},${by(pt.lat).toFixed(1)}`).join(' ') + ' Z';
+      const fill = svgEl('path');
+      fill.setAttribute('d', pathD);
+      fill.setAttribute('fill', col);
+      fill.setAttribute('opacity', String(fillOpacity));
+      fill.style.cursor = 'pointer';
+      fill.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
+      airspaceG.appendChild(fill);
+      const stroke = svgEl('path');
+      stroke.setAttribute('d', pathD);
+      stroke.setAttribute('fill', 'none');
+      stroke.setAttribute('stroke', col);
+      stroke.setAttribute('stroke-width', '1.8');
+      stroke.setAttribute('stroke-dasharray', '8,4');
+      stroke.style.cursor = 'pointer';
+      stroke.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
+      airspaceG.appendChild(stroke);
+      // Label at centroid
+      const cx = a.boundary.reduce((s, pt) => s + bx(pt.lon), 0) / a.boundary.length;
+      const cy = a.boundary.reduce((s, pt) => s + by(pt.lat), 0) / a.boundary.length;
+      const lbl = svgEl('text');
+      lbl.setAttribute('x', cx.toFixed(1));
+      lbl.setAttribute('y', cy.toFixed(1));
+      lbl.setAttribute('text-anchor', 'middle');
+      lbl.setAttribute('dominant-baseline', 'central');
+      lbl.setAttribute('font-size', '8');
+      lbl.setAttribute('font-family', 'IBM Plex Mono,monospace');
+      lbl.setAttribute('font-weight', '600');
+      lbl.setAttribute('fill', col);
+      lbl.setAttribute('opacity', '0.8');
+      lbl.setAttribute('pointer-events', 'none');
+      lbl.textContent = `${a.name || '?'} (${(a.type || '?').toUpperCase()})`;
+      airspaceG.appendChild(lbl);
+    }
+  });
+  content.appendChild(airspaceG);
+
   // ── Per-mission route groups (lines + markers together) ──
   // Each mission gets ONE <g data-msn="key"> so we can toggle opacity atomically
   const msnGroups = {}; // key → SVGElement
@@ -176,7 +279,9 @@ function drawMap(container, points, routes, geoData) {
     // Steer + target markers belonging to this mission
     points.filter(p=>(p.kind==='steer'||p.kind==='target') && p.mission?.mission_number===r.msnNum && p.mission?.callsign===r.callsign).forEach(p => {
       const mg=svgEl('g');
-      mg.setAttribute('transform',`translate(${bx(p.lon).toFixed(1)},${by(p.lat).toFixed(1)})`);
+      const mx = bx(p.lon).toFixed(1), my = by(p.lat).toFixed(1);
+      mg.setAttribute('transform',`translate(${mx},${my})`);
+      mg._baseX = mx; mg._baseY = my;
       if (p.kind==='steer') {
         const col=p.color;
         const circ=svgEl('circle'); circ.setAttribute('r','4');
@@ -194,6 +299,7 @@ function drawMap(container, points, routes, geoData) {
       }
       mg.style.cursor = 'pointer';
       mg.addEventListener('click', e => { e.stopPropagation(); showPopup(p); });
+      constantSizeMarkers.push(mg);
       g.appendChild(mg);
     });
 
@@ -204,7 +310,9 @@ function drawMap(container, points, routes, geoData) {
   const sharedG = svgEl('g');
   points.filter(p=>['bullseye','airfield','carrier'].includes(p.kind)).forEach(p => {
     const g=svgEl('g');
-    g.setAttribute('transform',`translate(${bx(p.lon).toFixed(1)},${by(p.lat).toFixed(1)})`);
+    const mx = bx(p.lon).toFixed(1), my = by(p.lat).toFixed(1);
+    g.setAttribute('transform',`translate(${mx},${my})`);
+    g._baseX = mx; g._baseY = my;
 
     if (p.kind==='bullseye') {
       const col='#ffb020';
@@ -241,6 +349,9 @@ function drawMap(container, points, routes, geoData) {
       });
       mapLabel(g, p.label, p.sub, col, 14);
     }
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', e => { e.stopPropagation(); showPopup(p); });
+    constantSizeMarkers.push(g);
     sharedG.appendChild(g);
   });
   content.appendChild(sharedG);
@@ -249,7 +360,9 @@ function drawMap(container, points, routes, geoData) {
   const threatG = svgEl('g');
   points.filter(p => p.kind === 'threat').forEach(p => {
     const g = svgEl('g');
-    g.setAttribute('transform', `translate(${bx(p.lon).toFixed(1)},${by(p.lat).toFixed(1)})`);
+    const mx = bx(p.lon).toFixed(1), my = by(p.lat).toFixed(1);
+    g.setAttribute('transform', `translate(${mx},${my})`);
+    g._baseX = mx; g._baseY = my;
     g.style.cursor = 'pointer';
     [[-7,-7,7,7],[7,-7,-7,7]].forEach(([x1,y1,x2,y2]) => {
       const l = svgEl('line');
@@ -263,6 +376,7 @@ function drawMap(container, points, routes, geoData) {
     cd.setAttribute('stroke-width','1.2'); g.appendChild(cd);
     mapLabel(g, p.label, p.sub, threatCol, 9);
     g.addEventListener('click', e => { e.stopPropagation(); showPopup(p); });
+    constantSizeMarkers.push(g);
     threatG.appendChild(g);
   });
   content.appendChild(threatG);
@@ -322,7 +436,11 @@ function drawMap(container, points, routes, geoData) {
 
   function showPopup(p) {
     popup.innerHTML = '';
-    const kindLabel = {steer:'WAYPOINT', target:'AIM POINT', threat:'THREAT'}[p.kind] || p.kind.toUpperCase();
+    const kindLabel = {
+      steer:'WAYPOINT', target:'AIM POINT', threat:'THREAT',
+      bullseye:'BULLSEYE', airfield:'AIRFIELD', carrier:'CARRIER',
+      airspace:'AIRSPACE',
+    }[p.kind] || p.kind.toUpperCase();
     popup.appendChild(el('div', 'mp-head', kindLabel));
     const rows = [];
     if (p.kind === 'steer') {
@@ -338,8 +456,28 @@ function drawMap(container, points, routes, geoData) {
       if (p.threatType) rows.push(['TYPE', p.threatType]);
       if (p.engagementRange) rows.push(['ENG RANGE', `${p.engagementRange} NM`]);
       if (p.maxAlt) rows.push(['MAX ALT', `${p.maxAlt.toLocaleString()} FT`]);
+    } else if (p.kind === 'bullseye') {
+      rows.push(['NAME', p.label]);
+    } else if (p.kind === 'airfield') {
+      rows.push(['ICAO', p.label]);
+      if (p.sub) rows.push(['INFO', p.sub]);
+      if (p.name) rows.push(['NAME', p.name]);
+    } else if (p.kind === 'carrier') {
+      rows.push(['NAME', p.label]);
+      if (p.sub) rows.push(['STATUS', p.sub]);
+      if (p.callsign) rows.push(['CALLSIGN', p.callsign]);
+    } else if (p.kind === 'airspace') {
+      rows.push(['NAME', p.name || '?']);
+      rows.push(['TYPE', (p.type || '?').toUpperCase()]);
+      if (p.altLower != null || p.altUpper != null) rows.push(['ALTITUDE', `${p.altLower != null ? p.altLower : '?'} → ${p.altUpper != null ? p.altUpper : '?'}`]);
+      if (p.timeFrom != null || p.timeTo != null) rows.push(['WINDOW', `${p.timeFrom != null ? p.timeFrom : '?'} – ${p.timeTo != null ? p.timeTo : '?'}`]);
+      if (p.agency) rows.push(['AGENCY', p.agency]);
+      if (p.freq) rows.push(['FREQ', p.freq + ' MHz']);
+      if (p.radiusNm) rows.push(['RADIUS', p.radiusNm + ' NM']);
+      if (p.missions?.length) rows.push(['MISSIONS', p.missions.join(', ')]);
+      if (p.notes) rows.push(['NOTES', p.notes]);
     }
-    rows.push(['COORDS', fmtCoord(p.lat, p.lon)]);
+    if (p.lat != null && p.lon != null) rows.push(['COORDS', fmtCoord(p.lat, p.lon)]);
     rows.forEach(([k, v]) => {
       const row = el('div', 'mp-row');
       row.appendChild(el('span', 'mp-k', k));
@@ -402,18 +540,31 @@ function drawMap(container, points, routes, geoData) {
   const sep = el('div','map-sidebar-sep');
   sidebar.appendChild(sep);
 
-  // Overlays toggle (engagement zones)
+  // Overlays toggle (engagement zones + airspaces)
   const hasEngZones = points.some(p => p.kind === 'threat' && p.engagementRange);
-  if (hasEngZones) {
+  const hasAirspaces = airspaces.length > 0;
+  if (hasEngZones || hasAirspaces) {
     sidebar.appendChild(el('div','map-sidebar-title','OVERLAYS'));
-    let engVisible = true;
-    const engBtn = el('button','map-msn-btn map-msn-active','◯ ENG ZONES');
-    engBtn.addEventListener('click', () => {
-      engVisible = !engVisible;
-      engZoneG.setAttribute('display', engVisible ? '' : 'none');
-      engBtn.classList.toggle('map-msn-active', engVisible);
-    });
-    sidebar.appendChild(engBtn);
+    if (hasEngZones) {
+      let engVisible = true;
+      const engBtn = el('button','map-msn-btn map-msn-active','◯ ENG ZONES');
+      engBtn.addEventListener('click', () => {
+        engVisible = !engVisible;
+        engZoneG.setAttribute('display', engVisible ? '' : 'none');
+        engBtn.classList.toggle('map-msn-active', engVisible);
+      });
+      sidebar.appendChild(engBtn);
+    }
+    if (hasAirspaces) {
+      let airspaceVisible = true;
+      const airspaceBtn = el('button','map-msn-btn map-msn-active','◯ AIRSPACES');
+      airspaceBtn.addEventListener('click', () => {
+        airspaceVisible = !airspaceVisible;
+        airspaceG.setAttribute('display', airspaceVisible ? '' : 'none');
+        airspaceBtn.classList.toggle('map-msn-active', airspaceVisible);
+      });
+      sidebar.appendChild(airspaceBtn);
+    }
     const sep2 = el('div','map-sidebar-sep');
     sidebar.appendChild(sep2);
   }
@@ -440,6 +591,15 @@ function drawMap(container, points, routes, geoData) {
     row.appendChild(dot); row.appendChild(el('span','map-legend-lbl',lbl));
     sidebar.appendChild(row);
   });
+  // Airspace legend entries
+  const seenAirspaceTypes = [...new Set(airspaces.map(a => (a.type || 'OTHER').toUpperCase()))];
+  seenAirspaceTypes.forEach(t => {
+    const col = airspaceColors[t] || defaultAirspaceCol;
+    const row = el('div','map-legend-item');
+    const dot = el('span','map-legend-dot'); dot.style.background = col;
+    row.appendChild(dot); row.appendChild(el('span','map-legend-lbl', t));
+    sidebar.appendChild(row);
+  });
 
   const resetBtn = el('button','map-msn-btn map-reset-btn','⊙ RESET VIEW');
   sidebar.appendChild(resetBtn);
@@ -450,6 +610,11 @@ function drawMap(container, points, routes, geoData) {
 
   function applyTransform() {
     content.setAttribute('transform',`translate(${state.tx.toFixed(2)},${state.ty.toFixed(2)}) scale(${state.sc.toFixed(5)})`);
+    // Apply inverse scaling to markers so they stay constant pixel size
+    const invSc = 1 / state.sc;
+    constantSizeMarkers.forEach(m => {
+      m.setAttribute('transform', `translate(${m._baseX},${m._baseY}) scale(${invSc.toFixed(5)})`);
+    });
     redrawGridLabels(state.tx, state.ty, state.sc);
   }
 
