@@ -177,19 +177,8 @@ function drawMap(container, points, routes, geoData, airspaces) {
   airspaces.forEach(a => {
     const col = airspaceColors[(a.type || '').toUpperCase()] || defaultAirspaceCol;
     if (a.shape === 'circle') {
-      const circ = svgEl('circle');
-      circ.setAttribute('cx', bx(a.lon).toFixed(1));
-      circ.setAttribute('cy', by(a.lat).toFixed(1));
-      circ.setAttribute('r', nmToSvg(a.radiusNm || 5).toFixed(1));
-      circ.setAttribute('fill', col.replace(')', ',0.08)').replace('rgb(', 'rgba(').replace('#', ''));
-      // Convert hex to rgba fill
       const fillOpacity = movie ? 0.08 : 0.07;
-      circ.setAttribute('fill', 'none');
-      circ.setAttribute('stroke', col);
-      circ.setAttribute('stroke-width', '1.8');
-      circ.setAttribute('stroke-dasharray', '8,4');
-      circ.style.cursor = 'pointer';
-      // Add semi-transparent fill
+      // Semi-transparent fill circle
       const fillCirc = svgEl('circle');
       fillCirc.setAttribute('cx', bx(a.lon).toFixed(1));
       fillCirc.setAttribute('cy', by(a.lat).toFixed(1));
@@ -199,6 +188,16 @@ function drawMap(container, points, routes, geoData, airspaces) {
       fillCirc.style.cursor = 'pointer';
       fillCirc.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
       airspaceG.appendChild(fillCirc);
+      // Stroke-only circle on top
+      const circ = svgEl('circle');
+      circ.setAttribute('cx', bx(a.lon).toFixed(1));
+      circ.setAttribute('cy', by(a.lat).toFixed(1));
+      circ.setAttribute('r', nmToSvg(a.radiusNm || 5).toFixed(1));
+      circ.setAttribute('fill', 'none');
+      circ.setAttribute('stroke', col);
+      circ.setAttribute('stroke-width', '1.8');
+      circ.setAttribute('stroke-dasharray', '8,4');
+      circ.style.cursor = 'pointer';
       circ.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
       airspaceG.appendChild(circ);
       // Label at center
@@ -470,8 +469,8 @@ function drawMap(container, points, routes, geoData, airspaces) {
     } else if (p.kind === 'airspace') {
       rows.push(['NAME', p.name || '?']);
       rows.push(['TYPE', (p.type || '?').toUpperCase()]);
-      if (p.altLower || p.altUpper) rows.push(['ALTITUDE', `${p.altLower || '?'} → ${p.altUpper || '?'}`]);
-      if (p.timeFrom || p.timeTo) rows.push(['WINDOW', `${p.timeFrom || '?'} – ${p.timeTo || '?'}`]);
+      if (p.altLower != null || p.altUpper != null) rows.push(['ALTITUDE', `${p.altLower != null ? p.altLower : '?'} → ${p.altUpper != null ? p.altUpper : '?'}`]);
+      if (p.timeFrom != null || p.timeTo != null) rows.push(['WINDOW', `${p.timeFrom != null ? p.timeFrom : '?'} – ${p.timeTo != null ? p.timeTo : '?'}`]);
       if (p.agency) rows.push(['AGENCY', p.agency]);
       if (p.freq) rows.push(['FREQ', p.freq + ' MHz']);
       if (p.radiusNm) rows.push(['RADIUS', p.radiusNm + ' NM']);
