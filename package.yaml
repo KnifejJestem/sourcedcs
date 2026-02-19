@@ -1,0 +1,189 @@
+# ============================================================
+# ATO BRIEF — Package File  (template)
+# Load this single file into the viewer via "LOAD PACKAGE"
+#
+# Top-level keys (all optional, ato is primary):
+#   ato:      Air Tasking Order
+#   aco:      Airspace Control Order
+#   spins:    Special Instructions
+#   comms:    Frequency Preset Table
+# ============================================================
+
+ato:
+  irl_date: 11/01/2026
+  irl_time_zulu: 1900Z
+  ingame_start_local: 0000L
+  ae_flags: [IRL, INGAME]
+
+  global_control:
+    primary_freq_mhz: '260.0'
+    controlling_unit: SCREWTOP
+    aircraft_type: E-3
+    bullseye:
+      name: COYOTE
+      coords: "N26deg51'19.09\" E56deg21'36.93\""
+
+  # ── Airfields used for deploy / recovery ─────────────────
+  # Plotted on map with a runway-cross symbol.
+  # role: deploy | recovery | alternate | divert  (or any string)
+  # elevation_ft: field elevation in feet (displayed as sub-label)
+  airfields:
+    - icao: OMAM
+      name: Al Dhafra AB
+      role: deploy
+      coords: "N24deg14'36\" E054deg27'07\""
+      elevation_ft: 77
+    - icao: OMSJ
+      name: Sharjah Intl
+      role: recovery
+      coords: "N25deg19'42\" E055deg31'06\""
+      elevation_ft: 111
+    - icao: OTBH
+      name: Al Udeid AB
+      role: alternate
+      coords: "N25deg06'56\" E051deg18'58\""
+      elevation_ft: 130
+
+  # ── Carrier positions (estimated) ────────────────────────
+  # Carriers move — these are planning estimates only.
+  # deploy_coords:   position at start of ATO window
+  # recovery_coords: position at end / recovery window
+  # Both are plotted on the map with an anchor symbol.
+  # Elevation is always 0 (surface) — omitted for carriers.
+  carriers:
+    - name: USS ROOSEVELT
+      callsign: ROUGH RIDER
+      deploy_coords:  "N24deg30'00\" E059deg15'00\""
+      recovery_coords: "N24deg45'00\" E059deg30'00\""
+
+  missions:
+    - unit: 510vFS
+      home_base_icao: OMAM
+      mission_number: MSN3266
+      callsign: FALCON5
+      mission_type: CAP
+      deploy_location_icao: OMAM
+      aar_location_icao: OMAM
+      aircraft:
+        count: 2
+        type: F16C
+        loadout: '501+'
+      target:
+        location: KHASAB AREA
+        not_earlier_than: '2040'
+        not_later_than: '2230'
+        # Aim points — where weapons are released / where to ID the target.
+        # Can be plain coord strings or objects with name + coords.
+        aim_points:
+          - coords: "N26deg22'00\" E056deg14'00\""
+            name: AP1
+          - coords: "N26deg25'00\" E056deg18'00\""
+            name: AP2
+      # Steer points — route waypoints. Plotted as small hollow circles
+      # with dashed lines connecting them in order. Distinct from aim points.
+      steer_points:
+        - coords: "N24deg30'00\" E056deg00'00\""
+          name: SP1
+        - coords: "N25deg15'00\" E056deg05'00\""
+          name: SP2
+      control:
+        primary_freq_mhz: '260.0'
+        secondary_freq_mhz: '134.0'
+        net_name: SCREWTOP
+      refuel:
+        tanker_callsign: ARCO4
+        ar_track: AR394
+        altitude: FL240
+        not_earlier_than: '2143'
+        not_later_than: '2150'
+
+aco:
+  id: ACO-XX-XX
+  operation: YOUR OPERATION
+  ato_day: 11/01/2026
+  timezone: UTC
+  classification: UNCLAS
+  acms:
+    - name: CAP-W
+      type: ROZ
+      shape: CIRCLE
+      missions: [MSN3266]
+      alt_lower: FL200
+      alt_upper: FL400
+      time_from: 1900Z
+      time_to: 2300Z
+      control_agency: SCREWTOP
+      control_freq_mhz: 260.000
+      center_coords: "N26deg51'00\" E056deg22'00\""
+      radius_nm: 20
+
+spins:
+  operation: YOUR OPERATION
+  ato_day: 11/01/2026
+  version: '1.0'
+  classification: UNCLAS
+
+  c1_command_control:
+    tactical_control:
+      primary_awacs:   { callsign: SCREWTOP, freq_mhz: 260.000 }
+      secondary_awacs: { callsign: BACKUP,   freq_mhz: 134.000 }
+    airspace_control: Via OMAM MTMA
+    package_lead: FALCON51
+    strike_lead:  FALCON51
+
+  c3_iff:
+    mode: 3
+    note: Squawk assigned code. M4 mandatory before departure.
+    assignments:
+      - { mission: MSN3266, code: '4811' }
+
+  c4_roe:
+    pid:
+      required: true
+      note: PID required prior to weapons release.
+      valid_sources:
+        - NCTR / radar profile
+        - Correlated track from CRC/AWACS
+        - Visual ID (VID)
+    bvr:
+      authorized: true
+    surface_attack:
+      authorized_targets: Assigned ATO targets only
+      dynamic_targeting:  Requires CAOC approval unless self-defence
+    civilian_traffic: No Factor
+
+  c7_lost_comms:
+    loss_awacs:
+      action: Default to package commander control
+      abort_condition: Abort if comms not restored within 5 minutes
+    loss_package:
+      action: Continue if task and ROE remain clear
+      abort_condition: Abort in degraded SA
+    loss_intraflight:
+      action: Continue assigned task. Reestablish post-target.
+      abort_condition: Abort if comms cannot be reestablished
+
+  c8_abort_criteria:
+    - Target PID cannot be confirmed
+    - Fuel state prevents safe recovery
+    - Major technical faults
+
+  c9_sar:     { status: Not Simulated }
+  c11_safety: { minimum_separation: 5NM / 2000ft outside tactical formation }
+
+comms:
+  operation: YOUR OPERATION
+  ato_day: 11/01/2026
+  classification: UNCLAS
+  wing_lead: FALCON51
+
+  uhf_presets:
+    1:  { callsign: GUARD,        freq_mhz: 243.000, role: Emergency }
+    2:  { callsign: PACKAGE,      freq_mhz: 260.000, role: Package primary }
+    3:  { callsign: INTRAFLIGHT,  freq_mhz: 261.500, role: Intraflight }
+    4:  { callsign: SPARE,        freq_mhz: null,    role: null }
+    5:  { callsign: SPARE,        freq_mhz: null,    role: null }
+
+  vhf_presets:
+    1:  { callsign: GUARD,        freq_mhz: 121.500, role: Emergency }
+    2:  { callsign: SPARE,        freq_mhz: null,    role: null }
