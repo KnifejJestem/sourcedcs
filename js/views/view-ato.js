@@ -76,15 +76,6 @@ function renderMissionCards(missions) {
       body.appendChild(r);
     }
     cr('ACFT',   (m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '?'), 'acft');
-    // Loadout chip — compact visual badge row
-    if (m.aircraft?.loadout) {
-      const chip = loadoutChip(m.aircraft.loadout);
-      if (chip) {
-        const r = el('div', 'card-row lo-chip-row'); r.appendChild(chip); body.appendChild(r);
-      } else {
-        cr('LOADOUT', m.aircraft.loadout, 'sm');
-      }
-    }
     cr('TARGET', m.target?.location || '—');
     cr('WINDOW', `${fmtZ(m.target?.not_earlier_than)} → ${fmtZ(m.target?.not_later_than)}`, 'time');
     if (m.control?.primary_freq_mhz)
