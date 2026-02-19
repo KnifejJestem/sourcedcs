@@ -5,9 +5,10 @@
 'use strict';
 
 // ── Collect all plottable data ─────────────────────────────
-function collectData(ato) {
+function collectData(ato, aco) {
   const points = [];
   const routes = []; // [{msnKey, callsign, msnNumber, color, segments:[{from,to,style}]}]
+  const airspaces = []; // [{kind:'airspace', shape, ...}]
   const missions = ato.missions || [];
 
   // Build a lookup: icao → {lat,lon} for airfields + carriers
@@ -87,7 +88,8 @@ function collectData(ato) {
     const p = parseCoord(af.coords);
     if (p) points.push({ ...p, kind:'airfield',
       label: af.icao || af.name || '?',
-      sub: [af.role, af.elevation_ft != null ? af.elevation_ft+'ft' : null].filter(Boolean).join(' · ') });
+      sub: [af.role, af.elevation_ft != null ? af.elevation_ft+'ft' : null].filter(Boolean).join(' · '),
+      name: af.name });
   });
 
   // Carriers
@@ -95,12 +97,14 @@ function collectData(ato) {
     if (cv.deploy_coords) {
       const p = parseCoord(cv.deploy_coords);
       if (p) points.push({ ...p, kind:'carrier',
-        label: cv.name || cv.callsign || 'CVN', sub: 'DEPLOY EST' });
+        label: cv.name || cv.callsign || 'CVN', sub: 'DEPLOY EST',
+        callsign: cv.callsign });
     }
     if (cv.recovery_coords) {
       const p = parseCoord(cv.recovery_coords);
       if (p) points.push({ ...p, kind:'carrier',
-        label: cv.name || cv.callsign || 'CVN', sub: 'RECOVERY EST' });
+        label: cv.name || cv.callsign || 'CVN', sub: 'RECOVERY EST',
+        callsign: cv.callsign });
     }
   });
 
@@ -120,7 +124,54 @@ function collectData(ato) {
     });
   });
 
-  return { points, routes };
+  // 6. ACO airspace measures (orbits, ROZ, restricted zones, etc.)
+  (aco?.acms || []).forEach(acm => {
+    if (acm.center_coords) {
+      const center = parseCoord(acm.center_coords);
+      if (center) {
+        airspaces.push({
+          ...center,
+          kind: 'airspace',
+          shape: 'circle',
+          radiusNm: acm.radius_nm || 5,
+          name: acm.name,
+          type: acm.type,
+          altLower: acm.alt_lower,
+          altUpper: acm.alt_upper,
+          timeFrom: acm.time_from,
+          timeTo: acm.time_to,
+          agency: acm.control_agency,
+          freq: acm.control_freq_mhz,
+          notes: acm.notes,
+          missions: acm.missions,
+        });
+      }
+    }
+    if (acm.boundary?.length) {
+      const pts = acm.boundary.map(c => parseCoord(c)).filter(Boolean);
+      if (pts.length >= 3) {
+        airspaces.push({
+          lat: pts.reduce((s, pt) => s + pt.lat, 0) / pts.length,
+          lon: pts.reduce((s, pt) => s + pt.lon, 0) / pts.length,
+          kind: 'airspace',
+          shape: 'polygon',
+          boundary: pts,
+          name: acm.name,
+          type: acm.type,
+          altLower: acm.alt_lower,
+          altUpper: acm.alt_upper,
+          timeFrom: acm.time_from,
+          timeTo: acm.time_to,
+          agency: acm.control_agency,
+          freq: acm.control_freq_mhz,
+          notes: acm.notes,
+          missions: acm.missions,
+        });
+      }
+    }
+  });
+
+  return { points, routes, airspaces };
 }
 
 // ── Coord parser ───────────────────────────────────────────
