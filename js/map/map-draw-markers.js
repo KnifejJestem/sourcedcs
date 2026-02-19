@@ -14,6 +14,11 @@ function drawSharedMarkers(ctx, points, showPopup) {
     g.setAttribute('transform',`translate(${mx},${my})`);
     g._baseX = mx; g._baseY = my;
 
+    // Transparent hit circle for reliable clicking
+    const hit=svgEl('circle'); hit.setAttribute('r','18');
+    hit.setAttribute('fill','transparent'); hit.setAttribute('stroke','none');
+    g.appendChild(hit);
+
     if (p.kind==='bullseye') {
       const col='#ffb020';
       [[-15,0,15,0],[0,-15,0,15]].forEach(([x1,y1,x2,y2])=>{
@@ -67,6 +72,10 @@ function drawThreatMarkers(ctx, points, threatCol, showPopup) {
     g.setAttribute('transform', `translate(${mx},${my})`);
     g._baseX = mx; g._baseY = my;
     g.style.cursor = 'pointer';
+    // Transparent hit circle for reliable clicking
+    const hit = svgEl('circle'); hit.setAttribute('r','18');
+    hit.setAttribute('fill','transparent'); hit.setAttribute('stroke','none');
+    g.appendChild(hit);
     [[-7,-7,7,7],[7,-7,-7,7]].forEach(([x1,y1,x2,y2]) => {
       const l = svgEl('line');
       l.setAttribute('x1',x1); l.setAttribute('y1',y1);

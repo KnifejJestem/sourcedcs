@@ -138,7 +138,8 @@ function drawMap(container, points, routes, geoData, airspaces) {
 
   // ── Markers ──────────────────────────────────────────────
   content.appendChild(drawSharedMarkers(ctx, points, showPopup));
-  content.appendChild(drawThreatMarkers(ctx, points, threatCol, showPopup));
+  const threatG = drawThreatMarkers(ctx, points, threatCol, showPopup);
+  content.appendChild(threatG);
 
   // ── Grid label overlay ───────────────────────────────────
   const gridLabels = createGridLabelOverlay(ctx);
@@ -155,7 +156,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
   // ── Sidebar ──────────────────────────────────────────────
   const sidebar = createSidebar({
     routes, msnGroups, points, airspaces,
-    engZoneG, airspaceG,
+    engZoneG, airspaceG, threatG,
     C, threatCol,
     airspaceColors: airResult.colors,
     defaultAirspaceCol: airResult.defaultCol,

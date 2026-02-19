@@ -129,7 +129,7 @@ function createGridLabelOverlay(ctx) {
 // ── Sidebar / Legend ─────────────────────────────────────
 // opts = {
 //   routes, msnGroups, points, airspaces,
-//   engZoneG, airspaceG,
+//   engZoneG, airspaceG, threatG,
 //   C, threatCol, airspaceColors, defaultAirspaceCol,
 // }
 // Returns the sidebar HTMLElement with everything wired.
@@ -138,24 +138,29 @@ function createSidebar(opts) {
 
   sidebar.appendChild(el('div','map-sidebar-title','ROUTES'));
 
-  let highlighted = null; // null=all visible, key=solo
+  let highlighted = null; // null=all visible, '__none__'=all hidden, key=solo
 
   function applyVisibility() {
     Object.entries(opts.msnGroups).forEach(([key, g]) => {
       if (highlighted === null) {
         g.setAttribute('opacity','1');
+        g.removeAttribute('pointer-events');
       } else if (highlighted === key) {
         g.setAttribute('opacity','1');
+        g.removeAttribute('pointer-events');
       } else {
         g.setAttribute('opacity', String(opts.C.dim));
+        g.setAttribute('pointer-events', 'none');
       }
     });
     sidebar.querySelectorAll('.map-msn-btn').forEach(btn => {
       const k = btn.dataset.key;
+      if (!k) return;
       btn.classList.toggle('map-msn-active',  highlighted===k);
       btn.classList.toggle('map-msn-dimmed',  highlighted!==null && highlighted!==k);
     });
     sidebar.querySelector('.map-all-btn')?.classList.toggle('map-msn-active', highlighted===null);
+    sidebar.querySelector('.map-none-btn')?.classList.toggle('map-msn-active', highlighted==='__none__');
   }
 
   opts.routes.forEach(r => {
@@ -176,6 +181,10 @@ function createSidebar(opts) {
   allBtn.addEventListener('click',()=>{ highlighted=null; applyVisibility(); });
   sidebar.appendChild(allBtn);
 
+  const noneBtn = el('button','map-msn-btn map-none-btn','◇ NONE');
+  noneBtn.addEventListener('click',()=>{ highlighted='__none__'; applyVisibility(); });
+  sidebar.appendChild(noneBtn);
+
   const sep = el('div','map-sidebar-sep');
   sidebar.appendChild(sep);
 
@@ -190,6 +199,7 @@ function createSidebar(opts) {
       engBtn.addEventListener('click', () => {
         engVisible = !engVisible;
         opts.engZoneG.setAttribute('display', engVisible ? '' : 'none');
+        if (opts.threatG) opts.threatG.setAttribute('display', engVisible ? '' : 'none');
         engBtn.classList.toggle('map-msn-active', engVisible);
       });
       sidebar.appendChild(engBtn);

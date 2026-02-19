@@ -67,9 +67,14 @@ function drawAirspaces(ctx, airspaces, showPopup) {
       circ.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
       airspaceG.appendChild(circ);
       // Label at center
+      const lblG = svgEl('g');
+      const lblX = ctx.bx(a.lon).toFixed(1);
+      const lblY = ctx.by(a.lat).toFixed(1);
+      lblG.setAttribute('transform', `translate(${lblX},${lblY})`);
+      lblG._baseX = lblX; lblG._baseY = lblY;
       const lbl = svgEl('text');
-      lbl.setAttribute('x', ctx.bx(a.lon).toFixed(1));
-      lbl.setAttribute('y', ctx.by(a.lat).toFixed(1));
+      lbl.setAttribute('x', 0);
+      lbl.setAttribute('y', 0);
       lbl.setAttribute('text-anchor', 'middle');
       lbl.setAttribute('dominant-baseline', 'central');
       lbl.setAttribute('font-size', '8');
@@ -79,7 +84,9 @@ function drawAirspaces(ctx, airspaces, showPopup) {
       lbl.setAttribute('opacity', '0.8');
       lbl.setAttribute('pointer-events', 'none');
       lbl.textContent = `${a.name || '?'} (${(a.type || '?').toUpperCase()})`;
-      airspaceG.appendChild(lbl);
+      lblG.appendChild(lbl);
+      ctx.constantSizeMarkers.push(lblG);
+      airspaceG.appendChild(lblG);
     } else if (a.shape === 'polygon' && a.boundary) {
       const fillOpacity = ctx.movie ? 0.08 : 0.07;
       const pathD = a.boundary.map((pt, i) =>
@@ -104,9 +111,13 @@ function drawAirspaces(ctx, airspaces, showPopup) {
       // Label at centroid
       const cx = a.boundary.reduce((s, pt) => s + ctx.bx(pt.lon), 0) / a.boundary.length;
       const cy = a.boundary.reduce((s, pt) => s + ctx.by(pt.lat), 0) / a.boundary.length;
+      const lblG = svgEl('g');
+      const lblX = cx.toFixed(1), lblY = cy.toFixed(1);
+      lblG.setAttribute('transform', `translate(${lblX},${lblY})`);
+      lblG._baseX = lblX; lblG._baseY = lblY;
       const lbl = svgEl('text');
-      lbl.setAttribute('x', cx.toFixed(1));
-      lbl.setAttribute('y', cy.toFixed(1));
+      lbl.setAttribute('x', 0);
+      lbl.setAttribute('y', 0);
       lbl.setAttribute('text-anchor', 'middle');
       lbl.setAttribute('dominant-baseline', 'central');
       lbl.setAttribute('font-size', '8');
@@ -116,7 +127,9 @@ function drawAirspaces(ctx, airspaces, showPopup) {
       lbl.setAttribute('opacity', '0.8');
       lbl.setAttribute('pointer-events', 'none');
       lbl.textContent = `${a.name || '?'} (${(a.type || '?').toUpperCase()})`;
-      airspaceG.appendChild(lbl);
+      lblG.appendChild(lbl);
+      ctx.constantSizeMarkers.push(lblG);
+      airspaceG.appendChild(lblG);
     } else if (a.shape === 'anchor' && a.anchorPt) {
       // Racetrack/anchor pattern — outline only with direction arrow
       const rPts = generateRacetrack(a.anchorPt.lat, a.anchorPt.lon,
@@ -157,9 +170,14 @@ function drawAirspaces(ctx, airspaces, showPopup) {
       ctx.constantSizeMarkers.push(arrowG);
       airspaceG.appendChild(arrowG);
       // Label at anchor point
+      const lblG = svgEl('g');
+      const lblX = ctx.bx(a.anchorPt.lon).toFixed(1);
+      const lblY = (ctx.by(a.anchorPt.lat) - 5).toFixed(1);
+      lblG.setAttribute('transform', `translate(${lblX},${lblY})`);
+      lblG._baseX = lblX; lblG._baseY = lblY;
       const lbl = svgEl('text');
-      lbl.setAttribute('x', ctx.bx(a.anchorPt.lon).toFixed(1));
-      lbl.setAttribute('y', (ctx.by(a.anchorPt.lat) - 5).toFixed(1));
+      lbl.setAttribute('x', 0);
+      lbl.setAttribute('y', 0);
       lbl.setAttribute('text-anchor', 'middle');
       lbl.setAttribute('font-size', '8');
       lbl.setAttribute('font-family', 'IBM Plex Mono,monospace');
@@ -168,7 +186,9 @@ function drawAirspaces(ctx, airspaces, showPopup) {
       lbl.setAttribute('opacity', '0.8');
       lbl.setAttribute('pointer-events', 'none');
       lbl.textContent = `${a.name || '?'} (${(a.type || '?').toUpperCase()} ${a.direction === 'ccw' ? 'CCW' : 'CW'})`;
-      airspaceG.appendChild(lbl);
+      lblG.appendChild(lbl);
+      ctx.constantSizeMarkers.push(lblG);
+      airspaceG.appendChild(lblG);
     }
   });
 
