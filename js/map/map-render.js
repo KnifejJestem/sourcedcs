@@ -1,157 +1,8 @@
 // ═══════════════════════════════════════════════════════════
-// view-map.js  —  MAP tab
-// Self-contained SVG tactical map. Pan (drag) + zoom (wheel/pinch).
-// No external deps, no tile server.
+// map-render.js — SVG map drawing (drawMap + mapLabel)
 // ═══════════════════════════════════════════════════════════
 
 'use strict';
-
-// ── Pan/zoom state ─────────────────────────────────────────
-const MAP_VP = {
-  // Base transform set by drawMap on first render, then user pans/zooms
-  tx: 0, ty: 0, scale: 1,
-  dragging: false, lastX: 0, lastY: 0,
-  // Pinch
-  lastDist: null,
-  // SVG content group reference
-  contentG: null,
-  svgEl: null,
-  // Reset function
-  resetFn: null,
-};
-
-async function renderMAP(ato) {
-  const container = document.getElementById('map-container');
-  container.innerHTML = '<div class="map-no-coords">Loading map data...</div>';
-
-  const geoData = await loadGeoData();
-
-  const { points, routes } = collectData(ato);
-
-  if (points.length === 0) {
-    container.innerHTML = '<div class="map-no-coords">No coordinate data found in ATO.<br>Add <code>aim_points</code>, <code>steer_points</code>, or <code>airfields</code> to your YAML.</div>';
-    return;
-  }
-  container.innerHTML = '';
-  drawMap(container, points, routes, geoData);
-}
-
-// ── Collect all plottable data ─────────────────────────────
-function collectData(ato) {
-  const points = [];
-  const routes = []; // [{msnKey, callsign, msnNumber, color, segments:[{from,to,style}]}]
-  const missions = ato.missions || [];
-
-  // Build a lookup: icao → {lat,lon} for airfields + carriers
-  const locByIcao = {};
-  (ato.airfields || []).forEach(af => {
-    const p = parseCoord(af.coords);
-    if (p && af.icao) locByIcao[af.icao.toUpperCase()] = p;
-  });
-  (ato.carriers || []).forEach(cv => {
-    if (cv.deploy_coords && cv.callsign) {
-      const p = parseCoord(cv.deploy_coords);
-      if (p) locByIcao[cv.callsign.toUpperCase()] = p;
-    }
-  });
-
-  // Bullseye
-  const bs = ato.global_control?.bullseye;
-  if (bs?.coords) {
-    const p = parseCoord(bs.coords);
-    if (p) points.push({ ...p, kind:'bullseye', label: bs.name || 'BULLSEYE', sub:'' });
-  }
-
-  // Per-mission data
-  missions.forEach(m => {
-    const color   = typeColor(m.mission_type);
-    const callsign = m.callsign || '?';
-    const msnNum   = m.mission_number || '';
-    const msnKey   = msnNum || callsign;
-    const route    = { msnKey, callsign, msnNum, color, pts: [] }; // ordered list of {lat,lon,kind}
-
-    // Helper: resolve a location string — try as ICAO first, then coord parse
-    const resolve = str => {
-      if (!str) return null;
-      const up = str.trim().toUpperCase();
-      if (locByIcao[up]) return locByIcao[up];
-      return parseCoord(str);
-    };
-
-    // 1. Deploy airfield / carrier
-    const deployLoc = resolve(m.deploy_location_icao);
-    if (deployLoc) route.pts.push({ ...deployLoc, kind:'route-node' });
-
-    // 2. Steer points (en-route waypoints)
-    (m.steer_points || []).forEach((sp, i) => {
-      const raw = typeof sp === 'string' ? sp : sp.coords;
-      const name = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i+1}`;
-      const p = parseCoord(raw);
-      if (p) {
-        route.pts.push({ ...p, kind:'route-node' });
-        points.push({ ...p, kind:'steer',
-          label: `${callsign}${msnNum ? ' · '+msnNum : ''}`,
-          sub: name, color, msnType: m.mission_type, mission: m });
-      }
-    });
-
-    // 3. Aim points (targets)
-    (m.target?.aim_points || []).forEach((ap, i) => {
-      const raw = typeof ap === 'string' ? ap : ap.coords;
-      const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i+1}`;
-      const p = parseCoord(raw);
-      if (p) {
-        route.pts.push({ ...p, kind:'target-node' });
-        points.push({ ...p, kind:'target',
-          label: callsign, sub: name, color, msnType: m.mission_type, mission: m });
-      }
-    });
-
-    // 4. Recovery airfield / carrier
-    const recLoc = resolve(m.aar_location_icao) || resolve(m.deploy_location_icao);
-    if (recLoc) route.pts.push({ ...recLoc, kind:'route-node' });
-
-    if (route.pts.length >= 2) routes.push(route);
-  });
-
-  // Airfields
-  (ato.airfields || []).forEach(af => {
-    const p = parseCoord(af.coords);
-    if (p) points.push({ ...p, kind:'airfield',
-      label: af.icao || af.name || '?',
-      sub: [af.role, af.elevation_ft != null ? af.elevation_ft+'ft' : null].filter(Boolean).join(' · ') });
-  });
-
-  // Carriers
-  (ato.carriers || []).forEach(cv => {
-    if (cv.deploy_coords) {
-      const p = parseCoord(cv.deploy_coords);
-      if (p) points.push({ ...p, kind:'carrier',
-        label: cv.name || cv.callsign || 'CVN', sub: 'DEPLOY EST' });
-    }
-    if (cv.recovery_coords) {
-      const p = parseCoord(cv.recovery_coords);
-      if (p) points.push({ ...p, kind:'carrier',
-        label: cv.name || cv.callsign || 'CVN', sub: 'RECOVERY EST' });
-    }
-  });
-
-  return { points, routes };
-}
-
-// ── Coord parser ───────────────────────────────────────────
-function parseCoord(str) {
-  if (!str) return null;
-  const re = /([NS])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″\s]*)?\s*([EW])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″]?)?/i;
-  const m = str.match(re);
-  if (!m) return null;
-  const lat = (m[1]==='N'?1:-1)*(+m[2] + +m[3]/60 + +(m[4]||0)/3600);
-  const lon = (m[5]==='E'?1:-1)*(+m[6] + +m[7]/60 + +(m[8]||0)/3600);
-  return (isNaN(lat)||isNaN(lon)) ? null : { lat, lon };
-}
-
-function svgEl(tag) { return document.createElementNS('http://www.w3.org/2000/svg', tag); }
-
 
 // ── Main draw ──────────────────────────────────────────────
 // Architecture:
@@ -488,73 +339,27 @@ function drawMap(container, points, routes, geoData) {
   sidebar.appendChild(resetBtn);
 
   // ── Pan / Zoom ───────────────────────────────────────────
-  let tx=0, ty=0, sc=1;
-  const MIN_SC=1.0, MAX_SC=28;  // 1.0 = can't zoom out past initial fit
+  const state = { tx: 0, ty: 0, sc: 1 };
+  const MIN_SC = 1.0, MAX_SC = 28;  // 1.0 = can't zoom out past initial fit
 
   function applyTransform() {
-    content.setAttribute('transform',`translate(${tx.toFixed(2)},${ty.toFixed(2)}) scale(${sc.toFixed(5)})`);
-    redrawGridLabels(tx, ty, sc);
+    content.setAttribute('transform',`translate(${state.tx.toFixed(2)},${state.ty.toFixed(2)}) scale(${state.sc.toFixed(5)})`);
+    redrawGridLabels(state.tx, state.ty, state.sc);
   }
 
   function clamp() {
     // Content at sc=1 fills exactly W×H. When zoomed in, allow panning
     // but never let the far edge come inward past a 10% margin.
     const margin = W * 0.1;
-    tx = Math.min(tx,  margin);            // left edge can go at most margin right of 0
-    tx = Math.max(tx, -(W*sc - W + margin)); // right edge stays in
-    ty = Math.min(ty,  margin);
-    ty = Math.max(ty, -(H*sc - H + margin));
+    state.tx = Math.min(state.tx,  margin);            // left edge can go at most margin right of 0
+    state.tx = Math.max(state.tx, -(W*state.sc - W + margin)); // right edge stays in
+    state.ty = Math.min(state.ty,  margin);
+    state.ty = Math.max(state.ty, -(H*state.sc - H + margin));
   }
 
-  resetBtn.addEventListener('click', ()=>{ tx=0; ty=0; sc=1; clamp(); applyTransform(); });
+  resetBtn.addEventListener('click', () => { state.tx=0; state.ty=0; state.sc=1; clamp(); applyTransform(); });
 
-  svg.addEventListener('wheel', e => {
-    e.preventDefault();
-    const rect=svg.getBoundingClientRect();
-    const mx=(e.clientX-rect.left)/rect.width*W;
-    const my=(e.clientY-rect.top)/rect.height*H;
-    const factor=e.deltaY<0?1.18:1/1.18;
-    const ns=Math.max(MIN_SC,Math.min(MAX_SC,sc*factor));
-    tx=mx-(mx-tx)*(ns/sc); ty=my-(my-ty)*(ns/sc); sc=ns;
-    clamp(); applyTransform();
-  },{passive:false});
-
-  let drag=null;
-  svg.addEventListener('mousedown',e=>{
-    if(e.button!==0)return;
-    drag={ox:e.clientX,oy:e.clientY,tx,ty};
-    svg.style.cursor='grabbing'; e.preventDefault();
-  });
-  window.addEventListener('mousemove',e=>{
-    if(!drag)return;
-    const rect=svg.getBoundingClientRect();
-    const sr=W/rect.width;
-    tx=drag.tx+(e.clientX-drag.ox)*sr; ty=drag.ty+(e.clientY-drag.oy)*sr;
-    clamp(); applyTransform();
-  });
-  window.addEventListener('mouseup',()=>{ drag=null; svg.style.cursor='grab'; });
-
-  let lastT=null;
-  svg.addEventListener('touchstart',e=>{ e.preventDefault(); lastT=e.touches; },{passive:false});
-  svg.addEventListener('touchmove',e=>{
-    e.preventDefault(); if(!lastT)return;
-    const rect=svg.getBoundingClientRect(), sr=W/rect.width;
-    if(e.touches.length===1&&lastT.length===1){
-      tx+=(e.touches[0].clientX-lastT[0].clientX)*sr;
-      ty+=(e.touches[0].clientY-lastT[0].clientY)*sr;
-      clamp(); applyTransform();
-    } else if(e.touches.length===2&&lastT.length===2){
-      const d0=Math.hypot(lastT[0].clientX-lastT[1].clientX,lastT[0].clientY-lastT[1].clientY);
-      const d1=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-      const mx=((e.touches[0].clientX+e.touches[1].clientX)/2-rect.left)/rect.width*W;
-      const my=((e.touches[0].clientY+e.touches[1].clientY)/2-rect.top)/rect.height*H;
-      const ns=Math.max(MIN_SC,Math.min(MAX_SC,sc*d1/Math.max(d0,1)));
-      tx=mx-(mx-tx)*(ns/sc); ty=my-(my-ty)*(ns/sc); sc=ns;
-      clamp(); applyTransform();
-    }
-    lastT=e.touches;
-  },{passive:false});
-  svg.addEventListener('touchend',()=>{ lastT=null; });
+  setupInteraction(svg, W, H, MIN_SC, MAX_SC, state, applyTransform, clamp);
 
   // Initial render
   applyTransform();

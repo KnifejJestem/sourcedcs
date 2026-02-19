@@ -655,7 +655,6 @@ header {
   gap: 3px;
   align-items: center;
 }
-.lo-chip-row { align-items: flex-start; padding-top: 2px; }
 
 .lo-badge {
   display: inline-flex;
