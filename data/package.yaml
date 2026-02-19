@@ -56,6 +56,32 @@ ato:
       deploy_coords:  "N24deg30'00\" E059deg15'00\""
       recovery_coords: "N24deg45'00\" E059deg30'00\""
 
+  # ── Target definitions ───────────────────────────────────
+  # Reusable targets referenced by aim_points via target_ref.
+  # Plotted on the map as threat/point markers.
+  targets:
+    - id: SA6-NORTH
+      name: SA-6 Battery North
+      type: SAM
+      coords: "N26deg30'00\" E056deg20'00\""
+      elevation: E350FT
+      engagement_range_nm: 13
+      max_alt_ft: 40000
+
+    - id: SA6-SOUTH
+      name: SA-6 Battery South
+      type: SAM
+      coords: "N26deg25'00\" E056deg15'00\""
+      elevation: E120FT
+      engagement_range_nm: 13
+      max_alt_ft: 40000
+
+    - id: FUEL-DEPOT
+      name: Fuel Storage Facility
+      type: BUILDING
+      coords: "N26deg28'00\" E056deg18'00\""
+      elevation: E80FT
+
   missions:
     - unit: 510vFS
       home_base_icao: OMAM
@@ -73,12 +99,13 @@ ato:
         not_earlier_than: '2040'
         not_later_than: '2230'
         # Aim points — where weapons are released / where to ID the target.
-        # Can be plain coord strings or objects with name + coords.
+        # Can be plain coord strings, objects with name + coords, or target_ref references.
         aim_points:
-          - coords: "N26deg22'00\" E056deg14'00\""
-            name: AP1
-          - coords: "N26deg25'00\" E056deg18'00\""
-            name: AP2
+          - target_ref: SA6-NORTH        # inherits coords, elevation, name from target
+          - target_ref: SA6-SOUTH
+            name: SECONDARY              # override the name
+          - coords: "N26deg28'00\" E056deg18'00\""
+            name: MANUAL-POINT           # plain aim point, no reference (still works as before)
       # Steer points — route waypoints. Plotted as small hollow circles
       # with dashed lines connecting them in order. Distinct from aim points.
       steer_points:

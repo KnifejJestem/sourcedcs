@@ -99,6 +99,26 @@ function loadPackage_obj(data) {
   }
 
   STATE.pkg = pkg;
+
+  // Resolve target references in aim_points
+  if (pkg.ato?.targets && pkg.ato?.missions) {
+    const tgtMap = {};
+    pkg.ato.targets.forEach(t => { if (t.id) tgtMap[t.id] = t; });
+
+    pkg.ato.missions.forEach(m => {
+      (m.target?.aim_points || []).forEach((ap, i, arr) => {
+        if (typeof ap === 'object' && ap.target_ref && tgtMap[ap.target_ref]) {
+          const ref = tgtMap[ap.target_ref];
+          if (!ap.coords)    ap.coords    = ref.coords;
+          if (!ap.elevation) ap.elevation = ref.elevation;
+          if (!ap.name)      ap.name      = ref.name || ref.id;
+          ap._resolved_target = ref;  // full target metadata for the UI
+          arr[i] = ap;
+        }
+      });
+    });
+  }
+
   STATE.selectedIdx = -1;
 
   // Show main content, hide upload screen
