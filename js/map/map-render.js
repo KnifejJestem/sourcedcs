@@ -164,12 +164,12 @@ function drawMap(container, points, routes, geoData, airspaces) {
 
   // ── Pan / Zoom ───────────────────────────────────────────
   const state = { tx: 0, ty: 0, sc: 1 };
-  const MIN_SC = 1.0, MAX_SC = 18;  // 1.0 = can't zoom out past initial fit
+  const MIN_SC = 1.0, MAX_SC = 20;  // 1.0 = can't zoom out past initial fit
 
   function applyTransform() {
     content.setAttribute('transform',`translate(${state.tx.toFixed(2)},${state.ty.toFixed(2)}) scale(${state.sc.toFixed(5)})`);
     // Apply damped inverse scaling to markers — they shrink with zoom but not as fast
-    const invSc = 1 / Math.pow(state.sc, 0.6);
+    const invSc = 1 / Math.pow(state.sc, 0.8);
     constantSizeMarkers.forEach(m => {
       m.setAttribute('transform', `translate(${m._baseX},${m._baseY}) scale(${invSc.toFixed(5)})`);
     });
