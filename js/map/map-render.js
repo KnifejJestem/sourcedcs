@@ -50,6 +50,10 @@ function drawMap(container, points, routes, geoData, airspaces) {
       expand({ lon: a.lon + degOffset, lat: a.lat + degOffset });
     } else if (a.shape === 'polygon' && a.boundary) {
       a.boundary.forEach(expand);
+    } else if (a.shape === 'anchor' && a.anchorPt) {
+      const reach = ((a.legLengthNm || 10) + (a.legLengthNm || 10) / 2) / 60;
+      expand({ lon: a.anchorPt.lon - reach, lat: a.anchorPt.lat - reach });
+      expand({ lon: a.anchorPt.lon + reach, lat: a.anchorPt.lat + reach });
     }
   });
 
@@ -159,6 +163,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
     circ.setAttribute('stroke', threatCol);
     circ.setAttribute('stroke-width', '1.5');
     circ.setAttribute('stroke-dasharray', '6,3');
+    circ.setAttribute('vector-effect', 'non-scaling-stroke');
     circ.setAttribute('pointer-events', 'none');
     engZoneG.appendChild(circ);
   });
@@ -166,11 +171,12 @@ function drawMap(container, points, routes, geoData, airspaces) {
 
   // ── ACO airspace zones (orbits, ROZ, restricted zones, etc.) ──
   const airspaceColors = {
-    ROZ:   movie ? '#ff4444' : '#c0392b',
+    ROZ:   movie ? '#ffb347' : '#c07c2b',
     ORBIT: movie ? '#4fc3f7' : '#1a3a6b',
     MEZ:   movie ? '#c084fc' : '#4a1a6b',
     NFZ:   movie ? '#ff4444' : '#9b1c1c',
     TRA:   movie ? '#ffb020' : '#7c5000',
+    ANCHOR:movie ? '#00e5ff' : '#006680',
   };
   const defaultAirspaceCol = movie ? '#6aaa7a' : '#5a6a60';
   const airspaceG = svgEl('g');
@@ -197,6 +203,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
       circ.setAttribute('stroke', col);
       circ.setAttribute('stroke-width', '1.8');
       circ.setAttribute('stroke-dasharray', '8,4');
+      circ.setAttribute('vector-effect', 'non-scaling-stroke');
       circ.style.cursor = 'pointer';
       circ.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
       airspaceG.appendChild(circ);
@@ -231,6 +238,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
       stroke.setAttribute('stroke', col);
       stroke.setAttribute('stroke-width', '1.8');
       stroke.setAttribute('stroke-dasharray', '8,4');
+      stroke.setAttribute('vector-effect', 'non-scaling-stroke');
       stroke.style.cursor = 'pointer';
       stroke.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
       airspaceG.appendChild(stroke);
@@ -249,6 +257,58 @@ function drawMap(container, points, routes, geoData, airspaces) {
       lbl.setAttribute('opacity', '0.8');
       lbl.setAttribute('pointer-events', 'none');
       lbl.textContent = `${a.name || '?'} (${(a.type || '?').toUpperCase()})`;
+      airspaceG.appendChild(lbl);
+    } else if (a.shape === 'anchor' && a.anchorPt) {
+      // Racetrack/anchor pattern — outline only with direction arrow
+      const rPts = generateRacetrack(a.anchorPt.lat, a.anchorPt.lon,
+        a.headingDeg || 0, a.legLengthNm || 10, (a.legLengthNm || 10) / 4, a.direction === 'ccw');
+      const pathD = rPts.map((pt, i) =>
+        `${i ? 'L' : 'M'}${bx(pt.lon).toFixed(1)},${by(pt.lat).toFixed(1)}`).join(' ') + ' Z';
+      const outline = svgEl('path');
+      outline.setAttribute('d', pathD);
+      outline.setAttribute('fill', 'none');
+      outline.setAttribute('stroke', col);
+      outline.setAttribute('stroke-width', '2');
+      outline.setAttribute('vector-effect', 'non-scaling-stroke');
+      outline.style.cursor = 'pointer';
+      outline.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
+      airspaceG.appendChild(outline);
+      // Direction arrow on the hot leg midpoint
+      const headRad = (a.headingDeg || 0) * Math.PI / 180;
+      const cosLat = Math.cos(a.anchorPt.lat * Math.PI / 180);
+      const halfLen = (a.legLengthNm || 10) / 2;
+      const midLat = a.anchorPt.lat + Math.cos(headRad) * halfLen / 60;
+      const midLon = a.anchorPt.lon + Math.sin(headRad) * halfLen / (60 * cosLat);
+      const amx = bx(midLon).toFixed(1), amy = by(midLat).toFixed(1);
+      const arrowG = svgEl('g');
+      arrowG.setAttribute('transform', `translate(${amx},${amy})`);
+      arrowG._baseX = amx; arrowG._baseY = amy;
+      // Arrow points in the heading direction; in SVG: dx=sin(h), dy=-cos(h)
+      const adx = Math.sin(headRad), ady = -Math.cos(headRad);
+      const arrSize = 6;
+      const perpX = -ady, perpY = adx; // perpendicular
+      const arrowPath = svgEl('polygon');
+      arrowPath.setAttribute('points',
+        `${(adx*arrSize).toFixed(1)},${(ady*arrSize).toFixed(1)} ` +
+        `${(-adx*arrSize + perpX*arrSize*0.5).toFixed(1)},${(-ady*arrSize + perpY*arrSize*0.5).toFixed(1)} ` +
+        `${(-adx*arrSize - perpX*arrSize*0.5).toFixed(1)},${(-ady*arrSize - perpY*arrSize*0.5).toFixed(1)}`);
+      arrowPath.setAttribute('fill', col);
+      arrowPath.setAttribute('opacity', '0.9');
+      arrowG.appendChild(arrowPath);
+      constantSizeMarkers.push(arrowG);
+      airspaceG.appendChild(arrowG);
+      // Label at anchor point
+      const lbl = svgEl('text');
+      lbl.setAttribute('x', bx(a.anchorPt.lon).toFixed(1));
+      lbl.setAttribute('y', (by(a.anchorPt.lat) - 5).toFixed(1));
+      lbl.setAttribute('text-anchor', 'middle');
+      lbl.setAttribute('font-size', '8');
+      lbl.setAttribute('font-family', 'IBM Plex Mono,monospace');
+      lbl.setAttribute('font-weight', '600');
+      lbl.setAttribute('fill', col);
+      lbl.setAttribute('opacity', '0.8');
+      lbl.setAttribute('pointer-events', 'none');
+      lbl.textContent = `${a.name || '?'} (${(a.type || '?').toUpperCase()} ${a.direction === 'ccw' ? 'CCW' : 'CW'})`;
       airspaceG.appendChild(lbl);
     }
   });
@@ -273,6 +333,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
       line.setAttribute('stroke-width', toTgt?'2':'1.2');
       line.setAttribute('stroke-dasharray', toTgt?'6,3':'2,6');
       line.setAttribute('stroke-opacity','0.9');
+      line.setAttribute('vector-effect','non-scaling-stroke');
       g.appendChild(line);
     }
 
@@ -474,6 +535,11 @@ function drawMap(container, points, routes, geoData, airspaces) {
       if (p.agency) rows.push(['AGENCY', p.agency]);
       if (p.freq) rows.push(['FREQ', p.freq + ' MHz']);
       if (p.radiusNm) rows.push(['RADIUS', p.radiusNm + ' NM']);
+      if (p.anchorPt) rows.push(['ANCHOR PT', fmtCoord(p.anchorPt.lat, p.anchorPt.lon)]);
+      if (p.headingDeg != null) rows.push(['HOT LEG HDG', p.headingDeg + '°']);
+      if (p.legLengthNm) rows.push(['LEG LENGTH', p.legLengthNm + ' NM']);
+      if (p.direction) rows.push(['DIRECTION', p.direction.toUpperCase()]);
+      if (p.boundary) rows.push(['BOUNDARY', p.boundary.map(pt => fmtCoord(pt.lat, pt.lon)).join(' → ')]);
       if (p.missions?.length) rows.push(['MISSIONS', p.missions.join(', ')]);
       if (p.notes) rows.push(['NOTES', p.notes]);
     }
@@ -606,12 +672,12 @@ function drawMap(container, points, routes, geoData, airspaces) {
 
   // ── Pan / Zoom ───────────────────────────────────────────
   const state = { tx: 0, ty: 0, sc: 1 };
-  const MIN_SC = 1.0, MAX_SC = 28;  // 1.0 = can't zoom out past initial fit
+  const MIN_SC = 1.0, MAX_SC = 18;  // 1.0 = can't zoom out past initial fit
 
   function applyTransform() {
     content.setAttribute('transform',`translate(${state.tx.toFixed(2)},${state.ty.toFixed(2)}) scale(${state.sc.toFixed(5)})`);
-    // Apply inverse scaling to markers so they stay constant pixel size
-    const invSc = 1 / state.sc;
+    // Apply damped inverse scaling to markers — they shrink with zoom but not as fast
+    const invSc = 1 / Math.pow(state.sc, 0.6);
     constantSizeMarkers.forEach(m => {
       m.setAttribute('transform', `translate(${m._baseX},${m._baseY}) scale(${invSc.toFixed(5)})`);
     });
@@ -649,4 +715,48 @@ function mapLabel(parent, line1, line2, color, offsetX) {
     t.textContent=txt;
     parent.appendChild(t);
   });
+}
+
+// ── Racetrack generator ──────────────────────────────────
+// Returns an array of {lat,lon} points forming a closed racetrack
+// (two parallel legs connected by semicircular turns).
+function generateRacetrack(anchorLat, anchorLon, headingDeg, legLengthNm, turnRadiusNm, isCCW) {
+  const headRad = headingDeg * Math.PI / 180;
+  const cosLat = Math.cos(anchorLat * Math.PI / 180);
+  const nmToLat = 1 / 60;
+  const nmToLon = 1 / (60 * cosLat);
+
+  function localToGeo(x, y) {
+    return {
+      lat: anchorLat + (x * Math.cos(headRad) - y * Math.sin(headRad)) * nmToLat,
+      lon: anchorLon + (x * Math.sin(headRad) + y * Math.cos(headRad)) * nmToLon,
+    };
+  }
+
+  const L = legLengthNm;
+  const R = turnRadiusNm;
+  const s = isCCW ? -1 : 1; // CW → right (+y), CCW → left (-y)
+  const N = 16; // arc segments per semicircle
+  const pts = [];
+
+  // Hot leg: from anchor (0,0) to (L,0)
+  pts.push(localToGeo(0, 0));
+  pts.push(localToGeo(L, 0));
+
+  // Turn 1: semicircle at end of hot leg, center at (L, R*s)
+  for (let i = 1; i <= N; i++) {
+    const a = -s * Math.PI / 2 + Math.PI * i / N;
+    pts.push(localToGeo(L + R * Math.cos(a), s * R + R * Math.sin(a)));
+  }
+
+  // Return leg: from (L, 2R*s) to (0, 2R*s)
+  pts.push(localToGeo(0, 2 * R * s));
+
+  // Turn 2: semicircle at start of hot leg, center at (0, R*s)
+  for (let i = 1; i <= N; i++) {
+    const a = s * (Math.PI / 2 + Math.PI * i / N);
+    pts.push(localToGeo(R * Math.cos(a), s * R + R * Math.sin(a)));
+  }
+
+  return pts;
 }

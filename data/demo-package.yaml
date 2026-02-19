@@ -168,6 +168,21 @@ ato:
     callsign: ROUGH RIDER
     deploy_coords: N24deg30'00" E059deg15'00"
     recovery_coords: N24deg45'00" E059deg30'00"
+  targets:
+  - id: SAM-1
+    name: SA-2 Guideline
+    type: SAM
+    coords: N26°30'00" E056°20'00"
+    engagement_range_nm: 28
+    max_alt_ft: 60000
+    elevation: 150ft
+  - id: SAM-2
+    name: SA-6 Gainful
+    type: SAM
+    coords: N26°25'00" E056°10'00"
+    engagement_range_nm: 15
+    max_alt_ft: 40000
+    elevation: 200ft
 aco:
   id: ACO-14-09
   operation: CLEAR SKY
@@ -213,6 +228,27 @@ aco:
     control_agency: DARKSTAR
     control_freq_mhz: 334.15
     notes: Primary target area — all non-tasked traffic PROHIBITED
+    boundary:
+    - N26°20'00" E056°05'00"
+    - N26°40'00" E056°05'00"
+    - N26°40'00" E056°30'00"
+    - N26°20'00" E056°30'00"
+  - name: TRACK-1
+    type: ANCHOR
+    shape: ANCHOR
+    missions:
+    - MSN3266
+    alt_lower: FL200
+    alt_upper: FL300
+    time_from: 0500Z
+    time_to: 0700Z
+    control_agency: MAGIC
+    control_freq_mhz: 265.1
+    anchor_point: N25°30'00" E055°30'00"
+    heading_deg: 45
+    leg_length_nm: 15
+    direction: cw
+    notes: CAP racetrack pattern
 spins:
   operation: CLEAR SKY
   ato_day: 30/09/2014

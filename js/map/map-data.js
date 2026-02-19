@@ -126,7 +126,32 @@ function collectData(ato, aco) {
 
   // 6. ACO airspace measures (orbits, ROZ, restricted zones, etc.)
   (aco?.acms || []).forEach(acm => {
-    if (acm.center_coords) {
+    if (acm.anchor_point) {
+      // Racetrack / anchor pattern
+      const anchor = parseCoord(acm.anchor_point);
+      if (anchor) {
+        airspaces.push({
+          lat: anchor.lat,
+          lon: anchor.lon,
+          kind: 'airspace',
+          shape: 'anchor',
+          anchorPt: anchor,
+          headingDeg: acm.heading_deg || 0,
+          legLengthNm: acm.leg_length_nm || 10,
+          direction: (acm.direction || 'cw').toLowerCase(),
+          name: acm.name,
+          type: acm.type,
+          altLower: acm.alt_lower,
+          altUpper: acm.alt_upper,
+          timeFrom: acm.time_from,
+          timeTo: acm.time_to,
+          agency: acm.control_agency,
+          freq: acm.control_freq_mhz,
+          notes: acm.notes,
+          missions: acm.missions,
+        });
+      }
+    } else if (acm.center_coords) {
       const center = parseCoord(acm.center_coords);
       if (center) {
         airspaces.push({
