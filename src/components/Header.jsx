@@ -5,6 +5,7 @@ export default function Header({ ato, theme, onTheme, onPackage }) {
 
   function handleFile(f) {
     if (!f) return
+    if (!window.jsyaml) { alert('YAML parser not loaded. Please refresh the page.'); return }
     const r = new FileReader()
     r.onload = e => {
       try {

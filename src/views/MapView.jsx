@@ -9,7 +9,11 @@ export default function MapView({ ato, aco, theme, active }) {
     window.STATE.theme = theme
     window.STATE.pkg   = { ato, aco }
     containerRef.current.innerHTML = ''
-    window.renderMAP(ato)
+    if (typeof window.renderMAP === 'function') {
+      window.renderMAP(ato)
+    } else {
+      console.error('Map rendering not available — map scripts may not have loaded')
+    }
   }, [active, ato, aco, theme])
 
   return (

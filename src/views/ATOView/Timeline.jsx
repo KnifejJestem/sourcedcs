@@ -96,7 +96,7 @@ export default function Timeline({ missions, theme, onSelect }) {
                         left: ((rnet - minT) / span * 100) + '%',
                         width: Math.max(2, (rnlt - rnet) / span * 100) + '%',
                       }}
-                      title={`${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtZ(rnet)} – ${fmtZ(rnlt)}`}
+                      title={`${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtZ(m.refuel?.not_earlier_than)} – ${fmtZ(m.refuel?.not_later_than)}`}
                     />
                   )}
                 </div>
