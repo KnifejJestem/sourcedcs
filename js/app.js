@@ -179,7 +179,7 @@ function renderHeader(ato) {
   if (!ato) { meta.innerHTML = ''; return; }
 
   const items = [
-    ['DATE',         ato.irl_date || '—',           ''],
+    ['IRL START',    ato.irl_start || '—',           ''],
     ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
   ];
   const unit = ato.global_control?.controlling_unit;

@@ -30,7 +30,7 @@ function renderIntelStrip(gc, ato) {
 
   const sections = [
     section(
-      ['IRL START',    `${ato.irl_date || '—'} ${ato.irl_time_zulu || ''}`],
+      ['IRL START',    ato.irl_start || '—'],
       ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
     ),
     section(

@@ -45,20 +45,21 @@ function renderACO(aco) {
     td(`<strong>${acm.name || '—'}</strong>`);
     td(`<span class="acm-badge ${typeKey}">${typeKey}</span>`);
 
-    // Geometry column — show shape-specific details
+    // Geometry column — read shape-specific fields from geometry sub-key
+    const geo_data = acm.geometry || {};
     let geo = '';
-    if (acm.anchor_point) {
-      geo += `<strong>ANCHOR:</strong> ${acm.anchor_point}`;
-      if (acm.heading_deg != null) geo += `<br>HDG: ${acm.heading_deg}°`;
-      if (acm.leg_length_nm) geo += ` · LEG: ${acm.leg_length_nm} NM`;
-      if (acm.direction) geo += ` · ${acm.direction.toUpperCase()}`;
-    } else if (acm.center_coords) {
-      geo += `<strong>CENTER:</strong> ${acm.center_coords}`;
-      if (acm.radius_nm) geo += `<br>RADIUS: ${acm.radius_nm} NM`;
+    if (geo_data.anchor_point) {
+      geo += `<strong>ANCHOR:</strong> ${geo_data.anchor_point}`;
+      if (geo_data.heading_deg != null) geo += `<br>HDG: ${geo_data.heading_deg}°`;
+      if (geo_data.leg_length_nm) geo += ` · LEG: ${geo_data.leg_length_nm} NM`;
+      if (geo_data.direction) geo += ` · ${geo_data.direction.toUpperCase()}`;
+    } else if (geo_data.center) {
+      geo += `<strong>CENTER:</strong> ${geo_data.center}`;
+      if (geo_data.radius_nm) geo += `<br>RADIUS: ${geo_data.radius_nm} NM`;
     }
-    if (acm.boundary?.length) {
-      geo += (geo ? '<br>' : '') + `<strong>POLYGON:</strong> ${acm.boundary.length} pts`;
-      acm.boundary.forEach((c, i) => { geo += `<br>&nbsp;&nbsp;${i + 1}. ${c}`; });
+    if (geo_data.boundary?.length) {
+      geo += (geo ? '<br>' : '') + `<strong>POLYGON:</strong> ${geo_data.boundary.length} pts`;
+      geo_data.boundary.forEach((c, i) => { geo += `<br>&nbsp;&nbsp;${i + 1}. ${c}`; });
     }
     td(`<span class="aco-geo">${geo || '—'}</span>`);
 
