@@ -92,31 +92,25 @@ function drawMap(container, points, routes, geoData, airspaces) {
   };
 
   // ── SVG skeleton ──────────────────────────────────────────
-  const svg = svgEl('svg');
-  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
-  svg.setAttribute('width','100%'); svg.setAttribute('height','100%');
+  const svg = makeSvgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%' });
   svg.style.cssText = 'display:block;cursor:grab;touch-action:none;';
 
+  // Clip path — hard edge so nothing drawn outside the canvas bounds is visible
+  const clip = makeSvgEl('clipPath', { id: 'mvc' });
+  clip.appendChild(makeSvgEl('rect', { x: 0, y: 0, width: W, height: H }));
   const defs = svgEl('defs');
-  const clip = svgEl('clipPath'); clip.setAttribute('id','mvc');
-  const cr   = svgEl('rect');
-  cr.setAttribute('x',0); cr.setAttribute('y',0);
-  cr.setAttribute('width',W); cr.setAttribute('height',H);
-  clip.appendChild(cr); defs.appendChild(clip);
+  defs.appendChild(clip);
   svg.appendChild(defs);
 
-  // Static sea background
-  const bg = svgEl('rect');
-  bg.setAttribute('x',0);bg.setAttribute('y',0);
-  bg.setAttribute('width',W);bg.setAttribute('height',H);
-  bg.setAttribute('fill',C.sea); svg.appendChild(bg);
+  // Static sea background fills the entire canvas
+  svg.appendChild(makeSvgEl('rect', { x: 0, y: 0, width: W, height: H, fill: C.sea }));
 
-  // Clip wrapper — hard edge, nothing escapes
-  const clipWrap = svgEl('g'); clipWrap.setAttribute('clip-path','url(#mvc)');
+  // Clip wrapper — contains all map content
+  const clipWrap = makeSvgEl('g', { 'clip-path': 'url(#mvc)' });
   svg.appendChild(clipWrap);
 
   // Inner content group — receives the pan/zoom transform
-  const content = svgEl('g'); content.setAttribute('id','map-content');
+  const content = makeSvgEl('g', { id: 'map-content' });
   clipWrap.appendChild(content);
 
   // ── Draw layers ──────────────────────────────────────────

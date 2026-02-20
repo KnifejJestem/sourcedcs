@@ -23,16 +23,18 @@ function renderATO(ato) {
 
 // ── Intel strip ───────────────────────────────────────────────
 function renderIntelStrip(gc, ato) {
-  // Each call to section() returns an HTML string for one intel-section block.
+  // section() builds one intel-section element from an array of [lbl, val, cls?] tuples.
+  // Returns a DOM element so the caller can append it directly (no innerHTML needed).
   function section(...items) {
-    return `
-      <div class="intel-section">
-        ${items.map(([lbl, val, cls]) => `
-          <div class="intel-item">
-            <span class="intel-lbl">${lbl}</span>
-            <span class="intel-val${cls ? ' ' + cls : ''}">${val || '—'}</span>
-          </div>`).join('')}
-      </div>`;
+    const div = el('div', 'intel-section');
+    items.forEach(([lbl, val, cls]) => {
+      div.appendChild(html`
+        <div class="intel-item">
+          <span class="intel-lbl">${lbl}</span>
+          <span class="intel-val${cls ? ' ' + cls : ''}">${val || '—'}</span>
+        </div>`);
+    });
+    return div;
   }
 
   const irl = [ato.irl_date, ato.irl_time_zulu].filter(Boolean).join(' ') || '—';
@@ -58,7 +60,9 @@ function renderIntelStrip(gc, ato) {
     ));
   }
 
-  document.getElementById('intel-row').innerHTML = sections.join('');
+  const row = document.getElementById('intel-row');
+  row.innerHTML = '';
+  sections.forEach(s => row.appendChild(s));
 }
 
 // ── Mission cards ─────────────────────────────────────────────
@@ -126,7 +130,8 @@ function renderTimeline(missions) {
   });
 
   if (!isFinite(minT)) {
-    canvas.innerHTML = '<div class="empty-state">NO TIME DATA</div>';
+    canvas.innerHTML = '';
+    canvas.appendChild(el('div', 'empty-state', 'NO TIME DATA'));
     return;
   }
 
@@ -156,13 +161,15 @@ function renderTimeline(missions) {
   const modeLabel = document.getElementById('tl-mode-label');
   if (modeLabel) modeLabel.textContent = `TIMELINE — ${timeSuffix === 'L' ? 'LOCAL' : 'ZULU'} · ▓ MISSION WINDOW · ▒ AAR WINDOW`;
 
-  // Tick header — build as a string array so we can join into one innerHTML call
-  // rather than calling html() once per tick (no event listeners needed on ticks).
-  const ticks = [];
+  // Tick header — one element per tick (no event listeners needed on ticks,
+  // but building them with el() avoids embedding HTML strings in JS).
+  const ticksRow = el('div', 'tl-ticks');
   for (let t = minT; t <= maxT; t += STEP) {
-    ticks.push(`<div class="tl-tick" style="width:${(STEP / span * TW).toFixed(2)}px">${hh(dispT(t))}${mm(dispT(t))}${timeSuffix}</div>`);
+    const tick = el('div', 'tl-tick', `${hh(dispT(t))}${mm(dispT(t))}${timeSuffix}`);
+    tick.style.width = `${(STEP / span * TW).toFixed(2)}px`;
+    ticksRow.appendChild(tick);
   }
-  canvas.insertAdjacentHTML('beforeend', `<div class="tl-ticks">${ticks.join('')}</div>`);
+  canvas.appendChild(ticksRow);
 
   // Mission rows
   missions.forEach((m, i) => {
@@ -180,10 +187,11 @@ function renderTimeline(missions) {
     const track = el('div', 'tl-track');
     track.style.width = TW + 'px';
 
-    // Grid lines — insertAdjacentHTML per tick (no event listeners needed).
+    // Grid lines — one per tick, positioned with CSS left %
     for (let t = minT; t <= maxT; t += STEP) {
-      track.insertAdjacentHTML('beforeend',
-        `<div class="tl-grid-line" style="left:${((t - minT) / span * 100).toFixed(3)}%"></div>`);
+      const line = el('div', 'tl-grid-line');
+      line.style.left = `${((t - minT) / span * 100).toFixed(3)}%`;
+      track.appendChild(line);
     }
 
     // Mission bar
@@ -203,10 +211,11 @@ function renderTimeline(missions) {
     const rnet = toMins(m.refuel?.not_earlier_than);
     const rnlt = toMins(m.refuel?.not_later_than);
     if (rnet != null && rnlt != null) {
-      track.insertAdjacentHTML('beforeend', `
-        <div class="tl-bar refuel"
-             style="left:${((rnet-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(rnlt-rnet)/span*100).toFixed(3)}%"
-             title="${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtTime(m.refuel?.not_earlier_than)} – ${fmtTime(m.refuel?.not_later_than)}"></div>`);
+      const refuelBar = el('div', 'tl-bar refuel');
+      refuelBar.style.left  = `${((rnet - minT) / span * 100).toFixed(3)}%`;
+      refuelBar.style.width = `${Math.max(2, (rnlt - rnet) / span * 100).toFixed(3)}%`;
+      refuelBar.title       = `${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtTime(m.refuel?.not_earlier_than)} – ${fmtTime(m.refuel?.not_later_than)}`;
+      track.appendChild(refuelBar);
     }
 
     row.appendChild(track);

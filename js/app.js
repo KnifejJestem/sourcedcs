@@ -364,13 +364,15 @@ function renderHeader(ato) {
   const unit = ato.global_control?.controlling_unit;
   if (unit) items.push(['AWACS / GCI', unit, '']);
 
-  // Header shows: date, ingame start, AWACS — concise identifiers only
-  // Full detail (freq, bullseye, etc.) is in the ATO intel strip
-  meta.innerHTML = items.map(([lbl, val, cls]) => `
-    <div class="meta-block">
-      <div class="meta-label">${lbl}</div>
-      <div class="meta-value${cls ? ' ' + cls : ''}">${val}</div>
-    </div>`).join('');
+  // Header shows: date, ingame start, AWACS — concise identifiers only.
+  // Full detail (freq, bullseye, etc.) is in the ATO intel strip.
+  meta.innerHTML = '';
+  items.forEach(([lbl, val, cls]) => {
+    const block = el('div', 'meta-block');
+    block.appendChild(el('div', 'meta-label', lbl));
+    block.appendChild(el('div', `meta-value${cls ? ' ' + cls : ''}`, val));
+    meta.appendChild(block);
+  });
 }
 
 // ── File input wiring ─────────────────────────────────────────

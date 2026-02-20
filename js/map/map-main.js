@@ -31,7 +31,8 @@ function svgText(text, attrs) {
 
 async function renderMAP(ato) {
   const container = document.getElementById('map-container');
-  container.innerHTML = '<div class="map-no-coords">Loading map data...</div>';
+  container.innerHTML = '';
+  container.appendChild(el('div', 'map-no-coords', 'Loading map data…'));
 
   const geoData = await loadGeoData();
 
@@ -39,7 +40,12 @@ async function renderMAP(ato) {
   const { points, routes, airspaces } = collectData(ato, aco);
 
   if (points.length === 0 && airspaces.length === 0) {
-    container.innerHTML = '<div class="map-no-coords">No coordinate data found in ATO.<br>Add <code>aim_points</code>, <code>steer_points</code>, or <code>airfields</code> to your YAML.</div>';
+    container.innerHTML = '';
+    container.appendChild(html`
+      <div class="map-no-coords">
+        No coordinate data found in ATO.<br>
+        Add <code>aim_points</code>, <code>steer_points</code>, or <code>airfields</code> to your YAML.
+      </div>`);
     return;
   }
   container.innerHTML = '';

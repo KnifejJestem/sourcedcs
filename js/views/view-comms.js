@@ -9,7 +9,7 @@ function renderCOMMS(cm) {
   div.innerHTML = '';
 
   if (!cm) {
-    div.innerHTML = '<div class="empty-state">NO COMMS DATA</div>';
+    div.appendChild(el('div', 'empty-state', 'NO COMMS DATA'));
     return;
   }
 
@@ -30,19 +30,18 @@ function renderCOMMS(cm) {
 
     const { table: tbl, tbody } = docTable(['CH', 'CALLSIGN', 'MHz', 'ROLE']);
 
-    // Presets can be keyed by integer or string — normalise
+    // Presets can be keyed by integer or string — normalise and sort numerically
     Object.keys(presets).sort((a, b) => parseInt(a) - parseInt(b)).forEach(ch => {
-      const p  = presets[ch];
-      const tr = tbody.insertRow();
+      const p       = presets[ch];
+      const tr      = tbody.insertRow();
       const isEmpty = !p.freq_mhz;
       if (isEmpty) tr.className = 'freq-empty';
 
-      tr.insertCell().innerHTML = `<span class="freq-ch">${ch}</span>`;
-      tr.insertCell().innerHTML = `<span class="freq-cs">${p.callsign || '—'}</span>`;
-      tr.insertCell().innerHTML = p.freq_mhz
-        ? `<span class="freq-mhz">${p.freq_mhz}</span>`
-        : `<span class="text-dim">—</span>`;
-      tr.insertCell().innerHTML = `<span class="freq-role">${p.role || ''}</span>`;
+      tr.insertCell().appendChild(el('span', 'freq-ch',   String(ch)));
+      tr.insertCell().appendChild(el('span', 'freq-cs',   p.callsign || '—'));
+      tr.insertCell().appendChild(el('span', p.freq_mhz ? 'freq-mhz' : 'text-dim',
+        p.freq_mhz ? String(p.freq_mhz) : '—'));
+      tr.insertCell().appendChild(el('span', 'freq-role', p.role || ''));
     });
 
     block.appendChild(tbl);

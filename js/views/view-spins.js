@@ -21,7 +21,7 @@ function renderSPINS(sp) {
   div.innerHTML = '';
 
   if (!sp) {
-    div.innerHTML = '<div class="empty-state">NO SPINS DATA</div>';
+    div.appendChild(el('div', 'empty-state', 'NO SPINS DATA'));
     return;
   }
 
@@ -74,7 +74,7 @@ function renderSPINS(sp) {
           row.forEach((cell, ci) => {
             const td = tr.insertCell();
             if (cls[ci]) {
-              td.innerHTML = `<span class="${cls[ci]}">${cell ?? '—'}</span>`;
+              td.appendChild(el('span', cls[ci], String(cell ?? '—')));
             } else {
               td.textContent = String(cell ?? '—');
             }
