@@ -7,11 +7,18 @@
 function renderATO(ato) {
   const gc       = ato.global_control || {};
   const missions = ato.missions || [];
+  const prevIdx  = STATE.selectedIdx;  // save before card rebuild clears old DOM
 
   renderIntelStrip(gc, ato);
   renderMissionCards(missions);
   renderTimeline(missions);
-  closeDetail();
+
+  // Re-open the detail panel for the previously selected mission (if any).
+  // Reset selectedIdx to -1 first so selectMission doesn't treat it as a toggle.
+  if (prevIdx >= 0) {
+    STATE.selectedIdx = -1;
+    selectMission(prevIdx);
+  }
 }
 
 // ── Intel strip ───────────────────────────────────────────────

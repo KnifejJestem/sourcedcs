@@ -52,13 +52,16 @@ function renderSPINS(sp) {
           const target = currentBlock || s;
 
           if (e.label != null) {
-            kvRow(target, e.label, e.value, e.style || null);
+            const valStr = e.value != null ? String(e.value) : null;
+            kvRow(target, e.label,
+              valStr != null ? reformatCoordsInText(valStr) : null,
+              e.style || null);
           } else if (e.bullet != null) {
-            const d = el('div', 'spins-sub', '• ' + e.bullet);
+            const d = el('div', 'spins-sub', '• ' + reformatCoordsInText(String(e.bullet)));
             if (e.style) d.style.color = `var(--${e.style})`;
             target.appendChild(d);
           } else if (e.value != null) {
-            target.appendChild(el('div', 'spins-mission-obj', e.value));
+            target.appendChild(el('div', 'spins-mission-obj', reformatCoordsInText(String(e.value))));
           }
         }
       });

@@ -48,7 +48,7 @@ function createPopup(container) {
       rows.push(['NAME', p.name || '?']);
       rows.push(['TYPE', (p.type || '?').toUpperCase()]);
       if (p.altLower != null || p.altUpper != null) rows.push(['ALTITUDE', `${p.altLower != null ? p.altLower : '?'} → ${p.altUpper != null ? p.altUpper : '?'}`]);
-      if (p.timeFrom != null || p.timeTo != null) rows.push(['WINDOW', `${p.timeFrom != null ? p.timeFrom : '?'} – ${p.timeTo != null ? p.timeTo : '?'}`]);
+      if (p.timeFrom != null || p.timeTo != null) rows.push(['WINDOW', `${p.timeFrom != null ? fmtTime(p.timeFrom) : '?'} – ${p.timeTo != null ? fmtTime(p.timeTo) : '?'}`]);
       if (p.agency) rows.push(['AGENCY', p.agency]);
       if (p.freq) rows.push(['FREQ', p.freq + ' MHz']);
       if (p.radiusNm) rows.push(['RADIUS', p.radiusNm + ' NM']);

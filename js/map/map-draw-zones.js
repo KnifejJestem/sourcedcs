@@ -131,11 +131,20 @@ function drawAirspaces(ctx, airspaces, showPopup) {
       ctx.constantSizeMarkers.push(lblG);
       airspaceG.appendChild(lblG);
     } else if (a.shape === 'anchor' && a.anchorPt) {
-      // Racetrack/anchor pattern — outline only with direction arrow
+      // Racetrack/anchor pattern — fill + outline with direction arrow
       const rPts = generateRacetrack(a.anchorPt.lat, a.anchorPt.lon,
         a.headingDeg || 0, a.legLengthNm || 10, (a.legLengthNm || 10) / 4, a.direction === 'ccw');
       const pathD = rPts.map((pt, i) =>
         `${i ? 'L' : 'M'}${ctx.bx(pt.lon).toFixed(1)},${ctx.by(pt.lat).toFixed(1)}`).join(' ') + ' Z';
+      // Semi-transparent fill makes the interior clickable (consistent with circle/polygon)
+      const fillOpacity = ctx.movie ? 0.08 : 0.07;
+      const fill = svgEl('path');
+      fill.setAttribute('d', pathD);
+      fill.setAttribute('fill', col);
+      fill.setAttribute('opacity', String(fillOpacity));
+      fill.style.cursor = 'pointer';
+      fill.addEventListener('click', e => { e.stopPropagation(); showPopup(a); });
+      airspaceG.appendChild(fill);
       const outline = svgEl('path');
       outline.setAttribute('d', pathD);
       outline.setAttribute('fill', 'none');

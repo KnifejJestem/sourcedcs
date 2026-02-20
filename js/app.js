@@ -65,13 +65,16 @@ function fmtTime(v) {
 }
 
 // ── Coordinate parsing ────────────────────────────────────────
+// Shared source for the NATO coord pattern (DM / DMS, N/S…E/W prefix).
+// Used both by parseCoord() and reformatCoordsInText() so they stay in sync.
+const COORD_RE_SRC = String.raw`([NS])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″\s]*)?\s*([EW])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″]?)?`;
+
 // Accepts DMS / DM / decimal-degree strings in any of the usual
 // military notations (deg / °d / deg keyword).  Returns {lat, lon}
 // or null when the string cannot be parsed.
 function parseCoord(str) {
   if (!str) return null;
-  const re = /([NS])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″\s]*)?\s*([EW])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″]?)?/i;
-  const m = String(str).match(re);
+  const m = String(str).match(new RegExp(COORD_RE_SRC, 'i'));
   if (!m) return null;
   const lat = (m[1].toUpperCase() === 'N' ? 1 : -1) * (+m[2] + +m[3] / 60 + +(m[4] || 0) / 3600);
   const lon = (m[5].toUpperCase() === 'E' ? 1 : -1) * (+m[6] + +m[7] / 60 + +(m[8] || 0) / 3600);
@@ -183,6 +186,22 @@ function fmtCoord(lat, lon) {
   return fmtCoordDM(lat, lon);
 }
 
+// Scan a free-text string for embedded coordinate patterns and reformat
+// each one according to the current coord display mode.  Non-coord text
+// is returned unchanged.  Used by ACO geometry strings and SPINS entries
+// so that changing the coord mode updates those views too.
+function reformatCoordsInText(text) {
+  if (!text) return text;
+  const re = new RegExp(COORD_RE_SRC, 'gi');
+  return String(text).replace(re, match => {
+    // Preserve any trailing whitespace consumed by ['\s]* in the regex
+    const trimmed  = match.trimEnd();
+    const trailing = match.slice(trimmed.length);
+    const p = parseCoord(trimmed);
+    return p ? fmtCoord(p.lat, p.lon) + trailing : match;
+  });
+}
+
 const KNOWN_TYPES = ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE'];
 function typeKey(t) {
   return KNOWN_TYPES.includes((t || '').toUpperCase()) ? t.toUpperCase() : 'OTHER';
@@ -227,7 +246,9 @@ function setTimeMode(m) {
   document.querySelectorAll('[data-time]').forEach(b => {
     b.classList.toggle('active', b.dataset.time === m);
   });
-  if (STATE.pkg?.ato) renderATO(STATE.pkg.ato);
+  if (STATE.pkg?.ato)   renderATO(STATE.pkg.ato);
+  if (STATE.pkg?.aco)   renderACO(STATE.pkg.aco);
+  if (STATE.pkg?.spins) renderSPINS(STATE.pkg.spins);
 }
 
 // ── Display mode: coordinates (dm / dms / mgrs) ───────────────
@@ -236,7 +257,9 @@ function setCoordMode(m) {
   document.querySelectorAll('[data-coord]').forEach(b => {
     b.classList.toggle('active', b.dataset.coord === m);
   });
-  if (STATE.pkg?.ato) renderATO(STATE.pkg.ato);
+  if (STATE.pkg?.ato)   renderATO(STATE.pkg.ato);
+  if (STATE.pkg?.aco)   renderACO(STATE.pkg.aco);
+  if (STATE.pkg?.spins) renderSPINS(STATE.pkg.spins);
 }
 
 // ── Tab routing ───────────────────────────────────────────────

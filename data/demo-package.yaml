@@ -367,3 +367,13 @@ comms:
     8:  {callsign: "COWBOY 1 / BOLO 1", freq_mhz: 129.225, role: CAS / Strike}
     9:  {callsign: SPARE,    freq_mhz: null,     role: null}
     10: {callsign: LTAG PAR, freq_mhz: 282.5,   role: Precision approach}
+    11: {callsign: SPARE,    freq_mhz: null,     role: null}
+    12: {callsign: SPARE,    freq_mhz: null,     role: null}
+    13: {callsign: SPARE,    freq_mhz: null,     role: null}
+    14: {callsign: SPARE,    freq_mhz: null,     role: null}
+    15: {callsign: SPARE,    freq_mhz: null,     role: null}
+    16: {callsign: SPARE,    freq_mhz: null,     role: null}
+    17: {callsign: SPARE,    freq_mhz: null,     role: null}
+    18: {callsign: SPARE,    freq_mhz: null,     role: null}
+    19: {callsign: SPARE,    freq_mhz: null,     role: null}
+    20: {callsign: SPARE,    freq_mhz: null,     role: null}
