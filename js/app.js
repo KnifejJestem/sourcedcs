@@ -20,6 +20,23 @@ function el(tag, cls, text) {
   return e;
 }
 
+// Build a DOM element from a tagged template literal.
+// Lets you write declarative HTML trees instead of el()+appendChild() chains:
+//
+//   const card = html`
+//     <div class="mission-card">
+//       <div class="card-callsign">${m.callsign}</div>
+//     </div>`;
+//
+// Returns the first element child of the parsed template.
+// Values are coerced to strings; no sanitisation is applied.
+function html(strings, ...values) {
+  const raw = strings.reduce((acc, str, i) => acc + str + (values[i] ?? ''), '');
+  const t = document.createElement('template');
+  t.innerHTML = raw.trim();
+  return t.content.firstElementChild;
+}
+
 function toMins(v) {
   if (!v) return null;
   const s = String(v).replace('Z', '').padStart(4, '0');
@@ -159,24 +176,22 @@ function loadPackage_obj(data) {
 // the ATO intel strip (view-ato.js) to avoid duplication.
 function renderHeader(ato) {
   const meta = document.getElementById('header-meta');
-  meta.innerHTML = '';
+  if (!ato) { meta.innerHTML = ''; return; }
 
-  if (!ato) return;
-
-  function mb(label, value, cls) {
-    const b = el('div', 'meta-block');
-    b.appendChild(el('div', 'meta-label', label));
-    const v = el('div', 'meta-value' + (cls ? ' ' + cls : ''), value);
-    b.appendChild(v);
-    meta.appendChild(b);
-  }
+  const items = [
+    ['DATE',         ato.irl_date || '—',           ''],
+    ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
+  ];
+  const unit = ato.global_control?.controlling_unit;
+  if (unit) items.push(['AWACS / GCI', unit, '']);
 
   // Header shows: date, ingame start, AWACS — concise identifiers only
   // Full detail (freq, bullseye, etc.) is in the ATO intel strip
-  mb('DATE',          ato.irl_date || '—');
-  mb('INGAME START',  ato.ingame_start_local || '—', 'ingame');
-  const unit = ato.global_control?.controlling_unit;
-  if (unit) mb('AWACS / GCI', unit);
+  meta.innerHTML = items.map(([lbl, val, cls]) => `
+    <div class="meta-block">
+      <div class="meta-label">${lbl}</div>
+      <div class="meta-value${cls ? ' ' + cls : ''}">${val}</div>
+    </div>`).join('');
 }
 
 // ── File input wiring ─────────────────────────────────────────
@@ -198,6 +213,9 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     dropZone.classList.remove('over');
     const f = e.dataTransfer.files[0];
-    if (f) { const r = new FileReader(); r.onload = ev => loadPackage(ev.target.result); r.readAsText(f); }
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => loadPackage(ev.target.result);
+    r.readAsText(f);
   });
 });

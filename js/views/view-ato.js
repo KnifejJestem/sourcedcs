@@ -16,37 +16,39 @@ function renderATO(ato) {
 
 // ── Intel strip ───────────────────────────────────────────────
 function renderIntelStrip(gc, ato) {
-  const row = document.getElementById('intel-row');
-  row.innerHTML = '';
-
+  // Each call to section() returns an HTML string for one intel-section block.
   function section(...items) {
-    const s = el('div', 'intel-section');
-    items.forEach(([lbl, val, cls]) => {
-      const item = el('div', 'intel-item');
-      item.appendChild(el('span', 'intel-lbl', lbl));
-      item.appendChild(el('span', 'intel-val' + (cls ? ' ' + cls : ''), val || '—'));
-      s.appendChild(item);
-    });
-    row.appendChild(s);
+    return `
+      <div class="intel-section">
+        ${items.map(([lbl, val, cls]) => `
+          <div class="intel-item">
+            <span class="intel-lbl">${lbl}</span>
+            <span class="intel-val${cls ? ' ' + cls : ''}">${val || '—'}</span>
+          </div>`).join('')}
+      </div>`;
   }
 
-  section(
-    ['IRL START',    `${ato.irl_date || '—'} ${ato.irl_time_zulu || ''}`],
-    ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
-  );
-  section(
-    ['PFREQ', gc.primary_freq_mhz ? gc.primary_freq_mhz + ' MHz' : '—', 'freq'],
-  );
-  section(
-    ['AWACS / GCI', gc.controlling_unit || '—'],
-    ['PLATFORM',    gc.aircraft_type    || '—'],
-  );
-  if (gc.bullseye) {
+  const sections = [
     section(
+      ['IRL START',    `${ato.irl_date || '—'} ${ato.irl_time_zulu || ''}`],
+      ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
+    ),
+    section(
+      ['PFREQ', gc.primary_freq_mhz ? gc.primary_freq_mhz + ' MHz' : '—', 'freq'],
+    ),
+    section(
+      ['AWACS / GCI', gc.controlling_unit || '—'],
+      ['PLATFORM',    gc.aircraft_type    || '—'],
+    ),
+  ];
+  if (gc.bullseye) {
+    sections.push(section(
       ['BULLSEYE', gc.bullseye.name   || '—'],
       ['COORDS',   gc.bullseye.coords || '—', 'coords'],
-    );
+    ));
   }
+
+  document.getElementById('intel-row').innerHTML = sections.join('');
 }
 
 // ── Mission cards ─────────────────────────────────────────────
@@ -55,34 +57,42 @@ function renderMissionCards(missions) {
   row.innerHTML = '';
 
   missions.forEach((m, i) => {
-    const tk   = typeKey(m.mission_type);
-    const card = el('div', `mission-card card-${tk}`);
+    const tk = typeKey(m.mission_type);
 
-    // Top strip
-    const top  = el('div', 'card-top');
-    const left = el('div');
-    left.appendChild(el('div', 'card-callsign', m.callsign || '—'));
-    left.appendChild(el('div', 'card-msn',      m.mission_number || ''));
-    top.appendChild(left);
-    top.appendChild(el('div', `card-type-badge type-${tk}`, m.mission_type || '?'));
-    card.appendChild(top);
-
-    // Body rows
-    const body = el('div', 'card-body');
-    function cr(k, v, c) {
-      const r = el('div', 'card-row');
-      r.appendChild(el('span', 'ck', k));
-      r.appendChild(el('span', 'cv' + (c ? ' ' + c : ''), v));
-      body.appendChild(r);
-    }
-    cr('ACFT',   (m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '?'), 'acft');
-    cr('TARGET', m.target?.location || '—');
-    cr('WINDOW', `${fmtZ(m.target?.not_earlier_than)} → ${fmtZ(m.target?.not_later_than)}`, 'time');
-    if (m.control?.primary_freq_mhz)
-      cr('PFREQ', m.control.primary_freq_mhz + ' MHz', 'freq');
-    if (m.refuel)
-      cr('TANKER', `${m.refuel.tanker_callsign} ${m.refuel.altitude}`, 'tanker');
-    card.appendChild(body);
+    const card = html`
+      <div class="mission-card card-${tk}">
+        <div class="card-top">
+          <div>
+            <div class="card-callsign">${m.callsign || '—'}</div>
+            <div class="card-msn">${m.mission_number || ''}</div>
+          </div>
+          <div class="card-type-badge type-${tk}">${m.mission_type || '?'}</div>
+        </div>
+        <div class="card-body">
+          <div class="card-row">
+            <span class="ck">ACFT</span>
+            <span class="cv acft">${m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '?'}</span>
+          </div>
+          <div class="card-row">
+            <span class="ck">TARGET</span>
+            <span class="cv">${m.target?.location || '—'}</span>
+          </div>
+          <div class="card-row">
+            <span class="ck">WINDOW</span>
+            <span class="cv time">${fmtZ(m.target?.not_earlier_than)} → ${fmtZ(m.target?.not_later_than)}</span>
+          </div>
+          ${m.control?.primary_freq_mhz ? `
+          <div class="card-row">
+            <span class="ck">PFREQ</span>
+            <span class="cv freq">${m.control.primary_freq_mhz} MHz</span>
+          </div>` : ''}
+          ${m.refuel ? `
+          <div class="card-row">
+            <span class="ck">TANKER</span>
+            <span class="cv tanker">${m.refuel.tanker_callsign} ${m.refuel.altitude}</span>
+          </div>` : ''}
+        </div>
+      </div>`;
 
     card.addEventListener('click', () => selectMission(i));
     row.appendChild(card);
@@ -122,14 +132,13 @@ function renderTimeline(missions) {
   document.getElementById('tl-range').textContent =
     `${hh(minT)}${mm(minT)}Z – ${hh(maxT)}${mm(maxT)}Z`;
 
-  // Tick header
-  const tickRow = el('div', 'tl-ticks');
+  // Tick header — build as a string array so we can join into one innerHTML call
+  // rather than calling html() once per tick (no event listeners needed on ticks).
+  const ticks = [];
   for (let t = minT; t <= maxT; t += STEP) {
-    const tick = el('div', 'tl-tick', `${hh(t)}${mm(t)}Z`);
-    tick.style.width = (STEP / span * TW) + 'px';
-    tickRow.appendChild(tick);
+    ticks.push(`<div class="tl-tick" style="width:${(STEP / span * TW).toFixed(2)}px">${hh(t)}${mm(t)}Z</div>`);
   }
-  canvas.appendChild(tickRow);
+  canvas.insertAdjacentHTML('beforeend', `<div class="tl-ticks">${ticks.join('')}</div>`);
 
   // Mission rows
   missions.forEach((m, i) => {
@@ -137,47 +146,43 @@ function renderTimeline(missions) {
     const row   = el('div', 'tl-row');
 
     // Label
-    const lbl = el('div', 'tl-label');
-    const lcs = el('div', 'tl-label-callsign', m.callsign || '—');
-    lcs.style.color = color;
-    lbl.appendChild(lcs);
-    lbl.appendChild(el('div', 'tl-label-type',
-      `${m.mission_type || ''} · ${m.mission_number || ''}`));
-    row.appendChild(lbl);
+    row.appendChild(html`
+      <div class="tl-label">
+        <div class="tl-label-callsign" style="color:${color}">${m.callsign || '—'}</div>
+        <div class="tl-label-type">${m.mission_type || ''} · ${m.mission_number || ''}</div>
+      </div>`);
 
     // Track
     const track = el('div', 'tl-track');
     track.style.width = TW + 'px';
 
-    // Grid lines
+    // Grid lines — insertAdjacentHTML per tick (no event listeners needed).
     for (let t = minT; t <= maxT; t += STEP) {
-      const gl = el('div', 'tl-grid-line');
-      gl.style.left = ((t - minT) / span * 100) + '%';
-      track.appendChild(gl);
+      track.insertAdjacentHTML('beforeend',
+        `<div class="tl-grid-line" style="left:${((t - minT) / span * 100).toFixed(3)}%"></div>`);
     }
 
     // Mission bar
     const net = toMins(m.target?.not_earlier_than);
     const nlt = toMins(m.target?.not_later_than);
     if (net != null && nlt != null) {
-      const bar = el('div', 'tl-bar', m.callsign || '');
-      bar.style.background = color;
-      bar.style.left  = ((net - minT) / span * 100) + '%';
-      bar.style.width = Math.max(2, (nlt - net) / span * 100) + '%';
-      bar.title = `${m.callsign} · ${fmtZ(m.target.not_earlier_than)} – ${fmtZ(m.target.not_later_than)}`;
+      const bar = html`
+        <div class="tl-bar"
+             style="background:${color};left:${((net-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(nlt-net)/span*100).toFixed(3)}%"
+             title="${m.callsign} · ${fmtZ(m.target.not_earlier_than)} – ${fmtZ(m.target.not_later_than)}"
+        >${m.callsign || ''}</div>`;
       bar.addEventListener('click', () => selectMission(i));
       track.appendChild(bar);
     }
 
-    // Refuel bar (hatched, below the mission bar)
+    // Refuel bar (hatched)
     const rnet = toMins(m.refuel?.not_earlier_than);
     const rnlt = toMins(m.refuel?.not_later_than);
     if (rnet != null && rnlt != null) {
-      const rbar = el('div', 'tl-bar refuel');
-      rbar.style.left  = ((rnet - minT) / span * 100) + '%';
-      rbar.style.width = Math.max(2, (rnlt - rnet) / span * 100) + '%';
-      rbar.title = `${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtZ(rnet)} – ${fmtZ(rnlt)}`;
-      track.appendChild(rbar);
+      track.insertAdjacentHTML('beforeend', `
+        <div class="tl-bar refuel"
+             style="left:${((rnet-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(rnlt-rnet)/span*100).toFixed(3)}%"
+             title="${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtZ(m.refuel?.not_earlier_than)} – ${fmtZ(m.refuel?.not_later_than)}"></div>`);
     }
 
     row.appendChild(track);
@@ -217,27 +222,29 @@ function selectMission(idx) {
   }
 
   function df(parent, k, v, cls) {
-    const f = el('div', 'detail-field');
-    f.appendChild(el('div', 'dk', k));
-    f.appendChild(el('div', 'dv' + (cls ? ' ' + cls : ''), v));
-    parent.appendChild(f);
+    parent.appendChild(html`
+      <div class="detail-field">
+        <div class="dk">${k}</div>
+        <div class="dv${cls ? ' ' + cls : ''}">${v}</div>
+      </div>`);
   }
 
   function timePair(parent, label, net, nlt) {
-    const f  = el('div', 'detail-field');
-    f.appendChild(el('div', 'dk', label));
-    const tp = el('div', 'time-pair');
-    const b1 = el('div', 'time-box');
-    b1.appendChild(el('div', 'time-box-lbl', 'NET'));
-    b1.appendChild(el('div', 'time-box-val', fmtZ(net)));
-    const b2 = el('div', 'time-box');
-    b2.appendChild(el('div', 'time-box-lbl', 'NLT'));
-    b2.appendChild(el('div', 'time-box-val', fmtZ(nlt)));
-    tp.appendChild(b1);
-    tp.appendChild(el('div', 'time-arr', '→'));
-    tp.appendChild(b2);
-    f.appendChild(tp);
-    parent.appendChild(f);
+    parent.appendChild(html`
+      <div class="detail-field">
+        <div class="dk">${label}</div>
+        <div class="time-pair">
+          <div class="time-box">
+            <div class="time-box-lbl">NET</div>
+            <div class="time-box-val">${fmtZ(net)}</div>
+          </div>
+          <div class="time-arr">→</div>
+          <div class="time-box">
+            <div class="time-box-lbl">NLT</div>
+            <div class="time-box-val">${fmtZ(nlt)}</div>
+          </div>
+        </div>
+      </div>`);
   }
 
   // COL 1 — Identification

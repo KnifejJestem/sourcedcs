@@ -3,7 +3,7 @@
 //
 // These helpers eliminate boilerplate that was previously
 // duplicated across view-aco.js, view-spins.js, view-comms.js.
-// They rely on the global el() helper defined in app.js.
+// They rely on the global el() and html() helpers in app.js.
 // ═══════════════════════════════════════════════════════════
 
 'use strict';
@@ -11,21 +11,20 @@
 // Build the standard doc-header strip and append it to parent.
 // items: array of [label, value] pairs.
 function docHeader(parent, items) {
-  const hdr = el('div', 'doc-header');
-  items.forEach(([lbl, val]) => {
-    const it = el('div', 'doc-hitem');
-    it.appendChild(el('div', 'doc-hlbl', lbl));
-    it.appendChild(el('div', 'doc-hval', val || '—'));
-    hdr.appendChild(it);
-  });
-  parent.appendChild(hdr);
+  parent.appendChild(html`
+    <div class="doc-header">
+      ${items.map(([lbl, val]) => `
+        <div class="doc-hitem">
+          <div class="doc-hlbl">${lbl}</div>
+          <div class="doc-hval">${val || '—'}</div>
+        </div>`).join('')}
+    </div>`);
 }
 
 // Build a doc-section with a title, pass the section element to
 // buildFn so the caller can fill it, then append it to parent.
 function docSection(parent, title, buildFn) {
-  const s = el('div', 'doc-section');
-  s.appendChild(el('div', 'doc-section-title', title));
+  const s = html`<div class="doc-section"><div class="doc-section-title">${title}</div></div>`;
   buildFn(s);
   parent.appendChild(s);
 }
@@ -33,10 +32,11 @@ function docSection(parent, title, buildFn) {
 // Build a key-value row and append it to parent.
 // cls is an optional extra class on the value span (e.g. 'amber', 'red', 'green').
 function kvRow(parent, key, value, cls) {
-  const r = el('div', 'kv-row');
-  r.appendChild(el('span', 'kv-key', key));
-  r.appendChild(el('span', 'kv-val' + (cls ? ' ' + cls : ''), value || '—'));
-  parent.appendChild(r);
+  parent.appendChild(html`
+    <div class="kv-row">
+      <span class="kv-key">${key}</span>
+      <span class="kv-val${cls ? ' ' + cls : ''}">${value || '—'}</span>
+    </div>`);
 }
 
 // Build a <table class="doc-table"> with the given column headers.

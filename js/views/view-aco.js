@@ -60,16 +60,16 @@ function renderACO(aco) {
       geo += (geo ? '<br>' : '') + `<strong>POLYGON:</strong> ${acm.boundary.length} pts`;
       acm.boundary.forEach((c, i) => { geo += `<br>&nbsp;&nbsp;${i + 1}. ${c}`; });
     }
-    td(`<span style="font-size:9px;color:var(--text-3)">${geo || '—'}</span>`);
+    td(`<span class="aco-geo">${geo || '—'}</span>`);
 
-    td(`<span style="font-size:10px;color:var(--text-3)">${(acm.missions || []).join(', ') || '—'}</span>`);
-    td(`<span style="font-size:11px">${acm.alt_lower || '?'} → ${acm.alt_upper || '?'}</span>`);
-    td(`<span style="color:var(--amber);font-size:11px">${acm.time_from || '—'} – ${acm.time_to || '—'}</span>`);
-    td(`<span style="color:var(--blue);font-size:11px">${acm.control_agency || '—'}</span>`);
-    td(`<span style="color:var(--blue);font-size:11px">${acm.control_freq_mhz ? acm.control_freq_mhz + ' MHz' : '—'}</span>`);
+    td(`<span class="aco-msns">${(acm.missions || []).join(', ') || '—'}</span>`);
+    td(`<span class="aco-alt">${acm.alt_lower || '?'} → ${acm.alt_upper || '?'}</span>`);
+    td(`<span class="aco-time">${acm.time_from || '—'} – ${acm.time_to || '—'}</span>`);
+    td(`<span class="aco-ctrl">${acm.control_agency || '—'}</span>`);
+    td(`<span class="aco-ctrl">${acm.control_freq_mhz ? acm.control_freq_mhz + ' MHz' : '—'}</span>`);
 
     // Notes column
-    td(`<span style="font-size:9px;color:var(--text-3);font-style:italic">${acm.notes || '—'}</span>`);
+    td(`<span class="aco-note">${acm.notes || '—'}</span>`);
   });
 
   div.appendChild(tbl);

@@ -41,7 +41,7 @@ function renderCOMMS(cm) {
       tr.insertCell().innerHTML = `<span class="freq-cs">${p.callsign || '—'}</span>`;
       tr.insertCell().innerHTML = p.freq_mhz
         ? `<span class="freq-mhz">${p.freq_mhz}</span>`
-        : `<span style="color:var(--text-3)">—</span>`;
+        : `<span class="text-dim">—</span>`;
       tr.insertCell().innerHTML = `<span class="freq-role">${p.role || ''}</span>`;
     });
 
