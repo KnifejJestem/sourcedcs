@@ -4,6 +4,10 @@
 
 'use strict';
 
+// ── Timeline layout constants ──────────────────────────────────
+const TIMELINE_STEP_MINS = 15;  // minutes between tick marks
+const TIMELINE_WIDTH_PX  = 800; // CSS width of the scrollable track area
+
 function renderATO(ato) {
   const gc       = ato.global_control || {};
   const missions = ato.missions || [];
@@ -135,11 +139,11 @@ function renderTimeline(missions) {
     return;
   }
 
-  const STEP = 15;
-  minT = Math.floor((minT - 15) / STEP) * STEP;
-  maxT = Math.ceil ((maxT + 15) / STEP) * STEP;
+  const STEP = TIMELINE_STEP_MINS;
+  minT = Math.floor((minT - STEP) / STEP) * STEP;
+  maxT = Math.ceil ((maxT + STEP) / STEP) * STEP;
   const span = maxT - minT;
-  const TW   = 800; // px — track width basis
+  const TW   = TIMELINE_WIDTH_PX;
 
   const hh = t => String(Math.floor(t / 60)).padStart(2, '0');
   const mm = t => String(t % 60).padStart(2, '0');

@@ -8,6 +8,10 @@
 
 'use strict';
 
+// ── Shared style constants ─────────────────────────────────
+// Single definition; imported implicitly by every map-draw-*.js file.
+const MONO_FONT = 'IBM Plex Mono,monospace';
+
 // ── SVG element helpers ────────────────────────────────────
 
 // Create an SVG element in the SVG namespace.

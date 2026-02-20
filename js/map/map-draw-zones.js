@@ -4,23 +4,46 @@
 
 'use strict';
 
+// ── Airspace fill / stroke style ──────────────────────────────
+const AIRSPACE_FILL_OPACITY     = 0.07; // pro theme — semi-transparent fill
+const AIRSPACE_FILL_OPACITY_MFD = 0.08; // movie theme — slightly brighter
+const AIRSPACE_STROKE_WIDTH     = 1.8;
+const AIRSPACE_DASH_ARRAY       = '8,4';
+
+// ── Engagement zone style ──────────────────────────────────────
+const ENG_ZONE_STROKE_WIDTH = 1.5;
+const ENG_ZONE_DASH_ARRAY   = '6,3';
+
+// ── Zone label style ───────────────────────────────────────────
+const ZONE_LABEL_FONT_SIZE = 8;   // px
+const ZONE_LABEL_OPACITY   = 0.8;
+const ZONE_LABEL_WEIGHT    = 600;
+
+// ── Racetrack generator ────────────────────────────────────────
+const ARC_SEGMENTS        = 16; // half-circle arc points per turn
+const DIRECTION_ARROW_SIZE = 6; // arrow half-size in SVG px
+
+// ── Airspace field defaults (when YAML omits optional keys) ───
+const DEFAULT_RADIUS_NM = 5;
+const DEFAULT_LEG_NM    = 10;
+const DEFAULT_HEADING   = 0;  // degrees
+
 // ── Private helpers ──────────────────────────────────────
 
 // Add a centered text label to a constantSizeMarkers group at (x, y).
 // opts.centralBaseline = true enables dominant-baseline:central (used for
 // circle/polygon labels where x,y is the shape center).
 function addMapLabel(ctx, parent, x, y, text, col, opts) {
-  const g = svgEl('g');
-  g.setAttribute('transform', `translate(${x},${y})`);
+  const g = makeSvgEl('g', { transform: `translate(${x},${y})` });
   g._baseX = x; g._baseY = y;
   const attrs = {
     x: 0, y: 0,
-    'text-anchor':  'middle',
-    'font-size':     8,
-    'font-family':  'IBM Plex Mono,monospace',
-    'font-weight':   600,
-    fill:            col,
-    opacity:         0.8,
+    'text-anchor':    'middle',
+    'font-size':      ZONE_LABEL_FONT_SIZE,
+    'font-family':    MONO_FONT,
+    'font-weight':    ZONE_LABEL_WEIGHT,
+    fill:             col,
+    opacity:          ZONE_LABEL_OPACITY,
     'pointer-events': 'none',
   };
   if (opts?.centralBaseline) attrs['dominant-baseline'] = 'central';
@@ -38,10 +61,10 @@ function makeClickable(el, clickFn) {
 
 // ── Circle airspace ──────────────────────────────────────
 function drawCircleAirspace(ctx, a, col, parent, showPopup) {
-  const opacity = ctx.movie ? 0.08 : 0.07;
+  const opacity = ctx.movie ? AIRSPACE_FILL_OPACITY_MFD : AIRSPACE_FILL_OPACITY;
   const cx = ctx.bx(a.lon).toFixed(1);
   const cy = ctx.by(a.lat).toFixed(1);
-  const r  = ctx.nmToSvg(a.radiusNm || 5).toFixed(1);
+  const r  = ctx.nmToSvg(a.radiusNm || DEFAULT_RADIUS_NM).toFixed(1);
   const open = () => showPopup(a);
 
   parent.appendChild(makeClickable(
@@ -52,8 +75,9 @@ function drawCircleAirspace(ctx, a, col, parent, showPopup) {
     makeSvgEl('circle', {
       cx, cy, r,
       fill: 'none', stroke: col,
-      'stroke-width': 1.8, 'stroke-dasharray': '8,4',
-      'vector-effect': 'non-scaling-stroke',
+      'stroke-width':    AIRSPACE_STROKE_WIDTH,
+      'stroke-dasharray': AIRSPACE_DASH_ARRAY,
+      'vector-effect':   'non-scaling-stroke',
     }),
     open,
   ));
@@ -64,7 +88,7 @@ function drawCircleAirspace(ctx, a, col, parent, showPopup) {
 
 // ── Polygon airspace ─────────────────────────────────────
 function drawPolygonAirspace(ctx, a, col, parent, showPopup) {
-  const opacity = ctx.movie ? 0.08 : 0.07;
+  const opacity = ctx.movie ? AIRSPACE_FILL_OPACITY_MFD : AIRSPACE_FILL_OPACITY;
   const d = a.boundary.map((pt, i) =>
     `${i ? 'L' : 'M'}${ctx.bx(pt.lon).toFixed(1)},${ctx.by(pt.lat).toFixed(1)}`).join(' ') + ' Z';
   const open = () => showPopup(a);
@@ -73,8 +97,9 @@ function drawPolygonAirspace(ctx, a, col, parent, showPopup) {
   parent.appendChild(makeClickable(
     makeSvgEl('path', {
       d, fill: 'none', stroke: col,
-      'stroke-width': 1.8, 'stroke-dasharray': '8,4',
-      'vector-effect': 'non-scaling-stroke',
+      'stroke-width':    AIRSPACE_STROKE_WIDTH,
+      'stroke-dasharray': AIRSPACE_DASH_ARRAY,
+      'vector-effect':   'non-scaling-stroke',
     }),
     open,
   ));
@@ -88,43 +113,47 @@ function drawPolygonAirspace(ctx, a, col, parent, showPopup) {
 
 // ── Anchor / racetrack airspace ──────────────────────────
 function drawAnchorAirspace(ctx, a, col, parent, showPopup) {
+  const legNm   = a.legLengthNm || DEFAULT_LEG_NM;
   const rPts = generateRacetrack(
     a.anchorPt.lat, a.anchorPt.lon,
-    a.headingDeg || 0, a.legLengthNm || 10,
-    (a.legLengthNm || 10) / 4,
+    a.headingDeg || DEFAULT_HEADING, legNm,
+    legNm / 4,
     a.direction === 'ccw',
   );
   const d = rPts.map((pt, i) =>
     `${i ? 'L' : 'M'}${ctx.bx(pt.lon).toFixed(1)},${ctx.by(pt.lat).toFixed(1)}`).join(' ') + ' Z';
-  const opacity = ctx.movie ? 0.08 : 0.07;
+  const opacity = ctx.movie ? AIRSPACE_FILL_OPACITY_MFD : AIRSPACE_FILL_OPACITY;
   const open = () => showPopup(a);
 
   // Semi-transparent fill (makes the interior clickable, consistent with other shapes)
   parent.appendChild(makeClickable(makeSvgEl('path', { d, fill: col, opacity }), open));
   parent.appendChild(makeClickable(
-    makeSvgEl('path', { d, fill: 'none', stroke: col, 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' }),
+    makeSvgEl('path', {
+      d, fill: 'none', stroke: col,
+      'stroke-width': AIRSPACE_STROKE_WIDTH, 'vector-effect': 'non-scaling-stroke',
+    }),
     open,
   ));
 
   // Direction arrow on the hot leg midpoint
-  const headRad = (a.headingDeg || 0) * Math.PI / 180;
+  const headRad = (a.headingDeg || DEFAULT_HEADING) * Math.PI / 180;
   const cosLat  = Math.cos(a.anchorPt.lat * Math.PI / 180);
-  const halfLen  = (a.legLengthNm || 10) / 2;
+  const halfLen  = legNm / 2;
   const midLat   = a.anchorPt.lat + Math.cos(headRad) * halfLen / 60;
   const midLon   = a.anchorPt.lon + Math.sin(headRad) * halfLen / (60 * cosLat);
   const amx = ctx.bx(midLon).toFixed(1);
   const amy = ctx.by(midLat).toFixed(1);
 
-  const adx = Math.sin(headRad), ady = -Math.cos(headRad);
-  const arrSize = 6, perpX = -ady, perpY = adx;
-  const arrowG = svgEl('g');
-  arrowG.setAttribute('transform', `translate(${amx},${amy})`);
+  const adx   = Math.sin(headRad), ady = -Math.cos(headRad);
+  const perpX = -ady, perpY = adx;
+  const sz    = DIRECTION_ARROW_SIZE;
+  const arrowG = makeSvgEl('g', { transform: `translate(${amx},${amy})` });
   arrowG._baseX = amx; arrowG._baseY = amy;
   arrowG.appendChild(makeSvgEl('polygon', {
     points:
-      `${(adx * arrSize).toFixed(1)},${(ady * arrSize).toFixed(1)} ` +
-      `${(-adx * arrSize + perpX * arrSize * 0.5).toFixed(1)},${(-ady * arrSize + perpY * arrSize * 0.5).toFixed(1)} ` +
-      `${(-adx * arrSize - perpX * arrSize * 0.5).toFixed(1)},${(-ady * arrSize - perpY * arrSize * 0.5).toFixed(1)}`,
+      `${(adx * sz).toFixed(1)},${(ady * sz).toFixed(1)} ` +
+      `${(-adx * sz + perpX * sz * 0.5).toFixed(1)},${(-ady * sz + perpY * sz * 0.5).toFixed(1)} ` +
+      `${(-adx * sz - perpX * sz * 0.5).toFixed(1)},${(-ady * sz - perpY * sz * 0.5).toFixed(1)}`,
     fill: col, opacity: 0.9,
   }));
   ctx.constantSizeMarkers.push(arrowG);
@@ -149,8 +178,9 @@ function drawEngagementZones(ctx, points) {
       cy: ctx.by(p.lat).toFixed(1),
       r:  ctx.nmToSvg(p.engagementRange).toFixed(1),
       fill: fillColor, stroke: threatCol,
-      'stroke-width': 1.5, 'stroke-dasharray': '6,3',
-      'vector-effect': 'non-scaling-stroke', 'pointer-events': 'none',
+      'stroke-width':    ENG_ZONE_STROKE_WIDTH,
+      'stroke-dasharray': ENG_ZONE_DASH_ARRAY,
+      'vector-effect':   'non-scaling-stroke', 'pointer-events': 'none',
     }));
   });
   return { group: engZoneG, threatCol };
@@ -197,8 +227,7 @@ function generateRacetrack(anchorLat, anchorLon, headingDeg, legLengthNm, turnRa
   }
 
   const L = legLengthNm, R = turnRadiusNm;
-  const s = isCCW ? -1 : 1; // CW → right (+y), CCW → left (-y)
-  const N = 16; // arc segments per semicircle
+  const s = isCCW ? -1 : 1; // CW → right turn (+y), CCW → left turn (-y)
   const pts = [];
 
   // Hot leg: anchor (0,0) → (L,0)
@@ -206,8 +235,8 @@ function generateRacetrack(anchorLat, anchorLon, headingDeg, legLengthNm, turnRa
   pts.push(localToGeo(L, 0));
 
   // Turn 1: semicircle at end of hot leg, center at (L, R*s)
-  for (let i = 1; i <= N; i++) {
-    const a = -s * Math.PI / 2 + Math.PI * i / N;
+  for (let i = 1; i <= ARC_SEGMENTS; i++) {
+    const a = -s * Math.PI / 2 + Math.PI * i / ARC_SEGMENTS;
     pts.push(localToGeo(L + R * Math.cos(a), s * R + R * Math.sin(a)));
   }
 
@@ -215,8 +244,8 @@ function generateRacetrack(anchorLat, anchorLon, headingDeg, legLengthNm, turnRa
   pts.push(localToGeo(0, 2 * R * s));
 
   // Turn 2: semicircle at start of hot leg, center at (0, R*s)
-  for (let i = 1; i <= N; i++) {
-    const a = s * (Math.PI / 2 + Math.PI * i / N);
+  for (let i = 1; i <= ARC_SEGMENTS; i++) {
+    const a = s * (Math.PI / 2 + Math.PI * i / ARC_SEGMENTS);
     pts.push(localToGeo(R * Math.cos(a), s * R + R * Math.sin(a)));
   }
 

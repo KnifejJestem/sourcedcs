@@ -4,6 +4,10 @@
 
 'use strict';
 
+// ── Zoom ──────────────────────────────────────────────────────
+// Scale multiplier applied (or its reciprocal) per mouse-wheel click.
+const ZOOM_FACTOR = 1.18;
+
 // ── Interaction setup ──────────────────────────────────────
 // Attaches wheel, mouse, and touch event listeners to the SVG.
 // state is a mutable object {tx, ty, sc} shared with drawMap.
@@ -16,7 +20,7 @@ function setupInteraction(svg, W, H, MIN_SC, MAX_SC, state, applyTransform, clam
     const rect   = svg.getBoundingClientRect();
     const mx     = (e.clientX - rect.left) / rect.width  * W;
     const my     = (e.clientY - rect.top)  / rect.height * H;
-    const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
+    const factor = e.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR;
     const ns     = Math.max(MIN_SC, Math.min(MAX_SC, state.sc * factor));
 
     // Zoom towards the cursor — keep the point under the cursor stationary

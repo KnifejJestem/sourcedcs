@@ -9,6 +9,89 @@
 // refreshPopup() re-renders the popup in-place after a display mode change
 // (coord format, time mode) so the user doesn't have to click again.
 // Returns { popup, showPopup, refreshPopup }.
+
+// Human-readable heading for each point kind.
+const KIND_LABELS = {
+  steer:    'WAYPOINT',
+  target:   'AIM POINT',
+  threat:   'THREAT',
+  bullseye: 'BULLSEYE',
+  airfield: 'AIRFIELD',
+  carrier:  'CARRIER',
+  airspace: 'AIRSPACE',
+};
+
+// ── Per-kind row builders ─────────────────────────────────
+// Each function returns [[key, value], …] for its specific point kind.
+
+function buildSteerTargetRows(p) {
+  const rows = [['NAME', p.sub], ['MISSION', p.label]];
+  if (p.msnType) rows.push(['TYPE', p.msnType]);
+  return rows;
+}
+
+function buildThreatRows(p) {
+  const rows = [['NAME', p.label]];
+  if (p.threatType)      rows.push(['TYPE',      p.threatType]);
+  if (p.engagementRange) rows.push(['ENG RANGE', `${p.engagementRange} NM`]);
+  if (p.maxAlt)          rows.push(['MAX ALT',   `${p.maxAlt.toLocaleString()} FT`]);
+  return rows;
+}
+
+function buildAirfieldRows(p) {
+  const rows = [['ICAO', p.label]];
+  if (p.sub)  rows.push(['INFO', p.sub]);
+  if (p.name) rows.push(['NAME', p.name]);
+  return rows;
+}
+
+function buildCarrierRows(p) {
+  const rows = [['NAME', p.label]];
+  if (p.sub)      rows.push(['STATUS',   p.sub]);
+  if (p.callsign) rows.push(['CALLSIGN', p.callsign]);
+  return rows;
+}
+
+function buildAirspaceRows(p) {
+  const rows = [
+    ['NAME', p.name || '?'],
+    ['TYPE', (p.type || '?').toUpperCase()],
+  ];
+  if (p.altLower != null || p.altUpper != null) {
+    const lo = p.altLower != null ? p.altLower : '?';
+    const hi = p.altUpper != null ? p.altUpper : '?';
+    rows.push(['ALTITUDE', `${lo} → ${hi}`]);
+  }
+  if (p.timeFrom != null || p.timeTo != null) {
+    const tf = p.timeFrom != null ? fmtTime(p.timeFrom) : '?';
+    const tt = p.timeTo   != null ? fmtTime(p.timeTo)   : '?';
+    rows.push(['WINDOW', `${tf} – ${tt}`]);
+  }
+  if (p.agency)           rows.push(['AGENCY',      p.agency]);
+  if (p.freq)             rows.push(['FREQ',         `${p.freq} MHz`]);
+  if (p.radiusNm)         rows.push(['RADIUS',       `${p.radiusNm} NM`]);
+  if (p.anchorPt)         rows.push(['ANCHOR PT',    fmtCoord(p.anchorPt.lat, p.anchorPt.lon)]);
+  if (p.headingDeg != null) rows.push(['HOT LEG HDG', `${p.headingDeg}°`]);
+  if (p.legLengthNm)      rows.push(['LEG LENGTH',   `${p.legLengthNm} NM`]);
+  if (p.direction)        rows.push(['DIRECTION',    p.direction.toUpperCase()]);
+  if (p.boundary?.length) rows.push(['BOUNDARY',
+    p.boundary.map(pt => fmtCoord(pt.lat, pt.lon)).join(' → ')]);
+  if (p.missions?.length) rows.push(['MISSIONS', p.missions.join(', ')]);
+  if (p.notes)            rows.push(['NOTES',    p.notes]);
+  return rows;
+}
+
+// Dispatch: returns the [[key, value], …] rows appropriate for any point kind.
+function buildPopupRows(p) {
+  if (p.kind === 'steer' || p.kind === 'target') return buildSteerTargetRows(p);
+  if (p.kind === 'threat')   return buildThreatRows(p);
+  if (p.kind === 'bullseye') return [['NAME', p.label]];
+  if (p.kind === 'airfield') return buildAirfieldRows(p);
+  if (p.kind === 'carrier')  return buildCarrierRows(p);
+  if (p.kind === 'airspace') return buildAirspaceRows(p);
+  return [];
+}
+
 function createPopup(container) {
   const popup = el('div', 'map-popup');
   popup.style.display = 'none';
@@ -19,52 +102,10 @@ function createPopup(container) {
   function showPopup(p) {
     lastPoint = p;
     popup.innerHTML = '';
-    const kindLabel = {
-      steer:'WAYPOINT', target:'AIM POINT', threat:'THREAT',
-      bullseye:'BULLSEYE', airfield:'AIRFIELD', carrier:'CARRIER',
-      airspace:'AIRSPACE',
-    }[p.kind] || p.kind.toUpperCase();
-    popup.appendChild(el('div', 'mp-head', kindLabel));
-    const rows = [];
-    if (p.kind === 'steer') {
-      rows.push(['NAME', p.sub]);
-      rows.push(['MISSION', p.label]);
-      if (p.msnType) rows.push(['TYPE', p.msnType]);
-    } else if (p.kind === 'target') {
-      rows.push(['NAME', p.sub]);
-      rows.push(['MISSION', p.label]);
-      if (p.msnType) rows.push(['TYPE', p.msnType]);
-    } else if (p.kind === 'threat') {
-      rows.push(['NAME', p.label]);
-      if (p.threatType) rows.push(['TYPE', p.threatType]);
-      if (p.engagementRange) rows.push(['ENG RANGE', `${p.engagementRange} NM`]);
-      if (p.maxAlt) rows.push(['MAX ALT', `${p.maxAlt.toLocaleString()} FT`]);
-    } else if (p.kind === 'bullseye') {
-      rows.push(['NAME', p.label]);
-    } else if (p.kind === 'airfield') {
-      rows.push(['ICAO', p.label]);
-      if (p.sub) rows.push(['INFO', p.sub]);
-      if (p.name) rows.push(['NAME', p.name]);
-    } else if (p.kind === 'carrier') {
-      rows.push(['NAME', p.label]);
-      if (p.sub) rows.push(['STATUS', p.sub]);
-      if (p.callsign) rows.push(['CALLSIGN', p.callsign]);
-    } else if (p.kind === 'airspace') {
-      rows.push(['NAME', p.name || '?']);
-      rows.push(['TYPE', (p.type || '?').toUpperCase()]);
-      if (p.altLower != null || p.altUpper != null) rows.push(['ALTITUDE', `${p.altLower != null ? p.altLower : '?'} → ${p.altUpper != null ? p.altUpper : '?'}`]);
-      if (p.timeFrom != null || p.timeTo != null) rows.push(['WINDOW', `${p.timeFrom != null ? fmtTime(p.timeFrom) : '?'} – ${p.timeTo != null ? fmtTime(p.timeTo) : '?'}`]);
-      if (p.agency) rows.push(['AGENCY', p.agency]);
-      if (p.freq) rows.push(['FREQ', p.freq + ' MHz']);
-      if (p.radiusNm) rows.push(['RADIUS', p.radiusNm + ' NM']);
-      if (p.anchorPt) rows.push(['ANCHOR PT', fmtCoord(p.anchorPt.lat, p.anchorPt.lon)]);
-      if (p.headingDeg != null) rows.push(['HOT LEG HDG', p.headingDeg + '°']);
-      if (p.legLengthNm) rows.push(['LEG LENGTH', p.legLengthNm + ' NM']);
-      if (p.direction) rows.push(['DIRECTION', p.direction.toUpperCase()]);
-      if (p.boundary) rows.push(['BOUNDARY', p.boundary.map(pt => fmtCoord(pt.lat, pt.lon)).join(' → ')]);
-      if (p.missions?.length) rows.push(['MISSIONS', p.missions.join(', ')]);
-      if (p.notes) rows.push(['NOTES', p.notes]);
-    }
+
+    popup.appendChild(el('div', 'mp-head', KIND_LABELS[p.kind] ?? p.kind.toUpperCase()));
+
+    const rows = buildPopupRows(p);
     if (p.lat != null && p.lon != null) rows.push(['COORDS', fmtCoord(p.lat, p.lon)]);
     rows.forEach(([k, v]) => {
       const row = el('div', 'mp-row');
@@ -72,6 +113,7 @@ function createPopup(container) {
       row.appendChild(el('span', 'mp-v', String(v)));
       popup.appendChild(row);
     });
+
     const closeBtn = el('button', 'mp-close', '×');
     closeBtn.addEventListener('click', () => { popup.style.display = 'none'; });
     popup.appendChild(closeBtn);
@@ -96,7 +138,7 @@ function createGridLabelOverlay(ctx) {
   // Shared text attributes for all grid labels
   const LABEL_ATTRS = {
     'font-size':   9,
-    'font-family': 'IBM Plex Mono,monospace',
+    'font-family': MONO_FONT,
     fill:          ctx.C.gridLbl,
   };
 

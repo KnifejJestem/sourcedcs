@@ -113,9 +113,10 @@ function fmtCoordDMS(lat, lon) {
 function latLonToMGRS(lat, lon) {
   if (lat < -80 || lat > 84) return fmtCoordDM(lat, lon);
 
-  const a  = 6378137;
-  const e2 = 0.00669437999014;
-  const k0 = 0.9996;
+  // WGS-84 ellipsoid parameters
+  const WGS84_SEMI_MAJOR = 6378137;          // semi-major axis (m)
+  const WGS84_ECC_SQ     = 0.00669437999014; // eccentricity squared (e²)
+  const UTM_SCALE        = 0.9996;           // UTM central meridian scale factor
 
   // UTM zone with Norway / Svalbard exceptions
   let zoneNum = Math.floor((lon + 180) / 6) + 1;
@@ -131,26 +132,27 @@ function latLonToMGRS(lat, lon) {
   const lonR  = lon * Math.PI / 180;
   const lon0R = ((zoneNum - 1) * 6 - 180 + 3) * Math.PI / 180;
 
+  const e2 = WGS84_ECC_SQ;
   const e4 = e2 * e2, e6 = e4 * e2;
-  const N  = a / Math.sqrt(1 - e2 * Math.sin(latR) ** 2);
+  const N  = WGS84_SEMI_MAJOR / Math.sqrt(1 - e2 * Math.sin(latR) ** 2);
   const t  = Math.tan(latR);
   const c  = (e2 / (1 - e2)) * Math.cos(latR) ** 2;
   const ag = Math.cos(latR) * (lonR - lon0R);
 
-  const M = a * (
+  const M = WGS84_SEMI_MAJOR * (
     (1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256)  * latR
     - (3 * e2 / 8 + 3 * e4 / 32 + 45 * e6 / 1024) * Math.sin(2 * latR)
     + (15 * e4 / 256 + 45 * e6 / 1024)             * Math.sin(4 * latR)
     - (35 * e6 / 3072)                              * Math.sin(6 * latR)
   );
 
-  const easting = k0 * N * (
+  const easting = UTM_SCALE * N * (
     ag
     + (1 - t * t + c) * ag ** 3 / 6
     + (5 - 18 * t * t + t ** 4 + 72 * c - 58 * e2 / (1 - e2)) * ag ** 5 / 120
   ) + 500000;
 
-  let northing = k0 * (M + N * Math.tan(latR) * (
+  let northing = UTM_SCALE * (M + N * Math.tan(latR) * (
     ag ** 2 / 2
     + (5 - t * t + 9 * c + 4 * c * c)                                        * ag ** 4 / 24
     + (61 - 58 * t * t + t ** 4 + 600 * c - 330 * e2 / (1 - e2))            * ag ** 6 / 720

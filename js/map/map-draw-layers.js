@@ -4,6 +4,14 @@
 
 'use strict';
 
+// ── City marker constants ─────────────────────────────────────
+// Dot radius keyed by population tier (1 = small, 3 = major city).
+const CITY_DOT_RADIUS    = { 3: 2.8, 2: 2.0, 1: 1.4 };
+const CITY_DOT_OPACITY   = 0.6;
+const CITY_LABEL_OPACITY = 0.7;
+const CITY_FONT_MAJOR    = 7;  // px — population tier 3
+const CITY_FONT_MINOR    = 6;  // px — population tier 1 and 2
+
 // ── Grid ─────────────────────────────────────────────────
 // Returns the grid <g> element.
 function drawGrid(ctx) {
@@ -49,25 +57,24 @@ function drawCities(ctx, geoData) {
   const cityG = svgEl('g');
   geoData.cities.forEach(city => {
     const major = city.pop === 3;
-    const r     = major ? 2.8 : city.pop === 2 ? 2 : 1.4;
+    const r     = CITY_DOT_RADIUS[city.pop] ?? CITY_DOT_RADIUS[1];
     const mx    = ctx.bx(city.lon).toFixed(1);
     const my    = ctx.by(city.lat).toFixed(1);
-    const g     = svgEl('g');
-    g.setAttribute('transform', `translate(${mx},${my})`);
+    const g     = makeSvgEl('g', { transform: `translate(${mx},${my})` });
     g._baseX = mx; g._baseY = my;
 
     g.appendChild(makeSvgEl('circle', {
       cx: 0, cy: 0, r,
-      fill: major ? ctx.C.cityMajor : ctx.C.cityDot,
-      opacity: 0.6,
+      fill:    major ? ctx.C.cityMajor : ctx.C.cityDot,
+      opacity: CITY_DOT_OPACITY,
     }));
     g.appendChild(svgText(city.n, {
       x: 3, y: -2,
-      'font-size':   major ? 7 : 6,
-      'font-family': 'IBM Plex Mono,monospace',
+      'font-size':   major ? CITY_FONT_MAJOR : CITY_FONT_MINOR,
+      'font-family': MONO_FONT,
       'font-weight': major ? 600 : 400,
       fill:    major ? ctx.C.cityMajor : ctx.C.cityLbl,
-      opacity: 0.7,
+      opacity: CITY_LABEL_OPACITY,
     }));
 
     ctx.constantSizeMarkers.push(g);
