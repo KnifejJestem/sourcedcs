@@ -39,6 +39,7 @@ function drawLand(ctx, geoData) {
     path.setAttribute('fill',ctx.C.land);
     path.setAttribute('stroke',ctx.C.border);
     path.setAttribute('stroke-width','0.8');
+    path.setAttribute('vector-effect','non-scaling-stroke');
     landG.appendChild(path);
   });
   return landG;
@@ -51,18 +52,24 @@ function drawCities(ctx, geoData) {
   geoData.cities.forEach(city => {
     const cx=ctx.bx(city.lon), cy=ctx.by(city.lat);
     const major=city.pop===3, r=major?2.8:city.pop===2?2:1.4;
+    const g=svgEl('g');
+    const mx=cx.toFixed(1), my=cy.toFixed(1);
+    g.setAttribute('transform',`translate(${mx},${my})`);
+    g._baseX=mx; g._baseY=my;
     const circ=svgEl('circle');
-    circ.setAttribute('cx',cx); circ.setAttribute('cy',cy); circ.setAttribute('r',r);
+    circ.setAttribute('cx',0); circ.setAttribute('cy',0); circ.setAttribute('r',r);
     circ.setAttribute('fill',major?ctx.C.cityMajor:ctx.C.cityDot); circ.setAttribute('opacity','0.6');
-    cityG.appendChild(circ);
+    g.appendChild(circ);
     const t=svgEl('text');
-    t.setAttribute('x',cx+3); t.setAttribute('y',cy-2);
+    t.setAttribute('x',3); t.setAttribute('y',-2);
     t.setAttribute('font-size',major?'7':'6');
     t.setAttribute('font-family','IBM Plex Mono,monospace');
     t.setAttribute('font-weight',major?'600':'400');
     t.setAttribute('fill',major?ctx.C.cityMajor:ctx.C.cityLbl);
     t.setAttribute('opacity','0.7'); t.textContent=city.n;
-    cityG.appendChild(t);
+    g.appendChild(t);
+    ctx.constantSizeMarkers.push(g);
+    cityG.appendChild(g);
   });
   return cityG;
 }

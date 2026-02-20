@@ -36,6 +36,10 @@ function drawRoutes(ctx, routes, points, showPopup) {
       const mx = ctx.bx(p.lon).toFixed(1), my = ctx.by(p.lat).toFixed(1);
       mg.setAttribute('transform',`translate(${mx},${my})`);
       mg._baseX = mx; mg._baseY = my;
+      // Transparent hit circle for reliable clicking
+      const hit=svgEl('circle'); hit.setAttribute('r','14');
+      hit.setAttribute('fill','transparent'); hit.setAttribute('stroke','none');
+      mg.appendChild(hit);
       if (p.kind==='steer') {
         const col=p.color;
         const circ=svgEl('circle'); circ.setAttribute('r','4');
