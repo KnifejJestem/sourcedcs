@@ -4,118 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ATO BRIEF</title>
-  <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-
-<div class="scanline"></div>
-
-<div class="app">
-
-  <header>
-    <div class="header-title">ATO BRIEF</div>
-    <div class="header-meta" id="header-meta"></div>
-    <div class="header-right">
-      <div class="theme-toggle">
-        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
-        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
-      </div>
-      <button class="load-btn" onclick="document.getElementById('fileInput').click()">LOAD PACKAGE</button>
-      <input type="file" id="fileInput" accept=".yaml,.yml" style="display:none">
-    </div>
-  </header>
-
-  <div class="body">
-
-    <div class="upload-screen" id="upload-screen">
-      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-        <div class="drop-icon">⊕</div>
-        <div class="drop-label">LOAD ATO PACKAGE</div>
-        <div class="drop-sub">
-          Drop a <strong>package.yaml</strong> here, or click to browse.<br>
-          Top-level keys: <code>ato</code>, <code>aco</code>, <code>spins</code>, <code>comms</code>
-        </div>
-        <div class="drop-hint">Try: <code>demo-package.yaml</code></div>
-      </div>
-    </div>
-
-    <div class="main-content" id="main-content" style="display:none">
-
-      <div class="tab-bar">
-        <button class="tab-btn active" data-tab="ato"   onclick="showTab('ato')">ATO</button>
-        <button class="tab-btn"        data-tab="aco"   onclick="showTab('aco')">ACO</button>
-        <button class="tab-btn"        data-tab="spins" onclick="showTab('spins')">SPINS</button>
-        <button class="tab-btn"        data-tab="comms" onclick="showTab('comms')">COMMS</button>
-        <button class="tab-btn"        data-tab="map"   onclick="showTab('map')">MAP</button>
-      </div>
-
-      <!-- ATO -->
-      <div class="view active" id="view-ato">
-        <div class="intel-row" id="intel-row"></div>
-        <div class="cards-row" id="cards-row"></div>
-        <div class="timeline-row">
-          <div class="tl-header-bar">
-            <span class="tl-lbl">TIMELINE — ZULU · ▓ MISSION WINDOW · ▒ AAR WINDOW</span>
-            <span class="tl-lbl" id="tl-range">—</span>
-          </div>
-          <div class="tl-scroll"><div class="tl-canvas" id="tl-canvas"></div></div>
-        </div>
-        <div class="detail-panel" id="detail-panel">
-          <div class="detail-inner" id="detail-inner"></div>
-        </div>
-      </div>
-
-      <!-- ACO -->
-      <div class="view" id="view-aco">
-        <div class="doc-scroll" id="aco-content">
-          <div class="empty-state">NO ACO — add an <code>aco:</code> section to your package.yaml</div>
-        </div>
-      </div>
-
-      <!-- SPINS -->
-      <div class="view" id="view-spins">
-        <div class="doc-scroll" id="spins-content">
-          <div class="empty-state">NO SPINS — add a <code>spins:</code> section to your package.yaml</div>
-        </div>
-      </div>
-
-      <!-- COMMS -->
-      <div class="view" id="view-comms">
-        <div class="doc-scroll" id="comms-content">
-          <div class="empty-state">NO COMMS — add a <code>comms:</code> section to your package.yaml</div>
-        </div>
-      </div>
-
-      <!-- MAP -->
-      <div class="view" id="view-map">
-        <div class="map-wrap">
-          <div class="map-container" id="map-container">
-            <div class="empty-state">Load a package with aim_points or bullseye.coords to plot them here.</div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
-<script src="js/app.js"></script>
-<script src="js/loadout.js"></script>
-<script src="js/views/view-ato.js"></script>
-<script src="js/views/view-aco.js"></script>
-<script src="js/views/view-spins.js"></script>
-<script src="js/views/view-comms.js"></script>
-<script src="js/geo-data.js"></script>
-<script src="js/map/map-state.js"></script>
-<script src="js/map/map-data.js"></script>
-<script src="js/map/map-interact.js"></script>
-<script src="js/map/map-ui.js"></script>
-<script src="js/map/map-draw-layers.js"></script>
-<script src="js/map/map-draw-zones.js"></script>
-<script src="js/map/map-draw-routes.js"></script>
-<script src="js/map/map-draw-markers.js"></script>
-<script src="js/map/map-render.js"></script>
-<script src="js/map/map-main.js"></script>
+  <div id="root"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+  <script src="/js/geo-data.js"></script>
+  <script src="/js/map/map-state.js"></script>
+  <script src="/js/map/map-data.js"></script>
+  <script src="/js/map/map-interact.js"></script>
+  <script src="/js/map/map-ui.js"></script>
+  <script src="/js/map/map-draw-layers.js"></script>
+  <script src="/js/map/map-draw-zones.js"></script>
+  <script src="/js/map/map-draw-routes.js"></script>
+  <script src="/js/map/map-draw-markers.js"></script>
+  <script src="/js/map/map-render.js"></script>
+  <script src="/js/map/map-main.js"></script>
+  <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
