@@ -4,87 +4,96 @@
 
 'use strict';
 
+// Build the geometry <span> for an ACM table cell using DOM methods.
+// Handles anchor/circle/polygon shapes with coord reformatting.
+function buildGeoCell(geo) {
+  const span = el('span', 'aco-geo');
+
+  // Small helpers to keep the builder readable
+  function br()           { span.appendChild(el('br')); }
+  function strong(text)   { span.appendChild(el('strong', '', text)); }
+  function text(str)      { span.appendChild(document.createTextNode(str)); }
+  function indent()       { text('\u00a0\u00a0'); } // two non-breaking spaces
+
+  if (geo.anchor_point) {
+    strong('ANCHOR:');
+    text(' ' + reformatCoordsInText(String(geo.anchor_point)));
+    if (geo.heading_deg != null) {
+      br();
+      text(`HDG: ${geo.heading_deg}°`);
+      if (geo.leg_length_nm) text(` · LEG: ${geo.leg_length_nm} NM`);
+      if (geo.direction)     text(` · ${geo.direction.toUpperCase()}`);
+    }
+  } else if (geo.center) {
+    strong('CENTER:');
+    text(' ' + reformatCoordsInText(String(geo.center)));
+    if (geo.radius_nm) {
+      br();
+      text(`RADIUS: ${geo.radius_nm} NM`);
+    }
+  }
+
+  if (geo.boundary?.length) {
+    if (span.childNodes.length > 0) br();
+    strong('POLYGON:');
+    text(` ${geo.boundary.length} pts`);
+    geo.boundary.forEach((c, i) => {
+      br();
+      indent();
+      text(`${i + 1}. ${reformatCoordsInText(String(c))}`);
+    });
+  }
+
+  if (!span.childNodes.length) span.textContent = '—';
+  return span;
+}
+
 function renderACO(aco) {
   const div = document.getElementById('aco-content');
   div.innerHTML = '';
 
   if (!aco) {
-    div.innerHTML = '<div class="empty-state">NO ACO DATA</div>';
+    div.appendChild(el('div', 'empty-state', 'NO ACO DATA'));
     return;
   }
 
-  // Header
-  const hdr = el('div', 'doc-header');
-  [
-    ['ACO ID',     aco.id],
-    ['OPERATION',  aco.operation],
-    ['ATO DAY',    aco.ato_day],
-    ['TIMEZONE',   aco.timezone],
-    ['CLASS',      aco.classification],
-  ].forEach(([lbl, val]) => {
-    const it = el('div', 'doc-hitem');
-    it.appendChild(el('div', 'doc-hlbl', lbl));
-    it.appendChild(el('div', 'doc-hval', val || '—'));
-    hdr.appendChild(it);
-  });
-  div.appendChild(hdr);
+  docHeader(div, [
+    ['ACO ID',    aco.id],
+    ['OPERATION', aco.operation],
+    ['ATO DAY',   aco.ato_day],
+    ['TIMEZONE',  aco.timezone],
+    ['CLASS',     aco.classification],
+  ]);
 
   if (!aco.acms?.length) {
-    div.innerHTML += '<div class="empty-state">NO ACMs DEFINED</div>';
+    div.appendChild(el('div', 'empty-state', 'NO ACMs DEFINED'));
     return;
   }
 
-  // ACM table
-  const tbl = el('table', 'doc-table');
+  // ACM table — one row per airspace control measure
+  const { table: tbl, tbody } = docTable(
+    ['NAME', 'TYPE', 'GEOMETRY', 'MISSIONS', 'ALTITUDE', `WINDOW (${STATE.display.timeMode})`, 'CONTROL AGENCY', 'FREQ', 'NOTES']
+  );
 
-  const thead = tbl.createTHead();
-  const hr = thead.insertRow();
-  ['NAME', 'TYPE', 'GEOMETRY', 'MISSIONS', 'ALTITUDE', 'WINDOW (Z)', 'CONTROL AGENCY', 'FREQ', 'NOTES'].forEach(h => {
-    const th = document.createElement('th');
-    th.textContent = h;
-    hr.appendChild(th);
-  });
-
-  const tbody = tbl.createTBody();
   aco.acms.forEach(acm => {
-    const tr = tbody.insertRow();
-
-    function td(content, style) {
-      const c = tr.insertCell();
-      if (typeof content === 'string') c.innerHTML = content;
-      else c.appendChild(content);
-      if (style) c.style.cssText = style;
-    }
-
+    const tr      = tbody.insertRow();
     const typeKey = (acm.type || 'OTHER').toUpperCase();
-    td(`<strong>${acm.name || '—'}</strong>`);
-    td(`<span class="acm-badge ${typeKey}">${typeKey}</span>`);
 
-    // Geometry column — show shape-specific details
-    let geo = '';
-    if (acm.anchor_point) {
-      geo += `<strong>ANCHOR:</strong> ${acm.anchor_point}`;
-      if (acm.heading_deg != null) geo += `<br>HDG: ${acm.heading_deg}°`;
-      if (acm.leg_length_nm) geo += ` · LEG: ${acm.leg_length_nm} NM`;
-      if (acm.direction) geo += ` · ${acm.direction.toUpperCase()}`;
-    } else if (acm.center_coords) {
-      geo += `<strong>CENTER:</strong> ${acm.center_coords}`;
-      if (acm.radius_nm) geo += `<br>RADIUS: ${acm.radius_nm} NM`;
+    // Helper: append a cell containing a single span with the given class and text
+    function spanCell(cls, text) {
+      tr.insertCell().appendChild(el('span', cls, String(text)));
     }
-    if (acm.boundary?.length) {
-      geo += (geo ? '<br>' : '') + `<strong>POLYGON:</strong> ${acm.boundary.length} pts`;
-      acm.boundary.forEach((c, i) => { geo += `<br>&nbsp;&nbsp;${i + 1}. ${c}`; });
-    }
-    td(`<span style="font-size:9px;color:var(--text-3)">${geo || '—'}</span>`);
 
-    td(`<span style="font-size:10px;color:var(--text-3)">${(acm.missions || []).join(', ') || '—'}</span>`);
-    td(`<span style="font-size:11px">${acm.alt_lower || '?'} → ${acm.alt_upper || '?'}</span>`);
-    td(`<span style="color:var(--amber);font-size:11px">${acm.time_from || '—'} – ${acm.time_to || '—'}</span>`);
-    td(`<span style="color:var(--blue);font-size:11px">${acm.control_agency || '—'}</span>`);
-    td(`<span style="color:var(--blue);font-size:11px">${acm.control_freq_mhz ? acm.control_freq_mhz + ' MHz' : '—'}</span>`);
+    tr.insertCell().appendChild(el('strong', '', acm.name || '—'));
+    tr.insertCell().appendChild(el('span', `acm-badge ${typeKey}`, typeKey));
+    tr.insertCell().appendChild(buildGeoCell(acm.geometry || {}));
 
-    // Notes column
-    td(`<span style="font-size:9px;color:var(--text-3);font-style:italic">${acm.notes || '—'}</span>`);
+    spanCell('aco-msns', (acm.missions || []).join(', ') || '—');
+    spanCell('aco-alt',  `${acm.alt_lower || '?'} → ${acm.alt_upper || '?'}`);
+    spanCell('aco-time', `${fmtTime(acm.time_from) || '—'} – ${fmtTime(acm.time_to) || '—'}`);
+    spanCell('aco-ctrl', acm.control_agency || '—');
+    spanCell('aco-ctrl', acm.control_freq_mhz ? acm.control_freq_mhz + ' MHz' : '—');
+    spanCell('aco-note', acm.notes || '—');
   });
 
   div.appendChild(tbl);

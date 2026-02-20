@@ -1011,3 +1011,13 @@ header {
   padding: 0;
 }
 .mp-close:hover { color: var(--text); }
+
+/* ── ACO table cell text helpers ────────────────────────────── */
+/* Replace inline style="..." attributes in view-aco.js        */
+.aco-geo    { font-size: 9px;  color: var(--text-3); }
+.aco-msns   { font-size: 10px; color: var(--text-3); }
+.aco-alt    { font-size: 11px; }
+.aco-time   { font-size: 11px; color: var(--amber); }
+.aco-ctrl   { font-size: 11px; color: var(--blue); }
+.aco-note   { font-size: 9px;  color: var(--text-3); font-style: italic; }
+.text-dim   { color: var(--text-3); }

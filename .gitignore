@@ -181,6 +181,5 @@ cython_debug/
 .cursorindexingignore
 /.idea
 node_modules/
-package.json
-package-lock.json
+dist/
 vendor/

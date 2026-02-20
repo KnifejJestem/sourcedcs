@@ -4,49 +4,69 @@
 
 'use strict';
 
+// ── Timeline layout constants ──────────────────────────────────
+const TIMELINE_STEP_MINS = 15;  // minutes between tick marks
+const TIMELINE_WIDTH_PX  = 800; // CSS width of the scrollable track area
+
 function renderATO(ato) {
   const gc       = ato.global_control || {};
   const missions = ato.missions || [];
+  const prevIdx  = STATE.selectedIdx;  // save before card rebuild clears old DOM
 
   renderIntelStrip(gc, ato);
   renderMissionCards(missions);
   renderTimeline(missions);
-  closeDetail();
+
+  // Re-open the detail panel for the previously selected mission (if any).
+  // Reset selectedIdx to -1 first so selectMission doesn't treat it as a toggle.
+  if (prevIdx >= 0) {
+    STATE.selectedIdx = -1;
+    selectMission(prevIdx);
+  }
 }
 
 // ── Intel strip ───────────────────────────────────────────────
 function renderIntelStrip(gc, ato) {
+  // section() builds one intel-section element from an array of [lbl, val, cls?] tuples.
+  // Returns a DOM element so the caller can append it directly (no innerHTML needed).
+  function section(...items) {
+    const div = el('div', 'intel-section');
+    items.forEach(([lbl, val, cls]) => {
+      div.appendChild(html`
+        <div class="intel-item">
+          <span class="intel-lbl">${lbl}</span>
+          <span class="intel-val${cls ? ' ' + cls : ''}">${val || '—'}</span>
+        </div>`);
+    });
+    return div;
+  }
+
+  const irl = [ato.irl_date, ato.irl_time_zulu].filter(Boolean).join(' ') || '—';
+  const sections = [
+    section(
+      ['IRL START',    irl],
+      ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
+    ),
+    section(
+      ['PFREQ', gc.primary_freq_mhz ? gc.primary_freq_mhz + ' MHz' : '—', 'freq'],
+    ),
+    section(
+      ['AWACS / GCI', gc.controlling_unit || '—'],
+      ['PLATFORM',    gc.aircraft_type    || '—'],
+    ),
+  ];
+  if (gc.bullseye) {
+    const bsParsed = parseCoord(gc.bullseye.coords);
+    const bsCoords = bsParsed ? fmtCoord(bsParsed.lat, bsParsed.lon) : (gc.bullseye.coords || '—');
+    sections.push(section(
+      ['BULLSEYE', gc.bullseye.name || '—'],
+      ['COORDS',   bsCoords, 'coords'],
+    ));
+  }
+
   const row = document.getElementById('intel-row');
   row.innerHTML = '';
-
-  function section(...items) {
-    const s = el('div', 'intel-section');
-    items.forEach(([lbl, val, cls]) => {
-      const item = el('div', 'intel-item');
-      item.appendChild(el('span', 'intel-lbl', lbl));
-      item.appendChild(el('span', 'intel-val' + (cls ? ' ' + cls : ''), val || '—'));
-      s.appendChild(item);
-    });
-    row.appendChild(s);
-  }
-
-  section(
-    ['IRL START',    `${ato.irl_date || '—'} ${ato.irl_time_zulu || ''}`],
-    ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
-  );
-  section(
-    ['PFREQ', gc.primary_freq_mhz ? gc.primary_freq_mhz + ' MHz' : '—', 'freq'],
-  );
-  section(
-    ['AWACS / GCI', gc.controlling_unit || '—'],
-    ['PLATFORM',    gc.aircraft_type    || '—'],
-  );
-  if (gc.bullseye) {
-    section(
-      ['BULLSEYE', gc.bullseye.name   || '—'],
-      ['COORDS',   gc.bullseye.coords || '—', 'coords'],
-    );
-  }
+  sections.forEach(s => row.appendChild(s));
 }
 
 // ── Mission cards ─────────────────────────────────────────────
@@ -55,34 +75,42 @@ function renderMissionCards(missions) {
   row.innerHTML = '';
 
   missions.forEach((m, i) => {
-    const tk   = typeKey(m.mission_type);
-    const card = el('div', `mission-card card-${tk}`);
+    const tk = typeKey(m.mission_type);
 
-    // Top strip
-    const top  = el('div', 'card-top');
-    const left = el('div');
-    left.appendChild(el('div', 'card-callsign', m.callsign || '—'));
-    left.appendChild(el('div', 'card-msn',      m.mission_number || ''));
-    top.appendChild(left);
-    top.appendChild(el('div', `card-type-badge type-${tk}`, m.mission_type || '?'));
-    card.appendChild(top);
-
-    // Body rows
-    const body = el('div', 'card-body');
-    function cr(k, v, c) {
-      const r = el('div', 'card-row');
-      r.appendChild(el('span', 'ck', k));
-      r.appendChild(el('span', 'cv' + (c ? ' ' + c : ''), v));
-      body.appendChild(r);
-    }
-    cr('ACFT',   (m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '?'), 'acft');
-    cr('TARGET', m.target?.location || '—');
-    cr('WINDOW', `${fmtZ(m.target?.not_earlier_than)} → ${fmtZ(m.target?.not_later_than)}`, 'time');
-    if (m.control?.primary_freq_mhz)
-      cr('PFREQ', m.control.primary_freq_mhz + ' MHz', 'freq');
-    if (m.refuel)
-      cr('TANKER', `${m.refuel.tanker_callsign} ${m.refuel.altitude}`, 'tanker');
-    card.appendChild(body);
+    const card = html`
+      <div class="mission-card card-${tk}">
+        <div class="card-top">
+          <div>
+            <div class="card-callsign">${m.callsign || '—'}</div>
+            <div class="card-msn">${m.mission_number || ''}</div>
+          </div>
+          <div class="card-type-badge type-${tk}">${m.mission_type || '?'}</div>
+        </div>
+        <div class="card-body">
+          <div class="card-row">
+            <span class="ck">ACFT</span>
+            <span class="cv acft">${m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '?'}</span>
+          </div>
+          <div class="card-row">
+            <span class="ck">TARGET</span>
+            <span class="cv">${m.target?.location || '—'}</span>
+          </div>
+          <div class="card-row">
+            <span class="ck">WINDOW</span>
+            <span class="cv time">${fmtTime(m.target?.not_earlier_than)} → ${fmtTime(m.target?.not_later_than)}</span>
+          </div>
+          ${m.control?.primary_freq_mhz ? `
+          <div class="card-row">
+            <span class="ck">PFREQ</span>
+            <span class="cv freq">${m.control.primary_freq_mhz} MHz</span>
+          </div>` : ''}
+          ${m.refuel ? `
+          <div class="card-row">
+            <span class="ck">TANKER</span>
+            <span class="cv tanker">${m.refuel.tanker_callsign} ${m.refuel.altitude}</span>
+          </div>` : ''}
+        </div>
+      </div>`;
 
     card.addEventListener('click', () => selectMission(i));
     row.appendChild(card);
@@ -106,30 +134,46 @@ function renderTimeline(missions) {
   });
 
   if (!isFinite(minT)) {
-    canvas.innerHTML = '<div class="empty-state">NO TIME DATA</div>';
+    canvas.innerHTML = '';
+    canvas.appendChild(el('div', 'empty-state', 'NO TIME DATA'));
     return;
   }
 
-  const STEP = 15;
-  minT = Math.floor((minT - 15) / STEP) * STEP;
-  maxT = Math.ceil ((maxT + 15) / STEP) * STEP;
+  const STEP = TIMELINE_STEP_MINS;
+  minT = Math.floor((minT - STEP) / STEP) * STEP;
+  maxT = Math.ceil ((maxT + STEP) / STEP) * STEP;
   const span = maxT - minT;
-  const TW   = 800; // px — track width basis
+  const TW   = TIMELINE_WIDTH_PX;
 
   const hh = t => String(Math.floor(t / 60)).padStart(2, '0');
   const mm = t => String(t % 60).padStart(2, '0');
 
-  document.getElementById('tl-range').textContent =
-    `${hh(minT)}${mm(minT)}Z – ${hh(maxT)}${mm(maxT)}Z`;
-
-  // Tick header
-  const tickRow = el('div', 'tl-ticks');
-  for (let t = minT; t <= maxT; t += STEP) {
-    const tick = el('div', 'tl-tick', `${hh(t)}${mm(t)}Z`);
-    tick.style.width = (STEP / span * TW) + 'px';
-    tickRow.appendChild(tick);
+  const timeSuffix = STATE.display.timeMode;
+  // Helper: display time label from raw minutes (applies local offset in L mode)
+  function dispT(rawMins) {
+    if (STATE.display.timeMode === 'L') {
+      const off = (STATE.pkg?.ato?.local_offset_hours || 0) * 60;
+      return wrapMins(rawMins + off);
+    }
+    return rawMins;
   }
-  canvas.appendChild(tickRow);
+
+  document.getElementById('tl-range').textContent =
+    `${hh(dispT(minT))}${mm(dispT(minT))}${timeSuffix} – ${hh(dispT(maxT))}${mm(dispT(maxT))}${timeSuffix}`;
+
+  // Update mode label in the static header bar
+  const modeLabel = document.getElementById('tl-mode-label');
+  if (modeLabel) modeLabel.textContent = `TIMELINE — ${timeSuffix === 'L' ? 'LOCAL' : 'ZULU'} · ▓ MISSION WINDOW · ▒ AAR WINDOW`;
+
+  // Tick header — one element per tick (no event listeners needed on ticks,
+  // but building them with el() avoids embedding HTML strings in JS).
+  const ticksRow = el('div', 'tl-ticks');
+  for (let t = minT; t <= maxT; t += STEP) {
+    const tick = el('div', 'tl-tick', `${hh(dispT(t))}${mm(dispT(t))}${timeSuffix}`);
+    tick.style.width = `${(STEP / span * TW).toFixed(2)}px`;
+    ticksRow.appendChild(tick);
+  }
+  canvas.appendChild(ticksRow);
 
   // Mission rows
   missions.forEach((m, i) => {
@@ -137,47 +181,45 @@ function renderTimeline(missions) {
     const row   = el('div', 'tl-row');
 
     // Label
-    const lbl = el('div', 'tl-label');
-    const lcs = el('div', 'tl-label-callsign', m.callsign || '—');
-    lcs.style.color = color;
-    lbl.appendChild(lcs);
-    lbl.appendChild(el('div', 'tl-label-type',
-      `${m.mission_type || ''} · ${m.mission_number || ''}`));
-    row.appendChild(lbl);
+    row.appendChild(html`
+      <div class="tl-label">
+        <div class="tl-label-callsign" style="color:${color}">${m.callsign || '—'}</div>
+        <div class="tl-label-type">${m.mission_type || ''} · ${m.mission_number || ''}</div>
+      </div>`);
 
     // Track
     const track = el('div', 'tl-track');
     track.style.width = TW + 'px';
 
-    // Grid lines
+    // Grid lines — one per tick, positioned with CSS left %
     for (let t = minT; t <= maxT; t += STEP) {
-      const gl = el('div', 'tl-grid-line');
-      gl.style.left = ((t - minT) / span * 100) + '%';
-      track.appendChild(gl);
+      const line = el('div', 'tl-grid-line');
+      line.style.left = `${((t - minT) / span * 100).toFixed(3)}%`;
+      track.appendChild(line);
     }
 
     // Mission bar
     const net = toMins(m.target?.not_earlier_than);
     const nlt = toMins(m.target?.not_later_than);
     if (net != null && nlt != null) {
-      const bar = el('div', 'tl-bar', m.callsign || '');
-      bar.style.background = color;
-      bar.style.left  = ((net - minT) / span * 100) + '%';
-      bar.style.width = Math.max(2, (nlt - net) / span * 100) + '%';
-      bar.title = `${m.callsign} · ${fmtZ(m.target.not_earlier_than)} – ${fmtZ(m.target.not_later_than)}`;
+      const bar = html`
+        <div class="tl-bar"
+             style="background:${color};left:${((net-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(nlt-net)/span*100).toFixed(3)}%"
+             title="${m.callsign} · ${fmtTime(m.target.not_earlier_than)} – ${fmtTime(m.target.not_later_than)}"
+        >${m.callsign || ''}</div>`;
       bar.addEventListener('click', () => selectMission(i));
       track.appendChild(bar);
     }
 
-    // Refuel bar (hatched, below the mission bar)
+    // Refuel bar (hatched)
     const rnet = toMins(m.refuel?.not_earlier_than);
     const rnlt = toMins(m.refuel?.not_later_than);
     if (rnet != null && rnlt != null) {
-      const rbar = el('div', 'tl-bar refuel');
-      rbar.style.left  = ((rnet - minT) / span * 100) + '%';
-      rbar.style.width = Math.max(2, (rnlt - rnet) / span * 100) + '%';
-      rbar.title = `${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtZ(rnet)} – ${fmtZ(rnlt)}`;
-      track.appendChild(rbar);
+      const refuelBar = el('div', 'tl-bar refuel');
+      refuelBar.style.left  = `${((rnet - minT) / span * 100).toFixed(3)}%`;
+      refuelBar.style.width = `${Math.max(2, (rnlt - rnet) / span * 100).toFixed(3)}%`;
+      refuelBar.title       = `${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtTime(m.refuel?.not_earlier_than)} – ${fmtTime(m.refuel?.not_later_than)}`;
+      track.appendChild(refuelBar);
     }
 
     row.appendChild(track);
@@ -217,27 +259,29 @@ function selectMission(idx) {
   }
 
   function df(parent, k, v, cls) {
-    const f = el('div', 'detail-field');
-    f.appendChild(el('div', 'dk', k));
-    f.appendChild(el('div', 'dv' + (cls ? ' ' + cls : ''), v));
-    parent.appendChild(f);
+    parent.appendChild(html`
+      <div class="detail-field">
+        <div class="dk">${k}</div>
+        <div class="dv${cls ? ' ' + cls : ''}">${v}</div>
+      </div>`);
   }
 
   function timePair(parent, label, net, nlt) {
-    const f  = el('div', 'detail-field');
-    f.appendChild(el('div', 'dk', label));
-    const tp = el('div', 'time-pair');
-    const b1 = el('div', 'time-box');
-    b1.appendChild(el('div', 'time-box-lbl', 'NET'));
-    b1.appendChild(el('div', 'time-box-val', fmtZ(net)));
-    const b2 = el('div', 'time-box');
-    b2.appendChild(el('div', 'time-box-lbl', 'NLT'));
-    b2.appendChild(el('div', 'time-box-val', fmtZ(nlt)));
-    tp.appendChild(b1);
-    tp.appendChild(el('div', 'time-arr', '→'));
-    tp.appendChild(b2);
-    f.appendChild(tp);
-    parent.appendChild(f);
+    parent.appendChild(html`
+      <div class="detail-field">
+        <div class="dk">${label}</div>
+        <div class="time-pair">
+          <div class="time-box">
+            <div class="time-box-lbl">NET</div>
+            <div class="time-box-val">${fmtTime(net)}</div>
+          </div>
+          <div class="time-arr">→</div>
+          <div class="time-box">
+            <div class="time-box-lbl">NLT</div>
+            <div class="time-box-val">${fmtTime(nlt)}</div>
+          </div>
+        </div>
+      </div>`);
   }
 
   // COL 1 — Identification
@@ -278,7 +322,10 @@ function selectMission(idx) {
       aim.forEach(p => {
         if (p && typeof p === 'object') {
           const ref = p._resolved_target;
-          let text = [p.name, p.coords].filter(Boolean).join(' — ');
+          // Reformat the stored coord string using the current coord display mode
+          const parsed = parseCoord(p.coords);
+          const coordStr = parsed ? fmtCoord(parsed.lat, parsed.lon) : (p.coords || '');
+          let text = [p.name, coordStr].filter(Boolean).join(' — ');
           if (p.elevation) text += ` · ${p.elevation}`;
           const entry = el('div', 'dmpi-entry', text);
 

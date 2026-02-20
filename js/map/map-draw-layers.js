@@ -4,26 +4,32 @@
 
 'use strict';
 
+// ── City marker constants ─────────────────────────────────────
+// Dot radius keyed by population tier (1 = small, 3 = major city).
+const CITY_DOT_RADIUS    = { 3: 2.8, 2: 2.0, 1: 1.4 };
+const CITY_DOT_OPACITY   = 0.6;
+const CITY_LABEL_OPACITY = 0.7;
+const CITY_FONT_MAJOR    = 7;  // px — population tier 3
+const CITY_FONT_MINOR    = 6;  // px — population tier 1 and 2
+
 // ── Grid ─────────────────────────────────────────────────
 // Returns the grid <g> element.
 function drawGrid(ctx) {
   const gridG = svgEl('g');
-  // Lines extend beyond canvas so they stay visible while panning
-  for (let lon=Math.floor(ctx.vMinLon/ctx.step)*ctx.step-ctx.step; lon<=ctx.vMaxLon+ctx.step; lon+=ctx.step) {
-    const x = ctx.bx(lon);
-    const l = svgEl('line');
-    l.setAttribute('x1',x); l.setAttribute('y1',-ctx.H);
-    l.setAttribute('x2',x); l.setAttribute('y2',ctx.H*2);
-    l.setAttribute('stroke',ctx.C.grid); l.setAttribute('stroke-width','0.5');
-    gridG.appendChild(l);
+  // Lines extend beyond canvas so they stay visible while panning.
+  for (let lon = Math.floor(ctx.vMinLon / ctx.step) * ctx.step - ctx.step; lon <= ctx.vMaxLon + ctx.step; lon += ctx.step) {
+    gridG.appendChild(makeSvgEl('line', {
+      x1: ctx.bx(lon), y1: -ctx.H,
+      x2: ctx.bx(lon), y2:  ctx.H * 2,
+      stroke: ctx.C.grid, 'stroke-width': 0.5,
+    }));
   }
-  for (let lat=Math.floor(ctx.vMinLat/ctx.step)*ctx.step-ctx.step; lat<=ctx.vMaxLat+ctx.step; lat+=ctx.step) {
-    const y = ctx.by(lat);
-    const l = svgEl('line');
-    l.setAttribute('x1',-ctx.W); l.setAttribute('y1',y);
-    l.setAttribute('x2',ctx.W*2); l.setAttribute('y2',y);
-    l.setAttribute('stroke',ctx.C.grid); l.setAttribute('stroke-width','0.5');
-    gridG.appendChild(l);
+  for (let lat = Math.floor(ctx.vMinLat / ctx.step) * ctx.step - ctx.step; lat <= ctx.vMaxLat + ctx.step; lat += ctx.step) {
+    gridG.appendChild(makeSvgEl('line', {
+      x1: -ctx.W,      y1: ctx.by(lat),
+      x2:  ctx.W * 2,  y2: ctx.by(lat),
+      stroke: ctx.C.grid, 'stroke-width': 0.5,
+    }));
   }
   return gridG;
 }
@@ -33,14 +39,14 @@ function drawGrid(ctx) {
 function drawLand(ctx, geoData) {
   const landG = svgEl('g');
   Object.values(geoData.countries).forEach(poly => {
-    const path = svgEl('path');
-    path.setAttribute('d', poly.map((pt,i)=>
-      `${i?'L':'M'}${ctx.bx(pt[0]).toFixed(1)},${ctx.by(pt[1]).toFixed(1)}`).join(' ')+' Z');
-    path.setAttribute('fill',ctx.C.land);
-    path.setAttribute('stroke',ctx.C.border);
-    path.setAttribute('stroke-width','0.8');
-    path.setAttribute('vector-effect','non-scaling-stroke');
-    landG.appendChild(path);
+    landG.appendChild(makeSvgEl('path', {
+      d: poly.map((pt, i) =>
+        `${i ? 'L' : 'M'}${ctx.bx(pt[0]).toFixed(1)},${ctx.by(pt[1]).toFixed(1)}`).join(' ') + ' Z',
+      fill: ctx.C.land,
+      stroke: ctx.C.border,
+      'stroke-width': 0.8,
+      'vector-effect': 'non-scaling-stroke',
+    }));
   });
   return landG;
 }
@@ -50,24 +56,27 @@ function drawLand(ctx, geoData) {
 function drawCities(ctx, geoData) {
   const cityG = svgEl('g');
   geoData.cities.forEach(city => {
-    const cx=ctx.bx(city.lon), cy=ctx.by(city.lat);
-    const major=city.pop===3, r=major?2.8:city.pop===2?2:1.4;
-    const g=svgEl('g');
-    const mx=cx.toFixed(1), my=cy.toFixed(1);
-    g.setAttribute('transform',`translate(${mx},${my})`);
-    g._baseX=mx; g._baseY=my;
-    const circ=svgEl('circle');
-    circ.setAttribute('cx',0); circ.setAttribute('cy',0); circ.setAttribute('r',r);
-    circ.setAttribute('fill',major?ctx.C.cityMajor:ctx.C.cityDot); circ.setAttribute('opacity','0.6');
-    g.appendChild(circ);
-    const t=svgEl('text');
-    t.setAttribute('x',3); t.setAttribute('y',-2);
-    t.setAttribute('font-size',major?'7':'6');
-    t.setAttribute('font-family','IBM Plex Mono,monospace');
-    t.setAttribute('font-weight',major?'600':'400');
-    t.setAttribute('fill',major?ctx.C.cityMajor:ctx.C.cityLbl);
-    t.setAttribute('opacity','0.7'); t.textContent=city.n;
-    g.appendChild(t);
+    const major = city.pop === 3;
+    const r     = CITY_DOT_RADIUS[city.pop] ?? CITY_DOT_RADIUS[1];
+    const mx    = ctx.bx(city.lon).toFixed(1);
+    const my    = ctx.by(city.lat).toFixed(1);
+    const g     = makeSvgEl('g', { transform: `translate(${mx},${my})` });
+    g._baseX = mx; g._baseY = my;
+
+    g.appendChild(makeSvgEl('circle', {
+      cx: 0, cy: 0, r,
+      fill:    major ? ctx.C.cityMajor : ctx.C.cityDot,
+      opacity: CITY_DOT_OPACITY,
+    }));
+    g.appendChild(svgText(city.n, {
+      x: 3, y: -2,
+      'font-size':   major ? CITY_FONT_MAJOR : CITY_FONT_MINOR,
+      'font-family': MONO_FONT,
+      'font-weight': major ? 600 : 400,
+      fill:    major ? ctx.C.cityMajor : ctx.C.cityLbl,
+      opacity: CITY_LABEL_OPACITY,
+    }));
+
     ctx.constantSizeMarkers.push(g);
     cityG.appendChild(g);
   });

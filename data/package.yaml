@@ -13,6 +13,7 @@ ato:
   irl_date: 11/01/2026
   irl_time_zulu: 1900Z
   ingame_start_local: 0000L
+  local_offset_hours: 0    # UTC offset for local time display (e.g. 4 for UTC+4)
   ae_flags: [IRL, INGAME]
 
   global_control:
@@ -133,7 +134,6 @@ aco:
   acms:
     - name: CAP-W
       type: ROZ
-      shape: CIRCLE
       missions: [MSN3266]
       alt_lower: FL200
       alt_upper: FL400
@@ -141,8 +141,9 @@ aco:
       time_to: 2300Z
       control_agency: SCREWTOP
       control_freq_mhz: 260.000
-      center_coords: "N26deg51'00\" E056deg22'00\""
-      radius_nm: 20
+      geometry:
+        center: "N26deg51'00\" E056deg22'00\""
+        radius_nm: 20
 
 spins:
   operation: YOUR OPERATION
@@ -150,53 +151,65 @@ spins:
   version: '1.0'
   classification: UNCLAS
 
-  c1_command_control:
-    tactical_control:
-      primary_awacs:   { callsign: SCREWTOP, freq_mhz: 260.000 }
-      secondary_awacs: { callsign: BACKUP,   freq_mhz: 134.000 }
-    airspace_control: Via OMAM MTMA
-    package_lead: FALCON51
-    strike_lead:  FALCON51
+  # Each section is independent — add, remove, or reorder freely.
+  # Entry types inside 'entries':
+  #   {label, value, style?}  → key-value row  (style: amber | red | green | blue)
+  #   {bullet, style?}        → bullet text
+  #   {heading}               → mission block header (groups entries beneath it)
+  #   {value}  (no label)     → plain body text (shown in amber as an objective)
+  # A section may also have a top-level 'note' and/or a 'table':
+  #   table: {headers: [...], rows: [[...], ...], cell_classes: [~, ~, css-class]}
+  sections:
 
-  c3_iff:
-    mode: 3
+  - title: C1 — COMMAND & CONTROL
+    entries:
+    - {label: PRIMARY AWACS,   value: "SCREWTOP / 260.000 MHz", style: green}
+    - {label: SECONDARY AWACS, value: "BACKUP / 134.000 MHz"}
+    - {label: AIRSPACE CTRL,   value: Via OMAM MTMA}
+    - {label: PACKAGE LEAD,    value: FALCON51, style: amber}
+    - {label: STRIKE LEAD,     value: FALCON51, style: amber}
+
+  - title: C3 — IFF / SIF
     note: Squawk assigned code. M4 mandatory before departure.
-    assignments:
-      - { mission: MSN3266, code: '4811' }
+    table:
+      headers: [MSN, MODE, CODE]
+      cell_classes: [~, ~, iff-code]
+      rows:
+      - [MSN3266, 3, '4811']
 
-  c4_roe:
-    pid:
-      required: true
-      note: PID required prior to weapons release.
-      valid_sources:
-        - NCTR / radar profile
-        - Correlated track from CRC/AWACS
-        - Visual ID (VID)
-    bvr:
-      authorized: true
-    surface_attack:
-      authorized_targets: Assigned ATO targets only
-      dynamic_targeting:  Requires CAOC approval unless self-defence
-    civilian_traffic: No Factor
+  - title: C4 — RULES OF ENGAGEMENT
+    entries:
+    - {label: PID REQUIRED, value: "YES — required before weapons release", style: red}
+    - {bullet: "NCTR / radar profile"}
+    - {bullet: "Correlated track from CRC/AWACS"}
+    - {bullet: "Visual ID (VID)"}
+    - {label: BVR,            value: "AUTHORIZED — after PID or controller declaration", style: amber}
+    - {label: SFC ATTACK,     value: Assigned ATO targets only}
+    - {label: DYNAMIC TGT,    value: Requires CAOC approval unless self-defence}
+    - {label: CIVILIAN TRAFFIC, value: No Factor}
 
-  c7_lost_comms:
-    loss_awacs:
-      action: Default to package commander control
-      abort_condition: Abort if comms not restored within 5 minutes
-    loss_package:
-      action: Continue if task and ROE remain clear
-      abort_condition: Abort in degraded SA
-    loss_intraflight:
-      action: Continue assigned task. Reestablish post-target.
-      abort_condition: Abort if comms cannot be reestablished
+  - title: C7 — LOST COMMS
+    entries:
+    - {label: "LOSS AWACS — ACTION", value: Default to package commander control}
+    - {label: "LOSS AWACS — ABORT",  value: Abort if comms not restored within 5 minutes, style: red}
+    - {label: "LOSS PACKAGE — ACTION", value: Continue if task and ROE remain clear}
+    - {label: "LOSS PACKAGE — ABORT",  value: Abort in degraded SA, style: red}
+    - {label: LOSS INTRAFLIGHT, value: Continue assigned task. Reestablish post-target.}
+    - {label: ABORT,            value: Abort if comms cannot be reestablished, style: red}
 
-  c8_abort_criteria:
-    - Target PID cannot be confirmed
-    - Fuel state prevents safe recovery
-    - Major technical faults
+  - title: C8 — ABORT CRITERIA
+    entries:
+    - {bullet: Target PID cannot be confirmed}
+    - {bullet: Fuel state prevents safe recovery}
+    - {bullet: Major technical faults}
 
-  c9_sar:     { status: Not Simulated }
-  c11_safety: { minimum_separation: 5NM / 2000ft outside tactical formation }
+  - title: C9 — SEARCH AND RESCUE
+    entries:
+    - {label: STATUS, value: Not Simulated}
+
+  - title: C11 — SAFETY
+    entries:
+    - {label: MIN SEPARATION, value: "5NM / 2000ft outside tactical formation", style: amber}
 
 comms:
   operation: YOUR OPERATION
@@ -204,13 +217,14 @@ comms:
   classification: UNCLAS
   wing_lead: FALCON51
 
+  # Only list populated channels — omit SPAREs or include them as null to show slot occupancy.
   uhf_presets:
-    1:  { callsign: GUARD,        freq_mhz: 243.000, role: Emergency }
-    2:  { callsign: PACKAGE,      freq_mhz: 260.000, role: Package primary }
-    3:  { callsign: INTRAFLIGHT,  freq_mhz: 261.500, role: Intraflight }
-    4:  { callsign: SPARE,        freq_mhz: null,    role: null }
-    5:  { callsign: SPARE,        freq_mhz: null,    role: null }
+    1:  {callsign: GUARD,       freq_mhz: 243.000, role: Emergency}
+    2:  {callsign: PACKAGE,     freq_mhz: 260.000, role: Package primary}
+    3:  {callsign: INTRAFLIGHT, freq_mhz: 261.500, role: Intraflight}
+    4:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    5:  {callsign: SPARE,       freq_mhz: null,     role: null}
 
   vhf_presets:
-    1:  { callsign: GUARD,        freq_mhz: 121.500, role: Emergency }
-    2:  { callsign: SPARE,        freq_mhz: null,    role: null }
+    1:  {callsign: GUARD,       freq_mhz: 121.500, role: Emergency}
+    2:  {callsign: SPARE,       freq_mhz: null,     role: null}

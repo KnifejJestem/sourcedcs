@@ -126,9 +126,11 @@ function collectData(ato, aco) {
 
   // 6. ACO airspace measures (orbits, ROZ, restricted zones, etc.)
   (aco?.acms || []).forEach(acm => {
-    if (acm.anchor_point) {
+    const geo = acm.geometry || {};
+
+    if (geo.anchor_point) {
       // Racetrack / anchor pattern
-      const anchor = parseCoord(acm.anchor_point);
+      const anchor = parseCoord(geo.anchor_point);
       if (anchor) {
         airspaces.push({
           lat: anchor.lat,
@@ -136,9 +138,9 @@ function collectData(ato, aco) {
           kind: 'airspace',
           shape: 'anchor',
           anchorPt: anchor,
-          headingDeg: acm.heading_deg || 0,
-          legLengthNm: acm.leg_length_nm || 10,
-          direction: (acm.direction || 'cw').toLowerCase(),
+          headingDeg: geo.heading_deg || 0,
+          legLengthNm: geo.leg_length_nm || 10,
+          direction: (geo.direction || 'cw').toLowerCase(),
           name: acm.name,
           type: acm.type,
           altLower: acm.alt_lower,
@@ -151,14 +153,14 @@ function collectData(ato, aco) {
           missions: acm.missions,
         });
       }
-    } else if (acm.center_coords) {
-      const center = parseCoord(acm.center_coords);
+    } else if (geo.center) {
+      const center = parseCoord(geo.center);
       if (center) {
         airspaces.push({
           ...center,
           kind: 'airspace',
           shape: 'circle',
-          radiusNm: acm.radius_nm || 5,
+          radiusNm: geo.radius_nm || 5,
           name: acm.name,
           type: acm.type,
           altLower: acm.alt_lower,
@@ -172,8 +174,8 @@ function collectData(ato, aco) {
         });
       }
     }
-    if (acm.boundary?.length) {
-      const pts = acm.boundary.map(c => parseCoord(c)).filter(Boolean);
+    if (geo.boundary?.length) {
+      const pts = geo.boundary.map(c => parseCoord(c)).filter(Boolean);
       if (pts.length >= 3) {
         airspaces.push({
           lat: pts.reduce((s, pt) => s + pt.lat, 0) / pts.length,
@@ -197,15 +199,4 @@ function collectData(ato, aco) {
   });
 
   return { points, routes, airspaces };
-}
-
-// ── Coord parser ───────────────────────────────────────────
-function parseCoord(str) {
-  if (!str) return null;
-  const re = /([NS])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″\s]*)?\s*([EW])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″]?)?/i;
-  const m = str.match(re);
-  if (!m) return null;
-  const lat = (m[1]==='N'?1:-1)*(+m[2] + +m[3]/60 + +(m[4]||0)/3600);
-  const lon = (m[5]==='E'?1:-1)*(+m[6] + +m[7]/60 + +(m[8]||0)/3600);
-  return (isNaN(lat)||isNaN(lon)) ? null : { lat, lon };
 }

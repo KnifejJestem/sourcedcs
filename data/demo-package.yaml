@@ -2,6 +2,7 @@ ato:
   irl_date: 11/01/2026
   irl_time_zulu: 1900Z
   ingame_start_local: 0000L
+  local_offset_hours: 4    # UTC+4 (Gulf area — no DST; adjust for your theater)
   ae_flags:
   - IRL
   - INGAME
@@ -192,7 +193,6 @@ aco:
   acms:
   - name: WEST-1
     type: ORBIT
-    shape: CORRIDOR
     missions:
     - 9001
     - 9002
@@ -204,7 +204,6 @@ aco:
     control_freq_mhz: 265.1
   - name: CAP-W
     type: ROZ
-    shape: CIRCLE
     missions:
     - 6012
     alt_lower: FL200
@@ -213,11 +212,11 @@ aco:
     time_to: 0600Z
     control_agency: DARKSTAR
     control_freq_mhz: 334.15
-    center_coords: N35°05.098' E035°44.098'
-    radius_nm: 10
+    geometry:
+      center: N35°05.098' E035°44.098'
+      radius_nm: 10
   - name: TS-024
     type: ROZ
-    shape: POLYGON
     missions:
     - 6013
     - 6014
@@ -228,14 +227,14 @@ aco:
     control_agency: DARKSTAR
     control_freq_mhz: 334.15
     notes: Primary target area — all non-tasked traffic PROHIBITED
-    boundary:
-    - N26°20'00" E056°05'00"
-    - N26°40'00" E056°05'00"
-    - N26°40'00" E056°30'00"
-    - N26°20'00" E056°30'00"
+    geometry:
+      boundary:
+      - N26°20'00" E056°05'00"
+      - N26°40'00" E056°05'00"
+      - N26°40'00" E056°30'00"
+      - N26°20'00" E056°30'00"
   - name: TRACK-1
     type: ANCHOR
-    shape: ANCHOR
     missions:
     - MSN3266
     alt_lower: FL200
@@ -244,259 +243,137 @@ aco:
     time_to: 0700Z
     control_agency: MAGIC
     control_freq_mhz: 265.1
-    anchor_point: N25°30'00" E055°30'00"
-    heading_deg: 45
-    leg_length_nm: 15
-    direction: cw
     notes: CAP racetrack pattern
+    geometry:
+      anchor_point: N25°30'00" E055°30'00"
+      heading_deg: 45
+      leg_length_nm: 15
+      direction: cw
 spins:
   operation: CLEAR SKY
   ato_day: 30/09/2014
   version: '3.0'
   classification: SCT
-  c1_command_control:
-    tactical_control:
-      primary_awacs:
-        callsign: MAGIC1
-        freq_mhz: 265.1
-      secondary_awacs:
-        callsign: MAGIC2
-        freq_mhz: 334.15
-    airspace_control: SCT via LTAG MTMA and CVN-75
-    package_lead: SHADOW11
-    strike_lead: BOLO11
-  c3_iff:
-    mode: 3
+  sections:
+
+  - title: C1 — COMMAND & CONTROL
+    entries:
+    - {label: PRIMARY AWACS,   value: "MAGIC1 / 265.1 MHz",   style: green}
+    - {label: SECONDARY AWACS, value: "MAGIC2 / 334.15 MHz"}
+    - {label: AIRSPACE CTRL,   value: SCT via LTAG MTMA and CVN-75}
+    - {label: PACKAGE LEAD,    value: SHADOW11, style: amber}
+    - {label: STRIKE LEAD,     value: BOLO11,   style: amber}
+
+  - title: C3 — IFF / SIF
     note: Squawk assigned code. M4 mandatory before departure.
-    assignments:
-    - mission: 6011
-      code: '4811'
-    - mission: 6012
-      code: '4821'
-    - mission: 6013
-      code: '4831'
-    - mission: 6014
-      code: '4841'
-  c4_roe:
-    pid:
-      required: true
-      note: PID required prior to weapons release on air or surface contacts unless hostile act demonstrated.
-      valid_sources:
-      - NCTR / radar profile
-      - Correlated track from CRC/AWACS
-      - Visual ID (VID)
-      caveat: Unidentified aircraft departing known mixed-use or adversary-controlled bases are NOT automatically
-        hostile.
-    bvr:
-      authorized: true
-    surface_attack:
-      authorized_targets: Assigned ATO targets only
-      dynamic_targeting: Requires CAOC approval unless self-defence
-      collateral_damage:
-        delegated_levels: 1-3
-        higher_requires: CAOC approval
-    civilian_traffic: No Factor
-  c5_execution:
-  - mission: 6011
-    objective: Degrade TS-024 radar effectiveness with Maximum Effort
-    notes: Reactive SEAD permitted against emitting threat systems tracking package aircraft
-  - mission: 6012
-    objective: Deny adversary air interference within package airspace
-    priority_of_effort:
-    - 1. Aircraft targeting MSN 6011
-    - 2. Aircraft supporting TS-024 engagement
-    - 3. All other hostile air contacts
-    orbit: N35°05.098' E035°44.098' AG27 090 10nm
-  - mission: 6013
-    objective: Deny adversary air interference on MSN 6014
-    targeting_range_nm: 65
-  - mission: 6014
-    objective: Destruction of TS-024R
-    secondary_objective: Destruction of TS-024S
-  c7_lost_comms:
-    loss_awacs:
-      action: Default to package commander control
-      abort_condition: Abort mission if communication cannot be restored within 5 minutes
-    loss_package:
-      action: Continue mission if task and ROE remain clear
-      abort_condition: Abort in case of degraded situation awareness
-    loss_intraflight:
-      action: Continue assigned task. Reestablish communication post-target if feasible.
-      abort_condition: Abort mission if communication cannot be reestablished
-  c8_abort_criteria:
-  - Target PID cannot be confirmed
-  - Collateral damage risk exceeds authorization
-  - Fuel state prevents safe recovery
-  - Supporting mission unsuccessful and threat unacceptable
-  - Major technical faults
-  c9_sar:
-    status: Not Simulated
-  c11_safety:
-    minimum_separation: 5NM / 2000ft between coalition aircraft outside tactical formation
+    table:
+      headers: [MSN, MODE, CODE]
+      cell_classes: [~, ~, iff-code]
+      rows:
+      - [6011, 3, '4811']
+      - [6012, 3, '4821']
+      - [6013, 3, '4831']
+      - [6014, 3, '4841']
+
+  - title: C4 — RULES OF ENGAGEMENT
+    entries:
+    - {label: PID REQUIRED,    value: "YES — required before weapons release", style: red}
+    - {bullet: "NCTR / radar profile"}
+    - {bullet: "Correlated track from CRC/AWACS"}
+    - {bullet: "Visual ID (VID)"}
+    - {bullet: "Unidentified aircraft departing known mixed-use or adversary-controlled bases are NOT automatically hostile.", style: amber}
+    - {label: BVR,             value: "AUTHORIZED — after PID or controller declaration", style: amber}
+    - {label: SFC ATTACK,      value: Assigned ATO targets only}
+    - {label: DYNAMIC TGT,     value: Requires CAOC approval unless self-defence}
+    - {label: COLLATERAL DAM., value: "Levels 1-3 delegated; higher → CAOC approval"}
+    - {label: CIVILIAN TRAFFIC, value: No Factor}
+
+  - title: C5 — EXECUTION OBJECTIVES
+    entries:
+    - {heading: "MSN 6011"}
+    - {value: Degrade TS-024 radar effectiveness with Maximum Effort}
+    - {bullet: Reactive SEAD permitted against emitting threat systems tracking package aircraft}
+    - {heading: "MSN 6012"}
+    - {value: Deny adversary air interference within package airspace}
+    - {bullet: "1. Aircraft targeting MSN 6011"}
+    - {bullet: "2. Aircraft supporting TS-024 engagement"}
+    - {bullet: "3. All other hostile air contacts"}
+    - {bullet: "ORBIT: N35°05.098' E035°44.098' AG27 090 10nm", style: blue}
+    - {heading: "MSN 6013"}
+    - {value: Deny adversary air interference on MSN 6014}
+    - {bullet: "Targeting range: 65nm"}
+    - {heading: "MSN 6014"}
+    - {value: Destruction of TS-024R}
+    - {bullet: "Secondary: Destruction of TS-024S"}
+
+  - title: C7 — LOST COMMS
+    entries:
+    - {label: "LOSS AWACS — ACTION", value: Default to package commander control}
+    - {label: "LOSS AWACS — ABORT",  value: Abort mission if communication cannot be restored within 5 minutes, style: red}
+    - {label: "LOSS PACKAGE — ACTION", value: Continue mission if task and ROE remain clear}
+    - {label: "LOSS PACKAGE — ABORT",  value: Abort in case of degraded situation awareness, style: red}
+    - {label: LOSS INTRAFLIGHT, value: Continue assigned task. Reestablish communication post-target if feasible.}
+    - {label: ABORT,            value: Abort mission if communication cannot be reestablished, style: red}
+
+  - title: C8 — ABORT CRITERIA
+    entries:
+    - {bullet: Target PID cannot be confirmed}
+    - {bullet: Collateral damage risk exceeds authorization}
+    - {bullet: Fuel state prevents safe recovery}
+    - {bullet: Supporting mission unsuccessful and threat unacceptable}
+    - {bullet: Major technical faults}
+
+  - title: C9 — SEARCH AND RESCUE
+    entries:
+    - {label: STATUS, value: Not Simulated}
+
+  - title: C11 — SAFETY
+    entries:
+    - {label: MIN SEPARATION, value: "5NM / 2000ft between coalition aircraft outside tactical formation", style: amber}
 comms:
   operation: CLEAR SKY
   ato_day: 30/09/2014
   classification: SCT
   wing_lead: SHADOW11
   uhf_presets:
-    1:
-      callsign: GUARD
-      freq_mhz: 243.0
-      role: Emergency
-    2:
-      callsign: PACKAGE
-      freq_mhz: 260.0
-      role: Package primary
-    3:
-      callsign: INTRAFLIGHT
-      freq_mhz: 261.5
-      role: Intraflight
-    4:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    5:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    6:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    7:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    8:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    9:
-      callsign: LTAG TWR
-      freq_mhz: 360.1
-      role: ATC Tower
-    10:
-      callsign: LTAG APP/DEP
-      freq_mhz: 340.775
-      role: ATC Approach/Departure
-    11:
-      callsign: MAGIC
-      freq_mhz: 265.1
-      role: AWACS primary
-    12:
-      callsign: DARKSTAR
-      freq_mhz: 334.15
-      role: AWACS secondary
-    13:
-      callsign: SHELL 1
-      freq_mhz: 266.025
-      role: Tanker
-    14:
-      callsign: ARCO 1
-      freq_mhz: 341.7
-      role: Tanker
-    15:
-      callsign: CV-75 APP 1
-      freq_mhz: 343.025
-      role: Carrier approach
-    16:
-      callsign: CV-75 MARSHAL
-      freq_mhz: 330.975
-      role: Carrier marshal
-    17:
-      callsign: CV-75 APP 2
-      freq_mhz: 327.45
-      role: Carrier approach 2
-    18:
-      callsign: CV-75 TWR
-      freq_mhz: 310.25
-      role: Carrier tower
-    19:
-      callsign: CV-75 DEP
-      freq_mhz: 322.075
-      role: Carrier departure
-    20:
-      callsign: LTAG ATIS
-      freq_mhz: 377.475
-      role: ATIS
+    1:  {callsign: GUARD,       freq_mhz: 243.0,   role: Emergency}
+    2:  {callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary}
+    3:  {callsign: INTRAFLIGHT, freq_mhz: 261.5,   role: Intraflight}
+    4:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    5:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    6:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    7:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    8:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    9:  {callsign: LTAG TWR,    freq_mhz: 360.1,   role: ATC Tower}
+    10: {callsign: LTAG APP/DEP, freq_mhz: 340.775, role: ATC Approach/Departure}
+    11: {callsign: MAGIC,       freq_mhz: 265.1,   role: AWACS primary}
+    12: {callsign: DARKSTAR,    freq_mhz: 334.15,  role: AWACS secondary}
+    13: {callsign: SHELL 1,     freq_mhz: 266.025, role: Tanker}
+    14: {callsign: ARCO 1,      freq_mhz: 341.7,   role: Tanker}
+    15: {callsign: CV-75 APP 1,  freq_mhz: 343.025, role: Carrier approach}
+    16: {callsign: CV-75 MARSHAL, freq_mhz: 330.975, role: Carrier marshal}
+    17: {callsign: CV-75 APP 2,  freq_mhz: 327.45,  role: Carrier approach 2}
+    18: {callsign: CV-75 TWR,   freq_mhz: 310.25,  role: Carrier tower}
+    19: {callsign: CV-75 DEP,   freq_mhz: 322.075, role: Carrier departure}
+    20: {callsign: LTAG ATIS,   freq_mhz: 377.475, role: ATIS}
   vhf_presets:
-    1:
-      callsign: GUARD
-      freq_mhz: 121.5
-      role: Emergency
-    2:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    3:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    4:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    5:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    6:
-      callsign: SHADOW 1
-      freq_mhz: 133.3
-      role: Package lead
-    7:
-      callsign: HAT 1
-      freq_mhz: 120.075
-      role: Flight
-    8:
-      callsign: COWBOY 1 / BOLO 1
-      freq_mhz: 129.225
-      role: CAS / Strike
-    9:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    10:
-      callsign: LTAG PAR
-      freq_mhz: 282.5
-      role: Precision approach
-    11:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    12:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    13:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    14:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    15:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    16:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    17:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    18:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    19:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
-    20:
-      callsign: SPARE
-      freq_mhz: null
-      role: null
+    1:  {callsign: GUARD,    freq_mhz: 121.5,   role: Emergency}
+    2:  {callsign: SPARE,    freq_mhz: null,     role: null}
+    3:  {callsign: SPARE,    freq_mhz: null,     role: null}
+    4:  {callsign: SPARE,    freq_mhz: null,     role: null}
+    5:  {callsign: SPARE,    freq_mhz: null,     role: null}
+    6:  {callsign: SHADOW 1, freq_mhz: 133.3,   role: Package lead}
+    7:  {callsign: HAT 1,    freq_mhz: 120.075, role: Flight}
+    8:  {callsign: "COWBOY 1 / BOLO 1", freq_mhz: 129.225, role: CAS / Strike}
+    9:  {callsign: SPARE,    freq_mhz: null,     role: null}
+    10: {callsign: LTAG PAR, freq_mhz: 282.5,   role: Precision approach}
+    11: {callsign: SPARE,    freq_mhz: null,     role: null}
+    12: {callsign: SPARE,    freq_mhz: null,     role: null}
+    13: {callsign: SPARE,    freq_mhz: null,     role: null}
+    14: {callsign: SPARE,    freq_mhz: null,     role: null}
+    15: {callsign: SPARE,    freq_mhz: null,     role: null}
+    16: {callsign: SPARE,    freq_mhz: null,     role: null}
+    17: {callsign: SPARE,    freq_mhz: null,     role: null}
+    18: {callsign: SPARE,    freq_mhz: null,     role: null}
+    19: {callsign: SPARE,    freq_mhz: null,     role: null}
+    20: {callsign: SPARE,    freq_mhz: null,     role: null}
