@@ -13,20 +13,12 @@ function renderCOMMS(cm) {
     return;
   }
 
-  // Header
-  const hdr = el('div', 'doc-header');
-  [
+  docHeader(div, [
     ['OPERATION', cm.operation],
     ['ATO DAY',   cm.ato_day],
     ['WING LEAD', cm.wing_lead],
     ['CLASS',     cm.classification],
-  ].forEach(([lbl, val]) => {
-    const it = el('div', 'doc-hitem');
-    it.appendChild(el('div', 'doc-hlbl', lbl));
-    it.appendChild(el('div', 'doc-hval', val || '—'));
-    hdr.appendChild(it);
-  });
-  div.appendChild(hdr);
+  ]);
 
   const grid = el('div', 'comms-grid');
 
@@ -36,20 +28,12 @@ function renderCOMMS(cm) {
     const block = el('div', 'radio-block');
     block.appendChild(el('div', 'radio-title', title));
 
-    const tbl = el('table', 'doc-table');
-    const th = tbl.createTHead().insertRow();
-    ['CH', 'CALLSIGN', 'MHz', 'ROLE'].forEach(h => {
-      const t = document.createElement('th');
-      t.textContent = h;
-      th.appendChild(t);
-    });
-
-    const tb = tbl.createTBody();
+    const { table: tbl, tbody } = docTable(['CH', 'CALLSIGN', 'MHz', 'ROLE']);
 
     // Presets can be keyed by integer or string — normalise
     Object.keys(presets).sort((a, b) => parseInt(a) - parseInt(b)).forEach(ch => {
       const p  = presets[ch];
-      const tr = tb.insertRow();
+      const tr = tbody.insertRow();
       const isEmpty = !p.freq_mhz;
       if (isEmpty) tr.className = 'freq-empty';
 

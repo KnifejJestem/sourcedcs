@@ -181,4 +181,5 @@ cython_debug/
 .cursorindexingignore
 /.idea
 node_modules/
+dist/
 vendor/

@@ -13,39 +13,24 @@ function renderACO(aco) {
     return;
   }
 
-  // Header
-  const hdr = el('div', 'doc-header');
-  [
-    ['ACO ID',     aco.id],
-    ['OPERATION',  aco.operation],
-    ['ATO DAY',    aco.ato_day],
-    ['TIMEZONE',   aco.timezone],
-    ['CLASS',      aco.classification],
-  ].forEach(([lbl, val]) => {
-    const it = el('div', 'doc-hitem');
-    it.appendChild(el('div', 'doc-hlbl', lbl));
-    it.appendChild(el('div', 'doc-hval', val || '—'));
-    hdr.appendChild(it);
-  });
-  div.appendChild(hdr);
+  docHeader(div, [
+    ['ACO ID',    aco.id],
+    ['OPERATION', aco.operation],
+    ['ATO DAY',   aco.ato_day],
+    ['TIMEZONE',  aco.timezone],
+    ['CLASS',     aco.classification],
+  ]);
 
   if (!aco.acms?.length) {
-    div.innerHTML += '<div class="empty-state">NO ACMs DEFINED</div>';
+    div.appendChild(el('div', 'empty-state', 'NO ACMs DEFINED'));
     return;
   }
 
   // ACM table
-  const tbl = el('table', 'doc-table');
+  const { table: tbl, tbody } = docTable(
+    ['NAME', 'TYPE', 'GEOMETRY', 'MISSIONS', 'ALTITUDE', 'WINDOW (Z)', 'CONTROL AGENCY', 'FREQ', 'NOTES']
+  );
 
-  const thead = tbl.createTHead();
-  const hr = thead.insertRow();
-  ['NAME', 'TYPE', 'GEOMETRY', 'MISSIONS', 'ALTITUDE', 'WINDOW (Z)', 'CONTROL AGENCY', 'FREQ', 'NOTES'].forEach(h => {
-    const th = document.createElement('th');
-    th.textContent = h;
-    hr.appendChild(th);
-  });
-
-  const tbody = tbl.createTBody();
   aco.acms.forEach(acm => {
     const tr = tbody.insertRow();
 
