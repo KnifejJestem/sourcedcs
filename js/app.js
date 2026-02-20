@@ -249,6 +249,7 @@ function setTimeMode(m) {
   if (STATE.pkg?.ato)   renderATO(STATE.pkg.ato);
   if (STATE.pkg?.aco)   renderACO(STATE.pkg.aco);
   if (STATE.pkg?.spins) renderSPINS(STATE.pkg.spins);
+  mapRefreshPopup(); // refresh open map popup with new time format
 }
 
 // ── Display mode: coordinates (dm / dms / mgrs) ───────────────
@@ -260,6 +261,7 @@ function setCoordMode(m) {
   if (STATE.pkg?.ato)   renderATO(STATE.pkg.ato);
   if (STATE.pkg?.aco)   renderACO(STATE.pkg.aco);
   if (STATE.pkg?.spins) renderSPINS(STATE.pkg.spins);
+  mapRefreshPopup(); // refresh open map popup with new coord format
 }
 
 // ── Tab routing ───────────────────────────────────────────────

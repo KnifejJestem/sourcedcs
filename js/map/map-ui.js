@@ -5,14 +5,19 @@
 'use strict';
 
 // ── Popup ────────────────────────────────────────────────
-// Creates the popup div and a showPopup(p) function that
-// populates it. Returns { popup, showPopup }.
+// Creates the popup div and a showPopup(p) / refreshPopup() pair.
+// refreshPopup() re-renders the popup in-place after a display mode change
+// (coord format, time mode) so the user doesn't have to click again.
+// Returns { popup, showPopup, refreshPopup }.
 function createPopup(container) {
   const popup = el('div', 'map-popup');
   popup.style.display = 'none';
   container.appendChild(popup);
 
+  let lastPoint = null; // track so refreshPopup() can re-render on mode change
+
   function showPopup(p) {
+    lastPoint = p;
     popup.innerHTML = '';
     const kindLabel = {
       steer:'WAYPOINT', target:'AIM POINT', threat:'THREAT',
@@ -73,7 +78,12 @@ function createPopup(container) {
     popup.style.display = 'block';
   }
 
-  return { popup: popup, showPopup: showPopup };
+  // Re-render the popup if it's currently visible — called after coord/time mode changes.
+  function refreshPopup() {
+    if (lastPoint && popup.style.display !== 'none') showPopup(lastPoint);
+  }
+
+  return { popup: popup, showPopup: showPopup, refreshPopup: refreshPopup };
 }
 
 // ── Grid label overlay ───────────────────────────────────

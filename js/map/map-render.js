@@ -4,6 +4,11 @@
 
 'use strict';
 
+// Refresh the currently open map popup after a display-mode change
+// (coord format or time mode).  Set by drawMap; called from app.js.
+let _refreshPopup = null;
+function mapRefreshPopup() { if (_refreshPopup) _refreshPopup(); }
+
 // ── Main draw ──────────────────────────────────────────────
 // Architecture:
 //   SVG
@@ -120,7 +125,8 @@ function drawMap(container, points, routes, geoData, airspaces) {
   content.appendChild(drawCities(ctx, geoData));
 
   // ── Popup (needed by subsequent draw calls) ──────────────
-  const { showPopup } = createPopup(container);
+  const { showPopup, refreshPopup } = createPopup(container);
+  _refreshPopup = refreshPopup;
 
   // ── Zones ────────────────────────────────────────────────
   const engResult = drawEngagementZones(ctx, points);
@@ -196,16 +202,17 @@ function drawMap(container, points, routes, geoData, airspaces) {
 }
 
 // ── Label helper ──────────────────────────────────────────
+// Appends two optional text lines to a marker group.
+// line1 is bold; line2 is secondary (faded, smaller).
 function mapLabel(parent, line1, line2, color, offsetX) {
-  [[line1,color,true,-11],[line2||'',color+'80',false,1]].forEach(([txt,col,bold,dy])=>{
-    if(!txt)return;
-    const t=svgEl('text');
-    t.setAttribute('x',offsetX); t.setAttribute('y',dy);
-    t.setAttribute('font-size',bold?'9':'7.5');
-    t.setAttribute('font-family','IBM Plex Mono,monospace');
-    t.setAttribute('font-weight',bold?'700':'400');
-    t.setAttribute('fill',col);
-    t.textContent=txt;
-    parent.appendChild(t);
+  [[line1, color, true, -11], [line2 || '', color + '80', false, 1]].forEach(([txt, col, bold, dy]) => {
+    if (!txt) return;
+    parent.appendChild(svgText(txt, {
+      x: offsetX, y: dy,
+      'font-size': bold ? 9 : 7.5,
+      'font-family': 'IBM Plex Mono,monospace',
+      'font-weight': bold ? 700 : 400,
+      fill: col,
+    }));
   });
 }

@@ -7,59 +7,58 @@
 // ── Per-mission route groups (lines + markers together) ──
 // Each mission gets ONE <g data-msn="key"> so we can toggle opacity atomically.
 // Returns msnGroups (object mapping msnKey → SVGElement).
-// IMPORTANT: the route groups must be added to a parent in drawMap, not here.
 function drawRoutes(ctx, routes, points, showPopup) {
-  const msnGroups = {}; // key → SVGElement
+  const msnGroups = {};
 
   routes.forEach(r => {
-    const g = svgEl('g'); g.setAttribute('data-msn', r.msnKey);
+    const g = svgEl('g');
+    g.setAttribute('data-msn', r.msnKey);
     msnGroups[r.msnKey] = g;
 
-    // Route lines
-    for (let i=0; i<r.pts.length-1; i++) {
-      const p0=r.pts[i], p1=r.pts[i+1];
-      const toTgt = p1.kind==='target-node';
-      const line=svgEl('line');
-      line.setAttribute('x1',ctx.bx(p0.lon).toFixed(1)); line.setAttribute('y1',ctx.by(p0.lat).toFixed(1));
-      line.setAttribute('x2',ctx.bx(p1.lon).toFixed(1)); line.setAttribute('y2',ctx.by(p1.lat).toFixed(1));
-      line.setAttribute('stroke',r.color);
-      line.setAttribute('stroke-width', toTgt?'2':'1.2');
-      line.setAttribute('stroke-dasharray', toTgt?'6,3':'2,6');
-      line.setAttribute('stroke-opacity','0.9');
-      line.setAttribute('vector-effect','non-scaling-stroke');
-      g.appendChild(line);
+    // ── Route lines ──────────────────────────────────────
+    for (let i = 0; i < r.pts.length - 1; i++) {
+      const p0 = r.pts[i], p1 = r.pts[i + 1];
+      const toTgt = p1.kind === 'target-node';
+      g.appendChild(makeSvgEl('line', {
+        x1: ctx.bx(p0.lon).toFixed(1), y1: ctx.by(p0.lat).toFixed(1),
+        x2: ctx.bx(p1.lon).toFixed(1), y2: ctx.by(p1.lat).toFixed(1),
+        stroke:              r.color,
+        'stroke-width':      toTgt ? 2   : 1.2,
+        'stroke-dasharray':  toTgt ? '6,3' : '2,6',
+        'stroke-opacity':    0.9,
+        'vector-effect':     'non-scaling-stroke',
+      }));
     }
 
-    // Steer + target markers belonging to this mission
-    points.filter(p=>(p.kind==='steer'||p.kind==='target') && p.mission?.mission_number===r.msnNum && p.mission?.callsign===r.callsign).forEach(p => {
-      const mg=svgEl('g');
-      const mx = ctx.bx(p.lon).toFixed(1), my = ctx.by(p.lat).toFixed(1);
-      mg.setAttribute('transform',`translate(${mx},${my})`);
-      mg._baseX = mx; mg._baseY = my;
-      // Transparent hit circle for reliable clicking
-      const hit=svgEl('circle'); hit.setAttribute('r','14');
-      hit.setAttribute('fill','transparent'); hit.setAttribute('stroke','none');
-      mg.appendChild(hit);
-      if (p.kind==='steer') {
-        const col=p.color;
-        const circ=svgEl('circle'); circ.setAttribute('r','4');
-        circ.setAttribute('fill','none'); circ.setAttribute('stroke',col);
-        circ.setAttribute('stroke-width','1.2'); mg.appendChild(circ);
-        mapLabel(mg, p.sub, p.label, col, 7);
-      } else {
-        const col=p.color;
-        const dia=svgEl('polygon'); dia.setAttribute('points','0,-8 7,0 0,8 -7,0');
-        dia.setAttribute('fill',col+'cc'); dia.setAttribute('stroke',col);
-        dia.setAttribute('stroke-width','1.2'); mg.appendChild(dia);
-        const cd=svgEl('circle'); cd.setAttribute('r','2');
-        cd.setAttribute('fill','#fff'); cd.setAttribute('opacity','0.9'); mg.appendChild(cd);
-        mapLabel(mg, p.sub, p.label, col, 10);
-      }
-      mg.style.cursor = 'pointer';
-      mg.addEventListener('click', e => { e.stopPropagation(); showPopup(p); });
-      ctx.constantSizeMarkers.push(mg);
-      g.appendChild(mg);
-    });
+    // ── Steer + target markers ───────────────────────────
+    points
+      .filter(p => (p.kind === 'steer' || p.kind === 'target') &&
+                   p.mission?.mission_number === r.msnNum &&
+                   p.mission?.callsign       === r.callsign)
+      .forEach(p => {
+        const mx = ctx.bx(p.lon).toFixed(1);
+        const my = ctx.by(p.lat).toFixed(1);
+        const mg = svgEl('g');
+        mg.setAttribute('transform', `translate(${mx},${my})`);
+        mg._baseX = mx; mg._baseY = my;
+
+        // Hit circle makes small markers easier to click
+        mg.appendChild(makeSvgEl('circle', { r: 14, fill: 'transparent', stroke: 'none' }));
+
+        if (p.kind === 'steer') {
+          mg.appendChild(makeSvgEl('circle', { r: 4, fill: 'none', stroke: p.color, 'stroke-width': 1.2 }));
+          mapLabel(mg, p.sub, p.label, p.color, 7);
+        } else {
+          mg.appendChild(makeSvgEl('polygon', { points: '0,-8 7,0 0,8 -7,0', fill: p.color + 'cc', stroke: p.color, 'stroke-width': 1.2 }));
+          mg.appendChild(makeSvgEl('circle',  { r: 2, fill: '#fff', opacity: 0.9 }));
+          mapLabel(mg, p.sub, p.label, p.color, 10);
+        }
+
+        mg.style.cursor = 'pointer';
+        mg.addEventListener('click', e => { e.stopPropagation(); showPopup(p); });
+        ctx.constantSizeMarkers.push(mg);
+        g.appendChild(mg);
+      });
   });
 
   return msnGroups;
