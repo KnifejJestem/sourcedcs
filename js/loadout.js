@@ -173,44 +173,6 @@ function parseLoadout(raw) {
   return { aa, gun: hasGun, weapons, raw: str };
 }
 
-// ── Card chip (compact, single line) ────────────────────────
-/**
- * Returns a DOM element showing a compact loadout summary
- * for use on the mission card.
- */
-function loadoutChip(raw) {
-  const parsed = parseLoadout(raw);
-  if (!parsed) return null;
-
-  const wrap = el('div', 'lo-chip');
-
-  // AA badges: only non-zero
-  parsed.aa.forEach(slot => {
-    if (slot.count === 0) return;
-    const b = el('span', 'lo-badge lo-fox', `${slot.count}×${slot.name.replace(' ', '')}`);
-    b.style.background = foxColor(slot.cat);
-    b.title = `${slot.count}× ${slot.full}`;
-    wrap.appendChild(b);
-  });
-
-  // Gun
-  if (parsed.gun) {
-    const g = el('span', 'lo-badge lo-gun', '+');
-    g.title = 'Gun / cannon ammo loaded';
-    wrap.appendChild(g);
-  }
-
-  // Weapons
-  parsed.weapons.forEach(w => {
-    const b = el('span', 'lo-badge lo-wpn', `${w.qty}×${w.info.name}`);
-    b.style.background = weaponColor(w.info.cat);
-    b.title = `${w.qty}× ${w.info.full}`;
-    wrap.appendChild(b);
-  });
-
-  return wrap;
-}
-
 // ── Detail panel widget (expanded, with full names) ──────────
 /**
  * Returns a DOM element showing the full loadout breakdown
@@ -219,7 +181,7 @@ function loadoutChip(raw) {
 function loadoutWidget(raw) {
   const parsed = parseLoadout(raw);
   if (!parsed) {
-    const d = el('div', 'dv sm', '—'); return d;
+      return el('div', 'dv sm', '—');
   }
 
   const wrap = el('div', 'lo-widget');
