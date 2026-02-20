@@ -17,6 +17,15 @@
     <div class="header-meta" id="header-meta"></div>
     <div class="header-right">
       <div class="theme-toggle">
+        <button class="theme-btn active" data-time="Z"  onclick="setTimeMode('Z')">Z</button>
+        <button class="theme-btn"        data-time="L"  onclick="setTimeMode('L')">L</button>
+      </div>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-coord="dm"   onclick="setCoordMode('dm')">DM</button>
+        <button class="theme-btn"        data-coord="dms"  onclick="setCoordMode('dms')">DMS</button>
+        <button class="theme-btn"        data-coord="mgrs" onclick="setCoordMode('mgrs')">MGRS</button>
+      </div>
+      <div class="theme-toggle">
         <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
         <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
       </div>
@@ -55,7 +64,7 @@
         <div class="cards-row" id="cards-row"></div>
         <div class="timeline-row">
           <div class="tl-header-bar">
-            <span class="tl-lbl">TIMELINE — ZULU · ▓ MISSION WINDOW · ▒ AAR WINDOW</span>
+            <span class="tl-lbl" id="tl-mode-label">TIMELINE — ZULU · ▓ MISSION WINDOW · ▒ AAR WINDOW</span>
             <span class="tl-lbl" id="tl-range">—</span>
           </div>
           <div class="tl-scroll"><div class="tl-canvas" id="tl-canvas"></div></div>

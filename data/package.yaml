@@ -10,8 +10,10 @@
 # ============================================================
 
 ato:
-  irl_start: "11/01/2026 1900Z"
+  irl_date: 11/01/2026
+  irl_time_zulu: 1900Z
   ingame_start_local: 0000L
+  local_offset_hours: 0    # UTC offset for local time display (e.g. 4 for UTC+4)
   ae_flags: [IRL, INGAME]
 
   global_control:
@@ -215,12 +217,14 @@ comms:
   classification: UNCLAS
   wing_lead: FALCON51
 
-  # Only list populated channels — omit SPAREs entirely.
-  # Channels are displayed sorted by number; gaps are fine.
+  # Only list populated channels — omit SPAREs or include them as null to show slot occupancy.
   uhf_presets:
     1:  {callsign: GUARD,       freq_mhz: 243.000, role: Emergency}
     2:  {callsign: PACKAGE,     freq_mhz: 260.000, role: Package primary}
     3:  {callsign: INTRAFLIGHT, freq_mhz: 261.500, role: Intraflight}
+    4:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    5:  {callsign: SPARE,       freq_mhz: null,     role: null}
 
   vhf_presets:
     1:  {callsign: GUARD,       freq_mhz: 121.500, role: Emergency}
+    2:  {callsign: SPARE,       freq_mhz: null,     role: null}

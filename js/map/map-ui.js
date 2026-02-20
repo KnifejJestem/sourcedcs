@@ -4,13 +4,6 @@
 
 'use strict';
 
-// ── Coordinate formatter ─────────────────────────────────
-function fmtCoord(lat, lon) {
-  const la = lat >= 0 ? `${lat.toFixed(4)}°N` : `${Math.abs(lat).toFixed(4)}°S`;
-  const lo = lon >= 0 ? `${lon.toFixed(4)}°E` : `${Math.abs(lon).toFixed(4)}°W`;
-  return `${la}  ${lo}`;
-}
-
 // ── Popup ────────────────────────────────────────────────
 // Creates the popup div and a showPopup(p) function that
 // populates it. Returns { popup, showPopup }.

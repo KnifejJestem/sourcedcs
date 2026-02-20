@@ -1,6 +1,8 @@
 ato:
-  irl_start: "11/01/2026 1900Z"
+  irl_date: 11/01/2026
+  irl_time_zulu: 1900Z
   ingame_start_local: 0000L
+  local_offset_hours: 4    # UTC+4 (Gulf area — no DST; adjust for your theater)
   ae_flags:
   - IRL
   - INGAME
@@ -337,6 +339,11 @@ comms:
     1:  {callsign: GUARD,       freq_mhz: 243.0,   role: Emergency}
     2:  {callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary}
     3:  {callsign: INTRAFLIGHT, freq_mhz: 261.5,   role: Intraflight}
+    4:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    5:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    6:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    7:  {callsign: SPARE,       freq_mhz: null,     role: null}
+    8:  {callsign: SPARE,       freq_mhz: null,     role: null}
     9:  {callsign: LTAG TWR,    freq_mhz: 360.1,   role: ATC Tower}
     10: {callsign: LTAG APP/DEP, freq_mhz: 340.775, role: ATC Approach/Departure}
     11: {callsign: MAGIC,       freq_mhz: 265.1,   role: AWACS primary}
@@ -350,8 +357,13 @@ comms:
     19: {callsign: CV-75 DEP,   freq_mhz: 322.075, role: Carrier departure}
     20: {callsign: LTAG ATIS,   freq_mhz: 377.475, role: ATIS}
   vhf_presets:
-    1: {callsign: GUARD,     freq_mhz: 121.5,   role: Emergency}
-    6: {callsign: SHADOW 1,  freq_mhz: 133.3,   role: Package lead}
-    7: {callsign: HAT 1,     freq_mhz: 120.075, role: Flight}
-    8: {callsign: "COWBOY 1 / BOLO 1", freq_mhz: 129.225, role: CAS / Strike}
+    1:  {callsign: GUARD,    freq_mhz: 121.5,   role: Emergency}
+    2:  {callsign: SPARE,    freq_mhz: null,     role: null}
+    3:  {callsign: SPARE,    freq_mhz: null,     role: null}
+    4:  {callsign: SPARE,    freq_mhz: null,     role: null}
+    5:  {callsign: SPARE,    freq_mhz: null,     role: null}
+    6:  {callsign: SHADOW 1, freq_mhz: 133.3,   role: Package lead}
+    7:  {callsign: HAT 1,    freq_mhz: 120.075, role: Flight}
+    8:  {callsign: "COWBOY 1 / BOLO 1", freq_mhz: 129.225, role: CAS / Strike}
+    9:  {callsign: SPARE,    freq_mhz: null,     role: null}
     10: {callsign: LTAG PAR, freq_mhz: 282.5,   role: Precision approach}

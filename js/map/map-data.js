@@ -200,14 +200,3 @@ function collectData(ato, aco) {
 
   return { points, routes, airspaces };
 }
-
-// ── Coord parser ───────────────────────────────────────────
-function parseCoord(str) {
-  if (!str) return null;
-  const re = /([NS])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″\s]*)?\s*([EW])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″]?)?/i;
-  const m = str.match(re);
-  if (!m) return null;
-  const lat = (m[1]==='N'?1:-1)*(+m[2] + +m[3]/60 + +(m[4]||0)/3600);
-  const lon = (m[5]==='E'?1:-1)*(+m[6] + +m[7]/60 + +(m[8]||0)/3600);
-  return (isNaN(lat)||isNaN(lon)) ? null : { lat, lon };
-}

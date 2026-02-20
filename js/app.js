@@ -10,6 +10,10 @@ const STATE = {
   selectedIdx:  -1,
   currentTab:   'ato',
   theme:        'pro',
+  display: {
+    timeMode:  'Z',   // 'Z' = Zulu, 'L' = local (uses ato.local_offset_hours)
+    coordMode: 'dm',  // 'dm' = decimal minutes, 'dms' = deg/min/sec, 'mgrs'
+  },
 };
 
 // ── Shared helpers ───────────────────────────────────────────
@@ -39,13 +43,144 @@ function html(strings, ...values) {
 
 function toMins(v) {
   if (!v) return null;
-  const s = String(v).replace('Z', '').padStart(4, '0');
+  const s = String(v).replace(/[ZL]/i, '').padStart(4, '0');
   return parseInt(s.slice(0, 2)) * 60 + parseInt(s.slice(2, 4));
 }
 
-function fmtZ(v) {
+// Wrap a minute value into the 0–1439 range (24-hour clock).
+function wrapMins(m) { return ((m % 1440) + 1440) % 1440; }
+// current display time mode. In 'Z' mode returns '2040Z'; in 'L' mode adds
+// the ATO's local_offset_hours and returns e.g. '0040L'.
+function fmtTime(v) {
   if (!v) return '—';
-  return String(v).replace('Z', '').padStart(4, '0') + 'Z';
+  const mins = toMins(v);
+  if (mins === null) return String(v);
+  if (STATE.display.timeMode === 'L') {
+    const off = (STATE.pkg?.ato?.local_offset_hours || 0) * 60;
+    const lm  = wrapMins(mins + off);
+    return String(Math.floor(lm / 60)).padStart(2, '0') +
+           String(lm % 60).padStart(2, '0') + 'L';
+  }
+  return String(v).replace(/[ZL]/i, '').padStart(4, '0') + 'Z';
+}
+
+// ── Coordinate parsing ────────────────────────────────────────
+// Accepts DMS / DM / decimal-degree strings in any of the usual
+// military notations (deg / °d / deg keyword).  Returns {lat, lon}
+// or null when the string cannot be parsed.
+function parseCoord(str) {
+  if (!str) return null;
+  const re = /([NS])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″\s]*)?\s*([EW])\s*(\d+)[°d][^\d]*(\d+(?:\.\d+)?)['\s]*(?:(\d+(?:\.\d+)?)["″]?)?/i;
+  const m = String(str).match(re);
+  if (!m) return null;
+  const lat = (m[1].toUpperCase() === 'N' ? 1 : -1) * (+m[2] + +m[3] / 60 + +(m[4] || 0) / 3600);
+  const lon = (m[5].toUpperCase() === 'E' ? 1 : -1) * (+m[6] + +m[7] / 60 + +(m[8] || 0) / 3600);
+  return (isNaN(lat) || isNaN(lon)) ? null : { lat, lon };
+}
+
+// ── Coordinate formatters ─────────────────────────────────────
+// Decimal minutes: 26°51.319'N 056°21.616'E
+function fmtCoordDM(lat, lon) {
+  function fmt(d, pos, neg) {
+    const sign = d >= 0;
+    const ab = Math.abs(d);
+    const deg = Math.floor(ab);
+    const min = (ab - deg) * 60;
+    return `${String(deg).padStart(2, '0')}°${min.toFixed(3).padStart(6, '0')}'${sign ? pos : neg}`;
+  }
+  return `${fmt(lat, 'N', 'S')} ${fmt(lon, 'E', 'W')}`;
+}
+
+// Degrees-minutes-seconds: 26°51'19.1"N 056°21'36.9"E
+function fmtCoordDMS(lat, lon) {
+  function fmt(d, pos, neg) {
+    const sign = d >= 0;
+    const ab = Math.abs(d);
+    const deg = Math.floor(ab);
+    const mf  = (ab - deg) * 60;
+    const min = Math.floor(mf);
+    const sec = ((mf - min) * 60).toFixed(1);
+    return `${String(deg).padStart(2, '0')}°${String(min).padStart(2, '0')}'${String(sec).padStart(4, '0')}"${sign ? pos : neg}`;
+  }
+  return `${fmt(lat, 'N', 'S')} ${fmt(lon, 'E', 'W')}`;
+}
+
+// MGRS (WGS-84) using the standard NATO formula.
+// Covers 80°S – 84°N; falls back to DM for polar regions.
+function latLonToMGRS(lat, lon) {
+  if (lat < -80 || lat > 84) return fmtCoordDM(lat, lon);
+
+  const a  = 6378137;
+  const e2 = 0.00669437999014;
+  const k0 = 0.9996;
+
+  // UTM zone with Norway / Svalbard exceptions
+  let zoneNum = Math.floor((lon + 180) / 6) + 1;
+  if (lat >= 56 && lat < 64 && lon >= 3  && lon < 12) zoneNum = 32;
+  if (lat >= 72 && lat < 84) {
+    if      (lon >=  0 && lon <  9) zoneNum = 31;
+    else if (lon >=  9 && lon < 21) zoneNum = 33;
+    else if (lon >= 21 && lon < 33) zoneNum = 35;
+    else if (lon >= 33 && lon < 42) zoneNum = 37;
+  }
+
+  const latR  = lat * Math.PI / 180;
+  const lonR  = lon * Math.PI / 180;
+  const lon0R = ((zoneNum - 1) * 6 - 180 + 3) * Math.PI / 180;
+
+  const e4 = e2 * e2, e6 = e4 * e2;
+  const N  = a / Math.sqrt(1 - e2 * Math.sin(latR) ** 2);
+  const t  = Math.tan(latR);
+  const c  = (e2 / (1 - e2)) * Math.cos(latR) ** 2;
+  const ag = Math.cos(latR) * (lonR - lon0R);
+
+  const M = a * (
+    (1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256)  * latR
+    - (3 * e2 / 8 + 3 * e4 / 32 + 45 * e6 / 1024) * Math.sin(2 * latR)
+    + (15 * e4 / 256 + 45 * e6 / 1024)             * Math.sin(4 * latR)
+    - (35 * e6 / 3072)                              * Math.sin(6 * latR)
+  );
+
+  const easting = k0 * N * (
+    ag
+    + (1 - t * t + c) * ag ** 3 / 6
+    + (5 - 18 * t * t + t ** 4 + 72 * c - 58 * e2 / (1 - e2)) * ag ** 5 / 120
+  ) + 500000;
+
+  let northing = k0 * (M + N * Math.tan(latR) * (
+    ag ** 2 / 2
+    + (5 - t * t + 9 * c + 4 * c * c)                                        * ag ** 4 / 24
+    + (61 - 58 * t * t + t ** 4 + 600 * c - 330 * e2 / (1 - e2))            * ag ** 6 / 720
+  ));
+  if (lat < 0) northing += 10000000;
+
+  // MGRS band letter (C–X, no I or O)
+  const BANDS = 'CDEFGHJKLMNPQRSTUVWX';
+  const band = BANDS[Math.min(Math.floor((lat + 80) / 8), 19)];
+
+  // 100 km column letter (A-H / J-R / S-Z cycling by zone mod 3)
+  const COL_SETS = ['ABCDEFGH', 'JKLMNPQR', 'STUVWXYZ'];
+  const colIdx   = Math.floor(easting / 100000) - 1;   // 0–7
+  const colLetter = (COL_SETS[(zoneNum - 1) % 3] || '')[colIdx] || '?';
+
+  // 100 km row letter (A–V no I/O, cycling; even zones start at F)
+  const ROW_LETTERS = 'ABCDEFGHJKLMNPQRSTUV'; // 20 letters
+  const rowOffset   = zoneNum % 2 === 0 ? 5 : 0;
+  const rowIdx      = (Math.floor(northing / 100000) % 20 + rowOffset + 20) % 20;
+  const rowLetter   = ROW_LETTERS[rowIdx];
+
+  const e5 = String(Math.floor(easting  % 100000)).padStart(5, '0');
+  const n5 = String(Math.floor(northing % 100000)).padStart(5, '0');
+
+  return `${zoneNum}${band} ${colLetter}${rowLetter} ${e5} ${n5}`;
+}
+
+// Dispatch to the formatter selected by STATE.display.coordMode.
+// Called from map-ui.js (popup coords) and view-ato.js (bullseye / aim points).
+function fmtCoord(lat, lon) {
+  if (STATE.display.coordMode === 'dms')  return fmtCoordDMS(lat, lon);
+  if (STATE.display.coordMode === 'mgrs') return latLonToMGRS(lat, lon);
+  return fmtCoordDM(lat, lon);
 }
 
 const KNOWN_TYPES = ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE'];
@@ -74,7 +209,7 @@ function setTheme(t) {
   } else {
     root.classList.remove('movie');
   }
-  document.querySelectorAll('.theme-btn').forEach(b => {
+  document.querySelectorAll('[data-theme]').forEach(b => {
     b.classList.toggle('active', b.dataset.theme === t);
   });
   // Re-render views that use theme-dependent colors
@@ -84,6 +219,24 @@ function setTheme(t) {
       renderMAP(STATE.pkg.ato);
     }
   }
+}
+
+// ── Display mode: time (Z / L) ────────────────────────────────
+function setTimeMode(m) {
+  STATE.display.timeMode = m;
+  document.querySelectorAll('[data-time]').forEach(b => {
+    b.classList.toggle('active', b.dataset.time === m);
+  });
+  if (STATE.pkg?.ato) renderATO(STATE.pkg.ato);
+}
+
+// ── Display mode: coordinates (dm / dms / mgrs) ───────────────
+function setCoordMode(m) {
+  STATE.display.coordMode = m;
+  document.querySelectorAll('[data-coord]').forEach(b => {
+    b.classList.toggle('active', b.dataset.coord === m);
+  });
+  if (STATE.pkg?.ato) renderATO(STATE.pkg.ato);
 }
 
 // ── Tab routing ───────────────────────────────────────────────
@@ -178,8 +331,9 @@ function renderHeader(ato) {
   const meta = document.getElementById('header-meta');
   if (!ato) { meta.innerHTML = ''; return; }
 
+  const irl = [ato.irl_date, ato.irl_time_zulu].filter(Boolean).join(' ') || '—';
   const items = [
-    ['IRL START',    ato.irl_start || '—',           ''],
+    ['IRL START',    irl,                           ''],
     ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
   ];
   const unit = ato.global_control?.controlling_unit;

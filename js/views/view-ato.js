@@ -28,9 +28,10 @@ function renderIntelStrip(gc, ato) {
       </div>`;
   }
 
+  const irl = [ato.irl_date, ato.irl_time_zulu].filter(Boolean).join(' ') || '—';
   const sections = [
     section(
-      ['IRL START',    ato.irl_start || '—'],
+      ['IRL START',    irl],
       ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
     ),
     section(
@@ -42,9 +43,11 @@ function renderIntelStrip(gc, ato) {
     ),
   ];
   if (gc.bullseye) {
+    const bsParsed = parseCoord(gc.bullseye.coords);
+    const bsCoords = bsParsed ? fmtCoord(bsParsed.lat, bsParsed.lon) : (gc.bullseye.coords || '—');
     sections.push(section(
-      ['BULLSEYE', gc.bullseye.name   || '—'],
-      ['COORDS',   gc.bullseye.coords || '—', 'coords'],
+      ['BULLSEYE', gc.bullseye.name || '—'],
+      ['COORDS',   bsCoords, 'coords'],
     ));
   }
 
@@ -79,7 +82,7 @@ function renderMissionCards(missions) {
           </div>
           <div class="card-row">
             <span class="ck">WINDOW</span>
-            <span class="cv time">${fmtZ(m.target?.not_earlier_than)} → ${fmtZ(m.target?.not_later_than)}</span>
+            <span class="cv time">${fmtTime(m.target?.not_earlier_than)} → ${fmtTime(m.target?.not_later_than)}</span>
           </div>
           ${m.control?.primary_freq_mhz ? `
           <div class="card-row">
@@ -129,14 +132,28 @@ function renderTimeline(missions) {
   const hh = t => String(Math.floor(t / 60)).padStart(2, '0');
   const mm = t => String(t % 60).padStart(2, '0');
 
+  const timeSuffix = STATE.display.timeMode;
+  // Helper: display time label from raw minutes (applies local offset in L mode)
+  function dispT(rawMins) {
+    if (STATE.display.timeMode === 'L') {
+      const off = (STATE.pkg?.ato?.local_offset_hours || 0) * 60;
+      return wrapMins(rawMins + off);
+    }
+    return rawMins;
+  }
+
   document.getElementById('tl-range').textContent =
-    `${hh(minT)}${mm(minT)}Z – ${hh(maxT)}${mm(maxT)}Z`;
+    `${hh(dispT(minT))}${mm(dispT(minT))}${timeSuffix} – ${hh(dispT(maxT))}${mm(dispT(maxT))}${timeSuffix}`;
+
+  // Update mode label in the static header bar
+  const modeLabel = document.getElementById('tl-mode-label');
+  if (modeLabel) modeLabel.textContent = `TIMELINE — ${timeSuffix === 'L' ? 'LOCAL' : 'ZULU'} · ▓ MISSION WINDOW · ▒ AAR WINDOW`;
 
   // Tick header — build as a string array so we can join into one innerHTML call
   // rather than calling html() once per tick (no event listeners needed on ticks).
   const ticks = [];
   for (let t = minT; t <= maxT; t += STEP) {
-    ticks.push(`<div class="tl-tick" style="width:${(STEP / span * TW).toFixed(2)}px">${hh(t)}${mm(t)}Z</div>`);
+    ticks.push(`<div class="tl-tick" style="width:${(STEP / span * TW).toFixed(2)}px">${hh(dispT(t))}${mm(dispT(t))}${timeSuffix}</div>`);
   }
   canvas.insertAdjacentHTML('beforeend', `<div class="tl-ticks">${ticks.join('')}</div>`);
 
@@ -169,7 +186,7 @@ function renderTimeline(missions) {
       const bar = html`
         <div class="tl-bar"
              style="background:${color};left:${((net-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(nlt-net)/span*100).toFixed(3)}%"
-             title="${m.callsign} · ${fmtZ(m.target.not_earlier_than)} – ${fmtZ(m.target.not_later_than)}"
+             title="${m.callsign} · ${fmtTime(m.target.not_earlier_than)} – ${fmtTime(m.target.not_later_than)}"
         >${m.callsign || ''}</div>`;
       bar.addEventListener('click', () => selectMission(i));
       track.appendChild(bar);
@@ -182,7 +199,7 @@ function renderTimeline(missions) {
       track.insertAdjacentHTML('beforeend', `
         <div class="tl-bar refuel"
              style="left:${((rnet-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(rnlt-rnet)/span*100).toFixed(3)}%"
-             title="${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtZ(m.refuel?.not_earlier_than)} – ${fmtZ(m.refuel?.not_later_than)}"></div>`);
+             title="${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtTime(m.refuel?.not_earlier_than)} – ${fmtTime(m.refuel?.not_later_than)}"></div>`);
     }
 
     row.appendChild(track);
@@ -236,12 +253,12 @@ function selectMission(idx) {
         <div class="time-pair">
           <div class="time-box">
             <div class="time-box-lbl">NET</div>
-            <div class="time-box-val">${fmtZ(net)}</div>
+            <div class="time-box-val">${fmtTime(net)}</div>
           </div>
           <div class="time-arr">→</div>
           <div class="time-box">
             <div class="time-box-lbl">NLT</div>
-            <div class="time-box-val">${fmtZ(nlt)}</div>
+            <div class="time-box-val">${fmtTime(nlt)}</div>
           </div>
         </div>
       </div>`);
@@ -285,7 +302,10 @@ function selectMission(idx) {
       aim.forEach(p => {
         if (p && typeof p === 'object') {
           const ref = p._resolved_target;
-          let text = [p.name, p.coords].filter(Boolean).join(' — ');
+          // Reformat the stored coord string using the current coord display mode
+          const parsed = parseCoord(p.coords);
+          const coordStr = parsed ? fmtCoord(parsed.lat, parsed.lon) : (p.coords || '');
+          let text = [p.name, coordStr].filter(Boolean).join(' — ');
           if (p.elevation) text += ` · ${p.elevation}`;
           const entry = el('div', 'dmpi-entry', text);
 
