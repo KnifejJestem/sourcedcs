@@ -358,9 +358,9 @@ function loadPackage_obj(data) {
     pkg.ato.airfields.forEach(af => {
       const reg = pkg.registry.airfields[af.icao];
       if (reg) {
-        if (reg.name)                     af.name          = reg.name;
-        if (reg.coords)                   af.coords        = reg.coords;
-        if (reg.elevation_ft != null)     af.elevation_ft  = reg.elevation_ft;
+        if (reg.name != null)          af.name          = reg.name;
+        if (reg.coords != null)        af.coords        = reg.coords;
+        if (reg.elevation_ft != null)  af.elevation_ft  = reg.elevation_ft;
       }
     });
   }
@@ -370,10 +370,10 @@ function loadPackage_obj(data) {
     pkg.ato.carriers.forEach(cv => {
       const reg = pkg.registry.carriers[cv.id];
       if (reg) {
-        if (reg.name)            cv.name            = reg.name;
-        if (reg.callsign)        cv.callsign        = reg.callsign;
-        if (reg.deploy_coords)   cv.deploy_coords   = reg.deploy_coords;
-        if (reg.recovery_coords) cv.recovery_coords = reg.recovery_coords;
+        if (reg.name != null)            cv.name            = reg.name;
+        if (reg.callsign != null)        cv.callsign        = reg.callsign;
+        if (reg.deploy_coords != null)   cv.deploy_coords   = reg.deploy_coords;
+        if (reg.recovery_coords != null) cv.recovery_coords = reg.recovery_coords;
       }
     });
   }
@@ -391,9 +391,9 @@ function loadPackage_obj(data) {
       pkg.ato.tankers.forEach(t => {
         const reg = pkg.registry.tankers[t.id];
         if (reg) {
-          if (reg.callsign) t.callsign = reg.callsign;
-          if (reg.ar_track) t.ar_track = reg.ar_track;
-          if (reg.altitude) t.altitude = reg.altitude;
+          if (reg.callsign != null) t.callsign = reg.callsign;
+          if (reg.ar_track != null) t.ar_track = reg.ar_track;
+          if (reg.altitude != null) t.altitude = reg.altitude;
         }
       });
     }
@@ -437,9 +437,9 @@ function loadPackage_obj(data) {
     if (gc?.agency_id) {
       const ag = pkg.registry.control_agencies[gc.agency_id];
       if (ag) {
-        if (ag.callsign)         gc.controlling_unit  = ag.callsign;
-        if (ag.platform)         gc.aircraft_type     = ag.platform;
-        if (ag.primary_freq_mhz) gc.primary_freq_mhz = ag.primary_freq_mhz;
+        if (ag.callsign != null)         gc.controlling_unit  = ag.callsign;
+        if (ag.platform != null)         gc.aircraft_type     = ag.platform;
+        if (ag.primary_freq_mhz != null) gc.primary_freq_mhz = ag.primary_freq_mhz;
         gc._agency = ag;
       }
     }
@@ -448,9 +448,9 @@ function loadPackage_obj(data) {
       if (m.control?.agency_id) {
         const ag = pkg.registry.control_agencies[m.control.agency_id];
         if (ag) {
-          if (ag.primary_freq_mhz)   m.control.primary_freq_mhz   = ag.primary_freq_mhz;
-          if (ag.secondary_freq_mhz) m.control.secondary_freq_mhz = ag.secondary_freq_mhz;
-          if (ag.callsign)           m.control.net_name            = ag.callsign;
+          if (ag.primary_freq_mhz != null)   m.control.primary_freq_mhz   = ag.primary_freq_mhz;
+          if (ag.secondary_freq_mhz != null) m.control.secondary_freq_mhz = ag.secondary_freq_mhz;
+          if (ag.callsign != null)           m.control.net_name            = ag.callsign;
           m.control._agency = ag;
         }
       }
