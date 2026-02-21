@@ -28,12 +28,13 @@ const SESSION = {
   _syncing:  false,  // true while applying remote state
 };
 
-// Keep references to the original global functions for wrapping
-const _origLoadPackage  = null;
-const _origShowTab      = null;
-const _origSetTheme     = null;
-const _origSetTimeMode  = null;
-const _origSetCoordMode = null;
+// ── Original function references (captured once) ─────────────
+// Saved before the first joinSession() call wraps the globals.
+let _origLoadPackage  = null;
+let _origShowTab      = null;
+let _origSetTheme     = null;
+let _origSetTimeMode  = null;
+let _origSetCoordMode = null;
 
 // ── Dialog helpers (global, called from onclick in HTML) ─────
 function openJoinDialog() {
@@ -86,19 +87,21 @@ function joinSession(sessionId, role, password) {
   SESSION.sessionId = sessionId;
   SESSION.role = role === 'presenter' ? 'presenter' : 'presentee';
 
-  // Store originals before wrapping (only once)
-  const _loadPackage  = window._origLoadPackage  || window.loadPackage;
-  const _showTab      = window._origShowTab      || window.showTab;
-  const _setTheme     = window._origSetTheme     || window.setTheme;
-  const _setTimeMode  = window._origSetTimeMode  || window.setTimeMode;
-  const _setCoordMode = window._origSetCoordMode || window.setCoordMode;
+  // Capture originals exactly once (before any wrapping)
+  if (!_origLoadPackage) {
+    _origLoadPackage  = window.loadPackage;
+    _origShowTab      = window.showTab;
+    _origSetTheme     = window.setTheme;
+    _origSetTimeMode  = window.setTimeMode;
+    _origSetCoordMode = window.setCoordMode;
+  }
 
-  // Save originals for potential re-join
-  window._origLoadPackage  = _loadPackage;
-  window._origShowTab      = _showTab;
-  window._origSetTheme     = _setTheme;
-  window._origSetTimeMode  = _setTimeMode;
-  window._origSetCoordMode = _setCoordMode;
+  // Always restore originals first, then wrap if presenter
+  const _loadPackage  = _origLoadPackage;
+  const _showTab      = _origShowTab;
+  const _setTheme     = _origSetTheme;
+  const _setTimeMode  = _origSetTimeMode;
+  const _setCoordMode = _origSetCoordMode;
 
   // ── Wrap global functions for presenter sync ──────────────
   if (SESSION.role === 'presenter') {
