@@ -67,7 +67,7 @@ function buildIntelSection(items) {
  */
 function formatIrlZuluTime(rawValue) {
   if (!rawValue) { return null; }
-  return String(rawValue).replace(/[ZL]/i, '').padStart(4, '0') + 'Z';
+  return String(rawValue).replace(/[ZL]$/i, '').padStart(4, '0') + 'Z';
 }
 
 function renderIntelStrip(gc, ato) {
@@ -258,8 +258,9 @@ function computeTimeRange(missions) {
  */
 function displayMinutes(rawMins) {
   if (STATE.display.timeMode === 'L') {
-    var offsetMins = (STATE.pkg && STATE.pkg.ato
-      ? STATE.pkg.ato.local_offset_hours || 0 : 0) * 60;
+    var ato        = (STATE.pkg && STATE.pkg.ato) ? STATE.pkg.ato : null;
+    var offsetHrs  = ato ? (ato.local_offset_hours || 0) : 0;
+    var offsetMins = offsetHrs * 60;
     return wrapMins(rawMins + offsetMins);
   }
   return rawMins;
