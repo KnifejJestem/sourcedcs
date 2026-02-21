@@ -123,11 +123,11 @@ function _editAcm(acms, index) {
 
     editorSectionTitle(body, 'GEOMETRY');
     var geo = acm.geometry || {};
-    var fAnchor  = editorField(body, 'Anchor Point', geo.anchor_point, { placeholder: "N25°30'00\" E55°30'00\"" });
+    var fAnchor  = editorField(body, 'Anchor Point', geo.anchor_point, { placeholder: "N25°30'00\" E55°30'00\"", coordPick: true });
     var fHeading = editorField(body, 'Heading (°)', geo.heading_deg, { type: 'number' });
     var fLeg     = editorField(body, 'Leg Length (NM)', geo.leg_length_nm, { type: 'number' });
     var fDir     = editorField(body, 'Direction', geo.direction, { placeholder: 'CW / CCW' });
-    var fCenter  = editorField(body, 'Center', geo.center, { placeholder: "N25°30'00\" E55°30'00\"" });
+    var fCenter  = editorField(body, 'Center', geo.center, { placeholder: "N25°30'00\" E55°30'00\"", coordPick: true });
     var fRadius  = editorField(body, 'Radius (NM)', geo.radius_nm, { type: 'number' });
 
     // Polygon boundary points

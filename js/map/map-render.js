@@ -295,8 +295,14 @@ function drawMap(container, points, routes, geoData, airspaces) {
 
   container.appendChild(svg);
 
-  // Close popup when clicking the map background
-  svg.addEventListener('click', () => {
+  // Close popup when clicking the map background, or handle coord pick
+  svg.addEventListener('click', (e) => {
+    // Coordinate picker mode — capture click position as lat/lon
+    if (typeof EDITOR !== 'undefined' && typeof EDITOR._coordPickCb === 'function') {
+      var pt = clientToContent(e.clientX, e.clientY);
+      EDITOR._coordPickCb(pt.lat, pt.lon);
+      return;
+    }
     const popup = container.querySelector('.map-popup');
     if (popup) popup.style.display = 'none';
   });

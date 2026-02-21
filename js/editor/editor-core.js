@@ -21,6 +21,7 @@
 const EDITOR = {
   active:   false,   // true when edit mode is on
   _onSave:  null,    // callback for current dialog
+  _coordPickCb: null, // callback for map coordinate picker
 };
 
 // ── Edit mode toggle ─────────────────────────────────────────
@@ -99,10 +100,57 @@ function editorField(parent, label, value, opts) {
   if (value != null) input.value = String(value);
   if (opts.disabled)  input.disabled = true;
 
-  wrap.appendChild(input);
+  if (opts.coordPick) {
+    // Wrap input + pick button in a flex row
+    var inputRow = el('div', 'ef-coord-row');
+    inputRow.appendChild(input);
+    var pickBtn = el('button', 'ef-btn ef-btn-sm ef-btn-pick', '📍');
+    pickBtn.title = 'Pick from map';
+    pickBtn.type = 'button';
+    pickBtn.addEventListener('click', function () {
+      _startCoordPick(input);
+    });
+    inputRow.appendChild(pickBtn);
+    wrap.appendChild(inputRow);
+  } else {
+    wrap.appendChild(input);
+  }
+
   if (opts.hint) wrap.appendChild(el('div', 'ef-hint', opts.hint));
   parent.appendChild(wrap);
   return input;
+}
+
+// ── Map coordinate picker ────────────────────────────────────
+// Minimises the editor, switches to the MAP tab, sets the map to
+// "pick" mode.  On click, the coordinate is written into the
+// target input and the editor is restored.
+function _startCoordPick(targetInput) {
+  if (!STATE.pkg) return;
+
+  // Hide editor overlay but don't close it (preserve form state)
+  var overlay = document.getElementById('editorOverlay');
+  if (overlay) overlay.style.display = 'none';
+
+  // Remember which tab was active so we can restore later
+  var savedTab = STATE.currentTab;
+  showTab('map');
+
+  // Set pick callback — map-render.js checks EDITOR._coordPickCb
+  EDITOR._coordPickCb = function (lat, lon) {
+    EDITOR._coordPickCb = null;
+    targetInput.value = fmtCoordDM(lat, lon);
+    // Trigger input event so any bound listeners fire
+    targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+    // Restore editor overlay and previous tab
+    showTab(savedTab);
+    if (overlay) overlay.style.display = 'flex';
+  };
+}
+
+// Cancel coordinate pick mode (called if the editor is closed)
+function _cancelCoordPick() {
+  EDITOR._coordPickCb = null;
 }
 
 // Section divider inside the editor form

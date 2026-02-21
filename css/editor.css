@@ -281,3 +281,20 @@
 }
 .ef-btn-back:hover { color: var(--text-2); }
 .ef-btn-back::before { content: '← '; }
+
+/* ── Coordinate picker row ───────────────────────────────────── */
+.ef-coord-row {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+}
+.ef-coord-row .ef-input {
+  flex: 1;
+  min-width: 0;
+}
+.ef-btn-pick {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+}

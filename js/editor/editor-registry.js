@@ -22,7 +22,7 @@ var REGISTRY_CATEGORIES = {
     idLabel: 'ICAO',
     fields: [
       { key: 'name',         label: 'Name',         placeholder: 'e.g. Al Dhafra AB' },
-      { key: 'coords',       label: 'Coordinates',  placeholder: "N24°14'36\" E054°27'07\"" },
+      { key: 'coords',       label: 'Coordinates',  placeholder: "N24°14'36\" E054°27'07\"", coordPick: true },
       { key: 'elevation_ft', label: 'Elevation (ft)', type: 'number' },
     ],
   },
@@ -32,8 +32,8 @@ var REGISTRY_CATEGORIES = {
     fields: [
       { key: 'name',            label: 'Name',            placeholder: 'e.g. USS ROOSEVELT' },
       { key: 'callsign',        label: 'Callsign',        placeholder: 'e.g. ROUGH RIDER' },
-      { key: 'deploy_coords',   label: 'Deploy Coords',   placeholder: "N24°30'00\" E059°15'00\"" },
-      { key: 'recovery_coords', label: 'Recovery Coords',  placeholder: "N24°45'00\" E059°30'00\"" },
+      { key: 'deploy_coords',   label: 'Deploy Coords',   placeholder: "N24°30'00\" E059°15'00\"", coordPick: true },
+      { key: 'recovery_coords', label: 'Recovery Coords',  placeholder: "N24°45'00\" E059°30'00\"", coordPick: true },
     ],
   },
   tankers: {
@@ -51,7 +51,7 @@ var REGISTRY_CATEGORIES = {
     fields: [
       { key: 'name',               label: 'Name',               placeholder: 'e.g. SA-2 Guideline' },
       { key: 'type',               label: 'Type',               placeholder: 'SAM / EWR / BUILDING' },
-      { key: 'coords',             label: 'Coordinates',        placeholder: "N26°30'00\" E056°20'00\"" },
+      { key: 'coords',             label: 'Coordinates',        placeholder: "N26°30'00\" E056°20'00\"", coordPick: true },
       { key: 'elevation',          label: 'Elevation',          placeholder: '150ft' },
       { key: 'engagement_range_nm', label: 'Engagement Range (NM)', type: 'number' },
       { key: 'max_alt_ft',         label: 'Max Altitude (ft)',  type: 'number' },
@@ -63,7 +63,7 @@ var REGISTRY_CATEGORIES = {
     fields: [
       { key: 'name',     label: 'Name',     placeholder: 'e.g. COYOTE' },
       { key: 'type',     label: 'Type',     placeholder: 'bullseye / marshal' },
-      { key: 'coords',   label: 'Coordinates', placeholder: "N26°51'19\" E056°21'37\"" },
+      { key: 'coords',   label: 'Coordinates', placeholder: "N26°51'19\" E056°21'37\"", coordPick: true },
       { key: 'altitude', label: 'Altitude', placeholder: 'FL250' },
     ],
   },
@@ -125,6 +125,7 @@ function editRegistryItem(catKey, id) {
       fields[f.key] = editorField(body, f.label, item[f.key] || '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
+        coordPick:   f.coordPick || false,
       });
     });
 
@@ -163,6 +164,7 @@ function addRegistryItem(catKey) {
       fields[f.key] = editorField(body, f.label, '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
+        coordPick:   f.coordPick || false,
       });
     });
 
