@@ -60,7 +60,6 @@ throughout the rest of the file.  It contains: `callsigns`, `frequencies`,
 `airfields`, `carriers`, `tankers`, `targets` (with nested aim points),
 `reference_points` (bullseye, marshal points, named positions), and
 `control_agencies` (AWACS, CRC).
-`reference_points` (bullseye, marshal points, named positions).
 
 ### `callsigns:` (map)
 
