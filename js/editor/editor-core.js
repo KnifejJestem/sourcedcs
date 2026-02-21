@@ -68,7 +68,12 @@ function saveEditorDialog() {
 function editorField(parent, label, value, opts) {
   opts = opts || {};
   const wrap = el('div', 'ef-group');
-  wrap.appendChild(el('label', 'ef-label', label));
+  var labelEl = el('label', 'ef-label');
+  labelEl.textContent = label;
+  if (opts.required) {
+    labelEl.appendChild(el('span', 'ef-required', ' *'));
+  }
+  wrap.appendChild(labelEl);
 
   let input;
   if (opts.type === 'textarea') {

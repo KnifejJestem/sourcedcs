@@ -36,6 +36,18 @@
 
 :root.edit-mode .editor-btn { display: inline-block; }
 
+/* Position the edit button absolutely in the top-right corner of
+   doc-scroll containers (ACO, SPINS, COMMS, WX views). */
+.doc-scroll {
+  position: relative;
+}
+.doc-scroll > .editor-btn:first-child {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+
 .editor-btn-add {
   border-style: dashed;
   margin: 6px 0;
@@ -250,3 +262,22 @@
   color: var(--text-3);
   min-width: 40px;
 }
+
+/* ── Mandatory field indicator ───────────────────────────────── */
+.ef-label .ef-required {
+  color: var(--red);
+  margin-left: 2px;
+}
+
+/* ── Back button (used in nested dialogs) ────────────────────── */
+.ef-btn-back {
+  border-style: none;
+  background: none;
+  color: var(--text-3);
+  font-size: 9px;
+  padding: 4px 0;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.ef-btn-back:hover { color: var(--text); }
+.ef-btn-back::before { content: '← '; }

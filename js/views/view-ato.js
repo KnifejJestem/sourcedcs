@@ -111,6 +111,11 @@ function renderIntelStrip(gc, ato) {
   var regBtn = el('button', 'editor-btn', '✎ REGISTRY');
   regBtn.addEventListener('click', openRegistryEditor);
   row.appendChild(regBtn);
+
+  // Times edit button (visible in edit mode)
+  var timesBtn = el('button', 'editor-btn', '✎ TIMES');
+  timesBtn.addEventListener('click', openTimesEditor);
+  row.appendChild(timesBtn);
 }
 
 // ═════════════════════════════════════════════════════════════

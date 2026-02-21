@@ -9,6 +9,18 @@
 
 'use strict';
 
+// ── Registry dropdown helper ─────────────────────────────────
+function _registryOptions(catKey, labelFn) {
+  var reg = (STATE.pkg && STATE.pkg.registry && STATE.pkg.registry[catKey]) || {};
+  var opts = [{ value: '', label: '— none —' }];
+  Object.keys(reg).forEach(function (id) {
+    var item = reg[id];
+    var label = labelFn ? labelFn(id, item) : id;
+    opts.push({ value: id, label: label });
+  });
+  return opts;
+}
+
 // ── Open mission editor for an existing mission ──────────────
 function editMission(index) {
   var ato = editorEnsureSection('ato');
@@ -51,23 +63,26 @@ function _openMissionForm(title, m, onSave) {
 
     // ── IDENTIFICATION ───────────────────────────────────────
     editorSectionTitle(body, 'IDENTIFICATION');
-    f.mission_number = editorField(body, 'Mission Number', m.mission_number, { placeholder: 'e.g. MSN3266' });
-    f.callsign       = editorField(body, 'Callsign',       m.callsign,       { placeholder: 'e.g. FALCON5' });
+    var msnNum = (m.mission_number || '').replace(/^MSN/i, '');
+    f.mission_number = editorField(body, 'Mission Number', msnNum, { placeholder: 'e.g. 3266' });
+    f.callsign       = editorField(body, 'Callsign',       m.callsign,       { placeholder: 'e.g. FALCON5', required: true });
     f.mission_type   = editorField(body, 'Mission Type',    m.mission_type,   {
       type: 'select',
       options: ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'OTHER'],
+      required: true,
     });
     if (m.mission_type) f.mission_type.value = m.mission_type;
     f.unit             = editorField(body, 'Unit',              m.unit, { placeholder: 'e.g. 510vFS' });
-    f.home_base_icao   = editorField(body, 'Home Base ICAO',    m.home_base_icao, { placeholder: 'OMAM' });
-    f.deploy_location  = editorField(body, 'Deploy Location',   m.deploy_location_icao, { placeholder: 'OMAM' });
-    f.aar_location     = editorField(body, 'AAR Location ICAO', m.aar_location_icao, { placeholder: 'OMAM' });
+    var afOpts = _registryOptions('airfields', function (id, af) { return id + (af.name ? ' — ' + af.name : ''); });
+    f.home_base_icao   = editorField(body, 'Home Base', m.home_base_icao, { type: 'select', options: afOpts });
+    f.deploy_location  = editorField(body, 'Deploy Location', m.deploy_location_icao, { type: 'select', options: afOpts });
+    f.aar_location     = editorField(body, 'Recovery Location', m.aar_location_icao, { type: 'select', options: afOpts });
 
     // ── AIRCRAFT ─────────────────────────────────────────────
     editorSectionTitle(body, 'AIRCRAFT');
     var ac = m.aircraft || {};
-    f.ac_count  = editorField(body, 'Count',   ac.count,  { type: 'number', placeholder: '2' });
-    f.ac_type   = editorField(body, 'Type',    ac.type,   { placeholder: 'e.g. F16C' });
+    f.ac_count  = editorField(body, 'Count',   ac.count,  { type: 'number', placeholder: '2', required: true });
+    f.ac_type   = editorField(body, 'Type',    ac.type,   { placeholder: 'e.g. F16C', required: true });
     f.ac_loadout = editorField(body, 'Loadout', ac.loadout, { placeholder: 'e.g. 501+' });
 
     // ── TIMING ───────────────────────────────────────────────
@@ -82,10 +97,8 @@ function _openMissionForm(title, m, onSave) {
     var tgt = m.target || {};
     f.tgt_location = editorField(body, 'Location',  tgt.location,   { placeholder: 'e.g. KHASAB' });
     f.tgt_altitude = editorField(body, 'Altitude',  tgt.altitude,   { placeholder: 'e.g. E73FT' });
-    f.tgt_target_id = editorField(body, 'Target ID (registry)', tgt.target_id, {
-      placeholder: 'e.g. SAM-1',
-      hint: 'References a target in the registry',
-    });
+    var tgtOpts = _registryOptions('targets', function (id, t) { return id + (t.name ? ' — ' + t.name : ''); });
+    f.tgt_target_id = editorField(body, 'Target', tgt.target_id, { type: 'select', options: tgtOpts });
     f.tgt_mission_type_override = editorField(body, 'Mission Type Override', tgt.mission_type_override, { placeholder: 'e.g. AIRDEF' });
     f.tgt_tot_net  = editorField(body, 'TOT NET',   tgt.tot_net,    { placeholder: '2046Z' });
     f.tgt_tot_nlt  = editorField(body, 'TOT NLT',   tgt.tot_nlt,    { placeholder: '2111Z' });
@@ -95,20 +108,16 @@ function _openMissionForm(title, m, onSave) {
     // ── CONTROL ──────────────────────────────────────────────
     editorSectionTitle(body, 'CONTROL');
     var ctrl = m.control || {};
-    f.ctrl_agency_id = editorField(body, 'Control Agency ID (registry)', ctrl.agency_id, {
-      placeholder: 'e.g. SCREWTOP',
-      hint: 'References a control agency in the registry',
-    });
+    var ctrlOpts = _registryOptions('control_agencies', function (id, ag) { return id + (ag.callsign ? ' — ' + ag.callsign : ''); });
+    f.ctrl_agency_id = editorField(body, 'Control Agency', ctrl.agency_id, { type: 'select', options: ctrlOpts });
     f.ctrl_primary   = editorField(body, 'Primary Freq (MHz)', ctrl.primary_freq_mhz, { placeholder: '260.0' });
     f.ctrl_secondary = editorField(body, 'Secondary Freq (MHz)', ctrl.secondary_freq_mhz, { placeholder: '134.0' });
 
     // ── REFUEL ───────────────────────────────────────────────
     editorSectionTitle(body, 'REFUEL');
     var ref = m.refuel || {};
-    f.ref_tanker_id = editorField(body, 'Tanker ID (registry)', ref.tanker_id, {
-      placeholder: 'e.g. ARCO4',
-      hint: 'References a tanker in the registry',
-    });
+    var tnkOpts = _registryOptions('tankers', function (id, t) { return id + (t.callsign ? ' — ' + t.callsign : ''); });
+    f.ref_tanker_id = editorField(body, 'Tanker', ref.tanker_id, { type: 'select', options: tnkOpts });
     f.ref_net = editorField(body, 'AAR NET', ref.not_earlier_than, { placeholder: '2143Z' });
     f.ref_nlt = editorField(body, 'AAR NLT', ref.not_later_than,  { placeholder: '2150Z' });
 
@@ -120,7 +129,8 @@ function _openMissionForm(title, m, onSave) {
     var m = Object.assign({}, body._msnOriginal);
 
     // Identification
-    m.mission_number       = f.mission_number.value || undefined;
+    var rawMsn = (f.mission_number.value || '').trim();
+    m.mission_number = rawMsn ? 'MSN' + rawMsn.replace(/^MSN/i, '') : undefined;
     m.callsign             = f.callsign.value || undefined;
     m.mission_type         = f.mission_type.value || undefined;
     m.unit                 = f.unit.value || undefined;

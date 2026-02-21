@@ -112,6 +112,10 @@ function editRegistryItem(catKey, id) {
   var item = reg[catKey][id] || {};
 
   openEditorDialog('EDIT ' + cat.label.slice(0, -1) + ' — ' + id, function (body) {
+    var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO REGISTRY');
+    backBtn.addEventListener('click', function () { openRegistryEditor(); });
+    body.appendChild(backBtn);
+
     var fields = {};
 
     // ID field (read-only for existing items)
@@ -144,10 +148,15 @@ function addRegistryItem(catKey) {
   var cat = REGISTRY_CATEGORIES[catKey];
 
   openEditorDialog('ADD ' + cat.label.slice(0, -1), function (body) {
+    var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO REGISTRY');
+    backBtn.addEventListener('click', function () { openRegistryEditor(); });
+    body.appendChild(backBtn);
+
     var fields = {};
 
     var idInput = editorField(body, cat.idLabel, '', {
       placeholder: 'Unique identifier',
+      required: true,
     });
 
     cat.fields.forEach(function (f) {

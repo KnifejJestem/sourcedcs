@@ -52,6 +52,11 @@ function renderACO(aco) {
   const div = document.getElementById('aco-content');
   div.innerHTML = '';
 
+  // Edit button (visible in edit mode)
+  const editBtn = el('button', 'editor-btn', '✎ EDIT ACO');
+  editBtn.addEventListener('click', openACOEditor);
+  div.appendChild(editBtn);
+
   if (!aco) {
     div.appendChild(el('div', 'empty-state', 'NO ACO DATA'));
     return;
