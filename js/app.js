@@ -313,12 +313,68 @@ function loadPackage_obj(data) {
   if (data.comms)   pkg.comms   = data.comms;
   if (data.weather) pkg.weather = data.weather;
 
+  // Preserve top-level metadata
+  if (data.schema_version) pkg.schema_version = data.schema_version;
+  if (data.header)         pkg.header         = data.header;
+  if (data.registry)       pkg.registry       = data.registry;
+
   if (!pkg.ato && !pkg.aco && !pkg.spins && !pkg.comms && !pkg.weather) {
     alert('Unrecognised file — expected top-level keys: ato, aco, spins, comms, and/or weather');
     return;
   }
 
   STATE.pkg = pkg;
+
+  // ── Propagate header fields to sections that lack them ───
+  if (pkg.header) {
+    const h = pkg.header;
+    ['ato', 'aco', 'spins', 'comms', 'weather'].forEach(key => {
+      if (!pkg[key]) return;
+      if (!pkg[key].operation && h.operation) pkg[key].operation = h.operation;
+      if (!pkg[key].ato_day   && h.ato_date)  pkg[key].ato_day   = h.ato_date;
+    });
+    if (pkg.ato && !pkg.ato.classification && h.classification)
+      pkg.ato.classification = h.classification;
+    if (pkg.aco && !pkg.aco.classification && h.classification)
+      pkg.aco.classification = h.classification;
+    if (pkg.spins && !pkg.spins.classification && h.classification)
+      pkg.spins.classification = h.classification;
+    if (pkg.comms && !pkg.comms.classification && h.classification)
+      pkg.comms.classification = h.classification;
+  }
+
+  // ── Resolve registry airfields into ato.airfields ────────
+  if (pkg.registry?.airfields && pkg.ato?.airfields) {
+    pkg.ato.airfields.forEach(af => {
+      const reg = pkg.registry.airfields[af.icao];
+      if (reg) {
+        if (!af.name)          af.name          = reg.name;
+        if (!af.coords)        af.coords        = reg.coords;
+        if (af.elevation_ft == null) af.elevation_ft = reg.elevation_ft;
+      }
+    });
+  }
+
+  // ── Normalize ingame start time (v1.0 uses ingame_start_time in Zulu) ─
+  if (pkg.ato?.ingame_start_time && !pkg.ato.ingame_start_local) {
+    pkg.ato.ingame_start_local = pkg.ato.ingame_start_time;
+    pkg.ato._ingame_is_zulu = true;
+  }
+
+  // ── Resolve tanker references in mission refuel blocks ───
+  if (pkg.ato?.tankers && pkg.ato?.missions) {
+    const tankerMap = {};
+    pkg.ato.tankers.forEach(t => { if (t.id) tankerMap[t.id] = t; });
+
+    pkg.ato.missions.forEach(m => {
+      if (m.refuel?.tanker_id && tankerMap[m.refuel.tanker_id]) {
+        const t = tankerMap[m.refuel.tanker_id];
+        if (!m.refuel.tanker_callsign) m.refuel.tanker_callsign = t.callsign;
+        if (!m.refuel.ar_track)        m.refuel.ar_track        = t.ar_track;
+        if (!m.refuel.altitude)        m.refuel.altitude        = t.altitude;
+      }
+    });
+  }
 
   // Resolve target references in aim_points
   if (pkg.ato?.targets && pkg.ato?.missions) {
@@ -378,7 +434,10 @@ function renderHeader(ato) {
   // IRL time is always displayed in Zulu — it's a real-world reference
   const irlTimeRaw = ato.irl_time_zulu ? String(ato.irl_time_zulu).replace(/[ZL]/i, '').padStart(4, '0') + 'Z' : null;
   const irl = [ato.irl_date, irlTimeRaw].filter(Boolean).join(' ') || '—';
-  const ingame = fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
+  // ingame_start_time (v1.0) is already Zulu; ingame_start_local (legacy) needs conversion
+  const ingame = ato._ingame_is_zulu
+    ? fmtTime(ato.ingame_start_time)
+    : fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
   const items = [
     ['IRL START',    irl,     ''],
     ['INGAME START', ingame,  'ingame'],

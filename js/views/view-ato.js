@@ -73,7 +73,9 @@ function formatIrlZuluTime(rawValue) {
 function renderIntelStrip(gc, ato) {
   var irlTimeFormatted = formatIrlZuluTime(ato.irl_time_zulu);
   var irl    = [ato.irl_date, irlTimeFormatted].filter(Boolean).join(' ') || '—';
-  var ingame = fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
+  var ingame = ato._ingame_is_zulu
+    ? fmtTime(ato.ingame_start_time)
+    : fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
 
   var sections = [
     buildIntelSection([
@@ -700,6 +702,18 @@ function selectMission(idx) {
 
     if (m.vul_start || m.vul_end) {
       detailTimePair(col, 'VULNERABILITY WINDOW', m.vul_start, m.vul_end, 'START', 'END');
+    }
+
+    if (m.coordination && m.coordination.length) {
+      var coordField = el('div', 'detail-field');
+      coordField.appendChild(el('div', 'dk', 'COORDINATION'));
+      m.coordination.forEach(function (c) {
+        var line = el('div', 'dmpi-entry',
+          (c.mission || '—') + ' — ' + (c.type || '') +
+          (c.notes ? ' · ' + c.notes : ''));
+        coordField.appendChild(line);
+      });
+      col.appendChild(coordField);
     }
   }));
 
