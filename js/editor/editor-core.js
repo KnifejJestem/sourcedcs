@@ -252,6 +252,8 @@ function _syncHeaders() {
   var atoDay    = null;
 
   // Find the latest non-empty values across all sections
+  // Note: sections use 'ato_day' while header uses 'ato_date' — this is the
+  // existing naming convention in the data model (see loadPackage_obj).
   sections.forEach(function (key) {
     var sec = pkg[key];
     if (!sec) return;
