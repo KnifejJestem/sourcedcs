@@ -204,8 +204,8 @@ function _openMissionForm(title, m, onSave) {
       m.refuel.not_later_than    = f.ref_nlt.value || undefined;
     }
 
-    // Steer points
-    var steerPts = (body._steerPoints || []).filter(function (sp) { return sp.name || sp.coords; });
+    // Steer points (require both name and coords)
+    var steerPts = (body._steerPoints || []).filter(function (sp) { return sp.name && sp.coords; });
     m.steer_points = steerPts.length ? steerPts : undefined;
 
     onSave(m);

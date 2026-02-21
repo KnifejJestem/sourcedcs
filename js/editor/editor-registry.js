@@ -226,9 +226,9 @@ function _cascadeRegistryDelete(catKey, id) {
     });
   } else if (catKey === 'reference_points') {
     // Clear bullseye if it references the deleted point
-    var gc2 = ato.global_control;
-    if (gc2 && gc2.bullseye && typeof gc2.bullseye === 'object' && gc2.bullseye.name === id) {
-      gc2.bullseye = undefined;
+    var globalControl = ato.global_control;
+    if (globalControl && globalControl.bullseye && typeof globalControl.bullseye === 'object' && globalControl.bullseye.name === id) {
+      globalControl.bullseye = undefined;
     }
   }
 }

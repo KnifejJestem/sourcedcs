@@ -218,10 +218,12 @@ function editorReRender() {
   var source = editorCleanPkg(STATE.pkg);
   loadPackage_obj(source);
 
-  // Restore the previously selected mission detail panel
+  // Restore the previously selected mission detail panel.
+  // selectMission() toggles closed if the same index is already selected,
+  // so we reset to -1 first to ensure it opens rather than closing.
   if (savedIdx >= 0 && STATE.pkg && STATE.pkg.ato &&
       STATE.pkg.ato.missions && savedIdx < STATE.pkg.ato.missions.length) {
-    STATE.selectedIdx = -1; // reset so selectMission doesn't toggle-close
+    STATE.selectedIdx = -1;
     selectMission(savedIdx);
   }
 
@@ -260,7 +262,8 @@ function exportPackageYaml() {
 
   var fileName = prompt('Enter file name:', 'package.yaml');
   if (!fileName) return; // cancelled
-  if (!/\.ya?ml$/i.test(fileName)) fileName += '.yaml';
+  // Ensure .yaml extension (strip any existing extension first)
+  fileName = fileName.replace(/\.[^.]+$/, '') + '.yaml';
 
   var clean    = editorCleanPkg(STATE.pkg);
   var yamlText = jsyaml.dump(clean, { lineWidth: -1, noRefs: true, sortKeys: false });
