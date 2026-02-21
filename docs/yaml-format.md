@@ -441,174 +441,140 @@ Groups are concatenated with no delimiter: `3X381X114` = `3×GBU-38` and
 
 ---
 
+---
+
 ## `weather:` — Mission Weather Forecast
 
-The weather section is inspired by the real-world **METAR** (current conditions)
-and **TAF** (terminal aerodrome forecast) formats.  All values are decoded and
-displayed in plain English on the WX tab.
+The weather section accepts **raw METAR and TAF strings** exactly as they
+appear in a real aerodrome weather briefing.  The viewer decodes and displays
+them in human-readable form on the WX tab.
+
+```yaml
+weather:
+  operation: CLEAR SKY          # optional header field
+  metars:
+    - 'METAR OMAM 011850Z 31012G18KT 9999 FEW040 SCT080 28/08 Q1013 NOSIG'
+    - 'METAR OMSJ 011850Z 28008KT 9000 SCT035 30/12 Q1012 NOSIG'
+  tafs:
+    - 'TAF OMAM 011700Z 0120/0206 30010KT 9999 FEW040
+           BECMG 0122/0124 27008KT
+           TEMPO 0200/0202 TS BKN020 4000
+           PROB30 0203/0205 TSRA BKN010CB'
+  mission_wx:
+    - { mission_ref: MSN3266, notes: Clear at CAP. No impact. }
+    - { mission_ref: AA7511,  notes: Watch for dust below 1000 ft., style: amber }
+```
 
 ### Top-level fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `issued` | string | When this weather package was issued (e.g. `'2026-11-01 1800Z'`) |
-| `valid_from` | string | Start of the valid period |
-| `valid_to` | string | End of the valid period |
 | `operation` | string | Operation name (display only) |
+| `issued` | string | When this weather package was issued (display only) |
+| `valid_from` | string | Start of the valid period (display only) |
+| `valid_to` | string | End of the valid period (display only) |
+| `metars` | list of strings | Raw METAR / SPECI strings — one per station |
+| `tafs` | list of strings | Raw TAF strings — one per station |
+| `mission_wx` | list | Mission-specific weather notes — see below |
 
-### `observations:` (list) — METAR-style
+### `metars:` — Raw METAR strings
 
-One entry per airfield.  Represents the current conditions observed at that
-station at the time of the brief.
+Paste standard ICAO or US-format METAR strings verbatim.  The viewer decodes:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `station` | string | ICAO station identifier |
-| `time` | time string | Observation time (e.g. `'1850Z'`) |
-| `wind.direction_deg` | number | Mean wind direction in degrees true |
-| `wind.speed_kt` | number | Mean wind speed in knots |
-| `wind.gust_kt` | number | Gust speed in knots (optional) |
-| `wind.variable` | boolean | Set `true` when direction is variable |
-| `visibility_m` | number or string | Prevailing visibility in metres.  Use `'CAVOK'` for Ceiling and Visibility OK (≥10 km, no significant cloud, no weather). |
-| `phenomena` | list of strings | Present weather codes (METAR-style): `RA`, `TS`, `FG`, `BR`, `TSRA`, `FZRA`, etc. |
-| `clouds` | list | Cloud layers — see below |
-| `temperature_c` | number | Air temperature in °C |
-| `dewpoint_c` | number | Dewpoint in °C |
-| `qnh_hpa` | number | Altimeter setting in hPa (also shown in inHg) |
-| `remarks` | string | Free-text remarks |
+- **Station** — 4-letter ICAO identifier
+- **Wind** — direction, speed, gusts (KT, MPS, KMH accepted)
+- **Visibility** — metres (`9999`) or US statute miles (`10SM`, `1/4SM`, `M1/4SM`)
+- **`CAVOK`** — Ceiling and Visibility OK
+- **Present weather** — decoded from ICAO codes (see table below)
+- **Sky condition / cloud layers** — `FEW`, `SCT`, `BKN`, `OVC`, `VV`, `SKC`, `CLR`, `NSC`, with altitude in hundreds of feet; `CB`/`TCU` suffixes recognised
+- **Temperature / dewpoint** — `T/T` or `M01/M02` (M prefix = below zero)
+- **QNH** — `Q1013` (hPa) or `A2992` (altimeter × 100, inHg)
+- **NOSIG** — No significant change expected
 
-#### Cloud layer fields
+A **flight category** badge (VFR / MVFR / IFR / LIFR) is automatically computed
+from the ceiling and visibility and shown on each station header.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `coverage` | string | `SKC` / `CLR` / `NSC` / `FEW` / `SCT` / `BKN` / `OVC` / `VV` |
-| `base_ft` | number | Cloud base in feet AGL (omit or `null` for SKC) |
-| `cb` | boolean | Cumulonimbus present |
-| `tcu` | boolean | Towering cumulus present |
+Examples:
+```
+METAR OMAM 011850Z 31012G18KT 9999 FEW040 SCT080 28/08 Q1013 NOSIG
+KJFK 122151Z 25014G25KT 10SM FEW060 SCT250 22/10 A2997
+EDDM 011850Z 18005KT 3000 BR FEW003 OVC005 08/07 Q1016
+EGLL 232320Z VRB03KT CAVOK 15/08 Q1022 NOSIG
+```
 
-#### Present weather codes
+### `tafs:` — Raw TAF strings
 
-Common METAR weather phenomenon codes accepted in `phenomena`:
+Paste standard ICAO TAF strings verbatim.  Multi-line TAF strings work if
+quoted as a YAML block scalar or a plain quoted string with spaces.  The viewer
+decodes:
 
-| Code | Meaning |
+- **Station**, issued time, validity period
+- **Prevailing (base) conditions** — same elements as METAR
+- **Change groups** — decoded type label + time period + changed conditions:
+
+| TAF keyword | Displayed as |
+|-------------|-------------|
+| `BECMG DDHH/DDHH` | Becoming · Day DD HH:00Z – Day DD HH:00Z |
+| `TEMPO DDHH/DDHH` | Temporary · time range |
+| `FM DDHHmm` | From · Day DD HH:mmZ |
+| `PROBnn DDHH/DDHH` | nn% Probability · time range |
+| `PROBnn TEMPO DDHH/DDHH` | nn% Probability — Temporary · time range |
+| `PROBnn BECMG DDHH/DDHH` | nn% Probability — Becoming · time range |
+
+Any `PROBnn` value is handled dynamically (PROB20, PROB30, PROB40…).
+
+Example:
+```
+TAF OMAM 011700Z 0120/0206 30010KT 9999 FEW040
+    BECMG 0122/0124 27008KT
+    TEMPO 0200/0202 TS BKN020 4000
+    PROB30 0203/0205 TSRA BKN010CB
+```
+
+### Present weather codes
+
+The viewer decodes ICAO present weather codes to plain English.  Common codes:
+
+| Code | Decoded |
 |------|---------|
 | `RA` | Rain |
+| `-RA` | Light Rain |
+| `+RA` | Heavy Rain |
 | `SN` | Snow |
+| `DZ` | Drizzle |
 | `TS` | Thunderstorm |
 | `TSRA` | Thunderstorm with Rain |
-| `FG` | Fog |
-| `BR` | Mist |
-| `HZ` | Haze |
-| `DU` | Dust |
+| `+TSRA` | Heavy Thunderstorm with Rain |
+| `TSGR` | Thunderstorm with Hail |
 | `FZRA` | Freezing Rain |
+| `FZDZ` | Freezing Drizzle |
+| `FZFG` | Freezing Fog |
 | `SHRA` | Rain Showers |
 | `SHSN` | Snow Showers |
-| `SQ` | Squall |
+| `BR` | Mist |
+| `FG` | Fog |
+| `BCFG` | Patchy Fog |
+| `MIFG` | Shallow Fog |
+| `HZ` | Haze |
+| `DU` | Dust |
+| `BLSN` | Blowing Snow |
+| `BLDU` | Blowing Dust |
+| `VCSH` | Showers in Vicinity |
+| `VCTS` | Thunderstorm in Vicinity |
+| `VCFG` | Fog in Vicinity |
+| `SS` | Sandstorm |
+| `DS` | Duststorm |
+| `FC` | Funnel Cloud |
 
-#### Flight category (automatic)
+Intensity prefixes (`-` light, `+` heavy) and vicinity indicator (`VC`) are
+decoded automatically for any code combination.
 
-The viewer automatically computes and color-codes the flight category from
-the ceiling and visibility:
+### `mission_wx:` — Mission-specific notes
 
-| Category | Condition |
-|----------|-----------|
-| **VFR** (green) | Ceiling ≥ 3,000 ft and visibility ≥ 5 SM |
-| **MVFR** (blue) | Ceiling 1,000–2,999 ft or visibility 3–4 SM |
-| **IFR** (red) | Ceiling 500–999 ft or visibility 1–2 SM |
-| **LIFR** (purple) | Ceiling < 500 ft or visibility < 1 SM |
-
-### `forecasts:` (list) — TAF-style
-
-One entry per airfield.  Provides a terminal aerodrome forecast with base
-conditions and optional change groups.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `station` | string | ICAO station identifier |
-| `issued` | time string | When the forecast was issued |
-| `valid_from` | time string | Forecast validity start |
-| `valid_to` | time string | Forecast validity end |
-| `conditions` | object | Base (prevailing) conditions — same fields as an observation (wind, visibility_m, phenomena, clouds) |
-| `changes` | list | Change groups — see below |
-
-#### Change group fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | `BECMG` / `TEMPO` / `FM` / `PROB30` / `PROB40` |
-| `from` | time string | Change group start time |
-| `to` | time string | Change group end time |
-| `wind` | object | Wind during this group |
-| `visibility_m` | number | Visibility during this group |
-| `phenomena` | list | Weather phenomena during this group |
-| `clouds` | list | Cloud layers during this group |
-| `remarks` | string | Free-text note for this group |
-
-### `mission_wx:` (list) — Mission-specific notes
-
-Plain-English weather notes linked to individual missions by mission number.
-
-```yaml
-mission_wx:
-  - mission_ref: MSN3266
-    notes: Clear at CAP station. Few clouds at 4000 ft en-route, no impact.
-  - mission_ref: AA7511
-    notes: 'VFR throughout. Watch for dust in low-altitude transit corridor.'
-    style: amber   # optional: amber / red / green / blue
-```
+Plain-English notes linked to missions by mission number.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `mission_ref` | string | Mission number (cross-reference to ATO) |
 | `notes` | string | Free-text weather note |
-| `style` | string | Optional color: `amber` / `red` / `green` / `blue` |
-
-### Full example
-
-```yaml
-weather:
-  issued: '2026-11-01 1800Z'
-  valid_from: '2026-11-01 2000Z'
-  valid_to: '2026-11-02 0600Z'
-  observations:
-    - station: OMAM
-      time: '1850Z'
-      wind:
-        direction_deg: 310
-        speed_kt: 12
-        gust_kt: 18
-      visibility_m: 10000
-      phenomena: []
-      clouds:
-        - { coverage: FEW, base_ft: 4000 }
-        - { coverage: SCT, base_ft: 8000 }
-      temperature_c: 28
-      dewpoint_c: 8
-      qnh_hpa: 1013
-      remarks: Conditions favorable for all planned operations.
-  forecasts:
-    - station: OMAM
-      issued: '1800Z'
-      valid_from: '2000Z'
-      valid_to: '0600Z'
-      conditions:
-        wind: { direction_deg: 300, speed_kt: 10 }
-        visibility_m: 10000
-        clouds:
-          - { coverage: FEW, base_ft: 4000 }
-      changes:
-        - type: TEMPO
-          from: '0000Z'
-          to: '0200Z'
-          phenomena: [TS]
-          clouds:
-            - { coverage: BKN, base_ft: 2000 }
-          visibility_m: 4000
-          remarks: Isolated thunderstorm activity possible after midnight.
-  mission_wx:
-    - mission_ref: MSN3266
-      notes: Clear at CAP station. No impact.
-    - mission_ref: MSN3268
-      notes: Coastal haze possible below 1000 ft. Maintain planned altitude.
-      style: amber
-```
+| `style` | string | Optional color tint: `amber` / `red` / `green` / `blue` |
