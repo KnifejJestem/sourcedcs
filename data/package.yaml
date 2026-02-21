@@ -91,6 +91,9 @@ ato:
       mission_type: CAP
       deploy_location_icao: OMAM
       aar_location_icao: OMAM
+      takeoff_time: '2000'        # Planned takeoff time
+      recovery_time: '2300'       # Planned recovery / landing time
+      # vul_start / vul_end — optional vulnerability window (hatched red on timeline)
       aircraft:
         count: 2
         type: F16C
@@ -100,11 +103,11 @@ ato:
         # Timing — use one of three approaches:
         #   Legacy:  not_earlier_than / not_later_than   (generic window)
         #   TOT:     tot_net / tot_nlt                   (Time on Target — strike/BAI missions)
-        #   TOS:     tos_net / tos_nlt                   (Time on Station — CAP/CAS orbit missions)
+        #   TOS:     tos / toffs                         (Time on Station / Time OFF Station — CAP/CAS orbit missions)
         # You may specify both TOT and TOS for a mission that needs to be on station
         # and also has a specific target time (e.g. SEAD supporting a strike).
-        tos_net: '2040'
-        tos_nlt: '2230'
+        tos: '2040'
+        toffs: '2230'
         # Aim points — where weapons are released / where to ID the target.
         # Can be plain coord strings, objects with name + coords, or target_ref references.
         aim_points:

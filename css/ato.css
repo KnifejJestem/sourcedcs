@@ -191,6 +191,17 @@
   filter: brightness(1.15);
   border: 1px solid rgba(255,255,255,.3);
 }
+.tl-bar.vul {
+  height: 28px;
+  opacity: .18;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--red), var(--red) 3px,
+    transparent 3px, transparent 7px
+  ) !important;
+  border: 1px dashed var(--red);
+  z-index: 0;
+}
 .tl-bar.refuel {
   height: 9px;
   top: 78%;
@@ -200,6 +211,41 @@
     var(--refuel-a), var(--refuel-a) 4px,
     var(--refuel-b), var(--refuel-b) 8px
   ) !important;
+}
+/* Takeoff / Recovery markers — vertical lines on the timeline track */
+.tl-marker {
+  position: absolute;
+  top: 10%;
+  height: 80%;
+  width: 2px;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+.tl-marker::after {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+.tl-marker.takeoff {
+  background: var(--green, #39ff7a);
+  border-left: 1px solid var(--green, #39ff7a);
+}
+.tl-marker.takeoff::after {
+  content: 'T/O';
+  color: var(--green, #39ff7a);
+}
+.tl-marker.recovery {
+  background: var(--blue, #4fc3f7);
+  border-left: 1px solid var(--blue, #4fc3f7);
+}
+.tl-marker.recovery::after {
+  content: 'REC';
+  color: var(--blue, #4fc3f7);
 }
 
 /* Detail panel */

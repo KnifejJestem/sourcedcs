@@ -40,7 +40,9 @@ function renderIntelStrip(gc, ato) {
     return div;
   }
 
-  const irl = [ato.irl_date, fmtTime(ato.irl_time_zulu)].filter(Boolean).join(' ') || '—';
+  // IRL time is always displayed in Zulu — it's a real-world reference
+  const irlTimeRaw = ato.irl_time_zulu ? String(ato.irl_time_zulu).replace(/[ZL]/i, '').padStart(4, '0') + 'Z' : null;
+  const irl = [ato.irl_date, irlTimeRaw].filter(Boolean).join(' ') || '—';
   const ingame = fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
   const sections = [
     section(
@@ -79,7 +81,7 @@ function renderMissionCards(missions) {
 
     // Determine window label and times based on TOT/TOS availability
     const hasTOT = m.target?.tot_net || m.target?.tot_nlt;
-    const hasTOS = m.target?.tos_net || m.target?.tos_nlt;
+    const hasTOS = m.target?.tos || m.target?.toffs;
     let windowLabel, windowNet, windowNlt;
     if (hasTOT) {
       windowLabel = 'TOT';
@@ -87,8 +89,8 @@ function renderMissionCards(missions) {
       windowNlt = m.target.tot_nlt;
     } else if (hasTOS) {
       windowLabel = 'TOS';
-      windowNet = m.target.tos_net;
-      windowNlt = m.target.tos_nlt;
+      windowNet = m.target.tos;
+      windowNlt = m.target.toffs;
     } else {
       windowLabel = 'WINDOW';
       windowNet = m.target?.not_earlier_than;
@@ -120,7 +122,12 @@ function renderMissionCards(missions) {
           ${hasTOS && hasTOT ? `
           <div class="card-row">
             <span class="ck">TOS</span>
-            <span class="cv time">${fmtTime(m.target.tos_net)} → ${fmtTime(m.target.tos_nlt)}</span>
+            <span class="cv time">${fmtTime(m.target.tos)} → ${fmtTime(m.target.toffs)}</span>
+          </div>` : ''}
+          ${m.takeoff_time ? `
+          <div class="card-row">
+            <span class="ck">T/O</span>
+            <span class="cv time">${fmtTime(m.takeoff_time)}</span>
           </div>` : ''}
           ${m.control?.primary_freq_mhz ? `
           <div class="card-row">
@@ -151,8 +158,10 @@ function renderTimeline(missions) {
     [
       toMins(m.target?.not_earlier_than), toMins(m.target?.not_later_than),
       toMins(m.target?.tot_net), toMins(m.target?.tot_nlt),
-      toMins(m.target?.tos_net), toMins(m.target?.tos_nlt),
+      toMins(m.target?.tos), toMins(m.target?.toffs),
       toMins(m.refuel?.not_earlier_than), toMins(m.refuel?.not_later_than),
+      toMins(m.takeoff_time), toMins(m.recovery_time),
+      toMins(m.vul_start), toMins(m.vul_end),
     ].forEach(t => {
       if (t != null) { minT = Math.min(minT, t); maxT = Math.max(maxT, t); }
     });
@@ -168,7 +177,7 @@ function renderTimeline(missions) {
   minT = Math.floor((minT - STEP) / STEP) * STEP;
   maxT = Math.ceil ((maxT + STEP) / STEP) * STEP;
   const span = maxT - minT;
-  const tickCount = Math.round(span / STEP) + 1;
+  const intervals = Math.round(span / STEP); // number of intervals (tickCount - 1)
 
   const hh = t => String(Math.floor(t / 60)).padStart(2, '0');
   const mm = t => String(t % 60).padStart(2, '0');
@@ -188,16 +197,25 @@ function renderTimeline(missions) {
 
   // Update mode label in the static header bar
   const modeLabel = document.getElementById('tl-mode-label');
-  if (modeLabel) modeLabel.textContent = `TIMELINE — ${timeSuffix === 'L' ? 'LOCAL' : 'ZULU'} · ▓ TOT/MISSION WINDOW · ░ TOS WINDOW · ▒ AAR WINDOW`;
+  if (modeLabel) modeLabel.textContent = `TIMELINE — ${timeSuffix === 'L' ? 'LOCAL' : 'ZULU'} · ▓ TOT · ░ TOS · ▒ AAR · ▐ VUL`;
 
-  // Tick header — one element per tick (no event listeners needed on ticks,
-  // but building them with el() avoids embedding HTML strings in JS).
+  // Tick header — use intervals (not tick count) for equal distribution.
+  // Each interval element represents the space between two consecutive ticks.
+  // The tick label sits at the left edge of each interval, aligned with the grid line.
   const ticksRow = el('div', 'tl-ticks');
-  for (let t = minT; t <= maxT; t += STEP) {
+  for (let idx = 0; idx < intervals; idx++) {
+    const t = minT + idx * STEP;
     const tick = el('div', 'tl-tick', `${hh(dispT(t))}${mm(dispT(t))}${timeSuffix}`);
     tick.style.flex = '1 0 0%';
     ticksRow.appendChild(tick);
   }
+  // Last tick label (at 100%) — zero-width, text overflows to the right
+  const lastT = minT + intervals * STEP;
+  const lastTick = el('div', 'tl-tick', `${hh(dispT(lastT))}${mm(dispT(lastT))}${timeSuffix}`);
+  lastTick.style.flex = '0 0 0';
+  lastTick.style.overflow = 'visible';
+  lastTick.style.whiteSpace = 'nowrap';
+  ticksRow.appendChild(lastTick);
   canvas.appendChild(ticksRow);
 
   // Mission rows
@@ -222,20 +240,31 @@ function renderTimeline(missions) {
       track.appendChild(line);
     }
 
+    // Vulnerability window bar (behind other bars)
+    const vulS = toMins(m.vul_start);
+    const vulE = toMins(m.vul_end);
+    if (vulS != null && vulE != null) {
+      const vulBar = el('div', 'tl-bar vul');
+      vulBar.style.left  = `${((vulS - minT) / span * 100).toFixed(3)}%`;
+      vulBar.style.width = `${Math.max(2, (vulE - vulS) / span * 100).toFixed(3)}%`;
+      vulBar.title       = `${m.callsign} VUL · ${fmtTime(m.vul_start)} – ${fmtTime(m.vul_end)}`;
+      track.appendChild(vulBar);
+    }
+
     // Mission bars — support TOT/TOS or legacy not_earlier/later_than
     const hasTOT = m.target?.tot_net || m.target?.tot_nlt;
-    const hasTOS = m.target?.tos_net || m.target?.tos_nlt;
+    const hasTOS = m.target?.tos || m.target?.toffs;
 
     if (hasTOT || hasTOS) {
       // TOS bar (wider station window, shown as the main bar)
       if (hasTOS) {
-        const tosNet = toMins(m.target.tos_net);
-        const tosNlt = toMins(m.target.tos_nlt);
-        if (tosNet != null && tosNlt != null) {
+        const tosStart = toMins(m.target.tos);
+        const tosEnd   = toMins(m.target.toffs);
+        if (tosStart != null && tosEnd != null) {
           const bar = html`
             <div class="tl-bar tos"
-                 style="background:${color};left:${((tosNet-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(tosNlt-tosNet)/span*100).toFixed(3)}%"
-                 title="${m.callsign} TOS · ${fmtTime(m.target.tos_net)} – ${fmtTime(m.target.tos_nlt)}"
+                 style="background:${color};left:${((tosStart-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(tosEnd-tosStart)/span*100).toFixed(3)}%"
+                 title="${m.callsign} TOS · ${fmtTime(m.target.tos)} – TOFFS ${fmtTime(m.target.toffs)}"
             >${m.callsign || ''}</div>`;
           bar.addEventListener('click', () => selectMission(i));
           track.appendChild(bar);
@@ -279,6 +308,24 @@ function renderTimeline(missions) {
       refuelBar.style.width = `${Math.max(2, (rnlt - rnet) / span * 100).toFixed(3)}%`;
       refuelBar.title       = `${m.refuel?.tanker_callsign} ${m.refuel?.altitude} · ${fmtTime(m.refuel?.not_earlier_than)} – ${fmtTime(m.refuel?.not_later_than)}`;
       track.appendChild(refuelBar);
+    }
+
+    // Takeoff marker
+    const toTime = toMins(m.takeoff_time);
+    if (toTime != null) {
+      const marker = el('div', 'tl-marker takeoff');
+      marker.style.left = `${((toTime - minT) / span * 100).toFixed(3)}%`;
+      marker.title = `T/O ${fmtTime(m.takeoff_time)}`;
+      track.appendChild(marker);
+    }
+
+    // Recovery marker
+    const recTime = toMins(m.recovery_time);
+    if (recTime != null) {
+      const marker = el('div', 'tl-marker recovery');
+      marker.style.left = `${((recTime - minT) / span * 100).toFixed(3)}%`;
+      marker.title = `REC ${fmtTime(m.recovery_time)}`;
+      track.appendChild(marker);
     }
 
     row.appendChild(track);
@@ -325,18 +372,20 @@ function selectMission(idx) {
       </div>`);
   }
 
-  function timePair(parent, label, net, nlt) {
+  function timePair(parent, label, net, nlt, netLabel, nltLabel) {
+    const lbl1 = netLabel || 'NET';
+    const lbl2 = nltLabel || 'NLT';
     parent.appendChild(html`
       <div class="detail-field">
         <div class="dk">${label}</div>
         <div class="time-pair">
           <div class="time-box">
-            <div class="time-box-lbl">NET</div>
+            <div class="time-box-lbl">${lbl1}</div>
             <div class="time-box-val">${fmtTime(net)}</div>
           </div>
           <div class="time-arr">→</div>
           <div class="time-box">
-            <div class="time-box-lbl">NLT</div>
+            <div class="time-box-lbl">${lbl2}</div>
             <div class="time-box-val">${fmtTime(nlt)}</div>
           </div>
         </div>
@@ -368,19 +417,28 @@ function selectMission(idx) {
     }
   });
 
-  // COL 2 — Target
+  // COL 2 — Target & Timing
   col('TARGET', c => {
     df(c, 'LOCATION', m.target?.location || '—', 'amber');
     df(c, 'ALTITUDE', m.target?.altitude || '—');
 
     // Show TOT and/or TOS when explicitly provided; fall back to legacy not_earlier/later_than
     const hasTOT = m.target?.tot_net || m.target?.tot_nlt;
-    const hasTOS = m.target?.tos_net || m.target?.tos_nlt;
+    const hasTOS = m.target?.tos || m.target?.toffs;
     if (hasTOT || hasTOS) {
       if (hasTOT) timePair(c, 'TIME ON TARGET (TOT)', m.target.tot_net, m.target.tot_nlt);
-      if (hasTOS) timePair(c, 'TIME ON STATION (TOS)', m.target.tos_net, m.target.tos_nlt);
+      if (hasTOS) timePair(c, 'TIME ON STATION (TOS)', m.target.tos, m.target.toffs, 'TOS', 'TOFFS');
     } else {
       timePair(c, 'TIME ON TARGET', m.target?.not_earlier_than, m.target?.not_later_than);
+    }
+
+    // Takeoff / Recovery times
+    if (m.takeoff_time) df(c, 'TAKEOFF', fmtTime(m.takeoff_time));
+    if (m.recovery_time) df(c, 'RECOVERY', fmtTime(m.recovery_time));
+
+    // Vulnerability window
+    if (m.vul_start || m.vul_end) {
+      timePair(c, 'VULNERABILITY WINDOW', m.vul_start, m.vul_end, 'START', 'END');
     }
 
     const aim = m.target?.aim_points;

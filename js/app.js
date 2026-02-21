@@ -375,7 +375,9 @@ function renderHeader(ato) {
   const meta = document.getElementById('header-meta');
   if (!ato) { meta.innerHTML = ''; return; }
 
-  const irl = [ato.irl_date, fmtTime(ato.irl_time_zulu)].filter(Boolean).join(' ') || '—';
+  // IRL time is always displayed in Zulu — it's a real-world reference
+  const irlTimeRaw = ato.irl_time_zulu ? String(ato.irl_time_zulu).replace(/[ZL]/i, '').padStart(4, '0') + 'Z' : null;
+  const irl = [ato.irl_date, irlTimeRaw].filter(Boolean).join(' ') || '—';
   const ingame = fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
   const items = [
     ['IRL START',    irl,     ''],

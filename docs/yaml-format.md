@@ -138,18 +138,31 @@ and map routes.
 | `location` | string | Target area name |
 | `mission_type_override` | string | Optional sub-type shown alongside `mission_type` |
 | `altitude` | string | Target altitude reference (e.g. `E73FT`, `FL200`) |
-| `not_earlier_than` | time string | Legacy mission window open (NET) — used when neither `tot_*` nor `tos_*` is set |
+| `not_earlier_than` | time string | Legacy mission window open (NET) — used when neither `tot_*` nor `tos`/`toffs` is set |
 | `not_later_than` | time string | Legacy mission window close (NLT) |
 | `tot_net` | time string | Time on Target — NET (strike/BAI missions: when weapons should be on target) |
 | `tot_nlt` | time string | Time on Target — NLT |
-| `tos_net` | time string | Time on Station — NET (CAP/CAS missions: when aircraft should be on station) |
-| `tos_nlt` | time string | Time on Station — NLT |
+| `tos` | time string | Time on Station (CAP/CAS missions: when aircraft should be on station) |
+| `toffs` | time string | Time OFF Station (when aircraft departs station) |
 
 **Timing guidance:**
 - For **strike/BAI/SEAD** missions, use `tot_net` / `tot_nlt` (Time on Target — when weapons should impact).
-- For **CAP/CAS/orbit** missions, use `tos_net` / `tos_nlt` (Time on Station — when to be on station).
+- For **CAP/CAS/orbit** missions, use `tos` / `toffs` (Time on Station / Time OFF Station).
 - Both can be specified for a single mission (e.g. a SEAD flight that must be on station before a strike TOT).
 - The legacy `not_earlier_than` / `not_later_than` fields are still accepted for backward compatibility.
+
+#### Mission-level timing fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `takeoff_time` | time string | Planned takeoff time |
+| `recovery_time` | time string | Planned recovery / landing time |
+| `vul_start` | time string | Vulnerability window start — period when the flight is exposed to threats |
+| `vul_end` | time string | Vulnerability window end |
+
+The **vulnerability window** is shown as a red hatched overlay on the timeline and
+as a time pair in the detail panel.  It marks the period when the flight is
+inside the threat envelope or otherwise exposed.
 
 #### `target.aim_points:` (list)
 

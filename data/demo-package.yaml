@@ -22,14 +22,16 @@ ato:
     mission_type: CAP
     deploy_location_icao: OMAM
     aar_location_icao: OMAM
+    takeoff_time: '2000'
+    recovery_time: '2300'
     aircraft:
       count: 2
       type: F16C
       loadout: 501+
     target:
       location: KHASAB
-      tos_net: '2040'
-      tos_nlt: '2230'
+      tos: '2040'
+      toffs: '2230'
     control:
       primary_freq_mhz: '260.0'
       secondary_freq_mhz: '134.0'
@@ -54,6 +56,10 @@ ato:
     mission_type: BAI
     deploy_location_icao: OMAM
     aar_location_icao: OMAM
+    takeoff_time: '2010'
+    recovery_time: '2200'
+    vul_start: '2040'
+    vul_end: '2115'
     aircraft:
       count: 2
       type: F16C
@@ -93,6 +99,10 @@ ato:
     mission_type: BAI
     deploy_location_icao: OMAM
     aar_location_icao: OMAM
+    takeoff_time: '2015'
+    recovery_time: '2245'
+    vul_start: '2055'
+    vul_end: '2210'
     aircraft:
       count: 3
       type: F16C
@@ -128,6 +138,8 @@ ato:
     mission_type: CAS
     deploy_location_icao: OMRK
     aar_location_icao: OMRK
+    takeoff_time: '2030'
+    recovery_time: '2230'
     aircraft:
       count: 1
       type: AH64
@@ -136,8 +148,8 @@ ato:
       location: KHASAB AFB
       mission_type_override: CAS
       altitude: E74FT
-      tos_net: '2108'
-      tos_nlt: '2200'
+      tos: '2108'
+      toffs: '2200'
       aim_points:
       - coords: N26deg28'00" E056deg18'00"
         name: OBJ-A
