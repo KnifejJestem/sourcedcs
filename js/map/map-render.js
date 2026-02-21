@@ -174,8 +174,19 @@ function drawMap(container, points, routes, geoData, airspaces) {
   content.appendChild(drawCities(ctx, geoData));
 
   // ── Popup (needed by subsequent draw calls) ──────────────
-  const { showPopup, refreshPopup } = createPopup(container);
+  const { showPopup: _showPopup, refreshPopup } = createPopup(container);
   _refreshPopup = refreshPopup;
+
+  // Wrap showPopup so that coord-pick mode intercepts marker clicks:
+  // instead of opening the popup, use the clicked point's lat/lon.
+  function showPopup(p) {
+    if (typeof EDITOR !== 'undefined' && typeof EDITOR._coordPickCb === 'function' &&
+        p.lat != null && p.lon != null) {
+      EDITOR._coordPickCb(p.lat, p.lon);
+      return;
+    }
+    _showPopup(p);
+  }
 
   // ── Zones ────────────────────────────────────────────────
   const engResult = drawEngagementZones(ctx, points);
@@ -295,8 +306,32 @@ function drawMap(container, points, routes, geoData, airspaces) {
 
   container.appendChild(svg);
 
-  // Close popup when clicking the map background
-  svg.addEventListener('click', () => {
+  // Track mousedown position so we can distinguish a clean click from a drag.
+  // Only fire coord pick if the mouse didn't move significantly.
+  var _pickStart = null;
+  var PICK_DRAG_THRESHOLD = 5; // pixels
+  svg.addEventListener('mousedown', (e) => {
+    if (e.button === 0) _pickStart = { x: e.clientX, y: e.clientY };
+    else _pickStart = null;
+  });
+
+  // Close popup when clicking the map background, or handle coord pick
+  svg.addEventListener('click', (e) => {
+    // Coordinate picker mode — capture click position as lat/lon
+    if (typeof EDITOR !== 'undefined' && typeof EDITOR._coordPickCb === 'function') {
+      // Ignore if the mouse moved significantly (user was dragging, not clicking)
+      if (_pickStart) {
+        var dx = e.clientX - _pickStart.x;
+        var dy = e.clientY - _pickStart.y;
+        var threshold = PICK_DRAG_THRESHOLD * PICK_DRAG_THRESHOLD;
+        if (dx * dx + dy * dy > threshold) { _pickStart = null; return; }
+      }
+      _pickStart = null;
+      var pt = clientToContent(e.clientX, e.clientY);
+      EDITOR._coordPickCb(pt.lat, pt.lon);
+      return;
+    }
+    _pickStart = null;
     const popup = container.querySelector('.map-popup');
     if (popup) popup.style.display = 'none';
   });

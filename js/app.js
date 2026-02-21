@@ -283,6 +283,15 @@ function setCoordMode(m) {
 
 // ── Tab routing ───────────────────────────────────────────────
 function showTab(name) {
+  // If coord pick is active and user navigates away from map, cancel pick
+  // and restore the editor overlay
+  if (typeof EDITOR !== 'undefined' && typeof EDITOR._coordPickCb === 'function' &&
+      name !== 'map' && STATE.currentTab === 'map') {
+    EDITOR._coordPickCb = null;
+    var overlay = document.getElementById('editorOverlay');
+    if (overlay) overlay.style.display = 'flex';
+  }
+
   STATE.currentTab = name;
   document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === name);
@@ -349,9 +358,9 @@ function loadPackage_obj(data) {
     pkg.ato.airfields.forEach(af => {
       const reg = pkg.registry.airfields[af.icao];
       if (reg) {
-        if (!af.name)          af.name          = reg.name;
-        if (!af.coords)        af.coords        = reg.coords;
-        if (af.elevation_ft == null) af.elevation_ft = reg.elevation_ft;
+        if (reg.name != null)          af.name          = reg.name;
+        if (reg.coords != null)        af.coords        = reg.coords;
+        if (reg.elevation_ft != null)  af.elevation_ft  = reg.elevation_ft;
       }
     });
   }
@@ -361,30 +370,30 @@ function loadPackage_obj(data) {
     pkg.ato.carriers.forEach(cv => {
       const reg = pkg.registry.carriers[cv.id];
       if (reg) {
-        if (!cv.name)            cv.name            = reg.name;
-        if (!cv.callsign)        cv.callsign        = reg.callsign;
-        if (!cv.deploy_coords)   cv.deploy_coords   = reg.deploy_coords;
-        if (!cv.recovery_coords) cv.recovery_coords = reg.recovery_coords;
+        if (reg.name != null)            cv.name            = reg.name;
+        if (reg.callsign != null)        cv.callsign        = reg.callsign;
+        if (reg.deploy_coords != null)   cv.deploy_coords   = reg.deploy_coords;
+        if (reg.recovery_coords != null) cv.recovery_coords = reg.recovery_coords;
       }
     });
   }
 
   // ── Resolve registry tankers into ato.tankers ───────────
   if (pkg.registry?.tankers && pkg.ato) {
-    if (!pkg.ato.tankers) pkg.ato.tankers = [];
-    // Build tanker list from registry if ATO has no tankers
-    if (pkg.ato.tankers.length === 0) {
+    if (!pkg.ato.tankers || pkg.ato.tankers.length === 0) {
+      // Build tanker list from registry
+      pkg.ato.tankers = [];
       Object.entries(pkg.registry.tankers).forEach(([id, t]) => {
         pkg.ato.tankers.push({ id, ...t });
       });
     } else {
-      // Resolve existing tanker references
+      // Resolve existing tanker references — registry always wins
       pkg.ato.tankers.forEach(t => {
         const reg = pkg.registry.tankers[t.id];
         if (reg) {
-          if (!t.callsign) t.callsign = reg.callsign;
-          if (!t.ar_track) t.ar_track = reg.ar_track;
-          if (!t.altitude) t.altitude = reg.altitude;
+          if (reg.callsign != null) t.callsign = reg.callsign;
+          if (reg.ar_track != null) t.ar_track = reg.ar_track;
+          if (reg.altitude != null) t.altitude = reg.altitude;
         }
       });
     }
@@ -392,12 +401,11 @@ function loadPackage_obj(data) {
 
   // ── Resolve registry targets into ato.targets ───────────
   if (pkg.registry?.targets && pkg.ato) {
-    if (!pkg.ato.targets) pkg.ato.targets = [];
-    if (pkg.ato.targets.length === 0) {
-      Object.entries(pkg.registry.targets).forEach(([id, t]) => {
-        pkg.ato.targets.push({ id, ...t });
-      });
-    }
+    // Always rebuild from registry so edits are reflected
+    pkg.ato.targets = [];
+    Object.entries(pkg.registry.targets).forEach(([id, t]) => {
+      pkg.ato.targets.push({ id, ...t });
+    });
   }
 
   // ── Resolve registry reference_points: bullseye + marshal_points ─
@@ -411,15 +419,13 @@ function loadPackage_obj(data) {
       }
     }
 
-    // Build marshal_points list from reference_points with type 'marshal'
-    if (!pkg.ato.marshal_points) pkg.ato.marshal_points = [];
-    if (pkg.ato.marshal_points.length === 0) {
-      Object.entries(pkg.registry.reference_points).forEach(([id, rp]) => {
-        if (rp.type === 'marshal') {
-          pkg.ato.marshal_points.push({ id, name: rp.name, coords: rp.coords, altitude: rp.altitude });
-        }
-      });
-    }
+    // Always rebuild marshal_points from registry so edits are reflected
+    pkg.ato.marshal_points = [];
+    Object.entries(pkg.registry.reference_points).forEach(([id, rp]) => {
+      if (rp.type === 'marshal') {
+        pkg.ato.marshal_points.push({ id, name: rp.name, coords: rp.coords, altitude: rp.altitude });
+      }
+    });
   }
 
   // ── Resolve registry control_agencies into global_control + mission control ─
@@ -428,9 +434,9 @@ function loadPackage_obj(data) {
     if (gc?.agency_id) {
       const ag = pkg.registry.control_agencies[gc.agency_id];
       if (ag) {
-        if (!gc.controlling_unit) gc.controlling_unit = ag.callsign;
-        if (!gc.aircraft_type)    gc.aircraft_type    = ag.platform;
-        if (!gc.primary_freq_mhz) gc.primary_freq_mhz = ag.primary_freq_mhz;
+        if (ag.callsign != null)         gc.controlling_unit  = ag.callsign;
+        if (ag.platform != null)         gc.aircraft_type     = ag.platform;
+        if (ag.primary_freq_mhz != null) gc.primary_freq_mhz = ag.primary_freq_mhz;
         gc._agency = ag;
       }
     }
@@ -439,9 +445,9 @@ function loadPackage_obj(data) {
       if (m.control?.agency_id) {
         const ag = pkg.registry.control_agencies[m.control.agency_id];
         if (ag) {
-          if (!m.control.primary_freq_mhz)   m.control.primary_freq_mhz   = ag.primary_freq_mhz;
-          if (!m.control.secondary_freq_mhz) m.control.secondary_freq_mhz = ag.secondary_freq_mhz;
-          if (!m.control.net_name)            m.control.net_name            = ag.callsign;
+          if (ag.primary_freq_mhz != null)   m.control.primary_freq_mhz   = ag.primary_freq_mhz;
+          if (ag.secondary_freq_mhz != null) m.control.secondary_freq_mhz = ag.secondary_freq_mhz;
+          if (ag.callsign != null)           m.control.net_name            = ag.callsign;
           m.control._agency = ag;
         }
       }
@@ -564,12 +570,9 @@ function renderHeader(ato) {
     ['IRL START',    irl,     ''],
     ['INGAME START', ingame,  'ingame'],
   ];
-  const unit = ato.global_control?.controlling_unit;
-  const agencyType = ato.global_control?._agency?.type;
-  if (unit) items.push([agencyType || 'AWACS / GCI', unit, '']);
 
-  // Header shows: date, ingame start, AWACS — concise identifiers only.
-  // Full detail (freq, bullseye, etc.) is in the ATO intel strip.
+  // Header shows: date + ingame start only — full detail (AWACS, freq,
+  // bullseye, etc.) is in the ATO intel strip.
   meta.innerHTML = '';
   items.forEach(([lbl, val, cls]) => {
     const block = el('div', 'meta-block');

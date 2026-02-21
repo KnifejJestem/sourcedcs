@@ -13,6 +13,11 @@ function renderCOMMS(cm) {
     return;
   }
 
+  // Edit button (visible in edit mode)
+  const editBtn = el('button', 'editor-btn', '✎ EDIT COMMS');
+  editBtn.addEventListener('click', openCommsEditor);
+  div.appendChild(editBtn);
+
   docHeader(div, [
     ['OPERATION', cm.operation],
     ['ATO DAY',   cm.ato_day],

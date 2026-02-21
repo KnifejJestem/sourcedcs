@@ -643,6 +643,11 @@ function renderWEATHER(wx) {
     return;
   }
 
+  // Edit button (visible in edit mode)
+  const editBtn = el('button', 'editor-btn', '✎ EDIT WEATHER');
+  editBtn.addEventListener('click', openWeatherEditor);
+  div.appendChild(editBtn);
+
   // Optional package-level header
   const hdrItems = [];
   if (wx.operation)  hdrItems.push(['OPERATION',  wx.operation]);

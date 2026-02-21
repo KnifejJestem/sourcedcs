@@ -137,7 +137,6 @@
 .wx-msn-ref {
   font-weight: 600;
   color: var(--text-2);
-  min-width: 100px;
   flex-shrink: 0;
   letter-spacing: 1px;
 }

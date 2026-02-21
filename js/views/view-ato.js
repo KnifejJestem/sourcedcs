@@ -82,13 +82,6 @@ function renderIntelStrip(gc, ato) {
       ['IRL START',    irl],
       ['INGAME START', ingame, 'ingame'],
     ]),
-    buildIntelSection([
-      ['PFREQ', gc.primary_freq_mhz ? gc.primary_freq_mhz + ' MHz' : '—', 'freq'],
-    ]),
-    buildIntelSection([
-      [gc._agency?.type || 'AWACS / GCI', gc.controlling_unit || '—'],
-      ['PLATFORM',    gc.aircraft_type    || '—'],
-    ]),
   ];
 
   if (gc.bullseye) {
@@ -106,6 +99,16 @@ function renderIntelStrip(gc, ato) {
   var row = document.getElementById(DOM_IDS.intelRow);
   row.innerHTML = '';
   sections.forEach(function (s) { row.appendChild(s); });
+
+  // Registry edit button (visible in edit mode)
+  var regBtn = el('button', 'editor-btn', '✎ REGISTRY');
+  regBtn.addEventListener('click', openRegistryEditor);
+  row.appendChild(regBtn);
+
+  // Times edit button (visible in edit mode)
+  var timesBtn = el('button', 'editor-btn', '✎ TIMES');
+  timesBtn.addEventListener('click', openTimesEditor);
+  row.appendChild(timesBtn);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -161,7 +164,22 @@ function renderMissionCards(missions) {
     leftCol.appendChild(el('div', 'card-callsign', m.callsign || '—'));
     leftCol.appendChild(el('div', 'card-msn', m.mission_number || ''));
     top.appendChild(leftCol);
-    top.appendChild(el('div', 'card-type-badge type-' + tk, m.mission_type || '?'));
+
+    var topRight = el('div', 'card-top-right');
+    topRight.appendChild(el('div', 'card-type-badge type-' + tk, m.mission_type || '?'));
+
+    // Edit/delete buttons (visible in edit mode)
+    var editBtn = el('button', 'editor-btn', '✎');
+    editBtn.title = 'Edit mission';
+    editBtn.addEventListener('click', function(e) { e.stopPropagation(); editMission(i); });
+    topRight.appendChild(editBtn);
+
+    var delBtn = el('button', 'editor-btn', '✕');
+    delBtn.title = 'Delete mission';
+    delBtn.addEventListener('click', function(e) { e.stopPropagation(); deleteMission(i); });
+    topRight.appendChild(delBtn);
+
+    top.appendChild(topRight);
     card.appendChild(top);
 
     // Card body rows
@@ -203,6 +221,11 @@ function renderMissionCards(missions) {
     card.addEventListener('click', function () { selectMission(i); });
     container.appendChild(card);
   });
+
+  // Add Mission button (visible in edit mode)
+  var addCard = el('button', 'editor-btn editor-btn-add', '+ ADD MISSION');
+  addCard.addEventListener('click', addMission);
+  container.appendChild(addCard);
 }
 
 // ═════════════════════════════════════════════════════════════

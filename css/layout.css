@@ -148,7 +148,7 @@ header {
 :root.movie .tab-btn.active { color: var(--cap); border-bottom-color: var(--cap); }
 
 /* ── Views ───────────────────────────────────────────────── */
-.view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.view { display: none; flex: 1; flex-direction: column; overflow: hidden; contain: layout paint; }
 .view.active { display: flex; }
 
 /* ── Join Room Dialog ────────────────────────────────────── */

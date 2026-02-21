@@ -25,6 +25,11 @@ function renderSPINS(sp) {
     return;
   }
 
+  // Edit button (visible in edit mode)
+  const editBtn = el('button', 'editor-btn', '✎ EDIT SPINS');
+  editBtn.addEventListener('click', openSpinsEditor);
+  div.appendChild(editBtn);
+
   docHeader(div, [
     ['OPERATION', sp.operation],
     ['ATO DAY',   sp.ato_day],

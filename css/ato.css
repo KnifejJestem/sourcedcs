@@ -91,6 +91,11 @@
   align-items: flex-start;
   flex-shrink: 0;
 }
+.card-top-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .card-callsign { font-weight: 600; font-size: 14px; line-height: 1; }
 .card-msn { font-size: 8px; color: var(--text-3); margin-top: 2px; }
 .card-type-badge {
