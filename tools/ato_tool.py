@@ -343,14 +343,17 @@ def mission_to_dict(m):
     return {k: v for k, v in d.items() if v is not None}
 
 def ato_to_yaml(ato: ATO) -> str:
-    doc = {'ato': {
-        'irl_date': ato.irl_date,
-        'irl_time_zulu': ato.irl_time,
-        'ingame_start_local': ato.ingame_start_local,
-        'ae_flags': ato.extra_flags,
-        'global_control': gc_to_dict(ato.global_control) if ato.global_control else {},
-        'missions': [mission_to_dict(m) for m in ato.missions],
-    }}
+    doc = {
+        'schema_version': '1.0',
+        'ato': {
+            'irl_date': ato.irl_date,
+            'irl_time_zulu': ato.irl_time,
+            'ingame_start_time': ato.ingame_start_local,
+            'ae_flags': ato.extra_flags,
+            'global_control': gc_to_dict(ato.global_control) if ato.global_control else {},
+            'missions': [mission_to_dict(m) for m in ato.missions],
+        }
+    }
     if ato.targets:
         doc['ato']['targets'] = ato.targets
     return yaml.dump(doc, allow_unicode=True, sort_keys=False, default_flow_style=False)
@@ -363,16 +366,34 @@ def dict_to_bullseye(d): return Bullseye(name=d.get('name',''), coords=d.get('co
 def dict_to_aircraft(d): return Aircraft(count=d.get('count',1), type=d.get('type',''), loadout=d.get('loadout'))
 def dict_to_target(d): return TargetLocation(location=d.get('location',''), net=d.get('not_earlier_than'), nlt=d.get('not_later_than'), mission_type_override=d.get('mission_type_override'), altitude=d.get('altitude'), dmp_ids=d.get('aim_points') or [])
 def dict_to_control(d): return Control(primary_freq=d.get('primary_freq_mhz'), secondary_freq=d.get('secondary_freq_mhz'), name=d.get('net_name'))
-def dict_to_refuel(d): return Refuel(tanker_callsign=d.get('tanker_callsign',''), track=d.get('ar_track',''), altitude=d.get('altitude',''), net=d.get('not_earlier_than'), nlt=d.get('not_later_than'))
+def dict_to_refuel(d):
+    # Handle v1.0 tanker_id reference (tanker_callsign may not exist yet)
+    callsign = d.get('tanker_callsign', d.get('tanker_id', ''))
+    return Refuel(tanker_callsign=callsign, track=d.get('ar_track',''), altitude=d.get('altitude',''), net=d.get('not_earlier_than'), nlt=d.get('not_later_than'))
 
 def yaml_to_ato(text: str) -> ATO:
-    doc = yaml.safe_load(text)['ato']
+    raw = yaml.safe_load(text)
+    doc = raw['ato']
+
+    # v1.0: resolve tanker references from ato.tankers
+    tanker_map = {}
+    for t in doc.get('tankers', []):
+        if t.get('id'):
+            tanker_map[t['id']] = t
+
     gc_d = doc.get('global_control', {})
     gc = GlobalControl(primary_freq=gc_d.get('primary_freq_mhz'), modulation=gc_d.get('modulation'),
                        unit=gc_d.get('controlling_unit'), aircraft_type=gc_d.get('aircraft_type'),
                        bullseye=dict_to_bullseye(gc_d['bullseye']) if 'bullseye' in gc_d else None)
     missions = []
     for md in doc.get('missions', []):
+        refuel_d = md.get('refuel')
+        if refuel_d and refuel_d.get('tanker_id') and refuel_d['tanker_id'] in tanker_map:
+            t = tanker_map[refuel_d['tanker_id']]
+            refuel_d.setdefault('tanker_callsign', t.get('callsign', ''))
+            refuel_d.setdefault('ar_track', t.get('ar_track', ''))
+            refuel_d.setdefault('altitude', t.get('altitude', ''))
+
         m = Mission(unit=md.get('unit',''), home_base=md.get('home_base_icao',''),
                     mission_number=md.get('mission_number'), callsign=md.get('callsign'),
                     mission_type=md.get('mission_type'), deploy_loc=md.get('deploy_location_icao'),
@@ -380,11 +401,15 @@ def yaml_to_ato(text: str) -> ATO:
                     aircraft=dict_to_aircraft(md['aircraft']) if 'aircraft' in md else None,
                     target=dict_to_target(md['target'])       if 'target'   in md else None,
                     control=dict_to_control(md['control'])    if 'control'  in md else None,
-                    refuel=dict_to_refuel(md['refuel'])       if 'refuel'   in md else None,
+                    refuel=dict_to_refuel(refuel_d)           if refuel_d   else None,
                     bullseye=dict_to_bullseye(md['bullseye']) if 'bullseye' in md else None)
         missions.append(m)
+
+    # v1.0 uses ingame_start_time (Zulu); legacy uses ingame_start_local
+    ingame = doc.get('ingame_start_time') or doc.get('ingame_start_local')
+
     return ATO(irl_date=doc.get('irl_date',''), irl_time=doc.get('irl_time_zulu',''),
-               ingame_start_local=doc.get('ingame_start_local'), extra_flags=doc.get('ae_flags',[]),
+               ingame_start_local=ingame, extra_flags=doc.get('ae_flags',[]),
                global_control=gc, missions=missions, targets=doc.get('targets', []))
 
 # ---------------------------------------------------------------------------
