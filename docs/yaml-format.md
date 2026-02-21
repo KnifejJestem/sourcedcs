@@ -57,7 +57,9 @@ header:
 
 The `registry` block defines entities once so they can be referenced by key
 throughout the rest of the file.  It contains: `callsigns`, `frequencies`,
-`airfields`, `carriers`, `tankers`, `targets` (with nested aim points), and
+`airfields`, `carriers`, `tankers`, `targets` (with nested aim points),
+`reference_points` (bullseye, marshal points, named positions), and
+`control_agencies` (AWACS, CRC).
 `reference_points` (bullseye, marshal points, named positions).
 
 ### `callsigns:` (map)
@@ -247,6 +249,37 @@ registry:
 | `coords` | coord string | Position |
 | `altitude` | string | Holding altitude (optional, mainly for marshal points) |
 
+### `control_agencies:` (map)
+
+A mapping of agency id → control agency data.  Both AWACS and CRC agencies
+are defined here.  The `global_control.agency_id` and each mission's
+`control.agency_id` reference these by key; frequencies, callsign, and
+platform are resolved from the registry at load time.
+
+```yaml
+registry:
+  control_agencies:
+    SCREWTOP:
+      type: AWACS
+      callsign: SCREWTOP
+      platform: E-3
+      primary_freq_mhz: '260.0'
+      secondary_freq_mhz: '134.0'
+    DARKSTAR:
+      type: CRC
+      callsign: DARKSTAR
+      primary_freq_mhz: '265.0'
+      secondary_freq_mhz: '135.0'
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Agency type: `AWACS` or `CRC` |
+| `callsign` | string | Agency callsign |
+| `platform` | string | Platform / aircraft type (optional — mainly for AWACS) |
+| `primary_freq_mhz` | string | Primary frequency in MHz |
+| `secondary_freq_mhz` | string | Secondary frequency in MHz |
+
 ---
 
 ## Coordinate strings
@@ -312,13 +345,16 @@ The same IDs are used in:
 
 ### `global_control:`
 
-Package-wide command and control data.
+Package-wide command and control data.  References a control agency from
+`registry.control_agencies` by `agency_id`.  Frequencies, callsign, and
+platform are resolved from the agency definition.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `primary_freq_mhz` | string | Package primary frequency in MHz |
-| `controlling_unit` | string | AWACS / GCI callsign |
-| `aircraft_type` | string | AWACS / GCI aircraft type |
+| `agency_id` | string | Control agency id (must match a key in `registry.control_agencies`).  Resolves `controlling_unit`, `aircraft_type`, and `primary_freq_mhz` from the registry. |
+| `primary_freq_mhz` | string | Package primary frequency — auto-resolved from agency if `agency_id` is set |
+| `controlling_unit` | string | Agency callsign — auto-resolved from agency if `agency_id` is set |
+| `aircraft_type` | string | Platform / aircraft type — auto-resolved from agency if `agency_id` is set |
 | `bullseye` | string | Reference point id in `registry.reference_points` (resolved at load time to `{name, coords}`) |
 
 ### `airfields:` (list)
@@ -360,17 +396,18 @@ carriers:
 ### `missions:` (list)
 
 One entry per tasked mission.  Missions drive the ATO card list, timeline bars,
-and map routes.
+and map routes.  `mission_number` is the primary identifying field and should
+be listed first in each mission entry.
 
 #### Mission identification
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `unit` | string | Operating unit |
-| `home_base_icao` | string | Home base ICAO (display only) |
-| `mission_number` | string | ATO mission number (e.g. `MSN3266`) — used as the cross-reference ID throughout the file |
+| `mission_number` | string | ATO mission number (e.g. `MSN3266`) — **primary key**, listed first.  Used as the cross-reference ID throughout the file |
 | `callsign` | string | Flight callsign |
 | `mission_type` | string | `CAP` / `BAI` / `CAS` / `SEAD` / `STRIKE` (drives color coding) |
+| `unit` | string | Operating unit |
+| `home_base_icao` | string | Home base ICAO (display only) |
 | `deploy_location_icao` | string | ICAO or coord string — start of route on map |
 | `aar_location_icao` | string | ICAO or coord string — recovery / end of route on map |
 
@@ -422,29 +459,43 @@ Aim points are typically resolved automatically from the registry target
 referenced by `target_id`.  The target's nested `aim_points` list is pulled
 into the mission at load time.
 
-You can also specify aim points explicitly for standalone points or legacy
-`target_ref` references:
+You can also specify aim points explicitly to select specific aim points from
+a target, add standalone coordinates, or use legacy `target_ref` references:
 
 ```yaml
-# Preferred: reference a registry target — aim points come from the target
+# Preferred: reference a registry target — all aim points come from the target
 target:
   location: KHASAB AFB
   target_id: SAM-1       # pulls SAM-1's nested aim_points automatically
 
+# Select specific aim points from a target by aim_point_id
+target:
+  location: KHASAB AFB
+  target_id: SAM-1
+  aim_points:
+    - aim_point_id: TGT-A  # only TGT-A from SAM-1, not TGT-B
+
+# Mix: specific aim_point from target + standalone coordinate
+target:
+  target_id: SAM-1
+  aim_points:
+    - aim_point_id: TGT-A
+    - coords: N26°28'00" E056°18'00"
+      name: MANUAL-POINT
+
 # Legacy: explicit aim_points list with target_ref
 aim_points:
   - target_ref: SA6-NORTH        # inherits coords, elevation, name from target
-  - target_ref: SA6-SOUTH
-    name: SECONDARY              # override the name
   - coords: N26°28'00" E056°18'00"
     name: MANUAL-POINT           # standalone aim point, no reference
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `target_ref` | string | `id` of a target in `registry.targets` |
-| `coords` | coord string | Position (overrides target `coords` when also using `target_ref`) |
-| `name` | string | Display name (overrides target `name` when also using `target_ref`) |
+| `aim_point_id` | string | `id` of a specific aim point within the target referenced by `target_id` |
+| `target_ref` | string | `id` of a target in `registry.targets` (legacy) |
+| `coords` | coord string | Position (overrides resolved coords) |
+| `name` | string | Display name (overrides resolved name) |
 | `elevation` | string | Elevation override |
 
 #### `steer_points:` (list)
@@ -471,11 +522,21 @@ steer_points:
 
 #### `control:`
 
+Mission-level C2 block.  References a control agency from
+`registry.control_agencies` by `agency_id`.  Frequencies and net callsign
+are resolved from the agency definition.
+
+```yaml
+control:
+  agency_id: SCREWTOP      # resolves freq + callsign from registry
+```
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `primary_freq_mhz` | string | Mission primary frequency |
-| `secondary_freq_mhz` | string | Mission secondary frequency |
-| `net_name` | string | Net callsign |
+| `agency_id` | string | Control agency id (must match a key in `registry.control_agencies`).  Resolves `primary_freq_mhz`, `secondary_freq_mhz`, and `net_name` from the registry. |
+| `primary_freq_mhz` | string | Mission primary frequency — auto-resolved from agency if `agency_id` is set |
+| `secondary_freq_mhz` | string | Mission secondary frequency — auto-resolved from agency |
+| `net_name` | string | Net callsign — auto-resolved from agency |
 
 #### `refuel:`
 
