@@ -174,8 +174,19 @@ function drawMap(container, points, routes, geoData, airspaces) {
   content.appendChild(drawCities(ctx, geoData));
 
   // ── Popup (needed by subsequent draw calls) ──────────────
-  const { showPopup, refreshPopup } = createPopup(container);
+  const { showPopup: _showPopup, refreshPopup } = createPopup(container);
   _refreshPopup = refreshPopup;
+
+  // Wrap showPopup so that coord-pick mode intercepts marker clicks:
+  // instead of opening the popup, use the clicked point's lat/lon.
+  function showPopup(p) {
+    if (typeof EDITOR !== 'undefined' && typeof EDITOR._coordPickCb === 'function' &&
+        p.lat != null && p.lon != null) {
+      EDITOR._coordPickCb(p.lat, p.lon);
+      return;
+    }
+    _showPopup(p);
+  }
 
   // ── Zones ────────────────────────────────────────────────
   const engResult = drawEngagementZones(ctx, points);
@@ -437,7 +448,8 @@ function drawMap(container, points, routes, geoData, airspaces) {
   });
 
   setupInteraction(svg, MAP_WIDTH, MAP_HEIGHT, MIN_ZOOM, MAX_ZOOM, state, applyTransform, clamp,
-    () => measure.mode === 'waitA' || measure.mode === 'waitB');
+    () => measure.mode === 'waitA' || measure.mode === 'waitB' ||
+          (typeof EDITOR !== 'undefined' && typeof EDITOR._coordPickCb === 'function'));
 
   // Initial render
   applyTransform();

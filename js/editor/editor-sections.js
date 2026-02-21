@@ -18,10 +18,10 @@ function openTimesEditor() {
   openEditorDialog('EDIT TIMES', function (body) {
     editorSectionTitle(body, 'IRL START');
     var fDate = editorField(body, 'IRL Date', ato.irl_date, { placeholder: '2026-01-11', required: true });
-    var fTime = editorField(body, 'IRL Time (Zulu)', ato.irl_time_zulu, { placeholder: '1900Z', required: true, hint: 'Always enter in Zulu (e.g. 1900Z)' });
+    var fTime = editorField(body, 'IRL Time (Zulu)', ato.irl_time_zulu, { placeholder: '1900', required: true, hint: 'Enter in Zulu — Z is added automatically' });
 
     editorSectionTitle(body, 'INGAME START');
-    var fIngame = editorField(body, 'Ingame Start Time (Zulu)', ato.ingame_start_time || ato.ingame_start_local, { placeholder: '2000Z', required: true, hint: 'Always enter in Zulu (e.g. 2000Z)' });
+    var fIngame = editorField(body, 'Ingame Start Time (Zulu)', ato.ingame_start_time || ato.ingame_start_local, { placeholder: '2000', required: true, hint: 'Enter in Zulu — Z is added automatically' });
 
     body._timesFields = { date: fDate, time: fTime, ingame: fIngame };
   }, function () {
@@ -149,8 +149,8 @@ function _editAcm(acms, index) {
     var fMsns    = editorField(body, 'Missions (comma-sep)', (acm.missions || []).join(', '));
     var fAltLo   = editorField(body, 'Alt Lower', acm.alt_lower, { placeholder: 'FL200' });
     var fAltHi   = editorField(body, 'Alt Upper', acm.alt_upper, { placeholder: 'FL260' });
-    var fTimeFrom = editorField(body, 'Time From', acm.time_from, { placeholder: '2000Z' });
-    var fTimeTo   = editorField(body, 'Time To', acm.time_to, { placeholder: '2300Z' });
+    var fTimeFrom = editorField(body, 'Time From', acm.time_from, { placeholder: '2000' });
+    var fTimeTo   = editorField(body, 'Time To', acm.time_to, { placeholder: '2300' });
     var fCtrl    = editorField(body, 'Control Agency', acm.control_agency);
     var fFreq    = editorField(body, 'Control Freq (MHz)', acm.control_freq_mhz);
     var fNotes   = editorField(body, 'Notes', acm.notes, { type: 'textarea', rows: 2 });
@@ -450,8 +450,8 @@ function openWeatherEditor() {
   openEditorDialog('EDIT WEATHER', function (body) {
     editorSectionTitle(body, 'HEADER');
     var fIssued = editorField(body, 'Issued',     wx.issued);
-    var fFrom   = editorField(body, 'Valid From',  wx.valid_from,  { placeholder: '1800Z' });
-    var fTo     = editorField(body, 'Valid To',    wx.valid_to,    { placeholder: '0600Z' });
+    var fFrom   = editorField(body, 'Valid From',  wx.valid_from,  { placeholder: '1800' });
+    var fTo     = editorField(body, 'Valid To',    wx.valid_to,    { placeholder: '0600' });
     var fOp     = editorField(body, 'Operation',   wx.operation);
 
     body._wxHeader = { issued: fIssued, from: fFrom, to: fTo, op: fOp };

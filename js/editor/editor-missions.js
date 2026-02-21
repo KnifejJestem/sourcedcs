@@ -87,10 +87,10 @@ function _openMissionForm(title, m, onSave) {
 
     // ── TIMING ───────────────────────────────────────────────
     editorSectionTitle(body, 'TIMING');
-    f.takeoff_time  = editorField(body, 'Takeoff Time',  m.takeoff_time,  { placeholder: '2000Z' });
-    f.recovery_time = editorField(body, 'Recovery Time', m.recovery_time, { placeholder: '2300Z' });
-    f.vul_start     = editorField(body, 'VUL Start',     m.vul_start,     { placeholder: '2040Z' });
-    f.vul_end       = editorField(body, 'VUL End',       m.vul_end,       { placeholder: '2115Z' });
+    f.takeoff_time  = editorField(body, 'Takeoff Time',  m.takeoff_time,  { placeholder: '2000' });
+    f.recovery_time = editorField(body, 'Recovery Time', m.recovery_time, { placeholder: '2300' });
+    f.vul_start     = editorField(body, 'VUL Start',     m.vul_start,     { placeholder: '2040' });
+    f.vul_end       = editorField(body, 'VUL End',       m.vul_end,       { placeholder: '2115' });
 
     // ── TARGET ───────────────────────────────────────────────
     editorSectionTitle(body, 'TARGET');
@@ -100,10 +100,10 @@ function _openMissionForm(title, m, onSave) {
     var tgtOpts = _registryOptions('targets', function (id, t) { return id + (t.name ? ' — ' + t.name : ''); });
     f.tgt_target_id = editorField(body, 'Target', tgt.target_id, { type: 'select', options: tgtOpts });
     f.tgt_mission_type_override = editorField(body, 'Mission Type Override', tgt.mission_type_override, { placeholder: 'e.g. AIRDEF' });
-    f.tgt_tot_net  = editorField(body, 'TOT NET',   tgt.tot_net,    { placeholder: '2046Z' });
-    f.tgt_tot_nlt  = editorField(body, 'TOT NLT',   tgt.tot_nlt,    { placeholder: '2111Z' });
-    f.tgt_tos      = editorField(body, 'TOS',       tgt.tos,        { placeholder: '2040Z' });
-    f.tgt_toffs    = editorField(body, 'TOFFS',     tgt.toffs,      { placeholder: '2230Z' });
+    f.tgt_tot_net  = editorField(body, 'TOT NET',   tgt.tot_net,    { placeholder: '2046' });
+    f.tgt_tot_nlt  = editorField(body, 'TOT NLT',   tgt.tot_nlt,    { placeholder: '2111' });
+    f.tgt_tos      = editorField(body, 'TOS',       tgt.tos,        { placeholder: '2040' });
+    f.tgt_toffs    = editorField(body, 'TOFFS',     tgt.toffs,      { placeholder: '2230' });
 
     // ── CONTROL ──────────────────────────────────────────────
     editorSectionTitle(body, 'CONTROL');
@@ -118,8 +118,8 @@ function _openMissionForm(title, m, onSave) {
     var ref = m.refuel || {};
     var tnkOpts = _registryOptions('tankers', function (id, t) { return id + (t.callsign ? ' — ' + t.callsign : ''); });
     f.ref_tanker_id = editorField(body, 'Tanker', ref.tanker_id, { type: 'select', options: tnkOpts });
-    f.ref_net = editorField(body, 'AAR NET', ref.not_earlier_than, { placeholder: '2143Z' });
-    f.ref_nlt = editorField(body, 'AAR NLT', ref.not_later_than,  { placeholder: '2150Z' });
+    f.ref_net = editorField(body, 'AAR NET', ref.not_earlier_than, { placeholder: '2143' });
+    f.ref_nlt = editorField(body, 'AAR NLT', ref.not_later_than,  { placeholder: '2150' });
 
     // ── STEER POINTS ────────────────────────────────────────
     editorSectionTitle(body, 'STEER POINTS');
@@ -231,6 +231,14 @@ function _renderSteerPointsList(container, steerPts) {
     coordInput.value = sp.coords || '';
     coordInput.addEventListener('input', function () { sp.coords = this.value; });
     row.appendChild(coordInput);
+
+    var pickBtn = el('button', 'ef-btn ef-btn-sm ef-btn-pick', '📍');
+    pickBtn.title = 'Pick from map';
+    pickBtn.type = 'button';
+    pickBtn.addEventListener('click', function () {
+      _startCoordPick(coordInput);
+    });
+    row.appendChild(pickBtn);
 
     var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '✕');
     delBtn.addEventListener('click', function () {
