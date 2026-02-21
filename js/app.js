@@ -564,12 +564,9 @@ function renderHeader(ato) {
     ['IRL START',    irl,     ''],
     ['INGAME START', ingame,  'ingame'],
   ];
-  const unit = ato.global_control?.controlling_unit;
-  const agencyType = ato.global_control?._agency?.type;
-  if (unit) items.push([agencyType || 'AWACS / GCI', unit, '']);
 
-  // Header shows: date, ingame start, AWACS — concise identifiers only.
-  // Full detail (freq, bullseye, etc.) is in the ATO intel strip.
+  // Header shows: date + ingame start only — full detail (AWACS, freq,
+  // bullseye, etc.) is in the ATO intel strip.
   meta.innerHTML = '';
   items.forEach(([lbl, val, cls]) => {
     const block = el('div', 'meta-block');

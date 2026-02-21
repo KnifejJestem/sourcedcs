@@ -18,10 +18,10 @@ function openTimesEditor() {
   openEditorDialog('EDIT TIMES', function (body) {
     editorSectionTitle(body, 'IRL START');
     var fDate = editorField(body, 'IRL Date', ato.irl_date, { placeholder: '2026-01-11', required: true });
-    var fTime = editorField(body, 'IRL Time (Zulu)', ato.irl_time_zulu, { placeholder: '1900Z', required: true });
+    var fTime = editorField(body, 'IRL Time (Zulu)', ato.irl_time_zulu, { placeholder: '1900Z', required: true, hint: 'Always enter in Zulu (e.g. 1900Z)' });
 
     editorSectionTitle(body, 'INGAME START');
-    var fIngame = editorField(body, 'Ingame Start Time', ato.ingame_start_time || ato.ingame_start_local, { placeholder: '2000Z', required: true });
+    var fIngame = editorField(body, 'Ingame Start Time (Zulu)', ato.ingame_start_time || ato.ingame_start_local, { placeholder: '2000Z', required: true, hint: 'Always enter in Zulu (e.g. 2000Z)' });
 
     body._timesFields = { date: fDate, time: fTime, ingame: fIngame };
   }, function () {
@@ -30,8 +30,12 @@ function openTimesEditor() {
     var ato = editorEnsureSection('ato');
 
     ato.irl_date      = f.date.value || undefined;
-    ato.irl_time_zulu = f.time.value || undefined;
-    ato.ingame_start_time = f.ingame.value || undefined;
+    // Normalize IRL time: strip trailing Z/L, re-add Z
+    var irlRaw = (f.time.value || '').replace(/[ZL]$/i, '').trim();
+    ato.irl_time_zulu = irlRaw ? irlRaw + 'Z' : undefined;
+    // Normalize ingame time: strip trailing Z/L, re-add Z
+    var igRaw = (f.ingame.value || '').replace(/[ZL]$/i, '').trim();
+    ato.ingame_start_time = igRaw ? igRaw + 'Z' : undefined;
 
     editorReRender();
   });
@@ -66,8 +70,10 @@ function openACOEditor() {
 
     var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD ACM');
     addBtn.addEventListener('click', function () {
-      acms.push({ name: 'NEW ACM', type: 'ROZ', geometry: {} });
-      _renderAcmList(listEl, acms);
+      var newAcm = { name: 'NEW ACM', type: 'ROZ', geometry: {} };
+      acms.push(newAcm);
+      // Auto-open the edit form for the new ACM
+      _editAcm(acms, acms.length - 1);
     });
     body.appendChild(addBtn);
   }, function () {
@@ -111,7 +117,7 @@ function _editAcm(acms, index) {
     var fName = editorField(body, 'Name', acm.name, { required: true });
     var fType = editorField(body, 'Type', acm.type, {
       type: 'select',
-      options: ['ROZ', 'ORBIT', 'MEZ', 'KILLBOX', 'FACA', 'OTHER'],
+      options: ['ROZ', 'ORBIT', 'MEZ', 'KILLBOX', 'FACA', 'ANCHOR', 'OTHER'],
     });
     if (acm.type) fType.value = acm.type;
 
@@ -123,6 +129,21 @@ function _editAcm(acms, index) {
     var fDir     = editorField(body, 'Direction', geo.direction, { placeholder: 'CW / CCW' });
     var fCenter  = editorField(body, 'Center', geo.center, { placeholder: "N25°30'00\" E55°30'00\"" });
     var fRadius  = editorField(body, 'Radius (NM)', geo.radius_nm, { type: 'number' });
+
+    // Polygon boundary points
+    editorSectionTitle(body, 'POLYGON BOUNDARY');
+    var boundary = (geo.boundary || []).map(function (c) { return String(c); });
+    body._acmBoundary = boundary;
+    var bListEl = el('div', 'ef-list-items');
+    _renderBoundaryList(bListEl, boundary);
+    body.appendChild(bListEl);
+
+    var addPtBtn = el('button', 'ef-btn ef-btn-add', '+ ADD POINT');
+    addPtBtn.addEventListener('click', function () {
+      boundary.push('');
+      _renderBoundaryList(bListEl, boundary);
+    });
+    body.appendChild(addPtBtn);
 
     editorSectionTitle(body, 'PARAMETERS');
     var fMsns    = editorField(body, 'Missions (comma-sep)', (acm.missions || []).join(', '));
@@ -159,6 +180,9 @@ function _editAcm(acms, index) {
     if (f.dir.value) geo.direction = f.dir.value;
     if (f.center.value) geo.center = f.center.value;
     if (f.radius.value) geo.radius_nm = parseFloat(f.radius.value);
+    // Collect polygon boundary
+    var boundary = (body._acmBoundary || []).filter(function (c) { return c.trim(); });
+    if (boundary.length) geo.boundary = boundary;
     acm.geometry = geo;
 
     var msnsRaw = f.msns.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -172,6 +196,36 @@ function _editAcm(acms, index) {
     acm.notes = f.notes.value || undefined;
 
     openACOEditor();
+  });
+}
+
+function _renderBoundaryList(container, boundary) {
+  container.innerHTML = '';
+  if (!boundary.length) {
+    container.appendChild(el('div', 'ef-hint', 'No polygon points. Click "+ ADD POINT" to create a polygon boundary.'));
+    return;
+  }
+  boundary.forEach(function (coord, i) {
+    var row = el('div', 'ef-ap-row');
+
+    var numLabel = el('span', 'ef-preset-ch', (i + 1) + '.');
+    row.appendChild(numLabel);
+
+    var input = document.createElement('input');
+    input.className = 'ef-input ef-input-sm';
+    input.placeholder = "N25°30'00\" E55°30'00\"";
+    input.value = coord;
+    input.addEventListener('input', function () { boundary[i] = this.value; });
+    row.appendChild(input);
+
+    var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '✕');
+    delBtn.addEventListener('click', function () {
+      boundary.splice(i, 1);
+      _renderBoundaryList(container, boundary);
+    });
+    row.appendChild(delBtn);
+
+    container.appendChild(row);
   });
 }
 

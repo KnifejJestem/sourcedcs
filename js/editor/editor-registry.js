@@ -181,8 +181,54 @@ function deleteRegistryItem(catKey, id) {
 
   var reg = editorEnsureRegistry();
   if (reg[catKey]) delete reg[catKey][id];
+
+  // Cascade: remove all references to the deleted item in missions & global_control
+  _cascadeRegistryDelete(catKey, id);
+
   editorReRender();
   openRegistryEditor(); // refresh list
+}
+
+// ── Cascade deletion: clear references to a deleted registry item ─
+function _cascadeRegistryDelete(catKey, id) {
+  var ato = STATE.pkg && STATE.pkg.ato;
+  if (!ato) return;
+  var missions = ato.missions || [];
+
+  if (catKey === 'airfields') {
+    missions.forEach(function (m) {
+      if (m.home_base_icao === id)       m.home_base_icao = undefined;
+      if (m.deploy_location_icao === id) m.deploy_location_icao = undefined;
+      if (m.aar_location_icao === id)    m.aar_location_icao = undefined;
+    });
+  } else if (catKey === 'tankers') {
+    missions.forEach(function (m) {
+      if (m.refuel && m.refuel.tanker_id === id) delete m.refuel;
+    });
+  } else if (catKey === 'targets') {
+    missions.forEach(function (m) {
+      if (m.target && m.target.target_id === id) m.target.target_id = undefined;
+    });
+  } else if (catKey === 'control_agencies') {
+    // Clear global_control reference
+    var gc = ato.global_control;
+    if (gc && gc.agency_id === id) {
+      gc.agency_id = undefined;
+      gc.controlling_unit = undefined;
+      gc.aircraft_type = undefined;
+      gc.primary_freq_mhz = undefined;
+    }
+    // Clear per-mission control references
+    missions.forEach(function (m) {
+      if (m.control && m.control.agency_id === id) delete m.control;
+    });
+  } else if (catKey === 'reference_points') {
+    // Clear bullseye if it references the deleted point
+    var gc2 = ato.global_control;
+    if (gc2 && gc2.bullseye && typeof gc2.bullseye === 'object' && gc2.bullseye.name === id) {
+      gc2.bullseye = undefined;
+    }
+  }
 }
 
 // ── Save registry item (shared by add/edit) ──────────────────

@@ -121,6 +121,25 @@ function _openMissionForm(title, m, onSave) {
     f.ref_net = editorField(body, 'AAR NET', ref.not_earlier_than, { placeholder: '2143Z' });
     f.ref_nlt = editorField(body, 'AAR NLT', ref.not_later_than,  { placeholder: '2150Z' });
 
+    // ── STEER POINTS ────────────────────────────────────────
+    editorSectionTitle(body, 'STEER POINTS');
+    var steerPts = (m.steer_points || []).map(function (sp) {
+      return { name: sp.name || '', coords: sp.coords || '' };
+    });
+    body._steerPoints = steerPts;
+
+    var spListEl = el('div', 'ef-list-items');
+    _renderSteerPointsList(spListEl, steerPts);
+    body.appendChild(spListEl);
+
+    var addSpBtn = el('button', 'ef-btn ef-btn-add', '+ ADD STEER POINT');
+    addSpBtn.addEventListener('click', function () {
+      steerPts.push({ name: '', coords: '' });
+      body._steerPoints = steerPts;
+      _renderSteerPointsList(spListEl, steerPts);
+    });
+    body.appendChild(addSpBtn);
+
     body._msnFields = f;
     body._msnOriginal = m;
   }, function () {
@@ -185,6 +204,41 @@ function _openMissionForm(title, m, onSave) {
       m.refuel.not_later_than    = f.ref_nlt.value || undefined;
     }
 
+    // Steer points
+    var steerPts = (body._steerPoints || []).filter(function (sp) { return sp.name || sp.coords; });
+    m.steer_points = steerPts.length ? steerPts : undefined;
+
     onSave(m);
+  });
+}
+
+// ── Steer points list renderer ──────────────────────────────
+function _renderSteerPointsList(container, steerPts) {
+  container.innerHTML = '';
+  steerPts.forEach(function (sp, i) {
+    var row = el('div', 'ef-ap-row');
+
+    var nameInput = document.createElement('input');
+    nameInput.className = 'ef-input ef-input-sm';
+    nameInput.placeholder = 'Name (e.g. SP1)';
+    nameInput.value = sp.name || '';
+    nameInput.addEventListener('input', function () { sp.name = this.value; });
+    row.appendChild(nameInput);
+
+    var coordInput = document.createElement('input');
+    coordInput.className = 'ef-input ef-input-sm';
+    coordInput.placeholder = "N24°30'00\" E055°30'00\"";
+    coordInput.value = sp.coords || '';
+    coordInput.addEventListener('input', function () { sp.coords = this.value; });
+    row.appendChild(coordInput);
+
+    var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '✕');
+    delBtn.addEventListener('click', function () {
+      steerPts.splice(i, 1);
+      _renderSteerPointsList(container, steerPts);
+    });
+    row.appendChild(delBtn);
+
+    container.appendChild(row);
   });
 }

@@ -279,5 +279,5 @@
   cursor: pointer;
   margin-bottom: 8px;
 }
-.ef-btn-back:hover { color: var(--text); }
+.ef-btn-back:hover { color: var(--text-2); }
 .ef-btn-back::before { content: '← '; }

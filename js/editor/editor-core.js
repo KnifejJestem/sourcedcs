@@ -170,7 +170,13 @@ function editorReRender() {
   var source = editorCleanPkg(STATE.pkg);
   loadPackage_obj(source);
 
-  STATE.selectedIdx = savedIdx;
+  // Restore the previously selected mission detail panel
+  if (savedIdx >= 0 && STATE.pkg && STATE.pkg.ato &&
+      STATE.pkg.ato.missions && savedIdx < STATE.pkg.ato.missions.length) {
+    STATE.selectedIdx = -1; // reset so selectMission doesn't toggle-close
+    selectMission(savedIdx);
+  }
+
   showTab(savedTab);
 
   // If presenter in a session, broadcast the updated package
@@ -204,6 +210,10 @@ function editorCleanPkg(pkg) {
 function exportPackageYaml() {
   if (!STATE.pkg) { alert('No package loaded'); return; }
 
+  var fileName = prompt('Enter file name:', 'package.yaml');
+  if (!fileName) return; // cancelled
+  if (!/\.ya?ml$/i.test(fileName)) fileName += '.yaml';
+
   var clean    = editorCleanPkg(STATE.pkg);
   var yamlText = jsyaml.dump(clean, { lineWidth: -1, noRefs: true, sortKeys: false });
   var blob     = new Blob([yamlText], { type: 'text/yaml' });
@@ -211,7 +221,7 @@ function exportPackageYaml() {
 
   var a = document.createElement('a');
   a.href     = url;
-  a.download = 'package.yaml';
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
