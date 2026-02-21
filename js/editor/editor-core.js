@@ -211,6 +211,10 @@ function editorItemRow(parent, label, onEdit, onDelete) {
 function editorReRender() {
   if (!STATE.pkg) return;
 
+  // Sync shared header fields across all sections before re-render.
+  // If any section has operation or ato_day, propagate to all others.
+  _syncHeaders();
+
   var savedTab = STATE.currentTab;
   var savedIdx = STATE.selectedIdx;
 
@@ -233,6 +237,45 @@ function editorReRender() {
   if (SESSION && SESSION.role === 'presenter' && SESSION.connected && SESSION.socket) {
     var yamlText = jsyaml.dump(source, { lineWidth: -1, noRefs: true });
     SESSION.socket.emit('package-loaded', yamlText);
+  }
+}
+
+// ── Sync shared header fields ────────────────────────────────
+// Finds the most recently set operation/ato_day across all sections
+// and propagates them, so editing one view's header updates all others.
+function _syncHeaders() {
+  var pkg = STATE.pkg;
+  if (!pkg) return;
+
+  var sections = ['ato', 'aco', 'spins', 'comms', 'weather'];
+  var operation = null;
+  var atoDay    = null;
+
+  // Find the latest non-empty values across all sections
+  sections.forEach(function (key) {
+    var sec = pkg[key];
+    if (!sec) return;
+    if (sec.operation) operation = sec.operation;
+    if (sec.ato_day)   atoDay   = sec.ato_day;
+  });
+
+  // Also check header
+  if (pkg.header) {
+    if (pkg.header.operation) operation = pkg.header.operation;
+    if (pkg.header.ato_date)  atoDay   = pkg.header.ato_date;
+  }
+
+  // Propagate to all sections and header
+  if (operation || atoDay) {
+    sections.forEach(function (key) {
+      var sec = pkg[key];
+      if (!sec) return;
+      if (operation) sec.operation = operation;
+      if (atoDay)    sec.ato_day   = atoDay;
+    });
+    if (!pkg.header) pkg.header = {};
+    if (operation) pkg.header.operation = operation;
+    if (atoDay)    pkg.header.ato_date  = atoDay;
   }
 }
 

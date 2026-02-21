@@ -106,6 +106,13 @@ function _renderAcmList(container, acms) {
   });
 }
 
+function _detectGeoType(geo) {
+  if (geo.anchor_point) return 'anchor';
+  if (geo.center)       return 'circle';
+  if (geo.boundary && geo.boundary.length) return 'polygon';
+  return 'anchor'; // default
+}
+
 function _editAcm(acms, index) {
   var acm = acms[index];
 
@@ -121,30 +128,64 @@ function _editAcm(acms, index) {
     });
     if (acm.type) fType.value = acm.type;
 
-    editorSectionTitle(body, 'GEOMETRY');
+    // ── Geometry type selector ────────────────────────────────
     var geo = acm.geometry || {};
-    var fAnchor  = editorField(body, 'Anchor Point', geo.anchor_point, { placeholder: "N25°30'00\" E55°30'00\"", coordPick: true });
-    var fHeading = editorField(body, 'Heading (°)', geo.heading_deg, { type: 'number' });
-    var fLeg     = editorField(body, 'Leg Length (NM)', geo.leg_length_nm, { type: 'number' });
-    var fDir     = editorField(body, 'Direction', geo.direction, { placeholder: 'CW / CCW' });
-    var fCenter  = editorField(body, 'Center', geo.center, { placeholder: "N25°30'00\" E55°30'00\"", coordPick: true });
-    var fRadius  = editorField(body, 'Radius (NM)', geo.radius_nm, { type: 'number' });
+    var currentGeoType = _detectGeoType(geo);
 
-    // Polygon boundary points
-    editorSectionTitle(body, 'POLYGON BOUNDARY');
+    var fGeoType = editorField(body, 'Geometry Type', currentGeoType, {
+      type: 'select',
+      options: [
+        { value: 'anchor',  label: 'Anchor (Racetrack)' },
+        { value: 'circle',  label: 'Circle (Center + Radius)' },
+        { value: 'polygon', label: 'Polygon (Boundary Points)' },
+      ],
+    });
+    fGeoType.value = currentGeoType;
+
+    // ── Anchor fields ─────────────────────────────────────────
+    var anchorSection = el('div', 'ef-geo-section');
+    editorSectionTitle(anchorSection, 'ANCHOR GEOMETRY');
+    var fAnchor  = editorField(anchorSection, 'Anchor Point', geo.anchor_point, { placeholder: "N25°30'00\" E55°30'00\"", coordPick: true });
+    var fHeading = editorField(anchorSection, 'Heading (°)', geo.heading_deg, { type: 'number' });
+    var fLeg     = editorField(anchorSection, 'Leg Length (NM)', geo.leg_length_nm, { type: 'number' });
+    var fDir     = editorField(anchorSection, 'Direction', geo.direction, { placeholder: 'CW / CCW' });
+    body.appendChild(anchorSection);
+
+    // ── Circle fields ─────────────────────────────────────────
+    var circleSection = el('div', 'ef-geo-section');
+    editorSectionTitle(circleSection, 'CIRCLE GEOMETRY');
+    var fCenter  = editorField(circleSection, 'Center', geo.center, { placeholder: "N25°30'00\" E55°30'00\"", coordPick: true });
+    var fRadius  = editorField(circleSection, 'Radius (NM)', geo.radius_nm, { type: 'number' });
+    body.appendChild(circleSection);
+
+    // ── Polygon fields ────────────────────────────────────────
+    var polygonSection = el('div', 'ef-geo-section');
+    editorSectionTitle(polygonSection, 'POLYGON BOUNDARY');
     var boundary = (geo.boundary || []).map(function (c) { return String(c); });
     body._acmBoundary = boundary;
     var bListEl = el('div', 'ef-list-items');
     _renderBoundaryList(bListEl, boundary);
-    body.appendChild(bListEl);
+    polygonSection.appendChild(bListEl);
 
     var addPtBtn = el('button', 'ef-btn ef-btn-add', '+ ADD POINT');
     addPtBtn.addEventListener('click', function () {
       boundary.push('');
       _renderBoundaryList(bListEl, boundary);
     });
-    body.appendChild(addPtBtn);
+    polygonSection.appendChild(addPtBtn);
+    body.appendChild(polygonSection);
 
+    // ── Show/hide geometry sections based on selection ─────────
+    function updateGeoVisibility() {
+      var sel = fGeoType.value;
+      anchorSection.style.display  = sel === 'anchor'  ? '' : 'none';
+      circleSection.style.display  = sel === 'circle'  ? '' : 'none';
+      polygonSection.style.display = sel === 'polygon' ? '' : 'none';
+    }
+    fGeoType.addEventListener('change', updateGeoVisibility);
+    updateGeoVisibility();
+
+    // ── Parameters ────────────────────────────────────────────
     editorSectionTitle(body, 'PARAMETERS');
     var fMsns    = editorField(body, 'Missions (comma-sep)', (acm.missions || []).join(', '));
     var fAltLo   = editorField(body, 'Alt Lower', acm.alt_lower, { placeholder: 'FL200' });
@@ -156,7 +197,7 @@ function _editAcm(acms, index) {
     var fNotes   = editorField(body, 'Notes', acm.notes, { type: 'textarea', rows: 2 });
 
     body._acmFields = {
-      name: fName, type: fType,
+      name: fName, type: fType, geoType: fGeoType,
       anchor: fAnchor, heading: fHeading, leg: fLeg, dir: fDir,
       center: fCenter, radius: fRadius,
       msns: fMsns, altLo: fAltLo, altHi: fAltHi,
@@ -173,16 +214,21 @@ function _editAcm(acms, index) {
     acm.name = f.name.value || undefined;
     acm.type = f.type.value || undefined;
 
+    // Only save geometry for the selected type
     var geo = {};
-    if (f.anchor.value) geo.anchor_point = f.anchor.value;
-    if (f.heading.value) geo.heading_deg = parseFloat(f.heading.value);
-    if (f.leg.value) geo.leg_length_nm = parseFloat(f.leg.value);
-    if (f.dir.value) geo.direction = f.dir.value;
-    if (f.center.value) geo.center = f.center.value;
-    if (f.radius.value) geo.radius_nm = parseFloat(f.radius.value);
-    // Collect polygon boundary
-    var boundary = (body._acmBoundary || []).filter(function (c) { return c.trim(); });
-    if (boundary.length) geo.boundary = boundary;
+    var geoType = f.geoType.value;
+    if (geoType === 'anchor') {
+      if (f.anchor.value) geo.anchor_point = f.anchor.value;
+      if (f.heading.value) geo.heading_deg = parseFloat(f.heading.value);
+      if (f.leg.value) geo.leg_length_nm = parseFloat(f.leg.value);
+      if (f.dir.value) geo.direction = f.dir.value;
+    } else if (geoType === 'circle') {
+      if (f.center.value) geo.center = f.center.value;
+      if (f.radius.value) geo.radius_nm = parseFloat(f.radius.value);
+    } else if (geoType === 'polygon') {
+      var boundary = (body._acmBoundary || []).filter(function (c) { return c.trim(); });
+      if (boundary.length) geo.boundary = boundary;
+    }
     acm.geometry = geo;
 
     var msnsRaw = f.msns.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -217,6 +263,14 @@ function _renderBoundaryList(container, boundary) {
     input.value = coord;
     input.addEventListener('input', function () { boundary[i] = this.value; });
     row.appendChild(input);
+
+    var pickBtn = el('button', 'ef-btn ef-btn-sm ef-btn-pick', '📍');
+    pickBtn.title = 'Pick from map';
+    pickBtn.type = 'button';
+    pickBtn.addEventListener('click', function () {
+      _startCoordPick(input);
+    });
+    row.appendChild(pickBtn);
 
     var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '✕');
     delBtn.addEventListener('click', function () {

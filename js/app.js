@@ -380,9 +380,9 @@ function loadPackage_obj(data) {
 
   // ── Resolve registry tankers into ato.tankers ───────────
   if (pkg.registry?.tankers && pkg.ato) {
-    if (!pkg.ato.tankers) pkg.ato.tankers = [];
-    // Build tanker list from registry if ATO has no tankers
-    if (pkg.ato.tankers.length === 0) {
+    if (!pkg.ato.tankers || pkg.ato.tankers.length === 0) {
+      // Build tanker list from registry
+      pkg.ato.tankers = [];
       Object.entries(pkg.registry.tankers).forEach(([id, t]) => {
         pkg.ato.tankers.push({ id, ...t });
       });
@@ -401,12 +401,11 @@ function loadPackage_obj(data) {
 
   // ── Resolve registry targets into ato.targets ───────────
   if (pkg.registry?.targets && pkg.ato) {
-    if (!pkg.ato.targets) pkg.ato.targets = [];
-    if (pkg.ato.targets.length === 0) {
-      Object.entries(pkg.registry.targets).forEach(([id, t]) => {
-        pkg.ato.targets.push({ id, ...t });
-      });
-    }
+    // Always rebuild from registry so edits are reflected
+    pkg.ato.targets = [];
+    Object.entries(pkg.registry.targets).forEach(([id, t]) => {
+      pkg.ato.targets.push({ id, ...t });
+    });
   }
 
   // ── Resolve registry reference_points: bullseye + marshal_points ─
@@ -420,15 +419,13 @@ function loadPackage_obj(data) {
       }
     }
 
-    // Build marshal_points list from reference_points with type 'marshal'
-    if (!pkg.ato.marshal_points) pkg.ato.marshal_points = [];
-    if (pkg.ato.marshal_points.length === 0) {
-      Object.entries(pkg.registry.reference_points).forEach(([id, rp]) => {
-        if (rp.type === 'marshal') {
-          pkg.ato.marshal_points.push({ id, name: rp.name, coords: rp.coords, altitude: rp.altitude });
-        }
-      });
-    }
+    // Always rebuild marshal_points from registry so edits are reflected
+    pkg.ato.marshal_points = [];
+    Object.entries(pkg.registry.reference_points).forEach(([id, rp]) => {
+      if (rp.type === 'marshal') {
+        pkg.ato.marshal_points.push({ id, name: rp.name, coords: rp.coords, altitude: rp.altitude });
+      }
+    });
   }
 
   // ── Resolve registry control_agencies into global_control + mission control ─
