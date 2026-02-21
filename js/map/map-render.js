@@ -307,10 +307,12 @@ function drawMap(container, points, routes, geoData, airspaces) {
   container.appendChild(svg);
 
   // Track mousedown position so we can distinguish a clean click from a drag.
-  // Only fire coord pick if the mouse didn't move significantly (< 5px).
+  // Only fire coord pick if the mouse didn't move significantly.
   var _pickStart = null;
+  var PICK_DRAG_THRESHOLD = 5; // pixels
   svg.addEventListener('mousedown', (e) => {
     if (e.button === 0) _pickStart = { x: e.clientX, y: e.clientY };
+    else _pickStart = null;
   });
 
   // Close popup when clicking the map background, or handle coord pick
@@ -321,7 +323,8 @@ function drawMap(container, points, routes, geoData, airspaces) {
       if (_pickStart) {
         var dx = e.clientX - _pickStart.x;
         var dy = e.clientY - _pickStart.y;
-        if (dx * dx + dy * dy > 25) { _pickStart = null; return; }
+        var threshold = PICK_DRAG_THRESHOLD * PICK_DRAG_THRESHOLD;
+        if (dx * dx + dy * dy > threshold) { _pickStart = null; return; }
       }
       _pickStart = null;
       var pt = clientToContent(e.clientX, e.clientY);
