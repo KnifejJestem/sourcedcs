@@ -83,7 +83,7 @@ registry:
       elevation: 200ft
       aim_points:
       - id: SAM-2-PRIMARY
-        name: SAM-1
+        name: SAM-2 Primary
         coords: N26°20'00" E056°15'00"
     OBJ-A:
       name: Objective Alpha
