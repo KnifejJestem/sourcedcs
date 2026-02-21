@@ -259,7 +259,7 @@ function setTimeMode(m) {
   document.querySelectorAll('[data-time]').forEach(b => {
     b.classList.toggle('active', b.dataset.time === m);
   });
-  if (STATE.pkg?.ato)     renderATO(STATE.pkg.ato);
+  if (STATE.pkg?.ato)     { renderHeader(STATE.pkg.ato); renderATO(STATE.pkg.ato); }
   if (STATE.pkg?.aco)     renderACO(STATE.pkg.aco);
   if (STATE.pkg?.spins)   renderSPINS(STATE.pkg.spins);
   if (STATE.pkg?.weather) renderWEATHER(STATE.pkg.weather);

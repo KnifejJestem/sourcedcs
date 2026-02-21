@@ -138,8 +138,18 @@ and map routes.
 | `location` | string | Target area name |
 | `mission_type_override` | string | Optional sub-type shown alongside `mission_type` |
 | `altitude` | string | Target altitude reference (e.g. `E73FT`, `FL200`) |
-| `not_earlier_than` | time string | Mission window open (NET) |
-| `not_later_than` | time string | Mission window close (NLT) |
+| `not_earlier_than` | time string | Legacy mission window open (NET) — used when neither `tot_*` nor `tos_*` is set |
+| `not_later_than` | time string | Legacy mission window close (NLT) |
+| `tot_net` | time string | Time on Target — NET (strike/BAI missions: when weapons should be on target) |
+| `tot_nlt` | time string | Time on Target — NLT |
+| `tos_net` | time string | Time on Station — NET (CAP/CAS missions: when aircraft should be on station) |
+| `tos_nlt` | time string | Time on Station — NLT |
+
+**Timing guidance:**
+- For **strike/BAI/SEAD** missions, use `tot_net` / `tot_nlt` (Time on Target — when weapons should impact).
+- For **CAP/CAS/orbit** missions, use `tos_net` / `tos_nlt` (Time on Station — when to be on station).
+- Both can be specified for a single mission (e.g. a SEAD flight that must be on station before a strike TOT).
+- The legacy `not_earlier_than` / `not_later_than` fields are still accepted for backward compatibility.
 
 #### `target.aim_points:` (list)
 
@@ -339,16 +349,15 @@ automatically reformatted when the coord display mode changes.
 
 ### `uhf_presets:` and `vhf_presets:`
 
-Both use the same format: a mapping from channel number to preset data.  Include
-SPARE entries (with `freq_mhz: null`) to show which channel slots are unused —
-this makes the channel plan immediately readable.
+Both use the same format: a mapping from channel number to preset data.  Only
+list channels that have assigned frequencies — the viewer automatically fills
+channels 1–20 with SPARE entries for any channel not defined in the YAML.
 
 ```yaml
 uhf_presets:
   1:  { callsign: GUARD,       freq_mhz: 243.000, role: Emergency }
   2:  { callsign: PACKAGE,     freq_mhz: 260.000, role: Package primary }
   3:  { callsign: INTRAFLIGHT, freq_mhz: 261.500, role: Intraflight }
-  4:  { callsign: SPARE,       freq_mhz: null,    role: null }
 ```
 
 Channel keys are integers.  Channels are sorted numerically, so any ordering
