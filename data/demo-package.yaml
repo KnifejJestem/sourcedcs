@@ -377,3 +377,104 @@ comms:
     18: {callsign: SPARE,    freq_mhz: null,     role: null}
     19: {callsign: SPARE,    freq_mhz: null,     role: null}
     20: {callsign: SPARE,    freq_mhz: null,     role: null}
+weather:
+  issued: '2026-11-01 1800Z'
+  valid_from: '2026-11-01 2000Z'
+  valid_to: '2026-11-02 0600Z'
+  operation: CLEAR SKY
+  observations:
+  - station: OMAM
+    time: '1850Z'
+    wind:
+      direction_deg: 310
+      speed_kt: 12
+      gust_kt: 18
+    visibility_m: 10000
+    phenomena: []
+    clouds:
+    - coverage: FEW
+      base_ft: 4000
+    - coverage: SCT
+      base_ft: 8000
+    temperature_c: 28
+    dewpoint_c: 8
+    qnh_hpa: 1013
+    remarks: Visibility excellent. Conditions favorable for all planned operations.
+  - station: OMSJ
+    time: '1850Z'
+    wind:
+      direction_deg: 280
+      speed_kt: 8
+    visibility_m: 9000
+    phenomena: []
+    clouds:
+    - coverage: SCT
+      base_ft: 3500
+    temperature_c: 30
+    dewpoint_c: 12
+    qnh_hpa: 1012
+  - station: OMRK
+    time: '1853Z'
+    wind:
+      direction_deg: 340
+      speed_kt: 6
+    visibility_m: 10000
+    phenomena: []
+    clouds:
+    - coverage: SKC
+      base_ft: null
+    temperature_c: 26
+    dewpoint_c: 5
+    qnh_hpa: 1014
+  forecasts:
+  - station: OMAM
+    issued: '1800Z'
+    valid_from: '2000Z'
+    valid_to: '0600Z'
+    conditions:
+      wind:
+        direction_deg: 300
+        speed_kt: 10
+      visibility_m: 10000
+      clouds:
+      - coverage: FEW
+        base_ft: 4000
+    changes:
+    - type: BECMG
+      from: '2200Z'
+      to: '2400Z'
+      wind:
+        direction_deg: 270
+        speed_kt: 8
+      visibility_m: 10000
+    - type: TEMPO
+      from: '0000Z'
+      to: '0200Z'
+      phenomena: [TS]
+      clouds:
+      - coverage: BKN
+        base_ft: 2000
+      visibility_m: 4000
+      remarks: Isolated thunderstorm activity possible after midnight.
+  - station: OMRK
+    issued: '1800Z'
+    valid_from: '2000Z'
+    valid_to: '0600Z'
+    conditions:
+      wind:
+        direction_deg: 350
+        speed_kt: 5
+      visibility_m: 10000
+      clouds:
+      - coverage: SKC
+        base_ft: null
+  mission_wx:
+  - mission_ref: MSN3266
+    notes: Clear at CAP station. Few clouds at 4000 ft en-route, no impact.
+  - mission_ref: MSN3267
+    notes: Target area clear. No weather restrictions.
+  - mission_ref: MSN3268
+    notes: Coastal haze possible below 1000 ft near Jask. Maintain planned altitude.
+  - mission_ref: AA7511
+    notes: 'VFR throughout. Watch for dust in low-altitude transit corridor.'
+    style: amber

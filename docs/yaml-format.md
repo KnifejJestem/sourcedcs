@@ -1,14 +1,15 @@
 # ATO BRIEF — Package File Format
 
-A **package file** is a single YAML file that contains one or more of the four
+A **package file** is a single YAML file that contains one or more of the five
 top-level sections below.  Any subset is valid; the viewer will enable only the
 tabs for which data is present.
 
 ```yaml
-ato:   { ... }   # Air Tasking Order (drives ATO, Timeline, and Map tabs)
-aco:   { ... }   # Airspace Control Order (ACO tab)
-spins: { ... }   # Special Instructions (SPINS tab)
-comms: { ... }   # Frequency Preset Table (COMMS tab)
+ato:     { ... }   # Air Tasking Order (drives ATO, Timeline, and Map tabs)
+aco:     { ... }   # Airspace Control Order (ACO tab)
+spins:   { ... }   # Special Instructions (SPINS tab)
+comms:   { ... }   # Frequency Preset Table (COMMS tab)
+weather: { ... }   # Mission weather forecast (WX tab)
 ```
 
 ---
@@ -437,3 +438,177 @@ Groups are concatenated with no delimiter: `3X381X114` = `3×GBU-38` and
 | `61` | LAU-61 (19× Hydra 70 mm) | Rockets |
 | `68` | LAU-68 (7× Hydra 70 mm) | Rockets |
 | `131` | LAU-131 (7× Hydra 70 mm) | Rockets |
+
+---
+
+## `weather:` — Mission Weather Forecast
+
+The weather section is inspired by the real-world **METAR** (current conditions)
+and **TAF** (terminal aerodrome forecast) formats.  All values are decoded and
+displayed in plain English on the WX tab.
+
+### Top-level fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `issued` | string | When this weather package was issued (e.g. `'2026-11-01 1800Z'`) |
+| `valid_from` | string | Start of the valid period |
+| `valid_to` | string | End of the valid period |
+| `operation` | string | Operation name (display only) |
+
+### `observations:` (list) — METAR-style
+
+One entry per airfield.  Represents the current conditions observed at that
+station at the time of the brief.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `station` | string | ICAO station identifier |
+| `time` | time string | Observation time (e.g. `'1850Z'`) |
+| `wind.direction_deg` | number | Mean wind direction in degrees true |
+| `wind.speed_kt` | number | Mean wind speed in knots |
+| `wind.gust_kt` | number | Gust speed in knots (optional) |
+| `wind.variable` | boolean | Set `true` when direction is variable |
+| `visibility_m` | number or string | Prevailing visibility in metres.  Use `'CAVOK'` for Ceiling and Visibility OK (≥10 km, no significant cloud, no weather). |
+| `phenomena` | list of strings | Present weather codes (METAR-style): `RA`, `TS`, `FG`, `BR`, `TSRA`, `FZRA`, etc. |
+| `clouds` | list | Cloud layers — see below |
+| `temperature_c` | number | Air temperature in °C |
+| `dewpoint_c` | number | Dewpoint in °C |
+| `qnh_hpa` | number | Altimeter setting in hPa (also shown in inHg) |
+| `remarks` | string | Free-text remarks |
+
+#### Cloud layer fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `coverage` | string | `SKC` / `CLR` / `NSC` / `FEW` / `SCT` / `BKN` / `OVC` / `VV` |
+| `base_ft` | number | Cloud base in feet AGL (omit or `null` for SKC) |
+| `cb` | boolean | Cumulonimbus present |
+| `tcu` | boolean | Towering cumulus present |
+
+#### Present weather codes
+
+Common METAR weather phenomenon codes accepted in `phenomena`:
+
+| Code | Meaning |
+|------|---------|
+| `RA` | Rain |
+| `SN` | Snow |
+| `TS` | Thunderstorm |
+| `TSRA` | Thunderstorm with Rain |
+| `FG` | Fog |
+| `BR` | Mist |
+| `HZ` | Haze |
+| `DU` | Dust |
+| `FZRA` | Freezing Rain |
+| `SHRA` | Rain Showers |
+| `SHSN` | Snow Showers |
+| `SQ` | Squall |
+
+#### Flight category (automatic)
+
+The viewer automatically computes and color-codes the flight category from
+the ceiling and visibility:
+
+| Category | Condition |
+|----------|-----------|
+| **VFR** (green) | Ceiling ≥ 3,000 ft and visibility ≥ 5 SM |
+| **MVFR** (blue) | Ceiling 1,000–2,999 ft or visibility 3–4 SM |
+| **IFR** (red) | Ceiling 500–999 ft or visibility 1–2 SM |
+| **LIFR** (purple) | Ceiling < 500 ft or visibility < 1 SM |
+
+### `forecasts:` (list) — TAF-style
+
+One entry per airfield.  Provides a terminal aerodrome forecast with base
+conditions and optional change groups.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `station` | string | ICAO station identifier |
+| `issued` | time string | When the forecast was issued |
+| `valid_from` | time string | Forecast validity start |
+| `valid_to` | time string | Forecast validity end |
+| `conditions` | object | Base (prevailing) conditions — same fields as an observation (wind, visibility_m, phenomena, clouds) |
+| `changes` | list | Change groups — see below |
+
+#### Change group fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | `BECMG` / `TEMPO` / `FM` / `PROB30` / `PROB40` |
+| `from` | time string | Change group start time |
+| `to` | time string | Change group end time |
+| `wind` | object | Wind during this group |
+| `visibility_m` | number | Visibility during this group |
+| `phenomena` | list | Weather phenomena during this group |
+| `clouds` | list | Cloud layers during this group |
+| `remarks` | string | Free-text note for this group |
+
+### `mission_wx:` (list) — Mission-specific notes
+
+Plain-English weather notes linked to individual missions by mission number.
+
+```yaml
+mission_wx:
+  - mission_ref: MSN3266
+    notes: Clear at CAP station. Few clouds at 4000 ft en-route, no impact.
+  - mission_ref: AA7511
+    notes: 'VFR throughout. Watch for dust in low-altitude transit corridor.'
+    style: amber   # optional: amber / red / green / blue
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mission_ref` | string | Mission number (cross-reference to ATO) |
+| `notes` | string | Free-text weather note |
+| `style` | string | Optional color: `amber` / `red` / `green` / `blue` |
+
+### Full example
+
+```yaml
+weather:
+  issued: '2026-11-01 1800Z'
+  valid_from: '2026-11-01 2000Z'
+  valid_to: '2026-11-02 0600Z'
+  observations:
+    - station: OMAM
+      time: '1850Z'
+      wind:
+        direction_deg: 310
+        speed_kt: 12
+        gust_kt: 18
+      visibility_m: 10000
+      phenomena: []
+      clouds:
+        - { coverage: FEW, base_ft: 4000 }
+        - { coverage: SCT, base_ft: 8000 }
+      temperature_c: 28
+      dewpoint_c: 8
+      qnh_hpa: 1013
+      remarks: Conditions favorable for all planned operations.
+  forecasts:
+    - station: OMAM
+      issued: '1800Z'
+      valid_from: '2000Z'
+      valid_to: '0600Z'
+      conditions:
+        wind: { direction_deg: 300, speed_kt: 10 }
+        visibility_m: 10000
+        clouds:
+          - { coverage: FEW, base_ft: 4000 }
+      changes:
+        - type: TEMPO
+          from: '0000Z'
+          to: '0200Z'
+          phenomena: [TS]
+          clouds:
+            - { coverage: BKN, base_ft: 2000 }
+          visibility_m: 4000
+          remarks: Isolated thunderstorm activity possible after midnight.
+  mission_wx:
+    - mission_ref: MSN3266
+      notes: Clear at CAP station. No impact.
+    - mission_ref: MSN3268
+      notes: Coastal haze possible below 1000 ft. Maintain planned altitude.
+      style: amber
+```
