@@ -45,8 +45,7 @@ app.get('/',  (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.use('/css',  express.static(path.join(__dirname, 'css')));
 app.use('/js',   express.static(path.join(__dirname, 'js')));
 app.use('/data', express.static(path.join(__dirname, 'data')));
-app.get('/vendor/js-yaml.min.js', (_req, res) =>
-  res.sendFile(path.join(__dirname, 'node_modules', 'js-yaml', 'dist', 'js-yaml.min.js')));
+app.use('/vendor', express.static(path.join(__dirname, 'node_modules', 'js-yaml', 'dist')));
 
 // ── Session store ────────────────────────────────────────────
 // Each session represents a briefing room that one presenter
