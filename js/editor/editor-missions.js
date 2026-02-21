@@ -61,155 +61,175 @@ function _openMissionForm(title, m, onSave) {
   openEditorDialog(title, function (body) {
     var f = {};
 
-    // ── IDENTIFICATION ───────────────────────────────────────
-    editorSectionTitle(body, 'IDENTIFICATION');
-    var msnNum = (m.mission_number || '').replace(/^MSN/i, '');
-    f.mission_number = editorField(body, 'Mission Number', msnNum, { placeholder: 'e.g. 3266' });
-    f.callsign       = editorField(body, 'Callsign',       m.callsign,       { placeholder: 'e.g. FALCON5', required: true });
-    f.mission_type   = editorField(body, 'Mission Type',    m.mission_type,   {
-      type: 'select',
-      options: ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'OTHER'],
-      required: true,
-    });
-    if (m.mission_type) f.mission_type.value = m.mission_type;
-    f.unit             = editorField(body, 'Unit',              m.unit, { placeholder: 'e.g. 510vFS' });
-    var afOpts = _registryOptions('airfields', function (id, af) { return id + (af.name ? ' — ' + af.name : ''); });
-    f.home_base_icao   = editorField(body, 'Home Base', m.home_base_icao, { type: 'select', options: afOpts });
-    f.deploy_location  = editorField(body, 'Deploy Location', m.deploy_location_icao, { type: 'select', options: afOpts });
-    f.aar_location     = editorField(body, 'Recovery Location', m.aar_location_icao, { type: 'select', options: afOpts });
-
-    // ── AIRCRAFT ─────────────────────────────────────────────
-    editorSectionTitle(body, 'AIRCRAFT');
-    var ac = m.aircraft || {};
-    f.ac_count  = editorField(body, 'Count',   ac.count,  { type: 'number', placeholder: '2', required: true });
-    f.ac_type   = editorField(body, 'Type',    ac.type,   { placeholder: 'e.g. F16C', required: true });
-    f.ac_loadout = editorField(body, 'Loadout', ac.loadout, { placeholder: 'e.g. 501+' });
-
-    // ── TIMING ───────────────────────────────────────────────
-    editorSectionTitle(body, 'TIMING');
-    f.takeoff_time  = editorField(body, 'Takeoff Time',  m.takeoff_time,  { placeholder: '2000' });
-    f.recovery_time = editorField(body, 'Recovery Time', m.recovery_time, { placeholder: '2300' });
-    f.vul_start     = editorField(body, 'VUL Start',     m.vul_start,     { placeholder: '2040' });
-    f.vul_end       = editorField(body, 'VUL End',       m.vul_end,       { placeholder: '2115' });
-
-    // ── TARGET ───────────────────────────────────────────────
-    editorSectionTitle(body, 'TARGET');
-    var tgt = m.target || {};
-    f.tgt_location = editorField(body, 'Location',  tgt.location,   { placeholder: 'e.g. KHASAB' });
-    f.tgt_altitude = editorField(body, 'Altitude',  tgt.altitude,   { placeholder: 'e.g. E73FT' });
-    var tgtOpts = _registryOptions('targets', function (id, t) { return id + (t.name ? ' — ' + t.name : ''); });
-    f.tgt_target_id = editorField(body, 'Target', tgt.target_id, { type: 'select', options: tgtOpts });
-    f.tgt_mission_type_override = editorField(body, 'Mission Type Override', tgt.mission_type_override, { placeholder: 'e.g. AIRDEF' });
-    f.tgt_tot_net  = editorField(body, 'TOT NET',   tgt.tot_net,    { placeholder: '2046' });
-    f.tgt_tot_nlt  = editorField(body, 'TOT NLT',   tgt.tot_nlt,    { placeholder: '2111' });
-    f.tgt_tos      = editorField(body, 'TOS',       tgt.tos,        { placeholder: '2040' });
-    f.tgt_toffs    = editorField(body, 'TOFFS',     tgt.toffs,      { placeholder: '2230' });
-
-    // ── CONTROL ──────────────────────────────────────────────
-    editorSectionTitle(body, 'CONTROL');
-    var ctrl = m.control || {};
-    var ctrlOpts = _registryOptions('control_agencies', function (id, ag) { return id + (ag.callsign ? ' — ' + ag.callsign : ''); });
-    f.ctrl_agency_id = editorField(body, 'Control Agency', ctrl.agency_id, { type: 'select', options: ctrlOpts });
-    f.ctrl_primary   = editorField(body, 'Primary Freq (MHz)', ctrl.primary_freq_mhz, { placeholder: '260.0' });
-    f.ctrl_secondary = editorField(body, 'Secondary Freq (MHz)', ctrl.secondary_freq_mhz, { placeholder: '134.0' });
-
-    // ── REFUEL ───────────────────────────────────────────────
-    editorSectionTitle(body, 'REFUEL');
-    var ref = m.refuel || {};
-    var tnkOpts = _registryOptions('tankers', function (id, t) { return id + (t.callsign ? ' — ' + t.callsign : ''); });
-    f.ref_tanker_id = editorField(body, 'Tanker', ref.tanker_id, { type: 'select', options: tnkOpts });
-    f.ref_net = editorField(body, 'AAR NET', ref.not_earlier_than, { placeholder: '2143' });
-    f.ref_nlt = editorField(body, 'AAR NLT', ref.not_later_than,  { placeholder: '2150' });
-
-    // ── STEER POINTS ────────────────────────────────────────
-    editorSectionTitle(body, 'STEER POINTS');
-    var steerPts = (m.steer_points || []).map(function (sp) {
-      return { name: sp.name || '', coords: sp.coords || '' };
-    });
-    body._steerPoints = steerPts;
-
-    var spListEl = el('div', 'ef-list-items');
-    _renderSteerPointsList(spListEl, steerPts);
-    body.appendChild(spListEl);
-
-    var addSpBtn = el('button', 'ef-btn ef-btn-add', '+ ADD STEER POINT');
-    addSpBtn.addEventListener('click', function () {
-      steerPts.push({ name: '', coords: '' });
-      body._steerPoints = steerPts;
-      _renderSteerPointsList(spListEl, steerPts);
-    });
-    body.appendChild(addSpBtn);
+    _buildIdentificationSection(body, m, f);
+    _buildAircraftSection(body, m, f);
+    _buildTimingSection(body, m, f);
+    _buildTargetSection(body, m, f);
+    _buildControlSection(body, m, f);
+    _buildRefuelSection(body, m, f);
+    _buildSteerPointsSection(body, m);
 
     body._msnFields = f;
     body._msnOriginal = m;
   }, function () {
-    var body = document.getElementById('editorBody');
-    var f = body._msnFields;
-    var m = Object.assign({}, body._msnOriginal);
-
-    // Identification
-    var rawMsn = (f.mission_number.value || '').trim();
-    m.mission_number = rawMsn ? 'MSN' + rawMsn.replace(/^MSN/i, '') : undefined;
-    m.callsign             = f.callsign.value || undefined;
-    m.mission_type         = f.mission_type.value || undefined;
-    m.unit                 = f.unit.value || undefined;
-    m.home_base_icao       = f.home_base_icao.value || undefined;
-    m.deploy_location_icao = f.deploy_location.value || undefined;
-    m.aar_location_icao    = f.aar_location.value || undefined;
-
-    // Aircraft
-    var acCount = parseInt(f.ac_count.value);
-    if (f.ac_type.value || !isNaN(acCount)) {
-      m.aircraft = {
-        count:   isNaN(acCount) ? undefined : acCount,
-        type:    f.ac_type.value || undefined,
-        loadout: f.ac_loadout.value || undefined,
-      };
-    }
-
-    // Timing
-    m.takeoff_time  = f.takeoff_time.value || undefined;
-    m.recovery_time = f.recovery_time.value || undefined;
-    m.vul_start     = f.vul_start.value || undefined;
-    m.vul_end       = f.vul_end.value || undefined;
-
-    // Target
-    var hasTgt = f.tgt_location.value || f.tgt_target_id.value ||
-                 f.tgt_tot_net.value || f.tgt_tos.value;
-    if (hasTgt) {
-      m.target = m.target || {};
-      m.target.location              = f.tgt_location.value || undefined;
-      m.target.altitude              = f.tgt_altitude.value || undefined;
-      m.target.target_id             = f.tgt_target_id.value || undefined;
-      m.target.mission_type_override = f.tgt_mission_type_override.value || undefined;
-      m.target.tot_net               = f.tgt_tot_net.value || undefined;
-      m.target.tot_nlt               = f.tgt_tot_nlt.value || undefined;
-      m.target.tos                   = f.tgt_tos.value || undefined;
-      m.target.toffs                 = f.tgt_toffs.value || undefined;
-    }
-
-    // Control
-    if (f.ctrl_agency_id.value || f.ctrl_primary.value) {
-      m.control = m.control || {};
-      m.control.agency_id          = f.ctrl_agency_id.value || undefined;
-      m.control.primary_freq_mhz   = f.ctrl_primary.value || undefined;
-      m.control.secondary_freq_mhz = f.ctrl_secondary.value || undefined;
-    }
-
-    // Refuel
-    if (f.ref_tanker_id.value) {
-      m.refuel = m.refuel || {};
-      m.refuel.tanker_id         = f.ref_tanker_id.value || undefined;
-      m.refuel.not_earlier_than  = f.ref_net.value || undefined;
-      m.refuel.not_later_than    = f.ref_nlt.value || undefined;
-    }
-
-    // Steer points (require both name and coords)
-    var steerPts = (body._steerPoints || []).filter(function (sp) { return sp.name && sp.coords; });
-    m.steer_points = steerPts.length ? steerPts : undefined;
-
-    onSave(m);
+    _saveMissionFromForm(onSave);
   });
+}
+
+function _buildIdentificationSection(body, m, f) {
+  editorSectionTitle(body, 'IDENTIFICATION');
+  var msnNum = (m.mission_number || '').replace(/^MSN/i, '');
+  f.mission_number = editorField(body, 'Mission Number', msnNum, { placeholder: 'e.g. 3266' });
+  f.callsign       = editorField(body, 'Callsign',       m.callsign,       { placeholder: 'e.g. FALCON5', required: true });
+  f.mission_type   = editorField(body, 'Mission Type',    m.mission_type,   {
+    type: 'select',
+    options: ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'OTHER'],
+    required: true,
+  });
+  if (m.mission_type) f.mission_type.value = m.mission_type;
+  f.unit             = editorField(body, 'Unit',              m.unit, { placeholder: 'e.g. 510vFS' });
+  var afOpts = _registryOptions('airfields', function (id, af) { return id + (af.name ? ' — ' + af.name : ''); });
+  f.home_base_icao   = editorField(body, 'Home Base', m.home_base_icao, { type: 'select', options: afOpts });
+  f.deploy_location  = editorField(body, 'Deploy Location', m.deploy_location_icao, { type: 'select', options: afOpts });
+  f.aar_location     = editorField(body, 'Recovery Location', m.aar_location_icao, { type: 'select', options: afOpts });
+}
+
+function _buildAircraftSection(body, m, f) {
+  editorSectionTitle(body, 'AIRCRAFT');
+  var ac = m.aircraft || {};
+  f.ac_count  = editorField(body, 'Count',   ac.count,  { type: 'number', placeholder: '2', required: true });
+  f.ac_type   = editorField(body, 'Type',    ac.type,   { placeholder: 'e.g. F16C', required: true });
+  f.ac_loadout = editorField(body, 'Loadout', ac.loadout, { placeholder: 'e.g. 501+' });
+}
+
+function _buildTimingSection(body, m, f) {
+  editorSectionTitle(body, 'TIMING');
+  f.takeoff_time  = editorField(body, 'Takeoff Time',  m.takeoff_time,  { placeholder: '2000' });
+  f.recovery_time = editorField(body, 'Recovery Time', m.recovery_time, { placeholder: '2300' });
+  f.vul_start     = editorField(body, 'VUL Start',     m.vul_start,     { placeholder: '2040' });
+  f.vul_end       = editorField(body, 'VUL End',       m.vul_end,       { placeholder: '2115' });
+}
+
+function _buildTargetSection(body, m, f) {
+  editorSectionTitle(body, 'TARGET');
+  var tgt = m.target || {};
+  f.tgt_location = editorField(body, 'Location',  tgt.location,   { placeholder: 'e.g. KHASAB' });
+  f.tgt_altitude = editorField(body, 'Altitude',  tgt.altitude,   { placeholder: 'e.g. E73FT' });
+  var tgtOpts = _registryOptions('targets', function (id, t) { return id + (t.name ? ' — ' + t.name : ''); });
+  f.tgt_target_id = editorField(body, 'Target', tgt.target_id, { type: 'select', options: tgtOpts });
+  f.tgt_mission_type_override = editorField(body, 'Mission Type Override', tgt.mission_type_override, { placeholder: 'e.g. AIRDEF' });
+  f.tgt_tot_net  = editorField(body, 'TOT NET',   tgt.tot_net,    { placeholder: '2046' });
+  f.tgt_tot_nlt  = editorField(body, 'TOT NLT',   tgt.tot_nlt,    { placeholder: '2111' });
+  f.tgt_tos      = editorField(body, 'TOS',       tgt.tos,        { placeholder: '2040' });
+  f.tgt_toffs    = editorField(body, 'TOFFS',     tgt.toffs,      { placeholder: '2230' });
+}
+
+function _buildControlSection(body, m, f) {
+  editorSectionTitle(body, 'CONTROL');
+  var ctrl = m.control || {};
+  var ctrlOpts = _registryOptions('control_agencies', function (id, ag) { return id + (ag.callsign ? ' — ' + ag.callsign : ''); });
+  f.ctrl_agency_id = editorField(body, 'Control Agency', ctrl.agency_id, { type: 'select', options: ctrlOpts });
+  f.ctrl_primary   = editorField(body, 'Primary Freq (MHz)', ctrl.primary_freq_mhz, { placeholder: '260.0' });
+  f.ctrl_secondary = editorField(body, 'Secondary Freq (MHz)', ctrl.secondary_freq_mhz, { placeholder: '134.0' });
+}
+
+function _buildRefuelSection(body, m, f) {
+  editorSectionTitle(body, 'REFUEL');
+  var ref = m.refuel || {};
+  var tnkOpts = _registryOptions('tankers', function (id, t) { return id + (t.callsign ? ' — ' + t.callsign : ''); });
+  f.ref_tanker_id = editorField(body, 'Tanker', ref.tanker_id, { type: 'select', options: tnkOpts });
+  f.ref_net = editorField(body, 'AAR NET', ref.not_earlier_than, { placeholder: '2143' });
+  f.ref_nlt = editorField(body, 'AAR NLT', ref.not_later_than,  { placeholder: '2150' });
+}
+
+function _buildSteerPointsSection(body, m) {
+  editorSectionTitle(body, 'STEER POINTS');
+  var steerPts = (m.steer_points || []).map(function (sp) {
+    return { name: sp.name || '', coords: sp.coords || '' };
+  });
+  body._steerPoints = steerPts;
+
+  var spListEl = el('div', 'ef-list-items');
+  _renderSteerPointsList(spListEl, steerPts);
+  body.appendChild(spListEl);
+
+  var addSpBtn = el('button', 'ef-btn ef-btn-add', '+ ADD STEER POINT');
+  addSpBtn.addEventListener('click', function () {
+    steerPts.push({ name: '', coords: '' });
+    body._steerPoints = steerPts;
+    _renderSteerPointsList(spListEl, steerPts);
+  });
+  body.appendChild(addSpBtn);
+}
+
+// ── Collect mission form values and invoke save callback ─────
+function _saveMissionFromForm(onSave) {
+  var body = document.getElementById('editorBody');
+  var f = body._msnFields;
+  var m = Object.assign({}, body._msnOriginal);
+
+  // Identification
+  var rawMsn = (f.mission_number.value || '').trim();
+  m.mission_number = rawMsn ? 'MSN' + rawMsn.replace(/^MSN/i, '') : undefined;
+  m.callsign             = f.callsign.value || undefined;
+  m.mission_type         = f.mission_type.value || undefined;
+  m.unit                 = f.unit.value || undefined;
+  m.home_base_icao       = f.home_base_icao.value || undefined;
+  m.deploy_location_icao = f.deploy_location.value || undefined;
+  m.aar_location_icao    = f.aar_location.value || undefined;
+
+  // Aircraft
+  var acCount = parseInt(f.ac_count.value);
+  if (f.ac_type.value || !isNaN(acCount)) {
+    m.aircraft = {
+      count:   isNaN(acCount) ? undefined : acCount,
+      type:    f.ac_type.value || undefined,
+      loadout: f.ac_loadout.value || undefined,
+    };
+  }
+
+  // Timing
+  m.takeoff_time  = f.takeoff_time.value || undefined;
+  m.recovery_time = f.recovery_time.value || undefined;
+  m.vul_start     = f.vul_start.value || undefined;
+  m.vul_end       = f.vul_end.value || undefined;
+
+  // Target
+  var hasTgt = f.tgt_location.value || f.tgt_target_id.value ||
+               f.tgt_tot_net.value || f.tgt_tos.value;
+  if (hasTgt) {
+    m.target = m.target || {};
+    m.target.location              = f.tgt_location.value || undefined;
+    m.target.altitude              = f.tgt_altitude.value || undefined;
+    m.target.target_id             = f.tgt_target_id.value || undefined;
+    m.target.mission_type_override = f.tgt_mission_type_override.value || undefined;
+    m.target.tot_net               = f.tgt_tot_net.value || undefined;
+    m.target.tot_nlt               = f.tgt_tot_nlt.value || undefined;
+    m.target.tos                   = f.tgt_tos.value || undefined;
+    m.target.toffs                 = f.tgt_toffs.value || undefined;
+  }
+
+  // Control
+  if (f.ctrl_agency_id.value || f.ctrl_primary.value) {
+    m.control = m.control || {};
+    m.control.agency_id          = f.ctrl_agency_id.value || undefined;
+    m.control.primary_freq_mhz   = f.ctrl_primary.value || undefined;
+    m.control.secondary_freq_mhz = f.ctrl_secondary.value || undefined;
+  }
+
+  // Refuel
+  if (f.ref_tanker_id.value) {
+    m.refuel = m.refuel || {};
+    m.refuel.tanker_id         = f.ref_tanker_id.value || undefined;
+    m.refuel.not_earlier_than  = f.ref_net.value || undefined;
+    m.refuel.not_later_than    = f.ref_nlt.value || undefined;
+  }
+
+  // Steer points (require both name and coords)
+  var steerPts = (body._steerPoints || []).filter(function (sp) { return sp.name && sp.coords; });
+  m.steer_points = steerPts.length ? steerPts : undefined;
+
+  onSave(m);
 }
 
 // ── Steer points list renderer ──────────────────────────────
@@ -218,15 +238,13 @@ function _renderSteerPointsList(container, steerPts) {
   steerPts.forEach(function (sp, i) {
     var row = el('div', 'ef-ap-row');
 
-    var nameInput = document.createElement('input');
-    nameInput.className = 'ef-input ef-input-sm';
+    var nameInput = el('input', 'ef-input ef-input-sm');
     nameInput.placeholder = 'Name (e.g. SP1)';
     nameInput.value = sp.name || '';
     nameInput.addEventListener('input', function () { sp.name = this.value; });
     row.appendChild(nameInput);
 
-    var coordInput = document.createElement('input');
-    coordInput.className = 'ef-input ef-input-sm';
+    var coordInput = el('input', 'ef-input ef-input-sm');
     coordInput.placeholder = "N24°30'00\" E055°30'00\"";
     coordInput.value = sp.coords || '';
     coordInput.addEventListener('input', function () { sp.coords = this.value; });

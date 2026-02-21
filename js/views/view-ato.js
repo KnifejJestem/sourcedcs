@@ -82,13 +82,6 @@ function renderIntelStrip(gc, ato) {
       ['IRL START',    irl],
       ['INGAME START', ingame, 'ingame'],
     ]),
-    buildIntelSection([
-      ['PFREQ', gc.primary_freq_mhz ? gc.primary_freq_mhz + ' MHz' : '—', 'freq'],
-    ]),
-    buildIntelSection([
-      [gc._agency?.type || 'AWACS / GCI', gc.controlling_unit || '—'],
-      ['PLATFORM',    gc.aircraft_type    || '—'],
-    ]),
   ];
 
   if (gc.bullseye) {
@@ -178,16 +171,12 @@ function renderMissionCards(missions) {
     // Edit/delete buttons (visible in edit mode)
     var editBtn = el('button', 'editor-btn', '✎');
     editBtn.title = 'Edit mission';
-    editBtn.addEventListener('click', (function(idx) {
-      return function(e) { e.stopPropagation(); editMission(idx); };
-    })(i));
+    editBtn.addEventListener('click', function(e) { e.stopPropagation(); editMission(i); });
     topRight.appendChild(editBtn);
 
     var delBtn = el('button', 'editor-btn', '✕');
     delBtn.title = 'Delete mission';
-    delBtn.addEventListener('click', (function(idx) {
-      return function(e) { e.stopPropagation(); deleteMission(idx); };
-    })(i));
+    delBtn.addEventListener('click', function(e) { e.stopPropagation(); deleteMission(i); });
     topRight.appendChild(delBtn);
 
     top.appendChild(topRight);
