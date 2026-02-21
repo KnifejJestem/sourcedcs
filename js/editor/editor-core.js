@@ -186,6 +186,12 @@ function editorCleanPkg(pkg) {
     if (k.charAt(0) === '_') return;  // skip internal fields
     clean[k] = editorCleanPkg(pkg[k]);
   });
+
+  // Strip auto-copied ingame_start_local so re-resolution can re-derive it
+  if (clean.ingame_start_time && clean.ingame_start_local) {
+    delete clean.ingame_start_local;
+  }
+
   return clean;
 }
 
