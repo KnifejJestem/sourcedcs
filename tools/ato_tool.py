@@ -367,7 +367,8 @@ def dict_to_aircraft(d): return Aircraft(count=d.get('count',1), type=d.get('typ
 def dict_to_target(d): return TargetLocation(location=d.get('location',''), net=d.get('not_earlier_than'), nlt=d.get('not_later_than'), mission_type_override=d.get('mission_type_override'), altitude=d.get('altitude'), dmp_ids=d.get('aim_points') or [])
 def dict_to_control(d): return Control(primary_freq=d.get('primary_freq_mhz'), secondary_freq=d.get('secondary_freq_mhz'), name=d.get('net_name'))
 def dict_to_refuel(d):
-    # Handle v1.0 tanker_id reference (tanker_callsign may not exist yet)
+    # tanker_id is a reference key; use tanker_callsign if available,
+    # otherwise fall back to tanker_id as a display name.
     callsign = d.get('tanker_callsign', d.get('tanker_id', ''))
     return Refuel(tanker_callsign=callsign, track=d.get('ar_track',''), altitude=d.get('altitude',''), net=d.get('not_earlier_than'), nlt=d.get('not_later_than'))
 

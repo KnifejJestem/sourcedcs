@@ -326,6 +326,7 @@ function loadPackage_obj(data) {
   STATE.pkg = pkg;
 
   // ── Propagate header fields to sections that lack them ───
+  // header uses ato_date (YYYY-MM-DD); sections expect ato_day for display
   if (pkg.header) {
     const h = pkg.header;
     ['ato', 'aco', 'spins', 'comms', 'weather'].forEach(key => {
