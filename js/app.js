@@ -313,6 +313,11 @@ function loadPackage_obj(data) {
   if (data.comms)   pkg.comms   = data.comms;
   if (data.weather) pkg.weather = data.weather;
 
+  // Preserve top-level metadata
+  if (data.schema_version) pkg.schema_version = data.schema_version;
+  if (data.header)         pkg.header         = data.header;
+  if (data.registry)       pkg.registry       = data.registry;
+
   if (!pkg.ato && !pkg.aco && !pkg.spins && !pkg.comms && !pkg.weather) {
     alert('Unrecognised file — expected top-level keys: ato, aco, spins, comms, and/or weather');
     return;
@@ -320,12 +325,185 @@ function loadPackage_obj(data) {
 
   STATE.pkg = pkg;
 
+  // ── Propagate header fields to sections that lack them ───
+  // header uses ato_date (YYYY-MM-DD); sections expect ato_day for display
+  if (pkg.header) {
+    const h = pkg.header;
+    ['ato', 'aco', 'spins', 'comms', 'weather'].forEach(key => {
+      if (!pkg[key]) return;
+      if (!pkg[key].operation && h.operation) pkg[key].operation = h.operation;
+      if (!pkg[key].ato_day   && h.ato_date)  pkg[key].ato_day   = h.ato_date;
+    });
+    if (pkg.ato && !pkg.ato.classification && h.classification)
+      pkg.ato.classification = h.classification;
+    if (pkg.aco && !pkg.aco.classification && h.classification)
+      pkg.aco.classification = h.classification;
+    if (pkg.spins && !pkg.spins.classification && h.classification)
+      pkg.spins.classification = h.classification;
+    if (pkg.comms && !pkg.comms.classification && h.classification)
+      pkg.comms.classification = h.classification;
+  }
+
+  // ── Resolve registry airfields into ato.airfields ────────
+  if (pkg.registry?.airfields && pkg.ato?.airfields) {
+    pkg.ato.airfields.forEach(af => {
+      const reg = pkg.registry.airfields[af.icao];
+      if (reg) {
+        if (!af.name)          af.name          = reg.name;
+        if (!af.coords)        af.coords        = reg.coords;
+        if (af.elevation_ft == null) af.elevation_ft = reg.elevation_ft;
+      }
+    });
+  }
+
+  // ── Resolve registry carriers into ato.carriers ─────────
+  if (pkg.registry?.carriers && pkg.ato?.carriers) {
+    pkg.ato.carriers.forEach(cv => {
+      const reg = pkg.registry.carriers[cv.id];
+      if (reg) {
+        if (!cv.name)            cv.name            = reg.name;
+        if (!cv.callsign)        cv.callsign        = reg.callsign;
+        if (!cv.deploy_coords)   cv.deploy_coords   = reg.deploy_coords;
+        if (!cv.recovery_coords) cv.recovery_coords = reg.recovery_coords;
+      }
+    });
+  }
+
+  // ── Resolve registry tankers into ato.tankers ───────────
+  if (pkg.registry?.tankers && pkg.ato) {
+    if (!pkg.ato.tankers) pkg.ato.tankers = [];
+    // Build tanker list from registry if ATO has no tankers
+    if (pkg.ato.tankers.length === 0) {
+      Object.entries(pkg.registry.tankers).forEach(([id, t]) => {
+        pkg.ato.tankers.push({ id, ...t });
+      });
+    } else {
+      // Resolve existing tanker references
+      pkg.ato.tankers.forEach(t => {
+        const reg = pkg.registry.tankers[t.id];
+        if (reg) {
+          if (!t.callsign) t.callsign = reg.callsign;
+          if (!t.ar_track) t.ar_track = reg.ar_track;
+          if (!t.altitude) t.altitude = reg.altitude;
+        }
+      });
+    }
+  }
+
+  // ── Resolve registry targets into ato.targets ───────────
+  if (pkg.registry?.targets && pkg.ato) {
+    if (!pkg.ato.targets) pkg.ato.targets = [];
+    if (pkg.ato.targets.length === 0) {
+      Object.entries(pkg.registry.targets).forEach(([id, t]) => {
+        pkg.ato.targets.push({ id, ...t });
+      });
+    }
+  }
+
+  // ── Resolve registry reference_points: bullseye + marshal_points ─
+  if (pkg.registry?.reference_points && pkg.ato) {
+    // Resolve bullseye if it's a string reference
+    const gc = pkg.ato.global_control;
+    if (gc && typeof gc.bullseye === 'string') {
+      const ref = pkg.registry.reference_points[gc.bullseye];
+      if (ref) {
+        gc.bullseye = { name: ref.name || gc.bullseye, coords: ref.coords };
+      }
+    }
+
+    // Build marshal_points list from reference_points with type 'marshal'
+    if (!pkg.ato.marshal_points) pkg.ato.marshal_points = [];
+    if (pkg.ato.marshal_points.length === 0) {
+      Object.entries(pkg.registry.reference_points).forEach(([id, rp]) => {
+        if (rp.type === 'marshal') {
+          pkg.ato.marshal_points.push({ id, name: rp.name, coords: rp.coords, altitude: rp.altitude });
+        }
+      });
+    }
+  }
+
+  // ── Resolve registry control_agencies into global_control + mission control ─
+  if (pkg.registry?.control_agencies && pkg.ato) {
+    const gc = pkg.ato.global_control;
+    if (gc?.agency_id) {
+      const ag = pkg.registry.control_agencies[gc.agency_id];
+      if (ag) {
+        if (!gc.controlling_unit) gc.controlling_unit = ag.callsign;
+        if (!gc.aircraft_type)    gc.aircraft_type    = ag.platform;
+        if (!gc.primary_freq_mhz) gc.primary_freq_mhz = ag.primary_freq_mhz;
+        gc._agency = ag;
+      }
+    }
+
+    (pkg.ato.missions || []).forEach(m => {
+      if (m.control?.agency_id) {
+        const ag = pkg.registry.control_agencies[m.control.agency_id];
+        if (ag) {
+          if (!m.control.primary_freq_mhz)   m.control.primary_freq_mhz   = ag.primary_freq_mhz;
+          if (!m.control.secondary_freq_mhz) m.control.secondary_freq_mhz = ag.secondary_freq_mhz;
+          if (!m.control.net_name)            m.control.net_name            = ag.callsign;
+          m.control._agency = ag;
+        }
+      }
+    });
+  }
+
+  // ── Normalize ingame start time (v1.0 uses ingame_start_time in Zulu) ─
+  if (pkg.ato?.ingame_start_time && !pkg.ato.ingame_start_local) {
+    pkg.ato.ingame_start_local = pkg.ato.ingame_start_time;
+    pkg.ato._ingame_is_zulu = true;
+  }
+
+  // ── Resolve tanker references in mission refuel blocks ───
+  if (pkg.ato?.tankers && pkg.ato?.missions) {
+    const tankerMap = {};
+    pkg.ato.tankers.forEach(t => { if (t.id) tankerMap[t.id] = t; });
+
+    pkg.ato.missions.forEach(m => {
+      if (m.refuel?.tanker_id && tankerMap[m.refuel.tanker_id]) {
+        const t = tankerMap[m.refuel.tanker_id];
+        if (!m.refuel.tanker_callsign) m.refuel.tanker_callsign = t.callsign;
+        if (!m.refuel.ar_track)        m.refuel.ar_track        = t.ar_track;
+        if (!m.refuel.altitude)        m.refuel.altitude        = t.altitude;
+      }
+    });
+  }
+
   // Resolve target references in aim_points
   if (pkg.ato?.targets && pkg.ato?.missions) {
     const tgtMap = {};
     pkg.ato.targets.forEach(t => { if (t.id) tgtMap[t.id] = t; });
 
     pkg.ato.missions.forEach(m => {
+      // Resolve target_id: pull aim_points from the referenced registry target
+      if (m.target?.target_id && tgtMap[m.target.target_id]) {
+        const ref = tgtMap[m.target.target_id];
+        if (!m.target.aim_points && ref.aim_points) {
+          // No explicit aim_points — pull all from the target
+          m.target.aim_points = ref.aim_points.map(ap => ({
+            coords: ap.coords, name: ap.name || ap.id, elevation: ap.elevation,
+            _resolved_target: ref,
+          }));
+        } else if (m.target.aim_points && ref.aim_points) {
+          // Explicit aim_points — resolve aim_point_id references
+          const apMap = {};
+          ref.aim_points.forEach(ap => { if (ap.id) apMap[ap.id] = ap; });
+          m.target.aim_points = m.target.aim_points.map(ap => {
+            if (ap.aim_point_id && apMap[ap.aim_point_id]) {
+              const resolved = apMap[ap.aim_point_id];
+              return {
+                coords: ap.coords || resolved.coords,
+                name: ap.name || resolved.name || resolved.id,
+                elevation: ap.elevation || resolved.elevation,
+                _resolved_target: ref,
+              };
+            }
+            return ap;
+          });
+        }
+      }
+
+      // Resolve legacy target_ref in individual aim_points
       (m.target?.aim_points || []).forEach((ap, i, arr) => {
         if (typeof ap === 'object' && ap.target_ref && tgtMap[ap.target_ref]) {
           const ref = tgtMap[ap.target_ref];
@@ -378,13 +556,17 @@ function renderHeader(ato) {
   // IRL time is always displayed in Zulu — it's a real-world reference
   const irlTimeRaw = ato.irl_time_zulu ? String(ato.irl_time_zulu).replace(/[ZL]/i, '').padStart(4, '0') + 'Z' : null;
   const irl = [ato.irl_date, irlTimeRaw].filter(Boolean).join(' ') || '—';
-  const ingame = fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
+  // ingame_start_time (v1.0) is already Zulu; ingame_start_local (legacy) needs conversion
+  const ingame = ato._ingame_is_zulu
+    ? fmtTime(ato.ingame_start_time)
+    : fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
   const items = [
     ['IRL START',    irl,     ''],
     ['INGAME START', ingame,  'ingame'],
   ];
   const unit = ato.global_control?.controlling_unit;
-  if (unit) items.push(['AWACS / GCI', unit, '']);
+  const agencyType = ato.global_control?._agency?.type;
+  if (unit) items.push([agencyType || 'AWACS / GCI', unit, '']);
 
   // Header shows: date, ingame start, AWACS — concise identifiers only.
   // Full detail (freq, bullseye, etc.) is in the ATO intel strip.

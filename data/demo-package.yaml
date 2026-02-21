@@ -1,65 +1,184 @@
+schema_version: "1.0"
+
+header:
+  operation: CLEAR SKY
+  ato_date: '2026-01-11'
+  classification: UNCLAS
+
+registry:
+  callsigns:
+    SCREWTOP:    { unit: USAF, type: E-3, role: AWACS primary }
+    FALCON5:     { unit: 510vFS, type: F16C, role: CAP flight lead }
+    DRAGON6:     { unit: 510vFS, type: F16C, role: BAI flight lead }
+    BUZZARD4:    { unit: 510vFS+132nd, type: F16C, role: BAI flight lead }
+    COWBOY7:     { unit: 1 AAC, type: AH64, role: CAS }
+    ARCO4:       { type: KC-135, role: Tanker }
+    TEXACO2:     { type: KC-135, role: Tanker }
+    SHELL3:      { type: KC-135, role: Tanker }
+    ROUGH RIDER: { type: CVN, role: Carrier }
+  frequencies:
+    - { freq_mhz: 243.0,   callsign: GUARD,       band: UHF, role: Emergency }
+    - { freq_mhz: 260.0,   callsign: PACKAGE,     band: UHF, role: Package primary }
+    - { freq_mhz: 261.5,   callsign: INTRAFLIGHT, band: UHF, role: Intraflight }
+    - { freq_mhz: 265.1,   callsign: SCREWTOP,    band: UHF, role: AWACS primary }
+    - { freq_mhz: 134.0,   callsign: SCREWTOP,    band: UHF, role: AWACS secondary }
+    - { freq_mhz: 121.5,   callsign: GUARD,       band: VHF, role: Emergency }
+  airfields:
+    OMAM:
+      name: Al Dhafra AB
+      coords: N24°14'36" E054°27'07"
+      elevation_ft: 77
+    OMSJ:
+      name: Sharjah Intl
+      coords: N25°19'42" E055°31'06"
+      elevation_ft: 111
+    OTBH:
+      name: Al Udeid AB
+      coords: N25°06'56" E051°18'58"
+      elevation_ft: 130
+    OMRK:
+      name: Ras Al Khaimah Intl
+      coords: N25°36'50" E055°56'15"
+      elevation_ft: 102
+  carriers:
+    CVN-71:
+      name: USS ROOSEVELT
+      callsign: ROUGH RIDER
+      deploy_coords: N24°30'00" E059°15'00"
+      recovery_coords: N24°45'00" E059°30'00"
+  tankers:
+    ARCO4:
+      callsign: ARCO4
+      ar_track: AR394
+      altitude: FL240
+    TEXACO2:
+      callsign: TEXACO2
+      ar_track: AR392
+      altitude: FL220
+    SHELL3:
+      callsign: SHELL3
+      ar_track: AR393
+      altitude: FL230
+  targets:
+    SAM-1:
+      name: SA-2 Guideline
+      type: SAM
+      coords: N26°30'00" E056°20'00"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      elevation: 150ft
+      aim_points:
+      - id: TGT-A
+        name: TGT-A
+        coords: N26°30'00" E056°20'00"
+      - id: TGT-B
+        name: TGT-B
+        coords: N26°33'00" E056°22'00"
+    SAM-2:
+      name: SA-6 Gainful
+      type: SAM
+      coords: N26°25'00" E056°10'00"
+      engagement_range_nm: 15
+      max_alt_ft: 40000
+      elevation: 200ft
+      aim_points:
+      - id: SAM-2-PRIMARY
+        name: SAM-2 Primary
+        coords: N26°20'00" E056°15'00"
+    OBJ-A:
+      name: Objective Alpha
+      type: BUILDING
+      coords: N26°28'00" E056°18'00"
+      elevation: 100ft
+      aim_points:
+      - id: OBJ-A-1
+        name: OBJ-A
+        coords: N26°28'00" E056°18'00"
+  reference_points:
+    COYOTE:
+      name: COYOTE
+      type: bullseye
+      coords: N26°51'19" E056°21'37"
+    MARSHAL-ALPHA:
+      name: ALPHA
+      type: marshal
+      coords: N24°45'00" E056°00'00"
+      altitude: FL250
+  control_agencies:
+    SCREWTOP:
+      type: AWACS
+      callsign: SCREWTOP
+      platform: E-3
+      primary_freq_mhz: '260.0'
+      secondary_freq_mhz: '134.0'
+    DARKSTAR:
+      type: CRC
+      callsign: DARKSTAR
+      primary_freq_mhz: '265.0'
+      secondary_freq_mhz: '135.0'
+
 ato:
-  irl_date: 11/01/2026
-  irl_time_zulu: 1900Z
-  ingame_start_local: 0000L
-  local_offset_hours: 4    # UTC+4 (Gulf area — no DST; adjust for your theater)
+  irl_date: '2026-01-11'
+  irl_time_zulu: '1900Z'
+  ingame_start_time: '2000Z'
+  local_offset_hours: 4
   ae_flags:
   - IRL
   - INGAME
   global_control:
-    primary_freq_mhz: '260.0'
-    modulation: U5
-    controlling_unit: SCREWTOP
-    aircraft_type: E-3
-    bullseye:
-      name: COYOTE
-      coords: N26°51'19.09" E56°21'36.93"
+    agency_id: SCREWTOP
+    bullseye: COYOTE
+  airfields:
+  - icao: OMAM
+    role: deploy
+  - icao: OMSJ
+    role: recovery
+  - icao: OTBH
+    role: alternate
+  carriers:
+  - id: CVN-71
   missions:
-  - unit: 510vFS
-    home_base_icao: OMAM
-    mission_number: MSN3266
+  - mission_number: MSN3266
     callsign: FALCON5
     mission_type: CAP
+    unit: 510vFS
+    home_base_icao: OMAM
     deploy_location_icao: OMAM
     aar_location_icao: OMAM
-    takeoff_time: '2000'
-    recovery_time: '2300'
+    takeoff_time: '2000Z'
+    recovery_time: '2300Z'
     aircraft:
       count: 2
       type: F16C
       loadout: 501+
     target:
       location: KHASAB
-      tos: '2040'
-      toffs: '2230'
+      tos: '2040Z'
+      toffs: '2230Z'
     control:
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-      net_name: SCREWTOP
+      agency_id: SCREWTOP
     refuel:
-      tanker_callsign: ARCO4
-      ar_track: AR394
-      altitude: FL240
-      not_earlier_than: '2143'
-      not_later_than: '2150'
+      tanker_id: ARCO4
+      not_earlier_than: '2143Z'
+      not_later_than: '2150Z'
     steer_points:
-    - coords: N24deg30'00" E055deg30'00"
+    - coords: N24°30'00" E055°30'00"
       name: SP1
-    - coords: N25deg30'00" E056deg00'00"
+    - coords: N25°30'00" E056°00'00"
       name: SP2
-    - coords: N26deg00'00" E056deg10'00"
+    - coords: N26°00'00" E056°10'00"
       name: SP3
-  - unit: 510vFS
-    home_base_icao: OMAM
-    mission_number: MSN3267
+  - mission_number: MSN3267
     callsign: DRAGON6
     mission_type: BAI
+    unit: 510vFS
+    home_base_icao: OMAM
     deploy_location_icao: OMAM
     aar_location_icao: OMAM
-    takeoff_time: '2010'
-    recovery_time: '2200'
-    vul_start: '2040'
-    vul_end: '2115'
+    takeoff_time: '2010Z'
+    recovery_time: '2200Z'
+    vul_start: '2040Z'
+    vul_end: '2115Z'
     aircraft:
       count: 2
       type: F16C
@@ -68,41 +187,39 @@ ato:
       location: KHASAB AFB
       mission_type_override: AIRDEF
       altitude: E73FT
-      tot_net: '2046'
-      tot_nlt: '2111'
+      tot_net: '2046Z'
+      tot_nlt: '2111Z'
+      target_id: SAM-1
       aim_points:
-      - coords: N26deg30'00" E056deg20'00"
-        name: TGT-A
-      - coords: N26deg33'00" E056deg22'00"
-        name: TGT-B
+      - aim_point_id: TGT-A
     control:
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-      net_name: SCREWTOP
+      agency_id: SCREWTOP
     refuel:
-      tanker_callsign: TEXACO2
-      ar_track: AR392
-      altitude: FL220
-      not_earlier_than: '2121'
-      not_later_than: '2131'
+      tanker_id: TEXACO2
+      not_earlier_than: '2121Z'
+      not_later_than: '2131Z'
+    coordination:
+    - mission: MSN3268
+      type: altitude_stack
+      notes: MSN3267 above FL200, MSN3268 below FL180 during VUL overlap 2055Z-2115Z
     steer_points:
-    - coords: N24deg30'00" E055deg00'00"
+    - coords: N24°30'00" E055°00'00"
       name: SP1
-    - coords: N25deg00'00" E055deg30'00"
+    - coords: N25°00'00" E055°30'00"
       name: SP2
-    - coords: N26deg00'00" E056deg00'00"
+    - coords: N26°00'00" E056°00'00"
       name: IP
-  - unit: 510vFS+132nd
-    home_base_icao: OMAM
-    mission_number: MSN3268
+  - mission_number: MSN3268
     callsign: BUZZARD4
     mission_type: BAI
+    unit: 510vFS+132nd
+    home_base_icao: OMAM
     deploy_location_icao: OMAM
     aar_location_icao: OMAM
-    takeoff_time: '2015'
-    recovery_time: '2245'
-    vul_start: '2055'
-    vul_end: '2210'
+    takeoff_time: '2015Z'
+    recovery_time: '2245Z'
+    vul_start: '2055Z'
+    vul_end: '2210Z'
     aircraft:
       count: 3
       type: F16C
@@ -111,35 +228,33 @@ ato:
       location: JASK
       mission_type_override: SILKWORMS
       altitude: E33FT
-      tot_net: '2105'
-      tot_nlt: '2200'
-      aim_points:
-      - coords: N26deg20'00" E056deg15'00"
-        name: SAM-1
+      tot_net: '2105Z'
+      tot_nlt: '2200Z'
+      target_id: SAM-2
     control:
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-      net_name: SCREWTOP
+      agency_id: DARKSTAR
     refuel:
-      tanker_callsign: SHELL3
-      ar_track: AR393
-      altitude: FL230
-      not_earlier_than: '2045'
-      not_later_than: '2100'
+      tanker_id: SHELL3
+      not_earlier_than: '2045Z'
+      not_later_than: '2100Z'
+    coordination:
+    - mission: MSN3267
+      type: altitude_stack
+      notes: MSN3267 above FL200, MSN3268 below FL180 during VUL overlap 2055Z-2115Z
     steer_points:
-    - coords: N24deg20'00" E055deg10'00"
+    - coords: N24°20'00" E055°10'00"
       name: SP1
-    - coords: N25deg10'00" E055deg40'00"
+    - coords: N25°10'00" E055°40'00"
       name: SP2
-  - unit: 1 AAC
-    home_base_icao: OMRK
-    mission_number: AA7511
+  - mission_number: AA7511
     callsign: COWBOY7
     mission_type: CAS
+    unit: 1 AAC
+    home_base_icao: OMRK
     deploy_location_icao: OMRK
     aar_location_icao: OMRK
-    takeoff_time: '2030'
-    recovery_time: '2230'
+    takeoff_time: '2030Z'
+    recovery_time: '2230Z'
     aircraft:
       count: 1
       type: AH64
@@ -148,101 +263,58 @@ ato:
       location: KHASAB AFB
       mission_type_override: CAS
       altitude: E74FT
-      tos: '2108'
-      toffs: '2200'
-      aim_points:
-      - coords: N26deg28'00" E056deg18'00"
-        name: OBJ-A
+      tos: '2108Z'
+      toffs: '2200Z'
+      target_id: OBJ-A
     control:
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-      net_name: SCREWTOP
+      agency_id: SCREWTOP
     steer_points:
-    - coords: N26deg10'00" E056deg05'00"
+    - coords: N26°10'00" E056°05'00"
       name: SP1
-  airfields:
-  - icao: OMAM
-    name: Al Dhafra AB
-    role: deploy
-    coords: N24deg14'36" E054deg27'07"
-    elevation_ft: 77
-  - icao: OMSJ
-    name: Sharjah Intl
-    role: recovery
-    coords: N25deg19'42" E055deg31'06"
-    elevation_ft: 111
-  - icao: OTBH
-    name: Al Udeid AB
-    role: alternate
-    coords: N25deg06'56" E051deg18'58"
-    elevation_ft: 130
-  carriers:
-  - name: USS ROOSEVELT
-    callsign: ROUGH RIDER
-    deploy_coords: N24deg30'00" E059deg15'00"
-    recovery_coords: N24deg45'00" E059deg30'00"
-  targets:
-  - id: SAM-1
-    name: SA-2 Guideline
-    type: SAM
-    coords: N26°30'00" E056°20'00"
-    engagement_range_nm: 28
-    max_alt_ft: 60000
-    elevation: 150ft
-  - id: SAM-2
-    name: SA-6 Gainful
-    type: SAM
-    coords: N26°25'00" E056°10'00"
-    engagement_range_nm: 15
-    max_alt_ft: 40000
-    elevation: 200ft
-  marshal_points:
-  - name: ALPHA
-    coords: N24deg45'00" E056deg00'00"
-    altitude: FL250
+
 aco:
-  operation: CLEAR SKY
-  ato_day: 30/09/2014
-  id: ACO-14-09
+  id: ACO-26-01
   timezone: UTC
   distributing_agency: CAOC
-  classification: SCT
   acms:
-  - name: WEST-1
+  - id: ACM-WEST1
+    name: WEST-1
     type: ORBIT
     missions:
-    - 9001
-    - 9002
+    - MSN3267
+    - MSN3268
     alt_lower: FL180
     alt_upper: FL240
-    time_from: 0430Z
-    time_to: 0730Z
-    control_agency: MAGIC
-    control_freq_mhz: 265.1
-  - name: CAP-W
+    time_from: '2000Z'
+    time_to: '2300Z'
+    control_agency: SCREWTOP
+    control_freq_mhz: 260.0
+  - id: ACM-CAPW
+    name: CAP-W
     type: ROZ
     missions:
-    - 6012
+    - MSN3266
     alt_lower: FL200
     alt_upper: FL400
-    time_from: 0500Z
-    time_to: 0600Z
-    control_agency: DARKSTAR
-    control_freq_mhz: 334.15
+    time_from: '2000Z'
+    time_to: '2300Z'
+    control_agency: SCREWTOP
+    control_freq_mhz: 260.0
     geometry:
-      center: N35°05.098' E035°44.098'
-      radius_nm: 10
-  - name: TS-024
+      center: N26°51'00" E056°22'00"
+      radius_nm: 20
+  - id: ACM-TS024
+    name: TS-024
     type: ROZ
     missions:
-    - 6013
-    - 6014
+    - MSN3267
+    - MSN3268
     alt_lower: SFC
     alt_upper: FL220
-    time_from: 0500Z
-    time_to: 0600Z
-    control_agency: DARKSTAR
-    control_freq_mhz: 334.15
+    time_from: '2000Z'
+    time_to: '2300Z'
+    control_agency: SCREWTOP
+    control_freq_mhz: 260.0
     notes: Primary target area — all non-tasked traffic PROHIBITED
     geometry:
       boundary:
@@ -250,36 +322,35 @@ aco:
       - N26°40'00" E056°05'00"
       - N26°40'00" E056°30'00"
       - N26°20'00" E056°30'00"
-  - name: TRACK-1
+  - id: ACM-TRACK1
+    name: TRACK-1
     type: ANCHOR
     missions:
     - MSN3266
     alt_lower: FL200
     alt_upper: FL300
-    time_from: 0500Z
-    time_to: 0700Z
-    control_agency: MAGIC
-    control_freq_mhz: 265.1
+    time_from: '2000Z'
+    time_to: '2300Z'
+    control_agency: SCREWTOP
+    control_freq_mhz: 260.0
     notes: CAP racetrack pattern
     geometry:
       anchor_point: N25°30'00" E055°30'00"
       heading_deg: 45
       leg_length_nm: 15
       direction: cw
+
 spins:
-  operation: CLEAR SKY
-  ato_day: 30/09/2014
   version: '3.0'
-  classification: SCT
   sections:
 
   - title: C1 — COMMAND & CONTROL
     entries:
-    - {label: PRIMARY AWACS,   value: "MAGIC1 / 265.1 MHz",   style: green}
-    - {label: SECONDARY AWACS, value: "MAGIC2 / 334.15 MHz"}
-    - {label: AIRSPACE CTRL,   value: SCT via LTAG MTMA and CVN-75}
-    - {label: PACKAGE LEAD,    value: SHADOW11, style: amber}
-    - {label: STRIKE LEAD,     value: BOLO11,   style: amber}
+    - {label: PRIMARY AWACS,   value: "SCREWTOP / 260.0 MHz", style: green}
+    - {label: SECONDARY AWACS, value: "SCREWTOP / 134.0 MHz"}
+    - {label: AIRSPACE CTRL,   value: Via OMAM MTMA}
+    - {label: PACKAGE LEAD,    value: FALCON5, style: amber}
+    - {label: STRIKE LEAD,     value: DRAGON6, style: amber}
 
   - title: C3 — IFF / SIF
     note: Squawk assigned code. M4 mandatory before departure.
@@ -287,10 +358,10 @@ spins:
       headers: [MSN, MODE, CODE]
       cell_classes: [~, ~, iff-code]
       rows:
-      - [6011, 3, '4811']
-      - [6012, 3, '4821']
-      - [6013, 3, '4831']
-      - [6014, 3, '4841']
+      - [MSN3266, 3, '4821']
+      - [MSN3267, 3, '4811']
+      - [MSN3268, 3, '4831']
+      - [AA7511,  3, '4841']
 
   - title: C4 — RULES OF ENGAGEMENT
     entries:
@@ -307,19 +378,24 @@ spins:
 
   - title: C5 — EXECUTION OBJECTIVES
     entries:
-    - {heading: "MSN 6011"}
+    - {heading: MSN3267}
     - {value: Degrade TS-024 radar effectiveness with Maximum Effort}
     - {bullet: Reactive SEAD permitted against emitting threat systems tracking package aircraft}
-    - {heading: "MSN 6012"}
+    - {heading: MSN3266}
     - {value: Deny adversary air interference within package airspace}
-    - {bullet: "1. Aircraft targeting MSN 6011"}
+    - {bullet: "1. Aircraft targeting MSN3267"}
     - {bullet: "2. Aircraft supporting TS-024 engagement"}
     - {bullet: "3. All other hostile air contacts"}
-    - {bullet: "ORBIT: N35°05.098' E035°44.098' AG27 090 10nm", style: blue}
-    - {heading: "MSN 6013"}
-    - {value: Deny adversary air interference on MSN 6014}
+    - type: orbit_reference
+      coords: N25°30'00" E055°30'00"
+      anchor: TRACK-1
+      bearing_deg: 45
+      distance_nm: 15
+      style: blue
+    - {heading: MSN3268}
+    - {value: Deny adversary air interference on AA7511}
     - {bullet: "Targeting range: 65nm"}
-    - {heading: "MSN 6014"}
+    - {heading: AA7511}
     - {value: Destruction of TS-024R}
     - {bullet: "Secondary: Destruction of TS-024S"}
 
@@ -347,35 +423,29 @@ spins:
   - title: C11 — SAFETY
     entries:
     - {label: MIN SEPARATION, value: "5NM / 2000ft between coalition aircraft outside tactical formation", style: amber}
+
 comms:
-  operation: CLEAR SKY
-  ato_day: 30/09/2014
-  classification: SCT
-  wing_lead: SHADOW11
+  wing_lead: FALCON5
   uhf_presets:
     1:  {callsign: GUARD,       freq_mhz: 243.0,   role: Emergency}
     2:  {callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary}
     3:  {callsign: INTRAFLIGHT, freq_mhz: 261.5,   role: Intraflight}
-    9:  {callsign: LTAG TWR,    freq_mhz: 360.1,   role: ATC Tower}
-    10: {callsign: LTAG APP/DEP, freq_mhz: 340.775, role: ATC Approach/Departure}
-    11: {callsign: MAGIC,       freq_mhz: 265.1,   role: AWACS primary}
-    12: {callsign: DARKSTAR,    freq_mhz: 334.15,  role: AWACS secondary}
-    13: {callsign: SHELL 1,     freq_mhz: 266.025, role: Tanker}
-    14: {callsign: ARCO 1,      freq_mhz: 341.7,   role: Tanker}
-    15: {callsign: CV-75 APP 1,  freq_mhz: 343.025, role: Carrier approach}
-    16: {callsign: CV-75 MARSHAL, freq_mhz: 330.975, role: Carrier marshal}
-    17: {callsign: CV-75 APP 2,  freq_mhz: 327.45,  role: Carrier approach 2}
-    18: {callsign: CV-75 TWR,   freq_mhz: 310.25,  role: Carrier tower}
-    19: {callsign: CV-75 DEP,   freq_mhz: 322.075, role: Carrier departure}
-    20: {callsign: LTAG ATIS,   freq_mhz: 377.475, role: ATIS}
+    11: {callsign: SCREWTOP,    freq_mhz: 260.0,   role: AWACS primary}
+    12: {callsign: SCREWTOP,    freq_mhz: 134.0,   role: AWACS secondary}
+    13: {callsign: SHELL3,      freq_mhz: 266.025, role: Tanker}
+    14: {callsign: ARCO4,       freq_mhz: 341.7,   role: Tanker}
+    15: {callsign: TEXACO2,     freq_mhz: 280.0,   role: Tanker}
+
   vhf_presets:
     1:  {callsign: GUARD,    freq_mhz: 121.5,   role: Emergency}
-    6:  {callsign: SHADOW 1, freq_mhz: 133.3,   role: Package lead}
-    7:  {callsign: HAT 1,    freq_mhz: 120.075, role: Flight}
-    8:  {callsign: "COWBOY 1 / BOLO 1", freq_mhz: 129.225, role: CAS / Strike}
-    10: {callsign: LTAG PAR, freq_mhz: 282.5,   role: Precision approach}
+    6:  {callsign: FALCON5,  freq_mhz: 133.3,   role: Package lead}
+    7:  {callsign: DRAGON6,  freq_mhz: 120.075, role: Flight}
+    8:  {callsign: BUZZARD4, freq_mhz: 129.225, role: Flight}
+
 weather:
-  operation: CLEAR SKY
+  issued: '2026-01-11'
+  valid_from: '1800Z'
+  valid_to: '0600Z'
   metars:
   - 'METAR OMAM 011850Z 31012G18KT 9999 FEW040 SCT080 28/08 Q1013 NOSIG'
   - 'METAR OMSJ 011850Z 28008KT 9000 SCT035 30/12 Q1012 NOSIG'

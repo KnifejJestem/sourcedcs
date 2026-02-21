@@ -3,101 +3,163 @@
 # Load this single file into the viewer via "LOAD PACKAGE"
 #
 # Top-level keys (all optional, ato is primary):
+#   schema_version: Format version
+#   header:   Shared operation metadata
+#   registry: Canonical reference definitions
 #   ato:      Air Tasking Order
 #   aco:      Airspace Control Order
 #   spins:    Special Instructions
 #   comms:    Frequency Preset Table
+#   weather:  Mission Weather Forecast
 # ============================================================
 
-ato:
-  irl_date: 11/01/2026
-  irl_time_zulu: 1900Z
-  ingame_start_local: 0000L
-  local_offset_hours: 0    # UTC offset for local time display (e.g. 4 for UTC+4)
-  ae_flags: [IRL, INGAME]
+schema_version: "1.0"
 
-  global_control:
-    primary_freq_mhz: '260.0'
-    controlling_unit: SCREWTOP
-    aircraft_type: E-3
-    bullseye:
-      name: COYOTE
-      coords: "N26deg51'19.09\" E56deg21'36.93\""
+header:
+  operation: YOUR OPERATION
+  ato_date: '2026-01-11'
+  classification: UNCLAS
 
-  # ── Airfields used for deploy / recovery ─────────────────
-  # Plotted on map with a runway-cross symbol.
-  # role: deploy | recovery | alternate | divert  (or any string)
-  # elevation_ft: field elevation in feet (displayed as sub-label)
+# ── Registry — canonical definitions referenced elsewhere ───
+# Callsigns, frequencies, airfields, carriers, tankers, targets,
+# and reference points are defined once here and referenced by key
+# throughout the rest of the document.
+registry:
+  callsigns:
+    SCREWTOP:    { unit: USAF, type: E-3, role: AWACS primary }
+    FALCON5:     { unit: 510vFS, type: F16C, role: CAP flight lead }
+  frequencies:
+    - { freq_mhz: 243.0, callsign: GUARD, band: UHF, role: Emergency }
+    - { freq_mhz: 260.0, callsign: PACKAGE, band: UHF, role: Package primary }
+    - { freq_mhz: 261.5, callsign: INTRAFLIGHT, band: UHF, role: Intraflight }
+    - { freq_mhz: 121.5, callsign: GUARD, band: VHF, role: Emergency }
   airfields:
-    - icao: OMAM
+    OMAM:
       name: Al Dhafra AB
-      role: deploy
-      coords: "N24deg14'36\" E054deg27'07\""
+      coords: N24°14'36" E054°27'07"
       elevation_ft: 77
-    - icao: OMSJ
+    OMSJ:
       name: Sharjah Intl
-      role: recovery
-      coords: "N25deg19'42\" E055deg31'06\""
+      coords: N25°19'42" E055°31'06"
       elevation_ft: 111
-    - icao: OTBH
+    OTBH:
       name: Al Udeid AB
-      role: alternate
-      coords: "N25deg06'56\" E051deg18'58\""
+      coords: N25°06'56" E051°18'58"
       elevation_ft: 130
 
-  # ── Carrier positions (estimated) ────────────────────────
-  # Carriers move — these are planning estimates only.
+  # ── Carriers ──────────────────────────────────────────────
+  # Carrier positions are planning estimates.
   # deploy_coords:   position at start of ATO window
   # recovery_coords: position at end / recovery window
-  # Both are plotted on the map with an anchor symbol.
-  # Elevation is always 0 (surface) — omitted for carriers.
   carriers:
-    - name: USS ROOSEVELT
+    CVN-71:
+      name: USS ROOSEVELT
       callsign: ROUGH RIDER
-      deploy_coords:  "N24deg30'00\" E059deg15'00\""
-      recovery_coords: "N24deg45'00\" E059deg30'00\""
+      deploy_coords: N24°30'00" E059°15'00"
+      recovery_coords: N24°45'00" E059°30'00"
 
-  # ── Target definitions ───────────────────────────────────
-  # Reusable targets referenced by aim_points via target_ref.
-  # Plotted on the map as threat/point markers.
+  # ── Tankers ───────────────────────────────────────────────
+  # Missions reference tankers by id in their refuel block.
+  tankers:
+    ARCO4:
+      callsign: ARCO4
+      ar_track: AR394
+      altitude: FL240
+
+  # ── Targets ───────────────────────────────────────────────
+  # Reusable targets with nested aim_points.
+  # Missions reference targets by id via target.target_id.
   targets:
-    - id: SA6-NORTH
+    SA6-NORTH:
       name: SA-6 Battery North
       type: SAM
-      coords: "N26deg30'00\" E056deg20'00\""
+      coords: N26°30'00" E056°20'00"
       elevation: E350FT
       engagement_range_nm: 13
       max_alt_ft: 40000
+      aim_points:
+        - id: SA6-N-1
+          name: SA6 North Primary
+          coords: N26°30'00" E056°20'00"
 
-    - id: SA6-SOUTH
+    SA6-SOUTH:
       name: SA-6 Battery South
       type: SAM
-      coords: "N26deg25'00\" E056deg15'00\""
+      coords: N26°25'00" E056°15'00"
       elevation: E120FT
       engagement_range_nm: 13
       max_alt_ft: 40000
 
-    - id: FUEL-DEPOT
+    FUEL-DEPOT:
       name: Fuel Storage Facility
       type: BUILDING
-      coords: "N26deg28'00\" E056deg18'00\""
+      coords: N26°28'00" E056°18'00"
       elevation: E80FT
 
-  marshal_points:
-    - name: ALPHA
-      coords: "N24deg45'00\" E056deg00'00\""
+  # ── Reference points ──────────────────────────────────────
+  # Bullseye, marshal points, named geographic positions.
+  # type: bullseye | marshal | ip | cp | geographic
+  reference_points:
+    COYOTE:
+      name: COYOTE
+      type: bullseye
+      coords: N26°51'19" E056°21'37"
+    MARSHAL-ALPHA:
+      name: ALPHA
+      type: marshal
+      coords: N24°45'00" E056°00'00"
       altitude: FL250
 
+  # ── Control agencies ───────────────────────────────────────
+  # AWACS and CRC control agencies referenced by missions.
+  # type: AWACS | CRC
+  control_agencies:
+    SCREWTOP:
+      type: AWACS
+      callsign: SCREWTOP
+      platform: E-3
+      primary_freq_mhz: '260.0'
+      secondary_freq_mhz: '134.0'
+
+ato:
+  irl_date: '2026-01-11'
+  irl_time_zulu: '1900Z'
+  ingame_start_time: '0000Z'
+  local_offset_hours: 0    # UTC offset for local time display (e.g. 4 for UTC+4)
+  ae_flags: [IRL, INGAME]
+
+  global_control:
+    agency_id: SCREWTOP     # references registry.control_agencies.SCREWTOP
+    bullseye: COYOTE        # references registry.reference_points.COYOTE
+
+  # ── Airfields used for deploy / recovery ─────────────────
+  # Plotted on map with a runway-cross symbol.
+  # Full airfield data (coords, elevation) comes from registry.
+  # role: deploy | recovery | alternate | divert  (or any string)
+  airfields:
+    - icao: OMAM
+      role: deploy
+    - icao: OMSJ
+      role: recovery
+    - icao: OTBH
+      role: alternate
+
+  # ── Carriers used in this ATO ────────────────────────────
+  # References registry.carriers by id.
+  # Full carrier data (name, callsign, coords) comes from registry.
+  carriers:
+    - id: CVN-71
+
   missions:
-    - unit: 510vFS
-      home_base_icao: OMAM
-      mission_number: MSN3266
+    - mission_number: MSN3266
       callsign: FALCON5
       mission_type: CAP
+      unit: 510vFS
+      home_base_icao: OMAM
       deploy_location_icao: OMAM
       aar_location_icao: OMAM
-      takeoff_time: '2000'        # Planned takeoff time
-      recovery_time: '2300'       # Planned recovery / landing time
+      takeoff_time: '2000Z'
+      recovery_time: '2300Z'
       # vul_start / vul_end — optional vulnerability window (hatched red on timeline)
       aircraft:
         count: 2
@@ -109,62 +171,51 @@ ato:
         #   Legacy:  not_earlier_than / not_later_than   (generic window)
         #   TOT:     tot_net / tot_nlt                   (Time on Target — strike/BAI missions)
         #   TOS:     tos / toffs                         (Time on Station / Time OFF Station — CAP/CAS orbit missions)
-        # You may specify both TOT and TOS for a mission that needs to be on station
-        # and also has a specific target time (e.g. SEAD supporting a strike).
-        tos: '2040'
-        toffs: '2230'
-        # Aim points — where weapons are released / where to ID the target.
-        # Can be plain coord strings, objects with name + coords, or target_ref references.
-        aim_points:
-          - target_ref: SA6-NORTH        # inherits coords, elevation, name from target
-          - target_ref: SA6-SOUTH
-            name: SECONDARY              # override the name
-          - coords: "N26deg28'00\" E056deg18'00\""
-            name: MANUAL-POINT           # plain aim point, no reference (still works as before)
-      # Steer points — route waypoints. Plotted as small hollow circles
-      # with dashed lines connecting them in order. Distinct from aim points.
+        tos: '2040Z'
+        toffs: '2230Z'
+        # target_id references a target in registry.targets;
+        # aim_points are pulled from the target's nested aim_points.
+        # You can also specify aim_points explicitly to select individual
+        # aim_points via aim_point_id or add standalone coordinates.
+        target_id: SA6-NORTH
+      # Steer points — route waypoints
       steer_points:
-        - coords: "N24deg30'00\" E056deg00'00\""
+        - coords: N24°30'00" E056°00'00"
           name: SP1
-        - coords: "N25deg15'00\" E056deg05'00\""
+        - coords: N25°15'00" E056°05'00"
           name: SP2
+      # Control block references a control agency by id;
+      # freq and callsign come from the registry control agency definition.
       control:
-        primary_freq_mhz: '260.0'
-        secondary_freq_mhz: '134.0'
-        net_name: SCREWTOP
+        agency_id: SCREWTOP
+      # Refuel block references a tanker by id;
+      # only mission-specific times are stored here.
       refuel:
-        tanker_callsign: ARCO4
-        ar_track: AR394
-        altitude: FL240
-        not_earlier_than: '2143'
-        not_later_than: '2150'
+        tanker_id: ARCO4
+        not_earlier_than: '2143Z'
+        not_later_than: '2150Z'
 
 aco:
-  operation: YOUR OPERATION
-  ato_day: 11/01/2026
   id: ACO-XX-XX
   timezone: UTC
-  distributing_agency: CAOC      # agency distributing this ACO
-  classification: UNCLAS
+  distributing_agency: CAOC
   acms:
-    - name: CAP-W
+    - id: ACM-CAPW
+      name: CAP-W
       type: ROZ
       missions: [MSN3266]
       alt_lower: FL200
       alt_upper: FL400
-      time_from: 1900Z
-      time_to: 2300Z
+      time_from: '1900Z'
+      time_to: '2300Z'
       control_agency: SCREWTOP
       control_freq_mhz: 260.000
       geometry:
-        center: "N26deg51'00\" E056deg22'00\""
+        center: N26°51'00" E056°22'00"
         radius_nm: 20
 
 spins:
-  operation: YOUR OPERATION
-  ato_day: 11/01/2026
   version: '1.0'
-  classification: UNCLAS
 
   # Each section is independent — add, remove, or reorder freely.
   # Entry types inside 'entries':
@@ -172,17 +223,16 @@ spins:
   #   {bullet, style?}        → bullet text
   #   {heading}               → mission block header (groups entries beneath it)
   #   {value}  (no label)     → plain body text (shown in amber as an objective)
-  # A section may also have a top-level 'note' and/or a 'table':
-  #   table: {headers: [...], rows: [[...], ...], cell_classes: [~, ~, css-class]}
+  #   {type: orbit_reference} → structured orbit/positional data
   sections:
 
   - title: C1 — COMMAND & CONTROL
     entries:
-    - {label: PRIMARY AWACS,   value: "SCREWTOP / 260.000 MHz", style: green}
-    - {label: SECONDARY AWACS, value: "BACKUP / 134.000 MHz"}
+    - {label: PRIMARY AWACS,   value: "SCREWTOP / 260.0 MHz", style: green}
+    - {label: SECONDARY AWACS, value: "BACKUP / 134.0 MHz"}
     - {label: AIRSPACE CTRL,   value: Via OMAM MTMA}
-    - {label: PACKAGE LEAD,    value: FALCON51, style: amber}
-    - {label: STRIKE LEAD,     value: FALCON51, style: amber}
+    - {label: PACKAGE LEAD,    value: FALCON5, style: amber}
+    - {label: STRIKE LEAD,     value: FALCON5, style: amber}
 
   - title: C3 — IFF / SIF
     note: Squawk assigned code. M4 mandatory before departure.
@@ -227,10 +277,7 @@ spins:
     - {label: MIN SEPARATION, value: "5NM / 2000ft outside tactical formation", style: amber}
 
 comms:
-  operation: YOUR OPERATION
-  ato_day: 11/01/2026
-  classification: UNCLAS
-  wing_lead: FALCON51
+  wing_lead: FALCON5
 
   # Only list populated channels — spare rows are auto-generated for unused channels.
   uhf_presets:

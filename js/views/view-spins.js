@@ -48,6 +48,16 @@ function renderSPINS(sp) {
           currentBlock = el('div', 'spins-mission-block');
           currentBlock.appendChild(el('div', 'spins-mission-id', e.heading));
           s.appendChild(currentBlock);
+        } else if (e.type === 'orbit_reference') {
+          const target = currentBlock || s;
+          const parts = [];
+          if (e.coords) parts.push('ORBIT: ' + reformatCoordsInText(String(e.coords)));
+          if (e.anchor) parts.push(e.anchor);
+          if (e.bearing_deg != null) parts.push(e.bearing_deg + '°');
+          if (e.distance_nm != null) parts.push(e.distance_nm + 'nm');
+          const d = el('div', 'spins-sub', '• ' + parts.join(' '));
+          if (e.style) d.style.color = `var(--${e.style})`;
+          target.appendChild(d);
         } else {
           const target = currentBlock || s;
 

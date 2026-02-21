@@ -73,7 +73,9 @@ function formatIrlZuluTime(rawValue) {
 function renderIntelStrip(gc, ato) {
   var irlTimeFormatted = formatIrlZuluTime(ato.irl_time_zulu);
   var irl    = [ato.irl_date, irlTimeFormatted].filter(Boolean).join(' ') || '—';
-  var ingame = fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
+  var ingame = ato._ingame_is_zulu
+    ? fmtTime(ato.ingame_start_time)
+    : fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
 
   var sections = [
     buildIntelSection([
@@ -84,7 +86,7 @@ function renderIntelStrip(gc, ato) {
       ['PFREQ', gc.primary_freq_mhz ? gc.primary_freq_mhz + ' MHz' : '—', 'freq'],
     ]),
     buildIntelSection([
-      ['AWACS / GCI', gc.controlling_unit || '—'],
+      [gc._agency?.type || 'AWACS / GCI', gc.controlling_unit || '—'],
       ['PLATFORM',    gc.aircraft_type    || '—'],
     ]),
   ];
@@ -701,6 +703,18 @@ function selectMission(idx) {
     if (m.vul_start || m.vul_end) {
       detailTimePair(col, 'VULNERABILITY WINDOW', m.vul_start, m.vul_end, 'START', 'END');
     }
+
+    if (m.coordination && m.coordination.length) {
+      var coordField = el('div', 'detail-field');
+      coordField.appendChild(el('div', 'dk', 'COORDINATION'));
+      m.coordination.forEach(function (c) {
+        var line = el('div', 'dmpi-entry',
+          (c.mission || '—') + ' — ' + (c.type || '') +
+          (c.notes ? ' · ' + c.notes : ''));
+        coordField.appendChild(line);
+      });
+      col.appendChild(coordField);
+    }
   }));
 
   // COL 2 — Loadout
@@ -760,6 +774,11 @@ function selectMission(idx) {
 
   // COL 5 — Comms
   inner.appendChild(buildDetailColumn('COMMS', function (col) {
+    var agency = m.control ? m.control._agency : null;
+    if (agency) {
+      detailField(col, 'CONTROL AGENCY', (agency.type || '') + ' — ' + (agency.callsign || '—'));
+    }
+
     var primaryFreq   = m.control && m.control.primary_freq_mhz
       ? m.control.primary_freq_mhz + ' MHz' : '—';
     var secondaryFreq = m.control && m.control.secondary_freq_mhz

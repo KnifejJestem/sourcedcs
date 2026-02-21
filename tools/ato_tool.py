@@ -343,14 +343,17 @@ def mission_to_dict(m):
     return {k: v for k, v in d.items() if v is not None}
 
 def ato_to_yaml(ato: ATO) -> str:
-    doc = {'ato': {
-        'irl_date': ato.irl_date,
-        'irl_time_zulu': ato.irl_time,
-        'ingame_start_local': ato.ingame_start_local,
-        'ae_flags': ato.extra_flags,
-        'global_control': gc_to_dict(ato.global_control) if ato.global_control else {},
-        'missions': [mission_to_dict(m) for m in ato.missions],
-    }}
+    doc = {
+        'schema_version': '1.0',
+        'ato': {
+            'irl_date': ato.irl_date,
+            'irl_time_zulu': ato.irl_time,
+            'ingame_start_time': ato.ingame_start_local,
+            'ae_flags': ato.extra_flags,
+            'global_control': gc_to_dict(ato.global_control) if ato.global_control else {},
+            'missions': [mission_to_dict(m) for m in ato.missions],
+        }
+    }
     if ato.targets:
         doc['ato']['targets'] = ato.targets
     return yaml.dump(doc, allow_unicode=True, sort_keys=False, default_flow_style=False)
@@ -363,29 +366,119 @@ def dict_to_bullseye(d): return Bullseye(name=d.get('name',''), coords=d.get('co
 def dict_to_aircraft(d): return Aircraft(count=d.get('count',1), type=d.get('type',''), loadout=d.get('loadout'))
 def dict_to_target(d): return TargetLocation(location=d.get('location',''), net=d.get('not_earlier_than'), nlt=d.get('not_later_than'), mission_type_override=d.get('mission_type_override'), altitude=d.get('altitude'), dmp_ids=d.get('aim_points') or [])
 def dict_to_control(d): return Control(primary_freq=d.get('primary_freq_mhz'), secondary_freq=d.get('secondary_freq_mhz'), name=d.get('net_name'))
-def dict_to_refuel(d): return Refuel(tanker_callsign=d.get('tanker_callsign',''), track=d.get('ar_track',''), altitude=d.get('altitude',''), net=d.get('not_earlier_than'), nlt=d.get('not_later_than'))
+def dict_to_refuel(d):
+    # tanker_id is a reference key; use tanker_callsign if available,
+    # otherwise fall back to tanker_id as a display name.
+    callsign = d.get('tanker_callsign', d.get('tanker_id', ''))
+    return Refuel(tanker_callsign=callsign, track=d.get('ar_track',''), altitude=d.get('altitude',''), net=d.get('not_earlier_than'), nlt=d.get('not_later_than'))
 
 def yaml_to_ato(text: str) -> ATO:
-    doc = yaml.safe_load(text)['ato']
+    raw = yaml.safe_load(text)
+    doc = raw['ato']
+    reg = raw.get('registry', {})
+
+    # v1.0: resolve tanker references — check ato.tankers first, then registry.tankers
+    tanker_map = {}
+    for t in doc.get('tankers', []):
+        if t.get('id'):
+            tanker_map[t['id']] = t
+    for tid, t in reg.get('tankers', {}).items():
+        if tid not in tanker_map:
+            tanker_map[tid] = t
+
+    # v1.0: resolve target references from registry.targets
+    target_map = {}
+    for t in doc.get('targets', []):
+        if t.get('id'):
+            target_map[t['id']] = t
+    for tid, t in reg.get('targets', {}).items():
+        if tid not in target_map:
+            target_map[tid] = {**t, 'id': tid}
+
     gc_d = doc.get('global_control', {})
+
+    # Resolve control_agencies: resolve agency_id in global_control
+    agency_map = reg.get('control_agencies', {})
+    if gc_d.get('agency_id') and gc_d['agency_id'] in agency_map:
+        ag = agency_map[gc_d['agency_id']]
+        gc_d.setdefault('controlling_unit', ag.get('callsign', ''))
+        gc_d.setdefault('aircraft_type', ag.get('platform', ''))
+        gc_d.setdefault('primary_freq_mhz', ag.get('primary_freq_mhz', ''))
+
+    # Resolve bullseye if it's a string reference to registry.reference_points
+    bullseye_d = gc_d.get('bullseye')
+    if isinstance(bullseye_d, str):
+        ref_pts = reg.get('reference_points', {})
+        rp = ref_pts.get(bullseye_d, {})
+        bullseye_d = {'name': rp.get('name', bullseye_d), 'coords': rp.get('coords', '')}
+
     gc = GlobalControl(primary_freq=gc_d.get('primary_freq_mhz'), modulation=gc_d.get('modulation'),
                        unit=gc_d.get('controlling_unit'), aircraft_type=gc_d.get('aircraft_type'),
-                       bullseye=dict_to_bullseye(gc_d['bullseye']) if 'bullseye' in gc_d else None)
+                       bullseye=dict_to_bullseye(bullseye_d) if bullseye_d else None)
     missions = []
     for md in doc.get('missions', []):
+        refuel_d = md.get('refuel')
+        if refuel_d and refuel_d.get('tanker_id') and refuel_d['tanker_id'] in tanker_map:
+            t = tanker_map[refuel_d['tanker_id']]
+            refuel_d.setdefault('tanker_callsign', t.get('callsign', ''))
+            refuel_d.setdefault('ar_track', t.get('ar_track', ''))
+            refuel_d.setdefault('altitude', t.get('altitude', ''))
+
+        # Resolve control agency_id in mission control block
+        ctrl_d = md.get('control')
+        if ctrl_d and ctrl_d.get('agency_id') and ctrl_d['agency_id'] in agency_map:
+            ag = agency_map[ctrl_d['agency_id']]
+            ctrl_d.setdefault('primary_freq_mhz', ag.get('primary_freq_mhz', ''))
+            ctrl_d.setdefault('secondary_freq_mhz', ag.get('secondary_freq_mhz', ''))
+            ctrl_d.setdefault('net_name', ag.get('callsign', ''))
+
+        # Resolve target_id: pull aim_points from the referenced registry target
+        target_d = md.get('target')
+        if target_d and target_d.get('target_id') and target_d['target_id'] in target_map:
+            ref = target_map[target_d['target_id']]
+            if not target_d.get('aim_points') and ref.get('aim_points'):
+                # No explicit aim_points — pull all from the target
+                target_d['aim_points'] = [
+                    {'coords': ap.get('coords'), 'name': ap.get('name', ap.get('id', ''))}
+                    for ap in ref['aim_points']
+                ]
+            elif target_d.get('aim_points') and ref.get('aim_points'):
+                # Resolve aim_point_id references to specific aim_points
+                ap_map = {ap['id']: ap for ap in ref['aim_points'] if ap.get('id')}
+                resolved = []
+                for ap in target_d['aim_points']:
+                    if isinstance(ap, dict) and ap.get('aim_point_id') and ap['aim_point_id'] in ap_map:
+                        src = ap_map[ap['aim_point_id']]
+                        resolved.append({
+                            'coords': ap.get('coords') or src.get('coords'),
+                            'name': ap.get('name') or src.get('name', src.get('id', '')),
+                        })
+                    else:
+                        resolved.append(ap)
+                target_d['aim_points'] = resolved
+
         m = Mission(unit=md.get('unit',''), home_base=md.get('home_base_icao',''),
                     mission_number=md.get('mission_number'), callsign=md.get('callsign'),
                     mission_type=md.get('mission_type'), deploy_loc=md.get('deploy_location_icao'),
                     aar_loc=md.get('aar_location_icao'),
                     aircraft=dict_to_aircraft(md['aircraft']) if 'aircraft' in md else None,
-                    target=dict_to_target(md['target'])       if 'target'   in md else None,
+                    target=dict_to_target(target_d)           if target_d   else None,
                     control=dict_to_control(md['control'])    if 'control'  in md else None,
-                    refuel=dict_to_refuel(md['refuel'])       if 'refuel'   in md else None,
+                    refuel=dict_to_refuel(refuel_d)           if refuel_d   else None,
                     bullseye=dict_to_bullseye(md['bullseye']) if 'bullseye' in md else None)
         missions.append(m)
+
+    # v1.0 uses ingame_start_time (Zulu); legacy uses ingame_start_local
+    ingame = doc.get('ingame_start_time') or doc.get('ingame_start_local')
+
+    # Collect targets list for the ATO object
+    targets = doc.get('targets', [])
+    if not targets:
+        targets = [{**t, 'id': tid} for tid, t in reg.get('targets', {}).items()]
+
     return ATO(irl_date=doc.get('irl_date',''), irl_time=doc.get('irl_time_zulu',''),
-               ingame_start_local=doc.get('ingame_start_local'), extra_flags=doc.get('ae_flags',[]),
-               global_control=gc, missions=missions, targets=doc.get('targets', []))
+               ingame_start_local=ingame, extra_flags=doc.get('ae_flags',[]),
+               global_control=gc, missions=missions, targets=targets)
 
 # ---------------------------------------------------------------------------
 # SERIALIZER
