@@ -306,14 +306,29 @@ function drawMap(container, points, routes, geoData, airspaces) {
 
   container.appendChild(svg);
 
+  // Track mousedown position so we can distinguish a clean click from a drag.
+  // Only fire coord pick if the mouse didn't move significantly (< 5px).
+  var _pickStart = null;
+  svg.addEventListener('mousedown', (e) => {
+    if (e.button === 0) _pickStart = { x: e.clientX, y: e.clientY };
+  });
+
   // Close popup when clicking the map background, or handle coord pick
   svg.addEventListener('click', (e) => {
     // Coordinate picker mode — capture click position as lat/lon
     if (typeof EDITOR !== 'undefined' && typeof EDITOR._coordPickCb === 'function') {
+      // Ignore if the mouse moved significantly (user was dragging, not clicking)
+      if (_pickStart) {
+        var dx = e.clientX - _pickStart.x;
+        var dy = e.clientY - _pickStart.y;
+        if (dx * dx + dy * dy > 25) { _pickStart = null; return; }
+      }
+      _pickStart = null;
       var pt = clientToContent(e.clientX, e.clientY);
       EDITOR._coordPickCb(pt.lat, pt.lon);
       return;
     }
+    _pickStart = null;
     const popup = container.querySelector('.map-popup');
     if (popup) popup.style.display = 'none';
   });
@@ -448,8 +463,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
   });
 
   setupInteraction(svg, MAP_WIDTH, MAP_HEIGHT, MIN_ZOOM, MAX_ZOOM, state, applyTransform, clamp,
-    () => measure.mode === 'waitA' || measure.mode === 'waitB' ||
-          (typeof EDITOR !== 'undefined' && typeof EDITOR._coordPickCb === 'function'));
+    () => measure.mode === 'waitA' || measure.mode === 'waitB');
 
   // Initial render
   applyTransform();

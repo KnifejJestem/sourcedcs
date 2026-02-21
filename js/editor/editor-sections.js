@@ -118,7 +118,11 @@ function _editAcm(acms, index) {
 
   openEditorDialog('EDIT ACM — ' + (acm.name || ''), function (body) {
     var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO ACO');
-    backBtn.addEventListener('click', function () { openACOEditor(); });
+    backBtn.addEventListener('click', function () {
+      // Persist current ACMs state so new/deleted items survive re-read
+      editorEnsureSection('aco').acms = acms;
+      openACOEditor();
+    });
     body.appendChild(backBtn);
 
     var fName = editorField(body, 'Name', acm.name, { required: true });
@@ -241,6 +245,8 @@ function _editAcm(acms, index) {
     acm.control_freq_mhz = f.freq.value ? parseFloat(f.freq.value) : undefined;
     acm.notes = f.notes.value || undefined;
 
+    // Persist edited ACMs back to STATE.pkg so openACOEditor() re-reads them
+    editorEnsureSection('aco').acms = body._acmAcms;
     openACOEditor();
   });
 }
