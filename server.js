@@ -1,0 +1,163 @@
+// ═══════════════════════════════════════════════════════════
+// server.js — ATO BRIEF web server with session support
+// ═══════════════════════════════════════════════════════════
+//
+// Usage:
+//   npm start                         # starts on port 3000
+//   PORT=8080 npm start               # custom port
+//
+// Roles:
+//   Presenter  — loads packages, controls navigation for everyone
+//   Presentee  — read-only view, synced with the presenter
+//
+// URL scheme:
+//   http://localhost:3000/                                   → standalone (no sync)
+//   http://localhost:3000/?session=<id>&role=presenter       → presenter
+//   http://localhost:3000/?session=<id>                      → presentee (default)
+
+'use strict';
+
+const express = require('express');
+const http    = require('http');
+const path    = require('path');
+const { Server } = require('socket.io');
+
+const app    = express();
+const server = http.createServer(app);
+const io     = new Server(server);
+
+// ── Serve static front-end assets ────────────────────────────
+// Everything in the repo root except server files is a static asset.
+app.use(express.static(__dirname, {
+  index: 'index.html',
+  dotfiles: 'deny',
+}));
+
+// ── Session store ────────────────────────────────────────────
+// Each session represents a briefing room that one presenter
+// controls and many presentees observe.
+//
+// Structure:
+//   sessions.get(sessionId) → {
+//     presenterId:  socket.id | null,
+//     packageYaml:  string    | null,   // raw YAML text
+//     currentTab:   string,
+//     theme:        string,
+//     display:      { timeMode, coordMode },
+//   }
+const sessions = new Map();
+
+function getOrCreateSession(sessionId) {
+  if (!sessions.has(sessionId)) {
+    sessions.set(sessionId, {
+      presenterId: null,
+      packageYaml: null,
+      currentTab:  'ato',
+      theme:       'pro',
+      display:     { timeMode: 'Z', coordMode: 'dm' },
+    });
+  }
+  return sessions.get(sessionId);
+}
+
+// ── WebSocket handling ───────────────────────────────────────
+io.on('connection', (socket) => {
+  let currentSessionId = null;
+  let currentRole      = null;
+
+  // ── Join a session ─────────────────────────────────────────
+  socket.on('join', ({ sessionId, role }) => {
+    if (!sessionId || typeof sessionId !== 'string') return;
+
+    currentSessionId = sessionId;
+    currentRole = role === 'presenter' ? 'presenter' : 'presentee';
+    socket.join(sessionId);
+
+    const session = getOrCreateSession(sessionId);
+
+    if (currentRole === 'presenter') {
+      session.presenterId = socket.id;
+    }
+
+    // Send the current session state to the joining client
+    socket.emit('session-state', {
+      role:        currentRole,
+      packageYaml: session.packageYaml,
+      currentTab:  session.currentTab,
+      theme:       session.theme,
+      display:     session.display,
+    });
+  });
+
+  // ── Presenter: package loaded ──────────────────────────────
+  socket.on('package-loaded', (yamlText) => {
+    if (!currentSessionId || currentRole !== 'presenter') return;
+    if (typeof yamlText !== 'string') return;
+
+    const session = sessions.get(currentSessionId);
+    if (!session || session.presenterId !== socket.id) return;
+
+    session.packageYaml = yamlText;
+    socket.to(currentSessionId).emit('package-loaded', yamlText);
+  });
+
+  // ── Presenter: tab changed ────────────────────────────────
+  socket.on('tab-changed', (tab) => {
+    if (!currentSessionId || currentRole !== 'presenter') return;
+    if (typeof tab !== 'string') return;
+
+    const session = sessions.get(currentSessionId);
+    if (!session || session.presenterId !== socket.id) return;
+
+    session.currentTab = tab;
+    socket.to(currentSessionId).emit('tab-changed', tab);
+  });
+
+  // ── Presenter: theme changed ──────────────────────────────
+  socket.on('theme-changed', (theme) => {
+    if (!currentSessionId || currentRole !== 'presenter') return;
+    if (typeof theme !== 'string') return;
+
+    const session = sessions.get(currentSessionId);
+    if (!session || session.presenterId !== socket.id) return;
+
+    session.theme = theme;
+    socket.to(currentSessionId).emit('theme-changed', theme);
+  });
+
+  // ── Presenter: display settings changed ───────────────────
+  socket.on('display-changed', (display) => {
+    if (!currentSessionId || currentRole !== 'presenter') return;
+    if (!display || typeof display !== 'object') return;
+
+    const session = sessions.get(currentSessionId);
+    if (!session || session.presenterId !== socket.id) return;
+
+    if (typeof display.timeMode  === 'string') session.display.timeMode  = display.timeMode;
+    if (typeof display.coordMode === 'string') session.display.coordMode = display.coordMode;
+
+    socket.to(currentSessionId).emit('display-changed', display);
+  });
+
+  // ── Disconnect ────────────────────────────────────────────
+  socket.on('disconnect', () => {
+    if (currentSessionId && currentRole === 'presenter') {
+      const session = sessions.get(currentSessionId);
+      if (session && session.presenterId === socket.id) {
+        session.presenterId = null;
+        io.to(currentSessionId).emit('presenter-disconnected');
+      }
+    }
+  });
+});
+
+// ── Start ────────────────────────────────────────────────────
+const PORT = process.env.PORT || 3000;
+
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`ATO BRIEF server listening on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = { app, server, io, PORT };
