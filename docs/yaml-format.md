@@ -1,10 +1,16 @@
 # ATO BRIEF — Package File Format
 
-A **package file** is a single YAML file that contains one or more of the five
-top-level sections below.  Any subset is valid; the viewer will enable only the
-tabs for which data is present.
+A **package file** is a single YAML file that contains a `schema_version`,
+shared metadata blocks, and one or more of the five data sections below.
+Any subset of data sections is valid; the viewer will enable only the tabs
+for which data is present.
 
 ```yaml
+schema_version: "1.0"        # required format version
+
+header:   { ... }   # shared operation metadata (propagated to all tabs)
+registry: { ... }   # canonical reference definitions (callsigns, freqs, airfields)
+
 ato:     { ... }   # Air Tasking Order (drives ATO, Timeline, and Map tabs)
 aco:     { ... }   # Airspace Control Order (ACO tab)
 spins:   { ... }   # Special Instructions (SPINS tab)
@@ -14,32 +20,156 @@ weather: { ... }   # Mission weather forecast (WX tab)
 
 ---
 
+## `schema_version:`
+
+Top-level string that identifies the file format version.  Currently the only
+accepted value is `"1.0"`.
+
+```yaml
+schema_version: "1.0"
+```
+
+---
+
+## `header:` — Shared Operation Metadata
+
+The `header` block holds fields that apply to the entire package.  The viewer
+propagates `operation`, `ato_date`, and `classification` to every tab
+(ACO, SPINS, COMMS, Weather), so individual sections no longer need their own
+`operation` / `ato_day` / `classification` fields.
+
+```yaml
+header:
+  operation: CLEAR SKY
+  ato_date: '2026-01-11'
+  classification: UNCLAS
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `operation` | string | Operation name (displayed on every tab header) |
+| `ato_date` | string | ATO date in `YYYY-MM-DD` format |
+| `classification` | string | Classification marking (e.g. `UNCLAS`, `SECRET`) |
+
+---
+
+## `registry:` — Canonical Reference Definitions
+
+The `registry` block defines entities once so they can be referenced by key
+throughout the rest of the file.  It has three sub-sections.
+
+### `callsigns:` (map)
+
+A mapping of callsign name → metadata.  Keys are the callsign strings used
+elsewhere in the file.
+
+```yaml
+registry:
+  callsigns:
+    SCREWTOP:    { unit: USAF, type: E-3, role: AWACS primary }
+    FALCON5:     { unit: 510vFS, type: F16C, role: CAP flight lead }
+    ARCO4:       { type: KC-135, role: Tanker }
+    ROUGH RIDER: { type: CVN, role: Carrier }
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `unit` | string | Operating unit (optional) |
+| `type` | string | Platform / aircraft type |
+| `role` | string | Role description |
+
+### `frequencies:` (list)
+
+A list of all frequencies used in the package.
+
+```yaml
+registry:
+  frequencies:
+    - { freq_mhz: 243.0,   callsign: GUARD,       band: UHF, role: Emergency }
+    - { freq_mhz: 260.0,   callsign: PACKAGE,     band: UHF, role: Package primary }
+    - { freq_mhz: 121.5,   callsign: GUARD,       band: VHF, role: Emergency }
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `freq_mhz` | number | Frequency in MHz |
+| `callsign` | string | Net / station callsign |
+| `band` | string | `UHF` or `VHF` |
+| `role` | string | Free-text role description |
+
+### `airfields:` (map)
+
+A mapping of ICAO code → full airfield data.  The `ato.airfields` list
+references these by ICAO key; only `icao` and `role` are stored at the ATO
+level.
+
+```yaml
+registry:
+  airfields:
+    OMAM:
+      name: Al Dhafra AB
+      coords: N24°14'36" E054°27'07"
+      elevation_ft: 77
+    OMSJ:
+      name: Sharjah Intl
+      coords: N25°19'42" E055°31'06"
+      elevation_ft: 111
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Human-readable name |
+| `coords` | coord string | Position (DMS format — see [Coordinate strings](#coordinate-strings)) |
+| `elevation_ft` | number | Field elevation in feet |
+
+---
+
 ## Coordinate strings
 
-All `coords` / `anchor_point` / `center` / `boundary` values are free-text
-strings parsed by the viewer.  Any of the following notations are accepted:
+All `coords` / `anchor_point` / `center` / `boundary` values are strings in
+**DMS (degrees-minutes-seconds) format** using the `°` symbol:
 
-| Notation | Example |
-|----------|---------|
-| Degrees + decimal minutes (DM) | `N26°51.319' E056°21.616'` |
-| Degrees + decimal minutes (deg keyword) | `N26deg51.319' E056deg21.616'` |
-| Degrees-minutes-seconds (DMS) | `N26°51'19.09" E056°21'36.93"` |
-| DMS with deg keyword | `N26deg51'19.09" E056deg21'36.93"` |
+```
+N26°30'00" E056°20'00"
+```
 
-The hemisphere letters (`N`/`S` and `E`/`W`) are required and must come
-**before** the degrees.  The viewer reformats every stored coordinate on the
-fly when you switch the `DM / DMS / MGRS` toggle, so no re-authoring of the
-YAML is needed when changing display modes.
+| Rule | Detail |
+|------|--------|
+| Hemisphere | `N`/`S` and `E`/`W` prefix, required, before the degrees |
+| Degrees | Whole number followed by `°` |
+| Minutes | Whole number followed by `'` |
+| Seconds | Whole number (no decimals) followed by `"` |
+
+The viewer reformats every stored coordinate on the fly when you switch the
+`DM / DMS / MGRS` toggle, so no re-authoring of the YAML is needed when
+changing display modes.
 
 ## Time strings
 
-Time values are four-digit strings in `HHMM` format with an optional suffix:
+All event times are four-digit **Zulu** strings in `HHMMz` format:
 
-- `'2040'` or `'2040Z'` — Zulu (UTC)  
-- `'2040L'` — Local (stripped when parsing; use `local_offset_hours` for display)
+```
+'2040Z'
+```
 
-Always quote times in YAML to avoid the value being parsed as an integer:
-`not_earlier_than: '2040'`
+- Always include the `Z` suffix.
+- Always quote times in YAML to avoid the value being parsed as an integer:
+  `not_earlier_than: '2040Z'`
+- No local times are stored in the data.  The renderer uses
+  `ato.local_offset_hours` to convert Zulu to local for display.
+- Dates use `YYYY-MM-DD` format (see `header.ato_date`, `ato.irl_date`).
+
+---
+
+## Mission IDs
+
+All mission cross-references use a consistent ID format (e.g. `MSN3266`).
+The same IDs are used in:
+
+- `ato.missions[].mission_number`
+- `aco.acms[].missions` lists
+- `spins` IFF tables and section headings
+- `weather.mission_wx[].mission_ref`
 
 ---
 
@@ -49,10 +179,10 @@ Always quote times in YAML to avoid the value being parsed as an integer:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `irl_date` | string | Real-world date of the briefing session (`DD/MM/YYYY`) |
+| `irl_date` | string | Real-world date of the briefing session (`YYYY-MM-DD`) |
 | `irl_time_zulu` | string | Real-world start time in Zulu (`HHMMz`) |
-| `ingame_start_local` | string | In-game mission start in Local (`HHMML`) |
-| `local_offset_hours` | number | UTC offset for the theater (e.g. `4` for UTC+4). Used to convert Zulu times when the `L` display mode is selected. |
+| `ingame_start_time` | string | In-game mission start in Zulu (`HHMMz`) |
+| `local_offset_hours` | number | UTC offset for the theater (e.g. `4` for UTC+4). Used by the renderer to convert Zulu times to local for display. |
 | `ae_flags` | list of strings | Informational tags shown in the header (e.g. `[IRL, INGAME]`) |
 
 ### `global_control:`
@@ -67,17 +197,50 @@ Package-wide command and control data.
 | `bullseye.name` | string | Bullseye reference point name |
 | `bullseye.coords` | coord string | Bullseye position (plotted on map with crosshair symbol) |
 
-### `airfields:` (list)
+### `tankers:` (list)
 
-Each airfield entry is plotted on the map with a runway-cross symbol.
+Tanker definitions at the ATO level.  Missions reference tankers by `tanker_id`
+and only store mission-specific timing.
+
+```yaml
+tankers:
+  - id: ARCO4
+    callsign: ARCO4
+    ar_track: AR394
+    altitude: FL240
+  - id: TEXACO2
+    callsign: TEXACO2
+    ar_track: AR392
+    altitude: FL220
+```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `icao` | string | ICAO code (used to resolve `deploy_location_icao` etc.) |
-| `name` | string | Human-readable name |
+| `id` | string | Unique tanker identifier (referenced by `refuel.tanker_id` in missions) |
+| `callsign` | string | Tanker callsign |
+| `ar_track` | string | AR track identifier |
+| `altitude` | string | Refueling altitude (e.g. `FL240`) |
+
+### `airfields:` (list)
+
+Each entry references an airfield defined in `registry.airfields` by ICAO code.
+Full data (name, coords, elevation) comes from the registry.  Plotted on the
+map with a runway-cross symbol.
+
+```yaml
+airfields:
+  - icao: OMAM
+    role: deploy
+  - icao: OMSJ
+    role: recovery
+  - icao: OTBH
+    role: alternate
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `icao` | string | ICAO code (must match a key in `registry.airfields`) |
 | `role` | string | `deploy` / `recovery` / `alternate` / `divert` (or any string) |
-| `coords` | coord string | Position |
-| `elevation_ft` | number | Field elevation in feet (shown as sub-label on map) |
 
 ### `carriers:` (list)
 
@@ -85,6 +248,7 @@ Carrier positions are planning estimates plotted with an anchor symbol.
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `id` | string | Unique carrier identifier |
 | `name` | string | Ship name |
 | `callsign` | string | Callsign (also used as an ICAO-like key for route resolution) |
 | `deploy_coords` | coord string | Estimated position at start of ATO window |
@@ -97,17 +261,16 @@ Each marshal point is plotted on the map as a diamond symbol with a dashed orbit
 
 ```yaml
 marshal_points:
-  - name: MARSHAL ALPHA
-    coords: "N25°30'00\" E055°30'00\""
+  - id: MARSHAL-ALPHA
+    name: ALPHA
+    coords: N24°45'00" E056°00'00"
     altitude: FL250
-  - name: MARSHAL BRAVO
-    coords: "N24°45'00\" E056°00'00\""
-    altitude: FL220
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | string | Marshal point identifier (shown as map label and in popup) |
+| `id` | string | Unique marshal point identifier |
+| `name` | string | Display name (shown as map label and in popup) |
 | `coords` | coord string | Position |
 | `altitude` | string | Holding altitude (e.g. `FL250`) — shown in popup and as map sub-label |
 
@@ -138,7 +301,7 @@ and map routes.
 |-------|------|-------------|
 | `unit` | string | Operating unit |
 | `home_base_icao` | string | Home base ICAO (display only) |
-| `mission_number` | string | ATO mission number (e.g. `MSN3266`) |
+| `mission_number` | string | ATO mission number (e.g. `MSN3266`) — used as the cross-reference ID throughout the file |
 | `callsign` | string | Flight callsign |
 | `mission_type` | string | `CAP` / `BAI` / `CAS` / `SEAD` / `STRIKE` (drives color coding) |
 | `deploy_location_icao` | string | ICAO or coord string — start of route on map |
@@ -200,7 +363,7 @@ aim_points:
     name: SECONDARY
 
   # Standalone aim point (no reference)
-  - coords: "N26deg28'00\" E056deg18'00\""
+  - coords: N26°28'00" E056°18'00"
     name: MANUAL-POINT
     elevation: E200FT
 ```
@@ -220,9 +383,9 @@ Each steer point can be specified with inline coordinates or by referencing a na
 
 ```yaml
 steer_points:
-  - coords: "N24deg30'00\" E056deg00'00\""
+  - coords: N24°30'00" E056°00'00"
     name: SP1
-  - coords: "N25deg15'00\" E056deg05'00\""
+  - coords: N25°15'00" E056°05'00"
     name: SP2
   - name_ref: ALPHA        # reference a marshal point by name
     name: MARSHAL ALPHA    # optional display label (defaults to the referenced name)
@@ -244,28 +407,54 @@ steer_points:
 
 #### `refuel:`
 
+Mission-level refueling block.  References a tanker defined in `ato.tankers`
+by `tanker_id`.  Only mission-specific timing is stored here; tanker track and
+altitude come from the tanker definition.
+
+```yaml
+refuel:
+  tanker_id: ARCO4
+  not_earlier_than: '2143Z'
+  not_later_than: '2150Z'
+```
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `tanker_callsign` | string | AAR tanker callsign |
-| `ar_track` | string | AR track identifier |
-| `altitude` | string | Refueling altitude (e.g. `FL240`) |
+| `tanker_id` | string | ID of a tanker in `ato.tankers` |
 | `not_earlier_than` | time string | AAR window open (NET) |
 | `not_later_than` | time string | AAR window close (NLT) — shown as a hatched bar on the timeline |
+
+#### `coordination:` (list)
+
+Optional list of related missions and deconfliction details.
+
+```yaml
+coordination:
+  - mission: MSN3268
+    type: altitude_stack
+    notes: MSN3267 above FL200, MSN3268 below FL180 during VUL overlap 2055Z-2115Z
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mission` | string | Mission number of the related mission |
+| `type` | string | Deconfliction method (e.g. `altitude_stack`, `time_separation`) |
+| `notes` | string | Free-text deconfliction details |
 
 ---
 
 ## `aco:` — Airspace Control Order
 
+The ACO no longer needs its own `operation`, `ato_day`, or `classification`
+fields — these are propagated from `header`.
+
 ### Top-level fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `operation` | string | Operation name |
-| `ato_day` | string | Date this ACO applies to |
 | `id` | string | ACO identifier |
 | `timezone` | string | Timezone reference (display only) |
 | `distributing_agency` | string | Agency responsible for distributing this ACO |
-| `classification` | string | Classification marking |
 
 ### `acms:` (list)
 
@@ -274,9 +463,10 @@ one shape on the map.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | string | ACM identifier |
+| `id` | string | Unique ACM identifier |
+| `name` | string | ACM display name |
 | `type` | string | `ROZ` / `ORBIT` / `MEZ` / `NFZ` / `TRA` / `ANCHOR` (drives color on map) |
-| `missions` | list of strings | Mission numbers this ACM supports |
+| `missions` | list of strings | Mission numbers this ACM supports (e.g. `[MSN3266, MSN3267]`) |
 | `alt_lower` | string | Lower altitude bound (e.g. `SFC`, `FL200`) |
 | `alt_upper` | string | Upper altitude bound |
 | `time_from` | time string | Activation time |
@@ -293,24 +483,24 @@ of the three shape definitions:
 **Circle**
 ```yaml
 geometry:
-  center: "N35°05.098' E035°44.098'"
-  radius_nm: 10
+  center: N26°51'00" E056°22'00"
+  radius_nm: 20
 ```
 
 **Polygon** (≥ 3 points)
 ```yaml
 geometry:
   boundary:
-    - "N26°20'00\" E056°05'00\""
-    - "N26°40'00\" E056°05'00\""
-    - "N26°40'00\" E056°30'00\""
-    - "N26°20'00\" E056°30'00\""
+    - N26°20'00" E056°05'00"
+    - N26°40'00" E056°05'00"
+    - N26°40'00" E056°30'00"
+    - N26°20'00" E056°30'00"
 ```
 
 **Anchor / Racetrack** (orbit pattern)
 ```yaml
 geometry:
-  anchor_point: "N25°30'00\" E055°30'00\""
+  anchor_point: N25°30'00" E055°30'00"
   heading_deg: 45       # hot-leg heading in degrees true
   leg_length_nm: 15     # length of each straight leg
   direction: cw         # cw (clockwise) or ccw
@@ -323,14 +513,14 @@ geometry:
 SPINS use a flexible `sections` list.  Sections can be added, removed, or
 reordered freely without any code changes.
 
+The SPINS section no longer needs its own `operation`, `ato_day`, or
+`classification` fields — these are propagated from `header`.
+
 ### Top-level fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `operation` | string | Operation name |
-| `ato_day` | string | Date |
 | `version` | string | SPINS version |
-| `classification` | string | Classification marking |
 
 ### `sections:` (list)
 
@@ -362,9 +552,32 @@ sections:
 | `{bullet, style?}` | Bulleted line.  `style` tints the text: same color names as above |
 | `{heading}` | Mission block header — subsequent entries are indented under it until the next `{heading}` |
 | `{value}` (no `label`) | Plain objective text, shown in amber |
+| `{type: orbit_reference, ...}` | Structured orbit / positional data — see below |
 
 Coordinate strings embedded anywhere in `label`, `value`, or `bullet` text are
 automatically reformatted when the coord display mode changes.
+
+#### `orbit_reference` entry type
+
+A structured entry that replaces embedding positional data in bullet text.
+
+```yaml
+- type: orbit_reference
+  coords: N25°30'00" E055°30'00"
+  anchor: TRACK-1
+  bearing_deg: 45
+  distance_nm: 15
+  style: blue
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Must be `orbit_reference` |
+| `coords` | coord string | Reference position |
+| `anchor` | string | Name of the associated ACM / anchor point |
+| `bearing_deg` | number | Bearing in degrees true |
+| `distance_nm` | number | Distance in nautical miles |
+| `style` | string | Optional color tint: `amber` / `red` / `green` / `blue` |
 
 #### `table:` sub-key
 
@@ -378,13 +591,13 @@ automatically reformatted when the coord display mode changes.
 
 ## `comms:` — Frequency Preset Table
 
+The COMMS section no longer needs its own `operation`, `ato_day`, or
+`classification` fields — these are propagated from `header`.
+
 ### Top-level fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `operation` | string | Operation name |
-| `ato_day` | string | Date |
-| `classification` | string | Classification marking |
 | `wing_lead` | string | Wing lead callsign (display only) |
 
 ### `uhf_presets:` and `vhf_presets:`
@@ -498,9 +711,14 @@ The weather section accepts **raw METAR and TAF strings** exactly as they
 appear in a real aerodrome weather briefing.  The viewer decodes and displays
 them in human-readable form on the WX tab.
 
+The operation name is propagated from `header` — no separate `operation` field
+is needed here.
+
 ```yaml
 weather:
-  operation: CLEAR SKY          # optional header field
+  issued: '2026-01-11'
+  valid_from: '1800Z'
+  valid_to: '0600Z'
   metars:
     - 'METAR OMAM 011850Z 31012G18KT 9999 FEW040 SCT080 28/08 Q1013 NOSIG'
     - 'METAR OMSJ 011850Z 28008KT 9000 SCT035 30/12 Q1012 NOSIG'
@@ -518,7 +736,6 @@ weather:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `operation` | string | Operation name (display only) |
 | `issued` | string | When this weather package was issued (display only) |
 | `valid_from` | string | Start of the valid period (display only) |
 | `valid_to` | string | End of the valid period (display only) |
