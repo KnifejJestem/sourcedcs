@@ -1,0 +1,252 @@
+/* ═══════════════════════════════════════════════════════════
+   EDITOR STYLES
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Edit mode indicator ─────────────────────────────────────── */
+.edit-mode-btn {
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.edit-mode-btn:hover { background: var(--text); color: var(--text-inv); }
+.edit-mode-btn.active { background: var(--amber); color: #fff; border-color: var(--amber); }
+:root.movie .edit-mode-btn.active { background: var(--amber); color: #000; }
+
+/* ── Inline edit buttons (hidden unless edit-mode is active) ─── */
+.editor-btn {
+  display: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  cursor: pointer;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.editor-btn:hover { border-color: var(--text); color: var(--text); }
+:root.movie .editor-btn:hover { border-color: var(--cap); color: var(--cap); }
+
+:root.edit-mode .editor-btn { display: inline-block; }
+
+.editor-btn-add {
+  border-style: dashed;
+  margin: 6px 0;
+}
+
+/* ── Editor overlay & panel ──────────────────────────────────── */
+.editor-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 9000;
+}
+:root.movie .editor-overlay { background: rgba(0,0,0,.7); }
+
+.editor-panel {
+  width: min(520px, 90vw);
+  height: 100vh;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-md);
+}
+
+.editor-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg2);
+}
+.editor-title {
+  font-size: 11px;
+  letter-spacing: 3px;
+  font-weight: 600;
+  color: var(--text);
+}
+:root.movie .editor-title { color: var(--cap); }
+
+.editor-actions { display: flex; gap: 8px; }
+
+.editor-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 32px;
+}
+
+/* ── Form fields ─────────────────────────────────────────────── */
+.ef-group {
+  margin-bottom: 12px;
+}
+
+.ef-label {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.ef-input {
+  display: block;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.ef-input:focus { border-color: var(--text); }
+:root.movie .ef-input { background: var(--bg2); border-color: var(--border); color: var(--text); }
+:root.movie .ef-input:focus { border-color: var(--cap); }
+
+.ef-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ef-textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.5;
+}
+
+.ef-input-sm {
+  display: inline-block;
+  width: auto;
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.ef-hint {
+  font-size: 9px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+/* ── Section titles in editor ────────────────────────────────── */
+.ef-section-title {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  padding: 8px 0 4px;
+  margin-top: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.ef-btn {
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.ef-btn:hover { background: var(--text); color: var(--text-inv); }
+:root.movie .ef-btn:hover { background: var(--cap); color: #000; }
+
+.ef-btn-sm {
+  font-size: 8px;
+  padding: 2px 8px;
+}
+
+.ef-btn-add {
+  border-style: dashed;
+  margin-top: 8px;
+}
+
+.ef-btn-danger { color: var(--red); border-color: var(--red); }
+.ef-btn-danger:hover { background: var(--red); color: #fff; }
+
+/* ── List blocks ─────────────────────────────────────────────── */
+.ef-list-block {
+  margin-bottom: 16px;
+}
+
+.ef-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ef-list-title {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.ef-list-items {
+  padding: 4px 0;
+}
+
+/* ── Item rows ───────────────────────────────────────────────── */
+.ef-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.ef-item-row:hover { background: var(--bg3); }
+
+.ef-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ef-item-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* ── Aim point / preset rows ─────────────────────────────────── */
+.ef-ap-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.ef-preset-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.ef-preset-ch {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-3);
+  min-width: 40px;
+}

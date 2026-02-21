@@ -29,6 +29,8 @@
         <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
         <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
       </div>
+      <button class="edit-mode-btn" id="editModeBtn" onclick="toggleEditMode()">EDIT</button>
+      <button class="load-btn" onclick="exportPackageYaml()">EXPORT</button>
       <button class="load-btn" onclick="document.getElementById('fileInput').click()">LOAD PACKAGE</button>
       <input type="file" id="fileInput" accept=".yaml,.yml" style="display:none">
       <button class="load-btn" onclick="openJoinDialog()">JOIN ROOM</button>
@@ -125,6 +127,20 @@
   </div>
 </div>
 
+<!-- Editor Panel -->
+<div class="editor-overlay" id="editorOverlay" style="display:none">
+  <div class="editor-panel">
+    <div class="editor-header">
+      <span class="editor-title" id="editorTitle">EDIT</span>
+      <div class="editor-actions">
+        <button class="dialog-btn" onclick="closeEditorDialog()">CANCEL</button>
+        <button class="dialog-btn dialog-btn-join" onclick="saveEditorDialog()">SAVE</button>
+      </div>
+    </div>
+    <div class="editor-body" id="editorBody"></div>
+  </div>
+</div>
+
 <!-- Join Room Dialog -->
 <div class="dialog-overlay" id="joinDialog" style="display:none">
   <div class="dialog-box">
@@ -148,7 +164,7 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<script src="/vendor/js-yaml.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="js/app.js"></script>
 <script src="js/session.js"></script>
@@ -170,5 +186,9 @@
 <script src="js/map/map-draw-markers.js"></script>
 <script src="js/map/map-render.js"></script>
 <script src="js/map/map-main.js"></script>
+<script src="js/editor/editor-core.js"></script>
+<script src="js/editor/editor-registry.js"></script>
+<script src="js/editor/editor-missions.js"></script>
+<script src="js/editor/editor-sections.js"></script>
 </body>
 </html>
