@@ -245,9 +245,10 @@ function _editAcm(acms, index) {
     acm.control_freq_mhz = f.freq.value ? parseFloat(f.freq.value) : undefined;
     acm.notes = f.notes.value || undefined;
 
-    // Persist edited ACMs back to STATE.pkg so openACOEditor() re-reads them
+    // Persist edited ACMs back to STATE.pkg and re-render all views
+    // (including the map, so airspace shapes update to new positions).
     editorEnsureSection('aco').acms = body._acmAcms;
-    openACOEditor();
+    editorReRender();
   });
 }
 
