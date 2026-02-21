@@ -17,10 +17,15 @@
 
 'use strict';
 
+const crypto  = require('crypto');
 const express = require('express');
 const http    = require('http');
 const path    = require('path');
 const { Server } = require('socket.io');
+
+function hashPassword(pw) {
+  return crypto.createHash('sha256').update(pw).digest('hex');
+}
 
 const app    = express();
 const server = http.createServer(app);
@@ -75,11 +80,22 @@ io.on('connection', (socket) => {
 
     // ── Presenter password gate ─────────────────────────────
     if (wantedRole === 'presenter') {
-      const pw = typeof password === 'string' ? password : '';
+      // Only one presenter at a time
+      if (session.presenterId !== null) {
+        const presenterSocket = io.sockets.sockets.get(session.presenterId);
+        if (presenterSocket && presenterSocket.connected) {
+          socket.emit('join-error', { message: 'Room already has an active presenter' });
+          return;
+        }
+        // Previous presenter disconnected without cleanup — clear stale id
+        session.presenterId = null;
+      }
+
+      const pwHash = hashPassword(typeof password === 'string' ? password : '');
       if (session.presenterPassword === null) {
-        // First presenter sets the room password (may be empty)
-        session.presenterPassword = pw;
-      } else if (session.presenterPassword !== pw) {
+        // First presenter sets the room password (stored hashed)
+        session.presenterPassword = pwHash;
+      } else if (session.presenterPassword !== pwHash) {
         socket.emit('join-error', { message: 'Wrong presenter password' });
         return;
       }
