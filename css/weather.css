@@ -1,0 +1,145 @@
+/* ═══════════════════════════════════════════════════════════
+   WEATHER VIEW
+═══════════════════════════════════════════════════════════ */
+
+/* Observation / TAF block */
+.wx-obs-block,
+.wx-taf-block {
+  border: 1px solid var(--border);
+  margin-bottom: 12px;
+  background: var(--bg-card);
+}
+
+.wx-obs-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+
+.wx-station {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+
+.wx-time {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+/* Flight-category badge */
+.wx-cat-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+}
+.wx-vfr  { background: var(--green);  color: #fff; }
+.wx-mvfr { background: var(--blue);   color: #fff; }
+.wx-ifr  { background: var(--red);    color: #fff; }
+.wx-lifr { background: var(--sead);   color: #fff; }
+:root.movie .wx-vfr  { background: var(--cap);   color: #000; }
+:root.movie .wx-mvfr { background: var(--blue);  color: #000; }
+:root.movie .wx-ifr  { background: var(--red);   color: #000; }
+:root.movie .wx-lifr { background: var(--sead);  color: #000; }
+
+/* Grid of key-value rows inside an obs/taf block */
+.wx-grid {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.wx-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  align-items: flex-start;
+}
+.wx-row:last-child { border-bottom: none; }
+
+.wx-lbl {
+  color: var(--text-3);
+  min-width: 140px;
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.wx-val { color: var(--text); }
+.wx-phenomena { color: var(--amber); font-weight: 500; }
+.wx-remarks   { color: var(--text-2); font-style: italic; }
+
+/* Raw METAR/TAF string display */
+.wx-raw {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-3);
+  letter-spacing: .5px;
+  padding: 4px 12px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  word-break: break-all;
+}
+
+/* TAF base conditions label */
+.wx-taf-base { border-bottom: 1px solid var(--border); }
+.wx-taf-base-lbl {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  padding: 4px 12px;
+  background: var(--bg2);
+}
+
+/* Change groups inside TAF (BECMG / TEMPO / FM) */
+.wx-chg-group { border-top: 1px dashed var(--border); }
+
+.wx-chg-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  background: var(--bg2);
+}
+
+.wx-chg-type {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--amber);
+}
+
+.wx-chg-time {
+  font-size: 9px;
+  color: var(--text-3);
+}
+
+.wx-chg-grid { padding-left: 12px; }
+
+/* Mission weather notes */
+.wx-msn-row {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  align-items: flex-start;
+}
+.wx-msn-row:last-child { border-bottom: none; }
+
+.wx-msn-ref {
+  font-weight: 600;
+  color: var(--text-2);
+  min-width: 100px;
+  flex-shrink: 0;
+  letter-spacing: 1px;
+}
+
+.wx-msn-note { color: var(--text); }

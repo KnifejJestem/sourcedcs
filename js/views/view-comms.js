@@ -23,16 +23,19 @@ function renderCOMMS(cm) {
   const grid = el('div', 'comms-grid');
 
   function radioBlock(title, presets) {
-    if (!presets) return;
+    if (!presets) presets = {};
 
     const block = el('div', 'radio-block');
     block.appendChild(el('div', 'radio-title', title));
 
     const { table: tbl, tbody } = docTable(['CH', 'CALLSIGN', 'MHz', 'ROLE']);
 
-    // Presets can be keyed by integer or string — normalise and sort numerically
-    Object.keys(presets).sort((a, b) => parseInt(a) - parseInt(b)).forEach(ch => {
-      const p       = presets[ch];
+    // Presets can be keyed by integer or string — normalise and sort numerically.
+    // Auto-fill spare rows for channels 1–20 not defined in YAML.
+    const TOTAL_CHANNELS = 20;
+    for (let ch = 1; ch <= TOTAL_CHANNELS; ch++) {
+      const key = Object.keys(presets).find(k => parseInt(k) === ch);
+      const p   = key ? presets[key] : { callsign: 'SPARE', freq_mhz: null, role: null };
       const tr      = tbody.insertRow();
       const isEmpty = !p.freq_mhz;
       if (isEmpty) tr.className = 'freq-empty';
@@ -42,7 +45,7 @@ function renderCOMMS(cm) {
       tr.insertCell().appendChild(el('span', p.freq_mhz ? 'freq-mhz' : 'text-dim',
         p.freq_mhz ? String(p.freq_mhz) : '—'));
       tr.insertCell().appendChild(el('span', 'freq-role', p.role || ''));
-    });
+    }
 
     block.appendChild(tbl);
     grid.appendChild(block);

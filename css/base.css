@@ -1,0 +1,122 @@
+/* ═══════════════════════════════════════════════════════════
+   THEME TOKENS
+═══════════════════════════════════════════════════════════ */
+:root {
+  /* Professional (default) */
+  --bg:          #f4f3f0;
+  --bg2:         #edecea;
+  --bg3:         #e5e4e0;
+  --bg-card:     #ffffff;
+  --border:      #c8c5bf;
+  --border-strong:#9a9690;
+  --text:        #1a1917;
+  --text-2:      #4a4845;
+  --text-3:      #7a7875;
+  --text-inv:    #ffffff;
+
+  /* Mission type colours */
+  --cap:    #1a5c2e; --cap-bg:    #e8f4ec;
+  --bai:    #7c3500; --bai-bg:    #fdf0e6;
+  --cas:    #003d6b; --cas-bg:    #e6f1fb;
+  --sead:   #4a1a6b; --sead-bg:   #f3edfb;
+  --strike: #6b0f1a; --strike-bg: #fbe8ea;
+  --other:  #3d3400; --other-bg:  #f9f6e0;
+
+  /* Semantic */
+  --amber: #7c5000;
+  --red:   #9b1c1c;
+  --blue:  #1a3a6b;
+  --green: #1a5c2e;
+
+  /* Timeline */
+  --tl-bg:       #f8f7f4;
+  --tl-grid:     #ddd9d3;
+  --tl-bar-text: #ffffff;
+  --refuel-a:    rgba(120,80,0,0.55);
+  --refuel-b:    rgba(120,80,0,0.25);
+
+  --font-mono: 'IBM Plex Mono', monospace;
+  --shadow:    0 1px 3px rgba(0,0,0,.10);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.12);
+}
+
+:root.movie {
+  --bg:          #050a08;
+  --bg2:         #080f0b;
+  --bg3:         #0d1710;
+  --bg-card:     #0a120d;
+  --border:      #1e3d28;
+  --border-strong:#2a5538;
+  --text:        #c8f0d0;
+  --text-2:      #6aaa7a;
+  --text-3:      #3a6a48;
+  --text-inv:    #050a08;
+
+  --cap:    #39ff7a; --cap-bg:    rgba(57,255,122,.10);
+  --bai:    #ff8c00; --bai-bg:    rgba(255,140,0,.10);
+  --cas:    #4fc3f7; --cas-bg:    rgba(79,195,247,.10);
+  --sead:   #c084fc; --sead-bg:   rgba(192,132,252,.10);
+  --strike: #ff4444; --strike-bg: rgba(255,68,68,.10);
+  --other:  #ffb020; --other-bg:  rgba(255,176,32,.10);
+
+  --amber: #ffb020;
+  --red:   #ff4444;
+  --blue:  #4fc3f7;
+  --green: #39ff7a;
+
+  --tl-bg:       #060d08;
+  --tl-grid:     #112218;
+  --tl-bar-text: #000000;
+  --refuel-a:    rgba(255,176,32,.65);
+  --refuel-b:    rgba(255,140,0,.25);
+
+  --shadow:    0 1px 6px rgba(0,0,0,.5);
+  --shadow-md: 0 4px 20px rgba(0,0,0,.6);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MOVIE FX
+═══════════════════════════════════════════════════════════ */
+.scanline { display: none; }
+:root.movie .scanline {
+  display: block;
+  position: fixed; left: 0; right: 0; height: 3px;
+  background: linear-gradient(transparent, rgba(57,255,122,.05), transparent);
+  animation: scan 9s linear infinite;
+  pointer-events: none; z-index: 9997;
+}
+@keyframes scan { 0% { top: -4%; } 100% { top: 104%; } }
+
+:root.movie body::before {
+  content: ''; position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px,
+    rgba(0,0,0,.07) 2px, rgba(0,0,0,.07) 4px);
+  pointer-events: none; z-index: 9999;
+}
+:root.movie body::after {
+  content: ''; position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.65) 100%);
+  pointer-events: none; z-index: 9998;
+}
+:root.movie .header-title {
+  font-family: 'Orbitron', monospace;
+  color: var(--cap);
+  text-shadow: 0 0 18px rgba(57,255,122,.4);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESET + BASE
+═══════════════════════════════════════════════════════════ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+button { font-family: inherit; cursor: pointer; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
