@@ -157,6 +157,63 @@
   border-bottom: 1px solid var(--border);
 }
 .tl-lbl { font-size: 8px; letter-spacing: 1.5px; color: var(--text-3); }
+
+/* Timeline legend — colored swatches next to labels */
+.tl-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tl-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+}
+.tl-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 8px;
+  border-radius: 1px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.tl-swatch-tot {
+  background: var(--text-3);
+  border: 1px solid rgba(255,255,255,.3);
+}
+.tl-swatch-tos {
+  background: var(--text-3);
+  opacity: .5;
+}
+.tl-swatch-aar {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--refuel-a), var(--refuel-a) 2px,
+    var(--refuel-b) 2px, var(--refuel-b) 4px
+  );
+}
+.tl-swatch-vul {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--red) 0, var(--red) 2px,
+    transparent 2px, transparent 4px
+  );
+  opacity: .5;
+  border: 1px dashed var(--red);
+}
+.tl-swatch-to {
+  width: 3px;
+  height: 10px;
+  background: var(--green, #39ff7a);
+}
+.tl-swatch-rec {
+  width: 3px;
+  height: 10px;
+  background: var(--blue, #4fc3f7);
+}
 .tl-scroll { flex: 1; overflow: auto; padding: 12px 16px; }
 .tl-canvas { min-width: 100%; position: relative; }
 .tl-ticks { display: flex; margin-left: 110px; margin-bottom: 4px; }
