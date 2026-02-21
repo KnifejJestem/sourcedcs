@@ -229,28 +229,61 @@ function collectMissionTimes(m) {
 
 /**
  * Compute the visible time range for the timeline (in minutes).
- * Returns { min, max } or null if no time data exists.
+ * Returns { min, max, pivot } or null if no time data exists.
+ * pivot > 0 means some times crossed midnight and were shifted +1440 to
+ * keep them chronological; normMins() must be used when placing bars.
  */
 function computeTimeRange(missions) {
-  var minT = Infinity;
-  var maxT = -Infinity;
+  var allTimes = [];
 
   missions.forEach(function (m) {
     collectMissionTimes(m).forEach(function (t) {
-      if (t != null) {
-        if (t < minT) { minT = t; }
-        if (t > maxT) { maxT = t; }
-      }
+      if (t != null) allTimes.push(t);
     });
   });
 
-  if (!isFinite(minT)) { return null; }
+  if (!allTimes.length) { return null; }
+
+  var minT = Math.min.apply(null, allTimes);
+  var maxT = Math.max.apply(null, allTimes);
+
+  // Handle day-boundary crossing: if the raw span > 12 hours, times may
+  // wrap across midnight (e.g. missions running from 2300Z to 0100Z).
+  // Shift any time below (minT + 720) forward by 1440 so bars stay
+  // chronological.  Store the crossover point as `pivot` so normMins()
+  // can apply the same adjustment when computing bar positions.
+  var pivot = 0;
+  if (maxT - minT > 720) {
+    var crossPoint = minT + 720;
+    var adjTimes = allTimes.map(function (t) { return t < crossPoint ? t + 1440 : t; });
+    var adjMin = Math.min.apply(null, adjTimes);
+    var adjMax = Math.max.apply(null, adjTimes);
+    // Only use the adjusted range if it is actually tighter
+    if (adjMax - adjMin < maxT - minT) {
+      minT  = adjMin;
+      maxT  = adjMax;
+      pivot = crossPoint;
+    }
+  }
 
   var step = TIMELINE_STEP_MINS;
   return {
-    min: Math.floor((minT - step) / step) * step,
-    max: Math.ceil ((maxT + step) / step) * step,
+    min:   Math.floor((minT - step) / step) * step,
+    max:   Math.ceil ((maxT + step) / step) * step,
+    pivot: pivot,
   };
+}
+
+/**
+ * Normalize a raw HHMM minute value relative to the timeline range,
+ * adding 1440 when the range crosses midnight (pivot > 0) and the
+ * time falls before the pivot point.
+ */
+function normMins(v, range) {
+  var m = toMins(v);
+  if (m == null) { return null; }
+  if (range.pivot > 0 && m < range.pivot) { return m + 1440; }
+  return m;
 }
 
 /**
@@ -268,9 +301,10 @@ function displayMinutes(rawMins) {
 
 /**
  * Format minutes as "HHMMx" where x is the current time suffix (Z or L).
+ * Wraps values that exceed 1440 (midnight crossing in shifted timeline).
  */
 function formatTickLabel(minutes) {
-  var dm     = displayMinutes(minutes);
+  var dm     = wrapMins(displayMinutes(minutes));
   var hh     = String(Math.floor(dm / 60)).padStart(2, '0');
   var mm     = String(dm % 60).padStart(2, '0');
   return hh + mm + STATE.display.timeMode;
@@ -336,8 +370,8 @@ function addGridLines(track, range) {
  * Add a single bar to the track if start/end are both valid.
  */
 function addBarIfValid(track, missionIdx, opts) {
-  var startMins = toMins(opts.startTime);
-  var endMins   = toMins(opts.endTime);
+  var startMins = normMins(opts.startTime, opts.range);
+  var endMins   = normMins(opts.endTime,   opts.range);
   if (startMins == null || endMins == null) { return; }
 
   var leftPct  = timeToLeftPct(startMins, opts.range.min, opts.span);
@@ -357,8 +391,8 @@ function addBarIfValid(track, missionIdx, opts) {
  * Add the vulnerability window bar (semi-transparent hatched overlay).
  */
 function addVulnerabilityBar(track, m, range) {
-  var vulStart = toMins(m.vul_start);
-  var vulEnd   = toMins(m.vul_end);
+  var vulStart = normMins(m.vul_start, range);
+  var vulEnd   = normMins(m.vul_end,   range);
   if (vulStart == null || vulEnd == null) { return; }
 
   var span     = range.max - range.min;
@@ -431,8 +465,8 @@ function addMissionBars(track, m, missionIdx, range) {
  */
 function addRefuelBar(track, m, range) {
   if (!m.refuel) { return; }
-  var rStart = toMins(m.refuel.not_earlier_than);
-  var rEnd   = toMins(m.refuel.not_later_than);
+  var rStart = normMins(m.refuel.not_earlier_than, range);
+  var rEnd   = normMins(m.refuel.not_later_than,   range);
   if (rStart == null || rEnd == null) { return; }
 
   var span     = range.max - range.min;
@@ -453,7 +487,7 @@ function addRefuelBar(track, m, range) {
  * Add a vertical marker (takeoff or recovery).
  */
 function addTimeMarker(track, timeValue, cssClass, tooltipPrefix, range) {
-  var mins = toMins(timeValue);
+  var mins = normMins(timeValue, range);
   if (mins == null) { return; }
 
   var span   = range.max - range.min;
@@ -648,7 +682,7 @@ function selectMission(idx) {
     csField.appendChild(csVal);
     col.appendChild(csField);
 
-    detailField(col, 'MISSION NO', m.mission_number || '—', 'amber');
+    detailField(col, 'MISSION NO', m.mission_number || '—');
 
     var typeStr = m.mission_type || '—';
     if (m.target && m.target.mission_type_override) {
@@ -661,9 +695,18 @@ function selectMission(idx) {
     detailField(col, 'AIRCRAFT',
       m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '—');
 
+    if (m.takeoff_time)  { detailField(col, 'TAKEOFF',  fmtTime(m.takeoff_time), 'time'); }
+    if (m.recovery_time) { detailField(col, 'RECOVERY', fmtTime(m.recovery_time), 'time'); }
+
+    if (m.vul_start || m.vul_end) {
+      detailTimePair(col, 'VULNERABILITY WINDOW', m.vul_start, m.vul_end, 'START', 'END');
+    }
+  }));
+
+  // COL 2 — Loadout
+  inner.appendChild(buildDetailColumn('LOADOUT', function (col) {
     if (m.aircraft && m.aircraft.loadout) {
       var lf = el('div', 'detail-field');
-      lf.appendChild(el('div', 'dk', 'LOADOUT'));
       lf.appendChild(loadoutWidget(m.aircraft.loadout));
       col.appendChild(lf);
     } else {
@@ -671,9 +714,9 @@ function selectMission(idx) {
     }
   }));
 
-  // COL 2 — Target & Timing
+  // COL 3 — Target
   inner.appendChild(buildDetailColumn('TARGET', function (col) {
-    detailField(col, 'LOCATION', m.target ? m.target.location || '—' : '—', 'amber');
+    detailField(col, 'LOCATION', m.target ? m.target.location || '—' : '—');
     detailField(col, 'ALTITUDE', m.target ? m.target.altitude || '—' : '—');
 
     var hasTOT = m.target && (m.target.tot_net || m.target.tot_nlt);
@@ -692,13 +735,6 @@ function selectMission(idx) {
         m.target ? m.target.not_later_than   : undefined);
     }
 
-    if (m.takeoff_time)  { detailField(col, 'TAKEOFF',  fmtTime(m.takeoff_time)); }
-    if (m.recovery_time) { detailField(col, 'RECOVERY', fmtTime(m.recovery_time)); }
-
-    if (m.vul_start || m.vul_end) {
-      detailTimePair(col, 'VULNERABILITY WINDOW', m.vul_start, m.vul_end, 'START', 'END');
-    }
-
     var aimPoints = m.target ? m.target.aim_points : null;
     if (aimPoints && aimPoints.length) {
       var apField = el('div', 'detail-field');
@@ -710,7 +746,19 @@ function selectMission(idx) {
     }
   }));
 
-  // COL 3 — Comms
+  // COL 4 — AAR / Refuel
+  inner.appendChild(buildDetailColumn('AAR / REFUEL', function (col) {
+    if (!m.refuel) {
+      detailField(col, 'STATUS', 'No AAR planned', 'sm');
+      return;
+    }
+    detailField(col, 'TANKER',   m.refuel.tanker_callsign || '—');
+    detailField(col, 'AR TRACK', m.refuel.ar_track || '—');
+    detailField(col, 'ALTITUDE', m.refuel.altitude || '—');
+    detailTimePair(col, 'AAR WINDOW', m.refuel.not_earlier_than, m.refuel.not_later_than);
+  }));
+
+  // COL 5 — Comms
   inner.appendChild(buildDetailColumn('COMMS', function (col) {
     var primaryFreq   = m.control && m.control.primary_freq_mhz
       ? m.control.primary_freq_mhz + ' MHz' : '—';
@@ -721,18 +769,6 @@ function selectMission(idx) {
     detailField(col, 'SECONDARY FREQ', secondaryFreq, 'freq');
     detailField(col, 'NET',            m.control ? m.control.net_name || '—' : '—');
     detailField(col, 'AAR LOCATION',   m.aar_location_icao || '—');
-  }));
-
-  // COL 4 — AAR / Refuel
-  inner.appendChild(buildDetailColumn('AAR / REFUEL', function (col) {
-    if (!m.refuel) {
-      detailField(col, 'STATUS', 'No AAR planned', 'sm');
-      return;
-    }
-    detailField(col, 'TANKER',   m.refuel.tanker_callsign || '—', 'amber');
-    detailField(col, 'AR TRACK', m.refuel.ar_track || '—');
-    detailField(col, 'ALTITUDE', m.refuel.altitude || '—');
-    detailTimePair(col, 'AAR WINDOW', m.refuel.not_earlier_than, m.refuel.not_later_than);
   }));
 }
 

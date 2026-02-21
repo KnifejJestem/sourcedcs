@@ -196,11 +196,16 @@ ato:
     engagement_range_nm: 15
     max_alt_ft: 40000
     elevation: 200ft
+  marshal_points:
+  - name: ALPHA
+    coords: N24deg45'00" E056deg00'00"
+    altitude: FL250
 aco:
-  id: ACO-14-09
   operation: CLEAR SKY
   ato_day: 30/09/2014
+  id: ACO-14-09
   timezone: UTC
+  distributing_agency: CAOC
   classification: SCT
   acms:
   - name: WEST-1

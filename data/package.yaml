@@ -83,6 +83,11 @@ ato:
       coords: "N26deg28'00\" E056deg18'00\""
       elevation: E80FT
 
+  marshal_points:
+    - name: ALPHA
+      coords: "N24deg45'00\" E056deg00'00\""
+      altitude: FL250
+
   missions:
     - unit: 510vFS
       home_base_icao: OMAM
@@ -135,10 +140,11 @@ ato:
         not_later_than: '2150'
 
 aco:
-  id: ACO-XX-XX
   operation: YOUR OPERATION
   ato_day: 11/01/2026
+  id: ACO-XX-XX
   timezone: UTC
+  distributing_agency: CAOC      # agency distributing this ACO
   classification: UNCLAS
   acms:
     - name: CAP-W

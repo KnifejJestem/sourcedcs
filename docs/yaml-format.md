@@ -90,6 +90,27 @@ Carrier positions are planning estimates plotted with an anchor symbol.
 | `deploy_coords` | coord string | Estimated position at start of ATO window |
 | `recovery_coords` | coord string | Estimated position at end / recovery window |
 
+### `marshal_points:` (list)
+
+Marshal points are holding positions where flights orbit before ingressing to the target area.
+Each marshal point is plotted on the map as a diamond symbol with a dashed orbit ring.
+
+```yaml
+marshal_points:
+  - name: MARSHAL ALPHA
+    coords: "N25°30'00\" E055°30'00\""
+    altitude: FL250
+  - name: MARSHAL BRAVO
+    coords: "N24°45'00\" E056°00'00\""
+    altitude: FL220
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Marshal point identifier (shown as map label and in popup) |
+| `coords` | coord string | Position |
+| `altitude` | string | Holding altitude (e.g. `FL250`) — shown in popup and as map sub-label |
+
 ### `targets:` (list)
 
 Reusable target definitions that can be referenced by missions via `target_ref`.
@@ -194,6 +215,8 @@ aim_points:
 #### `steer_points:` (list)
 
 En-route waypoints plotted as hollow circles connected by dashed lines.
+Each steer point can be specified with inline coordinates or by referencing a named marker
+(airfield ICAO, carrier callsign, or marshal point name) via `name_ref`.
 
 ```yaml
 steer_points:
@@ -201,11 +224,14 @@ steer_points:
     name: SP1
   - coords: "N25deg15'00\" E056deg05'00\""
     name: SP2
+  - name_ref: ALPHA        # reference a marshal point by name
+    name: MARSHAL ALPHA    # optional display label (defaults to the referenced name)
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `coords` | coord string | Waypoint position |
+| `coords` | coord string | Waypoint position (used when `name_ref` is not set) |
+| `name_ref` | string | Name of an airfield (ICAO), carrier (callsign), or marshal point to use as the waypoint position |
 | `name` | string | Waypoint label shown on map |
 
 #### `control:`
@@ -234,10 +260,11 @@ steer_points:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | ACO identifier |
 | `operation` | string | Operation name |
 | `ato_day` | string | Date this ACO applies to |
+| `id` | string | ACO identifier |
 | `timezone` | string | Timezone reference (display only) |
+| `distributing_agency` | string | Agency responsible for distributing this ACO |
 | `classification` | string | Classification marking |
 
 ### `acms:` (list)

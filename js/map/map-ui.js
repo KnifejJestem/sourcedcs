@@ -19,6 +19,7 @@ const KIND_LABELS = {
   airfield: 'AIRFIELD',
   carrier:  'CARRIER',
   airspace: 'AIRSPACE',
+  marshal:  'MARSHAL POINT',
 };
 
 // ── Per-kind row builders ─────────────────────────────────
@@ -89,6 +90,11 @@ function buildPopupRows(p) {
   if (p.kind === 'airfield') return buildAirfieldRows(p);
   if (p.kind === 'carrier')  return buildCarrierRows(p);
   if (p.kind === 'airspace') return buildAirspaceRows(p);
+  if (p.kind === 'marshal') {
+    const rows = [['NAME', p.label]];
+    if (p.altitude) rows.push(['ALTITUDE', p.altitude]);
+    return rows;
+  }
   return [];
 }
 
@@ -292,11 +298,12 @@ function createSidebar(opts) {
 
   // Fixed marker types (shown only when present in the data)
   const markerTypes = [
-    { check: opts.points.some(p => p.kind === 'bullseye'), color: '#ffb020',      label: 'BULLSEYE'     },
-    { check: opts.points.some(p => p.kind === 'airfield'), color: opts.C.af,      label: 'AIRFIELD'     },
+    { check: opts.points.some(p => p.kind === 'bullseye'), color: '#ffb020',      label: 'BULLSEYE'      },
+    { check: opts.points.some(p => p.kind === 'airfield'), color: opts.C.af,      label: 'AIRFIELD'      },
     { check: opts.points.some(p => p.kind === 'carrier'),  color: opts.C.cv,      label: 'CARRIER (EST)' },
-    { check: opts.points.some(p => p.kind === 'threat'),   color: opts.threatCol, label: 'THREAT'       },
-    { check: hasEngZones,                                   color: opts.threatCol, label: 'ENG ZONE'     },
+    { check: opts.points.some(p => p.kind === 'threat'),   color: opts.threatCol, label: 'THREAT'        },
+    { check: hasEngZones,                                   color: opts.threatCol, label: 'ENG ZONE'      },
+    { check: opts.points.some(p => p.kind === 'marshal'),  color: '#7ec8e3',      label: 'MARSHAL PT'    },
   ];
   markerTypes.forEach(({ check, color, label }) => {
     if (check) addLegendRow(color, label);

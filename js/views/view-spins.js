@@ -58,7 +58,9 @@ function renderSPINS(sp) {
               e.style || null);
           } else if (e.bullet != null) {
             const d = el('div', 'spins-sub', '• ' + reformatCoordsInText(String(e.bullet)));
-            if (e.style) d.style.color = `var(--${e.style})`;
+            if (e.style === 'red' || e.style === 'blue') {
+              d.style.color = `var(--${e.style})`;
+            }
             target.appendChild(d);
           } else if (e.value != null) {
             target.appendChild(el('div', 'spins-mission-obj', reformatCoordsInText(String(e.value))));

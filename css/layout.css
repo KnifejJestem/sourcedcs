@@ -49,7 +49,7 @@ header {
   color: var(--text);
 }
 :root.movie .meta-value { color: var(--amber); }
-.meta-value.ingame { color: var(--amber); }
+.meta-value.ingame { color: var(--text); }
 
 .header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 
