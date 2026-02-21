@@ -308,10 +308,14 @@ function createSidebar(opts) {
     addLegendRow(opts.airspaceColors[t] || opts.defaultAirspaceCol, t);
   });
 
+  const measureBtn = el('button', 'map-msn-btn map-measure-btn', '⊕ MEASURE');
+  sidebar.appendChild(measureBtn);
+
   const resetBtn = el('button', 'map-msn-btn map-reset-btn', '⊙ RESET VIEW');
   sidebar.appendChild(resetBtn);
 
-  // Expose the reset button so drawMap can wire it
+  // Expose buttons so drawMap can wire them
+  sidebar._measureBtn = measureBtn;
   sidebar._resetBtn = resetBtn;
 
   return sidebar;

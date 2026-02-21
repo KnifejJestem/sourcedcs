@@ -12,7 +12,9 @@ const ZOOM_FACTOR = 1.18;
 // Attaches wheel, mouse, and touch event listeners to the SVG.
 // state is a mutable object {tx, ty, sc} shared with drawMap.
 // applyTransform and clamp are callbacks provided by drawMap.
-function setupInteraction(svg, W, H, MIN_SC, MAX_SC, state, applyTransform, clamp) {
+// isMeasureActive (optional) — when it returns true, left-drag is suppressed
+//   so the measurement tool can capture clicks instead.
+function setupInteraction(svg, W, H, MIN_SC, MAX_SC, state, applyTransform, clamp, isMeasureActive) {
 
   // ── Mouse wheel / trackpad zoom ──────────────────────────
   svg.addEventListener('wheel', e => {
@@ -37,6 +39,7 @@ function setupInteraction(svg, W, H, MIN_SC, MAX_SC, state, applyTransform, clam
 
   svg.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
+    if (isMeasureActive && isMeasureActive()) return; // measure tool captures clicks
     drag = { ox: e.clientX, oy: e.clientY, tx: state.tx, ty: state.ty };
     svg.style.cursor = 'grabbing';
     e.preventDefault();

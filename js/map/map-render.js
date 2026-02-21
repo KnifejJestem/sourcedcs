@@ -9,6 +9,28 @@
 let _refreshPopup = null;
 function mapRefreshPopup() { if (_refreshPopup) _refreshPopup(); }
 
+// ── Measurement helpers ────────────────────────────────────────
+// Speed used for transit-time calculation on the measurement band.
+const MEAS_SPEED_KT = 400;
+
+// Great-circle distance between two lat/lon points in nautical miles.
+function haversineNm(lat1, lon1, lat2, lon2) {
+  const R   = 3440.065; // Earth radius in NM
+  const toR = d => d * Math.PI / 180;
+  const dLat = toR(lat2 - lat1);
+  const dLon = toR(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+          + Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Format a decimal-hour duration as "Xh XXm" or "XXm".
+function fmtMeasureTime(hours) {
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+}
+
 // ── Main draw ──────────────────────────────────────────────
 // Architecture:
 //   SVG
@@ -178,6 +200,93 @@ function drawMap(container, points, routes, geoData, airspaces) {
   const gridLabels = createGridLabelOverlay(ctx);
   svg.appendChild(gridLabels.overlay);
 
+  // ── Measurement overlay ──────────────────────────────────
+  // All measurement SVG elements live in this group which sits in SVG
+  // coordinate space (not the panned/zoomed content group).  Points are
+  // stored in content-space so the band tracks the map on pan/zoom.
+  const measureLayer = makeSvgEl('g', { 'pointer-events': 'none' });
+  svg.appendChild(measureLayer);
+
+  // Measurement state — two optional anchor points in content-space + lat/lon
+  const measure = { ptA: null, ptB: null, clickMode: false };
+
+  // Convert content-space (cx, cy) → current SVG overlay coords
+  function contentToOverlay(cx, cy) {
+    return { x: cx * state.sc + state.tx, y: cy * state.sc + state.ty };
+  }
+
+  // Convert a client mouse position → content-space + lat/lon
+  function clientToContent(clientX, clientY) {
+    const rect = svg.getBoundingClientRect();
+    const sx = (clientX - rect.left) / rect.width  * W;
+    const sy = (clientY - rect.top)  / rect.height * H;
+    const cx = (sx - state.tx) / state.sc;
+    const cy = (sy - state.ty) / state.sc;
+    const lat = vMaxLat - cy / H * vLat;
+    const lon = vMinLon + cx / W * vLon;
+    return { cx, cy, lat, lon };
+  }
+
+  const MEAS_COL     = '#ffdd00';
+  const MEAS_FONT    = 10;
+  const MEAS_STROKE  = 1.5;
+
+  function redrawMeasure() {
+    measureLayer.innerHTML = '';
+    if (!measure.ptA) return;
+
+    const a = contentToOverlay(measure.ptA.cx, measure.ptA.cy);
+    // Endpoint A — circle + dot
+    measureLayer.appendChild(makeSvgEl('circle', {
+      cx: a.x, cy: a.y, r: 5,
+      fill: 'none', stroke: MEAS_COL, 'stroke-width': MEAS_STROKE,
+    }));
+    measureLayer.appendChild(makeSvgEl('circle', {
+      cx: a.x, cy: a.y, r: 2, fill: MEAS_COL,
+    }));
+
+    if (!measure.ptB) return;
+
+    const b = contentToOverlay(measure.ptB.cx, measure.ptB.cy);
+
+    // Dashed line
+    measureLayer.appendChild(makeSvgEl('line', {
+      x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+      stroke: MEAS_COL, 'stroke-width': MEAS_STROKE, 'stroke-dasharray': '6 3',
+    }));
+
+    // Endpoint B
+    measureLayer.appendChild(makeSvgEl('circle', {
+      cx: b.x, cy: b.y, r: 5,
+      fill: 'none', stroke: MEAS_COL, 'stroke-width': MEAS_STROKE,
+    }));
+    measureLayer.appendChild(makeSvgEl('circle', {
+      cx: b.x, cy: b.y, r: 2, fill: MEAS_COL,
+    }));
+
+    // Distance + time label at midpoint
+    const nm  = haversineNm(measure.ptA.lat, measure.ptA.lon, measure.ptB.lat, measure.ptB.lon);
+    const hrs = nm / MEAS_SPEED_KT;
+    const lbl = `${nm.toFixed(1)} NM  ·  ${fmtMeasureTime(hrs)} @ ${MEAS_SPEED_KT} KT`;
+    const mx  = (a.x + b.x) / 2;
+    const my  = (a.y + b.y) / 2;
+
+    // Translucent background pill for readability
+    const bgRect = makeSvgEl('rect', {
+      x: mx - 84, y: my - 18, width: 168, height: 16,
+      rx: 3, fill: '#000000', opacity: '0.55',
+    });
+    measureLayer.appendChild(bgRect);
+
+    measureLayer.appendChild(svgText(lbl, {
+      x: mx, y: my - 6,
+      'font-size': MEAS_FONT,
+      'font-family': MONO_FONT,
+      fill: MEAS_COL,
+      'text-anchor': 'middle',
+    }));
+  }
+
   container.appendChild(svg);
 
   // Close popup when clicking the map background
@@ -208,6 +317,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
       m.setAttribute('transform', `translate(${m._baseX},${m._baseY}) scale(${invSc.toFixed(5)})`);
     });
     gridLabels.redraw(state.tx, state.ty, state.sc);
+    redrawMeasure();
   }
 
   function clamp() {
@@ -226,7 +336,69 @@ function drawMap(container, points, routes, geoData, airspaces) {
     applyTransform();
   });
 
-  setupInteraction(svg, MAP_WIDTH, MAP_HEIGHT, MIN_ZOOM, MAX_ZOOM, state, applyTransform, clamp);
+  // ── Measure button (legend toggle) ───────────────────────
+  sidebar._measureBtn.addEventListener('click', () => {
+    measure.clickMode = !measure.clickMode;
+    if (!measure.clickMode) {
+      measure.ptA = null;
+      measure.ptB = null;
+      redrawMeasure();
+    }
+    sidebar._measureBtn.classList.toggle('map-msn-active', measure.clickMode);
+    svg.style.cursor = measure.clickMode ? 'crosshair' : 'grab';
+  });
+
+  // Left-click in measure-click-mode: place point A then point B
+  svg.addEventListener('mousedown', e => {
+    if (e.button !== 0 || !measure.clickMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const pt = clientToContent(e.clientX, e.clientY);
+    if (!measure.ptA || measure.ptB) {
+      // Start a fresh measurement
+      measure.ptA = pt;
+      measure.ptB = null;
+    } else {
+      // Place endpoint — keep displayed
+      measure.ptB = pt;
+    }
+    redrawMeasure();
+  });
+
+  // Middle-click-and-hold: always available regardless of click mode
+  let midMeasuring = false;
+  let measureRafPending = false; // throttle live redraws to animation frames
+  svg.addEventListener('mousedown', e => {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    midMeasuring = true;
+    const pt = clientToContent(e.clientX, e.clientY);
+    measure.ptA = pt;
+    measure.ptB = null;
+    redrawMeasure();
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!midMeasuring && !(measure.clickMode && measure.ptA && !measure.ptB)) return;
+    if (measureRafPending) return;
+    measureRafPending = true;
+    requestAnimationFrame(() => {
+      measureRafPending = false;
+      const pt = clientToContent(e.clientX, e.clientY);
+      measure.ptB = pt;
+      redrawMeasure();
+    });
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (e.button === 1 && midMeasuring) {
+      midMeasuring = false;
+      // Leave the measurement displayed until the user starts a new one
+    }
+  });
+
+  setupInteraction(svg, MAP_WIDTH, MAP_HEIGHT, MIN_ZOOM, MAX_ZOOM, state, applyTransform, clamp,
+    () => measure.clickMode);
 
   // Initial render
   applyTransform();
