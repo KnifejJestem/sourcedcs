@@ -203,15 +203,40 @@ function parseTempC(s) {
   return (s.startsWith('M') ? -1 : 1) * parseInt(s.replace('M', ''));
 }
 
-// Format a TAF validity period token "DDHH" → "Day DD  HH:00Z"
+// Format a TAF validity period token "DDHH" → "Day DD  HH:00Z/L"
 function fmtTAFPeriod(ddhh) {
   if (!ddhh || ddhh.length !== 4) return ddhh;
+  const day  = parseInt(ddhh.slice(0, 2));
+  const hour = parseInt(ddhh.slice(2));
+  const suffix = STATE.display.timeMode;
+  if (suffix === 'L') {
+    const off = STATE.pkg?.ato?.local_offset_hours || 0;
+    const localHour = hour + off;
+    const dayAdj = localHour >= 24 ? 1 : localHour < 0 ? -1 : 0;
+    const adjDay  = day + dayAdj;
+    const adjHour = ((localHour % 24) + 24) % 24;
+    return 'Day ' + String(adjDay).padStart(2, '0') + '  ' +
+           String(adjHour).padStart(2, '0') + ':00L';
+  }
   return 'Day ' + ddhh.slice(0, 2) + '  ' + ddhh.slice(2) + ':00Z';
 }
 
-// Format a TAF FM time token "DDHHmm" → "Day DD  HH:mmZ"
+// Format a TAF FM time token "DDHHmm" → "Day DD  HH:mmZ/L"
 function fmtFMTime(ddhhnn) {
   if (!ddhhnn || ddhhnn.length !== 6) return ddhhnn;
+  const day  = parseInt(ddhhnn.slice(0, 2));
+  const hour = parseInt(ddhhnn.slice(2, 4));
+  const min  = ddhhnn.slice(4);
+  const suffix = STATE.display.timeMode;
+  if (suffix === 'L') {
+    const off = STATE.pkg?.ato?.local_offset_hours || 0;
+    const localHour = hour + off;
+    const dayAdj = localHour >= 24 ? 1 : localHour < 0 ? -1 : 0;
+    const adjDay  = day + dayAdj;
+    const adjHour = ((localHour % 24) + 24) % 24;
+    return 'Day ' + String(adjDay).padStart(2, '0') + '  ' +
+           String(adjHour).padStart(2, '0') + ':' + min + 'L';
+  }
   return 'Day ' + ddhhnn.slice(0, 2) + '  ' +
          ddhhnn.slice(2, 4) + ':' + ddhhnn.slice(4) + 'Z';
 }
@@ -511,7 +536,7 @@ function renderMetar(parent, raw) {
   hdr.appendChild(el('span', 'wx-station', m.station || '—'));
   if (m.day || m.time) {
     hdr.appendChild(el('span', 'wx-time',
-      [(m.day ? 'Day ' + m.day : ''), m.time].filter(Boolean).join('  ')));
+      [(m.day ? 'Day ' + m.day : ''), fmtTime(m.time)].filter(Boolean).join('  ')));
   }
   const badge = el('span', 'wx-cat-badge ' + cat.cls, cat.cat);
   badge.title = cat.label;
@@ -561,7 +586,7 @@ function renderTaf(parent, raw) {
   hdr.appendChild(el('span', 'wx-station', t.station || '—'));
   if (t.issued_day || t.issued_time) {
     hdr.appendChild(el('span', 'wx-time',
-      'Issued Day ' + (t.issued_day || '??') + '  ' + (t.issued_time || '')));
+      'Issued Day ' + (t.issued_day || '??') + '  ' + (fmtTime(t.issued_time) || '')));
   }
   if (t.valid_from || t.valid_to) {
     hdr.appendChild(el('span', 'wx-time',

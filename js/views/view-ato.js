@@ -41,11 +41,12 @@ function renderIntelStrip(gc, ato) {
     return div;
   }
 
-  const irl = [ato.irl_date, ato.irl_time_zulu].filter(Boolean).join(' ') || '—';
+  const irl = [ato.irl_date, fmtTime(ato.irl_time_zulu)].filter(Boolean).join(' ') || '—';
+  const ingame = fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
   const sections = [
     section(
       ['IRL START',    irl],
-      ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
+      ['INGAME START', ingame, 'ingame'],
     ),
     section(
       ['PFREQ', gc.primary_freq_mhz ? gc.primary_freq_mhz + ' MHz' : '—', 'freq'],

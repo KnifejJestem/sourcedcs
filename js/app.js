@@ -204,6 +204,17 @@ function reformatCoordsInText(text) {
   });
 }
 
+// Convert a time value that is natively in local time to Zulu,
+// so fmtTime() (which assumes Zulu input) can process it correctly.
+function localToZuluTime(v) {
+  const mins = toMins(v);
+  if (mins == null) return v;
+  const off = (STATE.pkg?.ato?.local_offset_hours || 0) * 60;
+  const zuluMins = wrapMins(mins - off);
+  return String(Math.floor(zuluMins / 60)).padStart(2, '0') +
+         String(zuluMins % 60).padStart(2, '0');
+}
+
 const KNOWN_TYPES = ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE'];
 function typeKey(t) {
   return KNOWN_TYPES.includes((t || '').toUpperCase()) ? t.toUpperCase() : 'OTHER';
@@ -248,9 +259,10 @@ function setTimeMode(m) {
   document.querySelectorAll('[data-time]').forEach(b => {
     b.classList.toggle('active', b.dataset.time === m);
   });
-  if (STATE.pkg?.ato)   renderATO(STATE.pkg.ato);
-  if (STATE.pkg?.aco)   renderACO(STATE.pkg.aco);
-  if (STATE.pkg?.spins) renderSPINS(STATE.pkg.spins);
+  if (STATE.pkg?.ato)     renderATO(STATE.pkg.ato);
+  if (STATE.pkg?.aco)     renderACO(STATE.pkg.aco);
+  if (STATE.pkg?.spins)   renderSPINS(STATE.pkg.spins);
+  if (STATE.pkg?.weather) renderWEATHER(STATE.pkg.weather);
   mapRefreshPopup(); // refresh open map popup with new time format
 }
 
@@ -360,10 +372,11 @@ function renderHeader(ato) {
   const meta = document.getElementById('header-meta');
   if (!ato) { meta.innerHTML = ''; return; }
 
-  const irl = [ato.irl_date, ato.irl_time_zulu].filter(Boolean).join(' ') || '—';
+  const irl = [ato.irl_date, fmtTime(ato.irl_time_zulu)].filter(Boolean).join(' ') || '—';
+  const ingame = fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
   const items = [
-    ['IRL START',    irl,                           ''],
-    ['INGAME START', ato.ingame_start_local || '—', 'ingame'],
+    ['IRL START',    irl,     ''],
+    ['INGAME START', ingame,  'ingame'],
   ];
   const unit = ato.global_control?.controlling_unit;
   if (unit) items.push(['AWACS / GCI', unit, '']);
