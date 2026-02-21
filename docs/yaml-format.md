@@ -56,7 +56,9 @@ header:
 ## `registry:` — Canonical Reference Definitions
 
 The `registry` block defines entities once so they can be referenced by key
-throughout the rest of the file.  It has three sub-sections.
+throughout the rest of the file.  It contains: `callsigns`, `frequencies`,
+`airfields`, `carriers`, `tankers`, `targets` (with nested aim points), and
+`reference_points` (bullseye, marshal points, named positions).
 
 ### `callsigns:` (map)
 
@@ -121,6 +123,129 @@ registry:
 | `name` | string | Human-readable name |
 | `coords` | coord string | Position (DMS format — see [Coordinate strings](#coordinate-strings)) |
 | `elevation_ft` | number | Field elevation in feet |
+
+### `carriers:` (map)
+
+A mapping of carrier id → carrier data.  Carriers are shared reference
+entities (like airfields) — multiple missions can use the same carrier.
+The `ato.carriers` list references these by id.
+
+```yaml
+registry:
+  carriers:
+    CVN-71:
+      name: USS ROOSEVELT
+      callsign: ROUGH RIDER
+      deploy_coords: N24°30'00" E059°15'00"
+      recovery_coords: N24°45'00" E059°30'00"
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Ship name |
+| `callsign` | string | Callsign (also used as an ICAO-like key for route resolution) |
+| `deploy_coords` | coord string | Estimated position at start of ATO window |
+| `recovery_coords` | coord string | Estimated position at end / recovery window |
+
+### `tankers:` (map)
+
+A mapping of tanker id → tanker data.  Missions reference tankers by id
+in their `refuel.tanker_id` field; only mission-specific timing is stored
+in the mission.
+
+```yaml
+registry:
+  tankers:
+    ARCO4:
+      callsign: ARCO4
+      ar_track: AR394
+      altitude: FL240
+    TEXACO2:
+      callsign: TEXACO2
+      ar_track: AR392
+      altitude: FL220
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `callsign` | string | Tanker callsign |
+| `ar_track` | string | AR track identifier |
+| `altitude` | string | Refueling altitude (e.g. `FL240`) |
+
+### `targets:` (map)
+
+A mapping of target id → target data with optional nested `aim_points`.
+Targets are shared reference entities — multiple missions can reference the
+same target.  Missions reference targets via `target.target_id`.
+
+```yaml
+registry:
+  targets:
+    SAM-1:
+      name: SA-2 Guideline
+      type: SAM
+      coords: N26°30'00" E056°20'00"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      elevation: 150ft
+      aim_points:
+        - id: TGT-A
+          name: TGT-A
+          coords: N26°30'00" E056°20'00"
+        - id: TGT-B
+          name: TGT-B
+          coords: N26°33'00" E056°22'00"
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Display name |
+| `type` | string | Target category (e.g. `SAM`, `EWR`, `BUILDING`) |
+| `coords` | coord string | Position |
+| `elevation` | string | Target elevation (e.g. `E350FT`) |
+| `engagement_range_nm` | number | SAM/AAA engagement range in NM (draws a dashed ring on the map) |
+| `max_alt_ft` | number | Maximum engagement altitude in feet (shown in popup) |
+| `aim_points` | list | Optional nested aim points (see below) |
+
+**Nested aim points** are sub-points of a target.  When a mission references
+a target via `target_id`, the target's nested aim points are automatically
+pulled into the mission.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique aim point identifier |
+| `name` | string | Display name |
+| `coords` | coord string | Position |
+
+### `reference_points:` (map)
+
+A mapping of id → positional reference data.  This section contains reusable
+named positions: bullseye, marshal points, IP/CP designations, and any other
+named geographic positions that multiple flights might reference.
+
+Mission-specific steer points (SP1, SP2, SP3 chains) do **not** belong here —
+they stay in the mission's `steer_points` block.
+
+```yaml
+registry:
+  reference_points:
+    COYOTE:
+      name: COYOTE
+      type: bullseye
+      coords: N26°51'19" E056°21'37"
+    MARSHAL-ALPHA:
+      name: ALPHA
+      type: marshal
+      coords: N24°45'00" E056°00'00"
+      altitude: FL250
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Display name |
+| `type` | string | `bullseye` / `marshal` / `ip` / `cp` / `geographic` |
+| `coords` | coord string | Position |
+| `altitude` | string | Holding altitude (optional, mainly for marshal points) |
 
 ---
 
@@ -194,32 +319,7 @@ Package-wide command and control data.
 | `primary_freq_mhz` | string | Package primary frequency in MHz |
 | `controlling_unit` | string | AWACS / GCI callsign |
 | `aircraft_type` | string | AWACS / GCI aircraft type |
-| `bullseye.name` | string | Bullseye reference point name |
-| `bullseye.coords` | coord string | Bullseye position (plotted on map with crosshair symbol) |
-
-### `tankers:` (list)
-
-Tanker definitions at the ATO level.  Missions reference tankers by `tanker_id`
-and only store mission-specific timing.
-
-```yaml
-tankers:
-  - id: ARCO4
-    callsign: ARCO4
-    ar_track: AR394
-    altitude: FL240
-  - id: TEXACO2
-    callsign: TEXACO2
-    ar_track: AR392
-    altitude: FL220
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique tanker identifier (referenced by `refuel.tanker_id` in missions) |
-| `callsign` | string | Tanker callsign |
-| `ar_track` | string | AR track identifier |
-| `altitude` | string | Refueling altitude (e.g. `FL240`) |
+| `bullseye` | string | Reference point id in `registry.reference_points` (resolved at load time to `{name, coords}`) |
 
 ### `airfields:` (list)
 
@@ -244,51 +344,18 @@ airfields:
 
 ### `carriers:` (list)
 
-Carrier positions are planning estimates plotted with an anchor symbol.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique carrier identifier |
-| `name` | string | Ship name |
-| `callsign` | string | Callsign (also used as an ICAO-like key for route resolution) |
-| `deploy_coords` | coord string | Estimated position at start of ATO window |
-| `recovery_coords` | coord string | Estimated position at end / recovery window |
-
-### `marshal_points:` (list)
-
-Marshal points are holding positions where flights orbit before ingressing to the target area.
-Each marshal point is plotted on the map as a diamond symbol with a dashed orbit ring.
+Each entry references a carrier defined in `registry.carriers` by id.
+Full data (name, callsign, coords) comes from the registry.  Plotted on the
+map with an anchor symbol.
 
 ```yaml
-marshal_points:
-  - id: MARSHAL-ALPHA
-    name: ALPHA
-    coords: N24°45'00" E056°00'00"
-    altitude: FL250
+carriers:
+  - id: CVN-71
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Unique marshal point identifier |
-| `name` | string | Display name (shown as map label and in popup) |
-| `coords` | coord string | Position |
-| `altitude` | string | Holding altitude (e.g. `FL250`) — shown in popup and as map sub-label |
-
-### `targets:` (list)
-
-Reusable target definitions that can be referenced by missions via `target_ref`.
-Each target is plotted on the map as a threat marker (×) with an optional
-engagement-range ring.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique identifier referenced by `aim_points[].target_ref` |
-| `name` | string | Display name |
-| `type` | string | Target category (e.g. `SAM`, `EWR`, `BUILDING`) |
-| `coords` | coord string | Position |
-| `elevation` | string | Target elevation (e.g. `E350FT`) |
-| `engagement_range_nm` | number | SAM/AAA engagement range in NM (draws a dashed ring on the map) |
-| `max_alt_ft` | number | Maximum engagement altitude in feet (shown in popup) |
+| `id` | string | Carrier id (must match a key in `registry.carriers`) |
 
 ### `missions:` (list)
 
@@ -320,6 +387,7 @@ and map routes.
 | Field | Type | Description |
 |-------|------|-------------|
 | `location` | string | Target area name |
+| `target_id` | string | Reference to a target in `registry.targets` — pulls aim points from the target's nested `aim_points` list |
 | `mission_type_override` | string | Optional sub-type shown alongside `mission_type` |
 | `altitude` | string | Target altitude reference (e.g. `E73FT`, `FL200`) |
 | `not_earlier_than` | time string | Legacy mission window open (NET) — used when neither `tot_*` nor `tos`/`toffs` is set |
@@ -350,27 +418,31 @@ inside the threat envelope or otherwise exposed.
 
 #### `target.aim_points:` (list)
 
-Each aim point can be a plain coord string, a named coord object, or a
-reference to a target defined in `ato.targets`.
+Aim points are typically resolved automatically from the registry target
+referenced by `target_id`.  The target's nested `aim_points` list is pulled
+into the mission at load time.
+
+You can also specify aim points explicitly for standalone points or legacy
+`target_ref` references:
 
 ```yaml
+# Preferred: reference a registry target — aim points come from the target
+target:
+  location: KHASAB AFB
+  target_id: SAM-1       # pulls SAM-1's nested aim_points automatically
+
+# Legacy: explicit aim_points list with target_ref
 aim_points:
-  # Reference an existing target — inherits coords, elevation, name
-  - target_ref: SA6-NORTH
-
-  # Reference + override the display name
+  - target_ref: SA6-NORTH        # inherits coords, elevation, name from target
   - target_ref: SA6-SOUTH
-    name: SECONDARY
-
-  # Standalone aim point (no reference)
+    name: SECONDARY              # override the name
   - coords: N26°28'00" E056°18'00"
-    name: MANUAL-POINT
-    elevation: E200FT
+    name: MANUAL-POINT           # standalone aim point, no reference
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `target_ref` | string | `id` of a target in `ato.targets` |
+| `target_ref` | string | `id` of a target in `registry.targets` |
 | `coords` | coord string | Position (overrides target `coords` when also using `target_ref`) |
 | `name` | string | Display name (overrides target `name` when also using `target_ref`) |
 | `elevation` | string | Elevation override |
@@ -407,9 +479,9 @@ steer_points:
 
 #### `refuel:`
 
-Mission-level refueling block.  References a tanker defined in `ato.tankers`
+Mission-level refueling block.  References a tanker defined in `registry.tankers`
 by `tanker_id`.  Only mission-specific timing is stored here; tanker track and
-altitude come from the tanker definition.
+altitude come from the registry tanker definition.
 
 ```yaml
 refuel:
@@ -420,7 +492,7 @@ refuel:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `tanker_id` | string | ID of a tanker in `ato.tankers` |
+| `tanker_id` | string | ID of a tanker in `registry.tankers` |
 | `not_earlier_than` | time string | AAR window open (NET) |
 | `not_later_than` | time string | AAR window close (NLT) — shown as a hatched bar on the timeline |
 
