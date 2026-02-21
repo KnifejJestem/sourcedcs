@@ -1,0 +1,153 @@
+/* ═══════════════════════════════════════════════════════════
+   APP SHELL
+═══════════════════════════════════════════════════════════ */
+.app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+/* ── Header ─────────────────────────────────────────────── */
+header {
+  flex-shrink: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border-strong);
+}
+.header-title {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.header-meta {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  align-items: stretch;
+  height: 100%;
+}
+.meta-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 16px;
+  border-left: 1px solid var(--border);
+}
+.meta-label {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.meta-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+:root.movie .meta-value { color: var(--amber); }
+.meta-value.ingame { color: var(--amber); }
+
+.header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+
+.theme-toggle {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  overflow: hidden;
+}
+.theme-btn {
+  border: none;
+  background: transparent;
+  padding: 4px 10px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+}
+.theme-btn.active { background: var(--text); color: var(--text-inv); }
+:root.movie .theme-btn.active { background: var(--cap); color: #000; }
+
+.load-btn {
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  color: var(--text-2);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  padding: 5px 12px;
+}
+.load-btn:hover { background: var(--text); color: var(--text-inv); }
+:root.movie .load-btn:hover { background: var(--cap); color: #000; }
+
+/* ── Body ────────────────────────────────────────────────── */
+.body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Upload screen ───────────────────────────────────────── */
+.upload-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.drop-zone {
+  border: 1px dashed var(--border-strong);
+  padding: 64px 96px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg2);
+  transition: border-color .15s, background .15s;
+}
+.drop-zone:hover, .drop-zone.over {
+  border-color: var(--text);
+  background: var(--bg3);
+}
+:root.movie .drop-zone:hover, :root.movie .drop-zone.over {
+  border-color: var(--cap);
+  background: rgba(57,255,122,.03);
+}
+.drop-icon { font-size: 26px; color: var(--text-3); margin-bottom: 14px; }
+.drop-label { font-size: 11px; letter-spacing: 3px; color: var(--text-2); margin-bottom: 6px; }
+.drop-sub { font-size: 10px; color: var(--text-3); margin-bottom: 18px; line-height: 1.6; }
+.demo-btn {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 9px;
+  letter-spacing: 2px;
+  padding: 6px 14px;
+  transition: border-color .15s, color .15s;
+}
+.demo-btn:hover { border-color: var(--text); color: var(--text); }
+:root.movie .demo-btn:hover { border-color: var(--cap); color: var(--cap); }
+
+/* ── Main content ────────────────────────────────────────── */
+.main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Tab bar ─────────────────────────────────────────────── */
+.tab-bar {
+  flex-shrink: 0;
+  display: flex;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg2);
+}
+.tab-btn {
+  border: none;
+  background: transparent;
+  padding: 0 20px;
+  height: 34px;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.tab-btn:hover { color: var(--text-2); }
+.tab-btn.active { color: var(--text); border-bottom-color: var(--text); }
+:root.movie .tab-btn.active { color: var(--cap); border-bottom-color: var(--cap); }
+
+/* ── Views ───────────────────────────────────────────────── */
+.view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.view.active { display: flex; }
+

@@ -1,0 +1,100 @@
+/* ═══════════════════════════════════════════════════════════
+   LOADOUT WIDGET
+═══════════════════════════════════════════════════════════ */
+
+/* Chip — compact badge row on mission card */
+.lo-chip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+
+.lo-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  color: #fff;
+  white-space: nowrap;
+  border-radius: 1px;
+  cursor: help;
+}
+.lo-gun {
+  background: var(--amber) !important;
+  color: #fff;
+  font-size: 9px;
+  padding: 1px 4px;
+}
+
+/* Widget — expanded in detail panel */
+.lo-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+.lo-raw {
+  font-size: 9px;
+  color: var(--text-3);
+  letter-spacing: .5px;
+  font-family: var(--font-mono);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.lo-section { display: flex; flex-direction: column; gap: 4px; }
+.lo-section-lbl {
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+/* AA grid: 4 cells (Fox3 / Fox1 / Fox2 / Gun) */
+.lo-aa-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.lo-aa-cell {
+  border: 1px solid var(--border);
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg3);
+}
+.lo-aa-cell.lo-zero { opacity: .35; }
+.lo-aa-count {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  font-family: var(--font-mono);
+}
+.lo-aa-name  { font-size: 8px; letter-spacing: 1px; color: var(--text-2); }
+.lo-aa-full  { font-size: 7px; color: var(--text-3); text-align: center; line-height: 1.3; }
+
+/* Stores rows */
+.lo-wpn-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+.lo-wpn-row:last-child { border-bottom: none; }
+.lo-wpn-badge {
+  font-size: 8px;
+  font-weight: 600;
+  color: #fff;
+  padding: 2px 6px;
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: center;
+}
+.lo-wpn-qty  { font-size: 12px; font-weight: 600; color: var(--text); min-width: 24px; }
+.lo-wpn-full { font-size: 10px; color: var(--text-2); }
+
