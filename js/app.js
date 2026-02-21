@@ -82,19 +82,19 @@ function parseCoord(str) {
 }
 
 // ── Coordinate formatters ─────────────────────────────────────
-// Decimal minutes: 26°51.319'N 056°21.616'E
+// Decimal minutes: N26°51.319' E056°21.616'
 function fmtCoordDM(lat, lon) {
   function fmt(d, pos, neg) {
     const sign = d >= 0;
     const ab = Math.abs(d);
     const deg = Math.floor(ab);
     const min = (ab - deg) * 60;
-    return `${String(deg).padStart(2, '0')}°${min.toFixed(3).padStart(6, '0')}'${sign ? pos : neg}`;
+    return `${sign ? pos : neg}${String(deg).padStart(2, '0')}°${min.toFixed(3).padStart(6, '0')}'`;
   }
   return `${fmt(lat, 'N', 'S')} ${fmt(lon, 'E', 'W')}`;
 }
 
-// Degrees-minutes-seconds: 26°51'19.1"N 056°21'36.9"E
+// Degrees-minutes-seconds: N26°51'19.1" E056°21'36.9"
 function fmtCoordDMS(lat, lon) {
   function fmt(d, pos, neg) {
     const sign = d >= 0;
@@ -103,7 +103,7 @@ function fmtCoordDMS(lat, lon) {
     const mf  = (ab - deg) * 60;
     const min = Math.floor(mf);
     const sec = ((mf - min) * 60).toFixed(1);
-    return `${String(deg).padStart(2, '0')}°${String(min).padStart(2, '0')}'${String(sec).padStart(4, '0')}"${sign ? pos : neg}`;
+    return `${sign ? pos : neg}${String(deg).padStart(2, '0')}°${String(min).padStart(2, '0')}'${String(sec).padStart(4, '0')}"`;
   }
   return `${fmt(lat, 'N', 'S')} ${fmt(lon, 'E', 'W')}`;
 }

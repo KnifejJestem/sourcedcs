@@ -73,7 +73,7 @@
 }
 
 .wx-val { color: var(--text); }
-.wx-phenomena { color: var(--amber); font-weight: 500; }
+.wx-phenomena { color: var(--text-2); font-weight: 500; }
 .wx-remarks   { color: var(--text-2); font-style: italic; }
 
 /* Raw METAR/TAF string display */
@@ -113,7 +113,7 @@
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 1.5px;
-  color: var(--amber);
+  color: var(--text-2);
 }
 
 .wx-chg-time {

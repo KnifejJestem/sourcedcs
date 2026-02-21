@@ -682,7 +682,7 @@ function selectMission(idx) {
     csField.appendChild(csVal);
     col.appendChild(csField);
 
-    detailField(col, 'MISSION NO', m.mission_number || '—', 'amber');
+    detailField(col, 'MISSION NO', m.mission_number || '—');
 
     var typeStr = m.mission_type || '—';
     if (m.target && m.target.mission_type_override) {
@@ -716,7 +716,7 @@ function selectMission(idx) {
 
   // COL 3 — Target
   inner.appendChild(buildDetailColumn('TARGET', function (col) {
-    detailField(col, 'LOCATION', m.target ? m.target.location || '—' : '—', 'amber');
+    detailField(col, 'LOCATION', m.target ? m.target.location || '—' : '—');
     detailField(col, 'ALTITUDE', m.target ? m.target.altitude || '—' : '—');
 
     var hasTOT = m.target && (m.target.tot_net || m.target.tot_nlt);
@@ -765,7 +765,7 @@ function selectMission(idx) {
       detailField(col, 'STATUS', 'No AAR planned', 'sm');
       return;
     }
-    detailField(col, 'TANKER',   m.refuel.tanker_callsign || '—', 'amber');
+    detailField(col, 'TANKER',   m.refuel.tanker_callsign || '—');
     detailField(col, 'AR TRACK', m.refuel.ar_track || '—');
     detailField(col, 'ALTITUDE', m.refuel.altitude || '—');
     detailTimePair(col, 'AAR WINDOW', m.refuel.not_earlier_than, m.refuel.not_later_than);
