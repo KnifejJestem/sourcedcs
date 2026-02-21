@@ -746,7 +746,19 @@ function selectMission(idx) {
     }
   }));
 
-  // COL 4 — Comms
+  // COL 4 — AAR / Refuel
+  inner.appendChild(buildDetailColumn('AAR / REFUEL', function (col) {
+    if (!m.refuel) {
+      detailField(col, 'STATUS', 'No AAR planned', 'sm');
+      return;
+    }
+    detailField(col, 'TANKER',   m.refuel.tanker_callsign || '—');
+    detailField(col, 'AR TRACK', m.refuel.ar_track || '—');
+    detailField(col, 'ALTITUDE', m.refuel.altitude || '—');
+    detailTimePair(col, 'AAR WINDOW', m.refuel.not_earlier_than, m.refuel.not_later_than);
+  }));
+
+  // COL 5 — Comms
   inner.appendChild(buildDetailColumn('COMMS', function (col) {
     var primaryFreq   = m.control && m.control.primary_freq_mhz
       ? m.control.primary_freq_mhz + ' MHz' : '—';
@@ -757,18 +769,6 @@ function selectMission(idx) {
     detailField(col, 'SECONDARY FREQ', secondaryFreq, 'freq');
     detailField(col, 'NET',            m.control ? m.control.net_name || '—' : '—');
     detailField(col, 'AAR LOCATION',   m.aar_location_icao || '—');
-  }));
-
-  // COL 5 — AAR / Refuel
-  inner.appendChild(buildDetailColumn('AAR / REFUEL', function (col) {
-    if (!m.refuel) {
-      detailField(col, 'STATUS', 'No AAR planned', 'sm');
-      return;
-    }
-    detailField(col, 'TANKER',   m.refuel.tanker_callsign || '—');
-    detailField(col, 'AR TRACK', m.refuel.ar_track || '—');
-    detailField(col, 'ALTITUDE', m.refuel.altitude || '—');
-    detailTimePair(col, 'AAR WINDOW', m.refuel.not_earlier_than, m.refuel.not_later_than);
   }));
 }
 

@@ -215,6 +215,8 @@ aim_points:
 #### `steer_points:` (list)
 
 En-route waypoints plotted as hollow circles connected by dashed lines.
+Each steer point can be specified with inline coordinates or by referencing a named marker
+(airfield ICAO, carrier callsign, or marshal point name) via `name_ref`.
 
 ```yaml
 steer_points:
@@ -222,11 +224,14 @@ steer_points:
     name: SP1
   - coords: "N25deg15'00\" E056deg05'00\""
     name: SP2
+  - name_ref: ALPHA        # reference a marshal point by name
+    name: MARSHAL ALPHA    # optional display label (defaults to the referenced name)
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `coords` | coord string | Waypoint position |
+| `coords` | coord string | Waypoint position (used when `name_ref` is not set) |
+| `name_ref` | string | Name of an airfield (ICAO), carrier (callsign), or marshal point to use as the waypoint position |
 | `name` | string | Waypoint label shown on map |
 
 #### `control:`

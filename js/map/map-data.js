@@ -7,109 +7,87 @@
 // ── Collect all plottable data ─────────────────────────────
 function collectData(ato, aco) {
   const points = [];
-  const routes = []; // [{msnKey, callsign, msnNumber, color, segments:[{from,to,style}]}]
+  const routes = []; // [{msnKey, callsign, msnNumber, color, pts:[{lat,lon,kind}]}]
   const airspaces = []; // [{kind:'airspace', shape, ...}]
   const missions = ato.missions || [];
 
-  // Build a lookup: icao → {lat,lon} for airfields + carriers
-  const locByIcao = {};
+  // ── Phase 1: Build named location map ─────────────────────
+  // Maps a string key → {lat, lon} for any named, locatable object.
+  // Resolution order in routes: namedLocs lookup → coord parse.
+  //   Airfields  keyed by ICAO (e.g. 'OMAM')
+  //   Carriers   keyed by callsign (e.g. 'ROUGH RIDER')
+  //   Marshal pts keyed by name (e.g. 'ALPHA')
+  const namedLocs = {};
+
   (ato.airfields || []).forEach(af => {
     const p = parseCoord(af.coords);
-    if (p && af.icao) locByIcao[af.icao.toUpperCase()] = p;
+    if (p && af.icao) namedLocs[af.icao.trim().toUpperCase()] = p;
   });
   (ato.carriers || []).forEach(cv => {
     if (cv.deploy_coords && cv.callsign) {
       const p = parseCoord(cv.deploy_coords);
-      if (p) locByIcao[cv.callsign.toUpperCase()] = p;
+      if (p) namedLocs[cv.callsign.trim().toUpperCase()] = p;
     }
   });
+  (ato.marshal_points || []).forEach(mp => {
+    if (mp.name && mp.coords) {
+      const p = parseCoord(mp.coords);
+      if (p) namedLocs[mp.name.trim().toUpperCase()] = p;
+    }
+  });
+
+  // Resolve a location string: named lookup first, then coord parse.
+  // resolve() is defined here, after namedLocs is fully populated in Phase 1,
+  // so all named markers (airfields, carriers, marshal points) are available
+  // when it is called during Phase 3 mission processing.
+  const resolve = str => {
+    if (!str) return null;
+    const up = str.trim().toUpperCase();
+    if (namedLocs[up]) return namedLocs[up];
+    return parseCoord(str);
+  };
+
+  // ── Phase 2: Static map markers ───────────────────────────
 
   // Bullseye
   const bs = ato.global_control?.bullseye;
   if (bs?.coords) {
     const p = parseCoord(bs.coords);
-    if (p) points.push({ ...p, kind:'bullseye', label: bs.name || 'BULLSEYE', sub:'' });
+    if (p) points.push({ ...p, kind: 'bullseye', label: bs.name || 'BULLSEYE', sub: '' });
   }
-
-  // Per-mission data
-  missions.forEach(m => {
-    const color   = typeColor(m.mission_type);
-    const callsign = m.callsign || '?';
-    const msnNum   = m.mission_number || '';
-    const msnKey   = msnNum || callsign;
-    const route    = { msnKey, callsign, msnNum, color, pts: [] }; // ordered list of {lat,lon,kind}
-
-    // Helper: resolve a location string — try as ICAO first, then coord parse
-    const resolve = str => {
-      if (!str) return null;
-      const up = str.trim().toUpperCase();
-      if (locByIcao[up]) return locByIcao[up];
-      return parseCoord(str);
-    };
-
-    // 1. Deploy airfield / carrier
-    const deployLoc = resolve(m.deploy_location_icao);
-    if (deployLoc) route.pts.push({ ...deployLoc, kind:'route-node' });
-
-    // 2. Steer points (en-route waypoints)
-    (m.steer_points || []).forEach((sp, i) => {
-      const raw = typeof sp === 'string' ? sp : sp.coords;
-      const name = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i+1}`;
-      const p = parseCoord(raw);
-      if (p) {
-        route.pts.push({ ...p, kind:'route-node' });
-        points.push({ ...p, kind:'steer',
-          label: `${callsign}${msnNum ? ' · '+msnNum : ''}`,
-          sub: name, color, msnType: m.mission_type, mission: m });
-      }
-    });
-
-    // 3. Aim points (targets)
-    (m.target?.aim_points || []).forEach((ap, i) => {
-      const raw = typeof ap === 'string' ? ap : ap.coords;
-      const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i+1}`;
-      const p = parseCoord(raw);
-      if (p) {
-        route.pts.push({ ...p, kind:'target-node' });
-        points.push({ ...p, kind:'target',
-          label: callsign, sub: name, color, msnType: m.mission_type, mission: m });
-      }
-    });
-
-    // 4. Recovery airfield / carrier
-    const recLoc = resolve(m.aar_location_icao) || resolve(m.deploy_location_icao);
-    if (recLoc) route.pts.push({ ...recLoc, kind:'route-node' });
-
-    if (route.pts.length >= 2) routes.push(route);
-  });
 
   // Airfields
   (ato.airfields || []).forEach(af => {
     const p = parseCoord(af.coords);
-    if (p) points.push({ ...p, kind:'airfield',
+    if (p) points.push({
+      ...p, kind: 'airfield',
       label: af.icao || af.name || '?',
-      sub: [af.role, af.elevation_ft != null ? af.elevation_ft+'ft' : null].filter(Boolean).join(' · '),
-      name: af.name });
+      sub: [af.role, af.elevation_ft != null ? af.elevation_ft + 'ft' : null].filter(Boolean).join(' · '),
+      name: af.name,
+    });
   });
 
   // Carriers
   (ato.carriers || []).forEach(cv => {
     if (cv.deploy_coords) {
       const p = parseCoord(cv.deploy_coords);
-      if (p) points.push({ ...p, kind:'carrier',
-        label: cv.name || cv.callsign || 'CVN', sub: 'DEPLOY EST',
-        callsign: cv.callsign });
+      if (p) points.push({ ...p, kind: 'carrier', label: cv.name || cv.callsign || 'CVN', sub: 'DEPLOY EST', callsign: cv.callsign });
     }
     if (cv.recovery_coords) {
       const p = parseCoord(cv.recovery_coords);
-      if (p) points.push({ ...p, kind:'carrier',
-        label: cv.name || cv.callsign || 'CVN', sub: 'RECOVERY EST',
-        callsign: cv.callsign });
+      if (p) points.push({ ...p, kind: 'carrier', label: cv.name || cv.callsign || 'CVN', sub: 'RECOVERY EST', callsign: cv.callsign });
     }
   });
 
+  // Marshal points
+  (ato.marshal_points || []).forEach(mp => {
+    if (!mp.coords) return;
+    const p = parseCoord(mp.coords);
+    if (!p) return;
+    points.push({ ...p, kind: 'marshal', label: mp.name || 'MARSHAL', altitude: mp.altitude || null });
+  });
 
-  // 5. SAM / Threat rings from targets list
+  // Threats (SAM / EWR / etc.)
   (ato.targets || []).forEach(tgt => {
     if (!tgt.coords) return;
     const p = parseCoord(tgt.coords);
@@ -125,92 +103,98 @@ function collectData(ato, aco) {
     });
   });
 
-  // 6. ACO airspace measures (orbits, ROZ, restricted zones, etc.)
+  // ── Phase 3: Per-mission routes + mission-linked markers ───
+  missions.forEach(m => {
+    const color    = typeColor(m.mission_type);
+    const callsign = m.callsign || '?';
+    const msnNum   = m.mission_number || '';
+    const msnKey   = msnNum || callsign;
+    const route    = { msnKey, callsign, msnNum, color, pts: [] };
+
+    // 1. Deploy location
+    const deployLoc = resolve(m.deploy_location_icao);
+    if (deployLoc) route.pts.push({ ...deployLoc, kind: 'route-node' });
+
+    // 2. Steer points — support both inline coords and name_ref to namedLocs.
+    //    name_ref takes precedence over coords when both are present.
+    (m.steer_points || []).forEach((sp, i) => {
+      const nameRef = typeof sp === 'object' ? sp.name_ref : null;
+      const raw     = typeof sp === 'string' ? sp : sp.coords;
+      const label   = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i + 1}`;
+      const p       = nameRef ? resolve(nameRef) : parseCoord(raw);
+      if (p) {
+        route.pts.push({ ...p, kind: 'route-node' });
+        points.push({
+          ...p, kind: 'steer',
+          label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
+          sub: label, color, msnType: m.mission_type, mission: m,
+        });
+      }
+    });
+
+    // 3. Aim points (target markers)
+    (m.target?.aim_points || []).forEach((ap, i) => {
+      const raw  = typeof ap === 'string' ? ap : ap.coords;
+      const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i + 1}`;
+      const p    = parseCoord(raw);
+      if (p) {
+        route.pts.push({ ...p, kind: 'target-node' });
+        points.push({ ...p, kind: 'target', label: callsign, sub: name, color, msnType: m.mission_type, mission: m });
+      }
+    });
+
+    // 4. Recovery location
+    const recLoc = resolve(m.aar_location_icao) || resolve(m.deploy_location_icao);
+    if (recLoc) route.pts.push({ ...recLoc, kind: 'route-node' });
+
+    if (route.pts.length >= 2) routes.push(route);
+  });
+
+  // ── Phase 4: ACO airspace measures ────────────────────────
   (aco?.acms || []).forEach(acm => {
     const geo = acm.geometry || {};
+    const acmBase = {
+      kind: 'airspace',
+      name: acm.name, type: acm.type,
+      altLower: acm.alt_lower, altUpper: acm.alt_upper,
+      timeFrom: acm.time_from, timeTo: acm.time_to,
+      agency: acm.control_agency, freq: acm.control_freq_mhz,
+      notes: acm.notes, missions: acm.missions,
+    };
 
     if (geo.anchor_point) {
-      // Racetrack / anchor pattern
       const anchor = parseCoord(geo.anchor_point);
       if (anchor) {
         airspaces.push({
-          lat: anchor.lat,
-          lon: anchor.lon,
-          kind: 'airspace',
+          ...acmBase,
+          lat: anchor.lat, lon: anchor.lon,
           shape: 'anchor',
           anchorPt: anchor,
           headingDeg: geo.heading_deg || 0,
           legLengthNm: geo.leg_length_nm || 10,
           direction: (geo.direction || 'cw').toLowerCase(),
-          name: acm.name,
-          type: acm.type,
-          altLower: acm.alt_lower,
-          altUpper: acm.alt_upper,
-          timeFrom: acm.time_from,
-          timeTo: acm.time_to,
-          agency: acm.control_agency,
-          freq: acm.control_freq_mhz,
-          notes: acm.notes,
-          missions: acm.missions,
         });
       }
     } else if (geo.center) {
       const center = parseCoord(geo.center);
       if (center) {
-        airspaces.push({
-          ...center,
-          kind: 'airspace',
-          shape: 'circle',
-          radiusNm: geo.radius_nm || 5,
-          name: acm.name,
-          type: acm.type,
-          altLower: acm.alt_lower,
-          altUpper: acm.alt_upper,
-          timeFrom: acm.time_from,
-          timeTo: acm.time_to,
-          agency: acm.control_agency,
-          freq: acm.control_freq_mhz,
-          notes: acm.notes,
-          missions: acm.missions,
-        });
+        airspaces.push({ ...acmBase, ...center, shape: 'circle', radiusNm: geo.radius_nm || 5 });
       }
     }
     if (geo.boundary?.length) {
       const pts = geo.boundary.map(c => parseCoord(c)).filter(Boolean);
       if (pts.length >= 3) {
         airspaces.push({
+          ...acmBase,
           lat: pts.reduce((s, pt) => s + pt.lat, 0) / pts.length,
           lon: pts.reduce((s, pt) => s + pt.lon, 0) / pts.length,
-          kind: 'airspace',
           shape: 'polygon',
           boundary: pts,
-          name: acm.name,
-          type: acm.type,
-          altLower: acm.alt_lower,
-          altUpper: acm.alt_upper,
-          timeFrom: acm.time_from,
-          timeTo: acm.time_to,
-          agency: acm.control_agency,
-          freq: acm.control_freq_mhz,
-          notes: acm.notes,
-          missions: acm.missions,
         });
       }
     }
   });
 
-  // 7. Marshal points — holding positions where aircraft orbit before ingressing
-  (ato.marshal_points || []).forEach(mp => {
-    if (!mp.coords) return;
-    const p = parseCoord(mp.coords);
-    if (!p) return;
-    points.push({
-      ...p,
-      kind:     'marshal',
-      label:    mp.name || 'MARSHAL',
-      altitude: mp.altitude || null,
-    });
-  });
-
   return { points, routes, airspaces };
 }
+
