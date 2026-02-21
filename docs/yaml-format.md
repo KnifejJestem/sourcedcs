@@ -1,14 +1,15 @@
 # ATO BRIEF — Package File Format
 
-A **package file** is a single YAML file that contains one or more of the four
+A **package file** is a single YAML file that contains one or more of the five
 top-level sections below.  Any subset is valid; the viewer will enable only the
 tabs for which data is present.
 
 ```yaml
-ato:   { ... }   # Air Tasking Order (drives ATO, Timeline, and Map tabs)
-aco:   { ... }   # Airspace Control Order (ACO tab)
-spins: { ... }   # Special Instructions (SPINS tab)
-comms: { ... }   # Frequency Preset Table (COMMS tab)
+ato:     { ... }   # Air Tasking Order (drives ATO, Timeline, and Map tabs)
+aco:     { ... }   # Airspace Control Order (ACO tab)
+spins:   { ... }   # Special Instructions (SPINS tab)
+comms:   { ... }   # Frequency Preset Table (COMMS tab)
+weather: { ... }   # Mission weather forecast (WX tab)
 ```
 
 ---
@@ -437,3 +438,143 @@ Groups are concatenated with no delimiter: `3X381X114` = `3×GBU-38` and
 | `61` | LAU-61 (19× Hydra 70 mm) | Rockets |
 | `68` | LAU-68 (7× Hydra 70 mm) | Rockets |
 | `131` | LAU-131 (7× Hydra 70 mm) | Rockets |
+
+---
+
+---
+
+## `weather:` — Mission Weather Forecast
+
+The weather section accepts **raw METAR and TAF strings** exactly as they
+appear in a real aerodrome weather briefing.  The viewer decodes and displays
+them in human-readable form on the WX tab.
+
+```yaml
+weather:
+  operation: CLEAR SKY          # optional header field
+  metars:
+    - 'METAR OMAM 011850Z 31012G18KT 9999 FEW040 SCT080 28/08 Q1013 NOSIG'
+    - 'METAR OMSJ 011850Z 28008KT 9000 SCT035 30/12 Q1012 NOSIG'
+  tafs:
+    - 'TAF OMAM 011700Z 0120/0206 30010KT 9999 FEW040
+           BECMG 0122/0124 27008KT
+           TEMPO 0200/0202 TS BKN020 4000
+           PROB30 0203/0205 TSRA BKN010CB'
+  mission_wx:
+    - { mission_ref: MSN3266, notes: Clear at CAP. No impact. }
+    - { mission_ref: AA7511,  notes: Watch for dust below 1000 ft., style: amber }
+```
+
+### Top-level fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `operation` | string | Operation name (display only) |
+| `issued` | string | When this weather package was issued (display only) |
+| `valid_from` | string | Start of the valid period (display only) |
+| `valid_to` | string | End of the valid period (display only) |
+| `metars` | list of strings | Raw METAR / SPECI strings — one per station |
+| `tafs` | list of strings | Raw TAF strings — one per station |
+| `mission_wx` | list | Mission-specific weather notes — see below |
+
+### `metars:` — Raw METAR strings
+
+Paste standard ICAO or US-format METAR strings verbatim.  The viewer decodes:
+
+- **Station** — 4-letter ICAO identifier
+- **Wind** — direction, speed, gusts (KT, MPS, KMH accepted)
+- **Visibility** — metres (`9999`) or US statute miles (`10SM`, `1/4SM`, `M1/4SM`)
+- **`CAVOK`** — Ceiling and Visibility OK
+- **Present weather** — decoded from ICAO codes (see table below)
+- **Sky condition / cloud layers** — `FEW`, `SCT`, `BKN`, `OVC`, `VV`, `SKC`, `CLR`, `NSC`, with altitude in hundreds of feet; `CB`/`TCU` suffixes recognised
+- **Temperature / dewpoint** — `T/T` or `M01/M02` (M prefix = below zero)
+- **QNH** — `Q1013` (hPa) or `A2992` (altimeter × 100, inHg)
+- **NOSIG** — No significant change expected
+
+A **flight category** badge (VFR / MVFR / IFR / LIFR) is automatically computed
+from the ceiling and visibility and shown on each station header.
+
+Examples:
+```
+METAR OMAM 011850Z 31012G18KT 9999 FEW040 SCT080 28/08 Q1013 NOSIG
+KJFK 122151Z 25014G25KT 10SM FEW060 SCT250 22/10 A2997
+EDDM 011850Z 18005KT 3000 BR FEW003 OVC005 08/07 Q1016
+EGLL 232320Z VRB03KT CAVOK 15/08 Q1022 NOSIG
+```
+
+### `tafs:` — Raw TAF strings
+
+Paste standard ICAO TAF strings verbatim.  Multi-line TAF strings work if
+quoted as a YAML block scalar or a plain quoted string with spaces.  The viewer
+decodes:
+
+- **Station**, issued time, validity period
+- **Prevailing (base) conditions** — same elements as METAR
+- **Change groups** — decoded type label + time period + changed conditions:
+
+| TAF keyword | Displayed as |
+|-------------|-------------|
+| `BECMG DDHH/DDHH` | Becoming · Day DD HH:00Z – Day DD HH:00Z |
+| `TEMPO DDHH/DDHH` | Temporary · time range |
+| `FM DDHHmm` | From · Day DD HH:mmZ |
+| `PROBnn DDHH/DDHH` | nn% Probability · time range |
+| `PROBnn TEMPO DDHH/DDHH` | nn% Probability — Temporary · time range |
+| `PROBnn BECMG DDHH/DDHH` | nn% Probability — Becoming · time range |
+
+Any `PROBnn` value is handled dynamically (PROB20, PROB30, PROB40…).
+
+Example:
+```
+TAF OMAM 011700Z 0120/0206 30010KT 9999 FEW040
+    BECMG 0122/0124 27008KT
+    TEMPO 0200/0202 TS BKN020 4000
+    PROB30 0203/0205 TSRA BKN010CB
+```
+
+### Present weather codes
+
+The viewer decodes ICAO present weather codes to plain English.  Common codes:
+
+| Code | Decoded |
+|------|---------|
+| `RA` | Rain |
+| `-RA` | Light Rain |
+| `+RA` | Heavy Rain |
+| `SN` | Snow |
+| `DZ` | Drizzle |
+| `TS` | Thunderstorm |
+| `TSRA` | Thunderstorm with Rain |
+| `+TSRA` | Heavy Thunderstorm with Rain |
+| `TSGR` | Thunderstorm with Hail |
+| `FZRA` | Freezing Rain |
+| `FZDZ` | Freezing Drizzle |
+| `FZFG` | Freezing Fog |
+| `SHRA` | Rain Showers |
+| `SHSN` | Snow Showers |
+| `BR` | Mist |
+| `FG` | Fog |
+| `BCFG` | Patchy Fog |
+| `MIFG` | Shallow Fog |
+| `HZ` | Haze |
+| `DU` | Dust |
+| `BLSN` | Blowing Snow |
+| `BLDU` | Blowing Dust |
+| `VCSH` | Showers in Vicinity |
+| `VCTS` | Thunderstorm in Vicinity |
+| `VCFG` | Fog in Vicinity |
+| `SS` | Sandstorm |
+| `DS` | Duststorm |
+| `FC` | Funnel Cloud |
+
+Intensity prefixes (`-` light, `+` heavy) and vicinity indicator (`VC`) are
+decoded automatically for any code combination.
+
+### `mission_wx:` — Mission-specific notes
+
+Plain-English notes linked to missions by mission number.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mission_ref` | string | Mission number (cross-reference to ATO) |
+| `notes` | string | Free-text weather note |
+| `style` | string | Optional color tint: `amber` / `red` / `green` / `blue` |

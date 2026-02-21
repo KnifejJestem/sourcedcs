@@ -292,13 +292,14 @@ function loadPackage(yamlText) {
 function loadPackage_obj(data) {
   // Accept a full package {ato, aco, spins, comms} — any subset is fine
   const pkg = {};
-  if (data.ato)   pkg.ato   = data.ato;
-  if (data.aco)   pkg.aco   = data.aco;
-  if (data.spins) pkg.spins = data.spins;
-  if (data.comms) pkg.comms = data.comms;
+  if (data.ato)     pkg.ato     = data.ato;
+  if (data.aco)     pkg.aco     = data.aco;
+  if (data.spins)   pkg.spins   = data.spins;
+  if (data.comms)   pkg.comms   = data.comms;
+  if (data.weather) pkg.weather = data.weather;
 
-  if (!pkg.ato && !pkg.aco && !pkg.spins && !pkg.comms) {
-    alert('Unrecognised file — expected top-level keys: ato, aco, spins, and/or comms');
+  if (!pkg.ato && !pkg.aco && !pkg.spins && !pkg.comms && !pkg.weather) {
+    alert('Unrecognised file — expected top-level keys: ato, aco, spins, comms, and/or weather');
     return;
   }
 
@@ -333,21 +334,22 @@ function loadPackage_obj(data) {
   renderHeader(pkg.ato || null);
 
   // Enable/disable tabs
-  ['ato', 'aco', 'spins', 'comms', 'map'].forEach(tab => {
+  ['ato', 'aco', 'spins', 'comms', 'map', 'weather'].forEach(tab => {
     const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
     const available = tab === 'map' ? !!pkg.ato : !!pkg[tab];
     if (btn) btn.disabled = !available;
   });
 
   // Render whatever we have
-  if (pkg.ato)   renderATO(pkg.ato);
-  if (pkg.aco)   renderACO(pkg.aco);
-  if (pkg.spins) renderSPINS(pkg.spins);
-  if (pkg.comms) renderCOMMS(pkg.comms);
-  if (pkg.ato)   renderMAP(pkg.ato); // map uses ATO coordinate data
+  if (pkg.ato)     renderATO(pkg.ato);
+  if (pkg.aco)     renderACO(pkg.aco);
+  if (pkg.spins)   renderSPINS(pkg.spins);
+  if (pkg.comms)   renderCOMMS(pkg.comms);
+  if (pkg.weather) renderWEATHER(pkg.weather);
+  if (pkg.ato)     renderMAP(pkg.ato); // map uses ATO coordinate data
 
   // Navigate to first available tab
-  const first = ['ato', 'aco', 'spins', 'comms'].find(t => pkg[t]);
+  const first = ['ato', 'aco', 'spins', 'comms', 'weather'].find(t => pkg[t]);
   if (first) showTab(first);
 }
 

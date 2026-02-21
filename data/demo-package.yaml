@@ -377,3 +377,22 @@ comms:
     18: {callsign: SPARE,    freq_mhz: null,     role: null}
     19: {callsign: SPARE,    freq_mhz: null,     role: null}
     20: {callsign: SPARE,    freq_mhz: null,     role: null}
+weather:
+  operation: CLEAR SKY
+  metars:
+  - 'METAR OMAM 011850Z 31012G18KT 9999 FEW040 SCT080 28/08 Q1013 NOSIG'
+  - 'METAR OMSJ 011850Z 28008KT 9000 SCT035 30/12 Q1012 NOSIG'
+  - 'METAR OMRK 011853Z 34006KT 9999 SKC 26/05 Q1014 NOSIG'
+  tafs:
+  - 'TAF OMAM 011700Z 0120/0206 30010KT 9999 FEW040 BECMG 0122/0124 27008KT TEMPO 0200/0202 TS BKN020 4000 PROB30 0203/0205 TSRA BKN010CB'
+  - 'TAF OMRK 011700Z 0120/0206 35005KT 9999 SKC'
+  mission_wx:
+  - mission_ref: MSN3266
+    notes: Clear at CAP station. Few clouds at 4000 ft en-route, no impact.
+  - mission_ref: MSN3267
+    notes: Target area clear. No weather restrictions.
+  - mission_ref: MSN3268
+    notes: Coastal haze possible below 1000 ft near Jask. Maintain planned altitude.
+  - mission_ref: AA7511
+    notes: VFR throughout. Watch for dust in low-altitude transit corridor.
+    style: amber

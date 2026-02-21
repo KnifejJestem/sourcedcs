@@ -42,7 +42,7 @@
         <div class="drop-label">LOAD ATO PACKAGE</div>
         <div class="drop-sub">
           Drop a <strong>package.yaml</strong> here, or click to browse.<br>
-          Top-level keys: <code>ato</code>, <code>aco</code>, <code>spins</code>, <code>comms</code>
+          Top-level keys: <code>ato</code>, <code>aco</code>, <code>spins</code>, <code>comms</code>, <code>weather</code>
         </div>
         <div class="drop-hint">Try: <code>demo-package.yaml</code></div>
       </div>
@@ -55,7 +55,8 @@
         <button class="tab-btn"        data-tab="aco"   onclick="showTab('aco')">ACO</button>
         <button class="tab-btn"        data-tab="spins" onclick="showTab('spins')">SPINS</button>
         <button class="tab-btn"        data-tab="comms" onclick="showTab('comms')">COMMS</button>
-        <button class="tab-btn"        data-tab="map"   onclick="showTab('map')">MAP</button>
+        <button class="tab-btn"        data-tab="map"     onclick="showTab('map')">MAP</button>
+        <button class="tab-btn"        data-tab="weather" onclick="showTab('weather')">WX</button>
       </div>
 
       <!-- ATO -->
@@ -104,6 +105,13 @@
         </div>
       </div>
 
+      <!-- WEATHER -->
+      <div class="view" id="view-weather">
+        <div class="doc-scroll" id="weather-content">
+          <div class="empty-state">NO WEATHER — add a <code>weather:</code> section to your package.yaml</div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -116,6 +124,7 @@
 <script src="js/views/view-aco.js"></script>
 <script src="js/views/view-spins.js"></script>
 <script src="js/views/view-comms.js"></script>
+<script src="js/views/view-weather.js"></script>
 <script src="js/geo-data.js"></script>
 <script src="js/map/map-state.js"></script>
 <script src="js/map/map-data.js"></script>
