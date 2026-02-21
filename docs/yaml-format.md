@@ -90,6 +90,27 @@ Carrier positions are planning estimates plotted with an anchor symbol.
 | `deploy_coords` | coord string | Estimated position at start of ATO window |
 | `recovery_coords` | coord string | Estimated position at end / recovery window |
 
+### `marshal_points:` (list)
+
+Marshal points are holding positions where flights orbit before ingressing to the target area.
+Each marshal point is plotted on the map as a diamond symbol with a dashed orbit ring.
+
+```yaml
+marshal_points:
+  - name: MARSHAL ALPHA
+    coords: "N25°30'00\" E055°30'00\""
+    altitude: FL250
+  - name: MARSHAL BRAVO
+    coords: "N24°45'00\" E056°00'00\""
+    altitude: FL220
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Marshal point identifier (shown as map label and in popup) |
+| `coords` | coord string | Position |
+| `altitude` | string | Holding altitude (e.g. `FL250`) — shown in popup and as map sub-label |
+
 ### `targets:` (list)
 
 Reusable target definitions that can be referenced by missions via `target_ref`.
@@ -234,10 +255,11 @@ steer_points:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | ACO identifier |
 | `operation` | string | Operation name |
 | `ato_day` | string | Date this ACO applies to |
+| `id` | string | ACO identifier |
 | `timezone` | string | Timezone reference (display only) |
+| `distributing_agency` | string | Agency responsible for distributing this ACO |
 | `classification` | string | Classification marking |
 
 ### `acms:` (list)

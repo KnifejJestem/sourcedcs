@@ -58,11 +58,11 @@ function renderACO(aco) {
   }
 
   docHeader(div, [
-    ['ACO ID',    aco.id],
-    ['OPERATION', aco.operation],
-    ['ATO DAY',   aco.ato_day],
-    ['TIMEZONE',  aco.timezone],
-    ['CLASS',     aco.classification],
+    ['OPERATION',   aco.operation],
+    ['ATO DAY',     aco.ato_day],
+    ['ACO ID',      aco.id],
+    ['TIMEZONE',    aco.timezone],
+    ['DIST AGENCY', aco.distributing_agency],
   ]);
 
   if (!aco.acms?.length) {

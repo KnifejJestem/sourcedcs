@@ -108,6 +108,7 @@ function collectData(ato, aco) {
     }
   });
 
+
   // 5. SAM / Threat rings from targets list
   (ato.targets || []).forEach(tgt => {
     if (!tgt.coords) return;
@@ -196,6 +197,19 @@ function collectData(ato, aco) {
         });
       }
     }
+  });
+
+  // 7. Marshal points — holding positions where aircraft orbit before ingressing
+  (ato.marshal_points || []).forEach(mp => {
+    if (!mp.coords) return;
+    const p = parseCoord(mp.coords);
+    if (!p) return;
+    points.push({
+      ...p,
+      kind:     'marshal',
+      label:    mp.name || 'MARSHAL',
+      altitude: mp.altitude || null,
+    });
   });
 
   return { points, routes, airspaces };

@@ -26,7 +26,11 @@ const CARRIER_RING_R        = 5;
 const CARRIER_MAST_RATIO    = 2.4; // mast height as a multiple of the ring radius
 const CARRIER_LABEL_OFFSET  = 14;
 
-// ── Threat marker ──────────────────────────────────────────────
+// ── Marshal point marker ───────────────────────────────────────
+const MARSHAL_HALF          = 8;   // half-diagonal of the diamond
+const MARSHAL_RING_R        = 11;  // orbit ring radius
+const MARSHAL_LABEL_OFFSET  = 14;
+
 const THREAT_CROSS_HALF    = 7;   // half-size of the × arms
 const THREAT_CROSS_STROKE  = 2.5;
 const THREAT_DOT_R         = 5;   // threat dot ring radius
@@ -40,7 +44,7 @@ const MARKER_RING_STROKE   = 1.2;
 function drawSharedMarkers(ctx, points, showPopup) {
   const sharedG = svgEl('g');
 
-  points.filter(p => ['bullseye', 'airfield', 'carrier'].includes(p.kind)).forEach(p => {
+  points.filter(p => ['bullseye', 'airfield', 'carrier', 'marshal'].includes(p.kind)).forEach(p => {
     const mx = ctx.bx(p.lon).toFixed(1);
     const my = ctx.by(p.lat).toFixed(1);
     const g  = makeSvgEl('g', { transform: `translate(${mx},${my})` });
@@ -73,6 +77,20 @@ function drawSharedMarkers(ctx, points, showPopup) {
       [[0, -r, 0, r], [-r, 0, r, 0], [0, r, 0, mast], [-r, mast, r, mast]].forEach(([x1, y1, x2, y2]) =>
         g.appendChild(makeSvgEl('line', { x1, y1, x2, y2, stroke: col, 'stroke-width': 1.5 })));
       mapLabel(g, p.label, p.sub, col, CARRIER_LABEL_OFFSET);
+
+    } else if (p.kind === 'marshal') {
+      // Diamond (rotated square) with a dashed orbit ring — "holding point"
+      const col = '#7ec8e3';
+      const h   = MARSHAL_HALF;
+      const pts = `0,${-h} ${h},0 0,${h} ${-h},0`;
+      g.appendChild(makeSvgEl('polygon', {
+        points: pts, fill: 'none', stroke: col, 'stroke-width': 1.5,
+      }));
+      g.appendChild(makeSvgEl('circle', {
+        r: MARSHAL_RING_R, fill: 'none', stroke: col,
+        'stroke-width': MARKER_RING_STROKE, 'stroke-dasharray': '3 2', opacity: 0.7,
+      }));
+      mapLabel(g, p.label, p.altitude || '', col, MARSHAL_LABEL_OFFSET);
     }
 
     g.style.cursor = 'pointer';
