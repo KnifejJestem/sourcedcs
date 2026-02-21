@@ -27,11 +27,11 @@ const server = http.createServer(app);
 const io     = new Server(server);
 
 // ── Serve static front-end assets ────────────────────────────
-// Everything in the repo root except server files is a static asset.
-app.use(express.static(__dirname, {
-  index: 'index.html',
-  dotfiles: 'deny',
-}));
+// Only expose the directories the browser actually needs.
+app.get('/',  (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.use('/css',  express.static(path.join(__dirname, 'css')));
+app.use('/js',   express.static(path.join(__dirname, 'js')));
+app.use('/data', express.static(path.join(__dirname, 'data')));
 
 // ── Session store ────────────────────────────────────────────
 // Each session represents a briefing room that one presenter
