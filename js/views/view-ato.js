@@ -6,7 +6,6 @@
 
 // ── Timeline layout constants ──────────────────────────────────
 const TIMELINE_STEP_MINS = 15;  // minutes between tick marks
-const TIMELINE_WIDTH_PX  = 800; // CSS width of the scrollable track area
 
 function renderATO(ato) {
   const gc       = ato.global_control || {};
@@ -78,6 +77,24 @@ function renderMissionCards(missions) {
   missions.forEach((m, i) => {
     const tk = typeKey(m.mission_type);
 
+    // Determine window label and times based on TOT/TOS availability
+    const hasTOT = m.target?.tot_net || m.target?.tot_nlt;
+    const hasTOS = m.target?.tos_net || m.target?.tos_nlt;
+    let windowLabel, windowNet, windowNlt;
+    if (hasTOT) {
+      windowLabel = 'TOT';
+      windowNet = m.target.tot_net;
+      windowNlt = m.target.tot_nlt;
+    } else if (hasTOS) {
+      windowLabel = 'TOS';
+      windowNet = m.target.tos_net;
+      windowNlt = m.target.tos_nlt;
+    } else {
+      windowLabel = 'WINDOW';
+      windowNet = m.target?.not_earlier_than;
+      windowNlt = m.target?.not_later_than;
+    }
+
     const card = html`
       <div class="mission-card card-${tk}">
         <div class="card-top">
@@ -97,9 +114,14 @@ function renderMissionCards(missions) {
             <span class="cv">${m.target?.location || '—'}</span>
           </div>
           <div class="card-row">
-            <span class="ck">WINDOW</span>
-            <span class="cv time">${fmtTime(m.target?.not_earlier_than)} → ${fmtTime(m.target?.not_later_than)}</span>
+            <span class="ck">${windowLabel}</span>
+            <span class="cv time">${fmtTime(windowNet)} → ${fmtTime(windowNlt)}</span>
           </div>
+          ${hasTOS && hasTOT ? `
+          <div class="card-row">
+            <span class="ck">TOS</span>
+            <span class="cv time">${fmtTime(m.target.tos_net)} → ${fmtTime(m.target.tos_nlt)}</span>
+          </div>` : ''}
           ${m.control?.primary_freq_mhz ? `
           <div class="card-row">
             <span class="ck">PFREQ</span>
@@ -128,6 +150,8 @@ function renderTimeline(missions) {
   missions.forEach(m => {
     [
       toMins(m.target?.not_earlier_than), toMins(m.target?.not_later_than),
+      toMins(m.target?.tot_net), toMins(m.target?.tot_nlt),
+      toMins(m.target?.tos_net), toMins(m.target?.tos_nlt),
       toMins(m.refuel?.not_earlier_than), toMins(m.refuel?.not_later_than),
     ].forEach(t => {
       if (t != null) { minT = Math.min(minT, t); maxT = Math.max(maxT, t); }
@@ -144,7 +168,7 @@ function renderTimeline(missions) {
   minT = Math.floor((minT - STEP) / STEP) * STEP;
   maxT = Math.ceil ((maxT + STEP) / STEP) * STEP;
   const span = maxT - minT;
-  const TW   = TIMELINE_WIDTH_PX;
+  const tickCount = Math.round(span / STEP) + 1;
 
   const hh = t => String(Math.floor(t / 60)).padStart(2, '0');
   const mm = t => String(t % 60).padStart(2, '0');
@@ -164,14 +188,14 @@ function renderTimeline(missions) {
 
   // Update mode label in the static header bar
   const modeLabel = document.getElementById('tl-mode-label');
-  if (modeLabel) modeLabel.textContent = `TIMELINE — ${timeSuffix === 'L' ? 'LOCAL' : 'ZULU'} · ▓ MISSION WINDOW · ▒ AAR WINDOW`;
+  if (modeLabel) modeLabel.textContent = `TIMELINE — ${timeSuffix === 'L' ? 'LOCAL' : 'ZULU'} · ▓ TOT/MISSION WINDOW · ░ TOS WINDOW · ▒ AAR WINDOW`;
 
   // Tick header — one element per tick (no event listeners needed on ticks,
   // but building them with el() avoids embedding HTML strings in JS).
   const ticksRow = el('div', 'tl-ticks');
   for (let t = minT; t <= maxT; t += STEP) {
     const tick = el('div', 'tl-tick', `${hh(dispT(t))}${mm(dispT(t))}${timeSuffix}`);
-    tick.style.width = `${(STEP / span * TW).toFixed(2)}px`;
+    tick.style.flex = '1 0 0%';
     ticksRow.appendChild(tick);
   }
   canvas.appendChild(ticksRow);
@@ -190,7 +214,6 @@ function renderTimeline(missions) {
 
     // Track
     const track = el('div', 'tl-track');
-    track.style.width = TW + 'px';
 
     // Grid lines — one per tick, positioned with CSS left %
     for (let t = minT; t <= maxT; t += STEP) {
@@ -199,17 +222,52 @@ function renderTimeline(missions) {
       track.appendChild(line);
     }
 
-    // Mission bar
-    const net = toMins(m.target?.not_earlier_than);
-    const nlt = toMins(m.target?.not_later_than);
-    if (net != null && nlt != null) {
-      const bar = html`
-        <div class="tl-bar"
-             style="background:${color};left:${((net-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(nlt-net)/span*100).toFixed(3)}%"
-             title="${m.callsign} · ${fmtTime(m.target.not_earlier_than)} – ${fmtTime(m.target.not_later_than)}"
-        >${m.callsign || ''}</div>`;
-      bar.addEventListener('click', () => selectMission(i));
-      track.appendChild(bar);
+    // Mission bars — support TOT/TOS or legacy not_earlier/later_than
+    const hasTOT = m.target?.tot_net || m.target?.tot_nlt;
+    const hasTOS = m.target?.tos_net || m.target?.tos_nlt;
+
+    if (hasTOT || hasTOS) {
+      // TOS bar (wider station window, shown as the main bar)
+      if (hasTOS) {
+        const tosNet = toMins(m.target.tos_net);
+        const tosNlt = toMins(m.target.tos_nlt);
+        if (tosNet != null && tosNlt != null) {
+          const bar = html`
+            <div class="tl-bar tos"
+                 style="background:${color};left:${((tosNet-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(tosNlt-tosNet)/span*100).toFixed(3)}%"
+                 title="${m.callsign} TOS · ${fmtTime(m.target.tos_net)} – ${fmtTime(m.target.tos_nlt)}"
+            >${m.callsign || ''}</div>`;
+          bar.addEventListener('click', () => selectMission(i));
+          track.appendChild(bar);
+        }
+      }
+      // TOT bar (narrower target window, shown with brighter/distinct style)
+      if (hasTOT) {
+        const totNet = toMins(m.target.tot_net);
+        const totNlt = toMins(m.target.tot_nlt);
+        if (totNet != null && totNlt != null) {
+          const bar = html`
+            <div class="tl-bar tot"
+                 style="background:${color};left:${((totNet-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(totNlt-totNet)/span*100).toFixed(3)}%"
+                 title="${m.callsign} TOT · ${fmtTime(m.target.tot_net)} – ${fmtTime(m.target.tot_nlt)}"
+            >${hasTOS ? '' : (m.callsign || '')}</div>`;
+          bar.addEventListener('click', () => selectMission(i));
+          track.appendChild(bar);
+        }
+      }
+    } else {
+      // Legacy: single not_earlier/later_than window
+      const net = toMins(m.target?.not_earlier_than);
+      const nlt = toMins(m.target?.not_later_than);
+      if (net != null && nlt != null) {
+        const bar = html`
+          <div class="tl-bar"
+               style="background:${color};left:${((net-minT)/span*100).toFixed(3)}%;width:${Math.max(2,(nlt-net)/span*100).toFixed(3)}%"
+               title="${m.callsign} · ${fmtTime(m.target.not_earlier_than)} – ${fmtTime(m.target.not_later_than)}"
+          >${m.callsign || ''}</div>`;
+        bar.addEventListener('click', () => selectMission(i));
+        track.appendChild(bar);
+      }
     }
 
     // Refuel bar (hatched)
@@ -314,7 +372,16 @@ function selectMission(idx) {
   col('TARGET', c => {
     df(c, 'LOCATION', m.target?.location || '—', 'amber');
     df(c, 'ALTITUDE', m.target?.altitude || '—');
-    timePair(c, 'TIME ON TARGET', m.target?.not_earlier_than, m.target?.not_later_than);
+
+    // Show TOT and/or TOS when explicitly provided; fall back to legacy not_earlier/later_than
+    const hasTOT = m.target?.tot_net || m.target?.tot_nlt;
+    const hasTOS = m.target?.tos_net || m.target?.tos_nlt;
+    if (hasTOT || hasTOS) {
+      if (hasTOT) timePair(c, 'TIME ON TARGET (TOT)', m.target.tot_net, m.target.tot_nlt);
+      if (hasTOS) timePair(c, 'TIME ON STATION (TOS)', m.target.tos_net, m.target.tos_nlt);
+    } else {
+      timePair(c, 'TIME ON TARGET', m.target?.not_earlier_than, m.target?.not_later_than);
+    }
 
     const aim = m.target?.aim_points;
     if (aim?.length) {

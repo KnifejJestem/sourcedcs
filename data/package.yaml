@@ -97,8 +97,14 @@ ato:
         loadout: '501+'
       target:
         location: KHASAB AREA
-        not_earlier_than: '2040'
-        not_later_than: '2230'
+        # Timing — use one of three approaches:
+        #   Legacy:  not_earlier_than / not_later_than   (generic window)
+        #   TOT:     tot_net / tot_nlt                   (Time on Target — strike/BAI missions)
+        #   TOS:     tos_net / tos_nlt                   (Time on Station — CAP/CAS orbit missions)
+        # You may specify both TOT and TOS for a mission that needs to be on station
+        # and also has a specific target time (e.g. SEAD supporting a strike).
+        tos_net: '2040'
+        tos_nlt: '2230'
         # Aim points — where weapons are released / where to ID the target.
         # Can be plain coord strings, objects with name + coords, or target_ref references.
         aim_points:
@@ -217,14 +223,11 @@ comms:
   classification: UNCLAS
   wing_lead: FALCON51
 
-  # Only list populated channels — omit SPAREs or include them as null to show slot occupancy.
+  # Only list populated channels — spare rows are auto-generated for unused channels.
   uhf_presets:
     1:  {callsign: GUARD,       freq_mhz: 243.000, role: Emergency}
     2:  {callsign: PACKAGE,     freq_mhz: 260.000, role: Package primary}
     3:  {callsign: INTRAFLIGHT, freq_mhz: 261.500, role: Intraflight}
-    4:  {callsign: SPARE,       freq_mhz: null,     role: null}
-    5:  {callsign: SPARE,       freq_mhz: null,     role: null}
 
   vhf_presets:
     1:  {callsign: GUARD,       freq_mhz: 121.500, role: Emergency}
-    2:  {callsign: SPARE,       freq_mhz: null,     role: null}

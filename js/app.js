@@ -416,4 +416,13 @@ document.addEventListener('DOMContentLoaded', () => {
     r.onload = ev => loadPackage(ev.target.result);
     r.readAsText(f);
   });
+
+  // Re-render ATO timeline on window resize so tick spacing adapts
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (STATE.pkg?.ato) renderTimeline(STATE.pkg.ato.missions || []);
+    }, 150);
+  });
 });

@@ -28,8 +28,8 @@ ato:
       loadout: 501+
     target:
       location: KHASAB
-      not_earlier_than: '2040'
-      not_later_than: '2230'
+      tos_net: '2040'
+      tos_nlt: '2230'
     control:
       primary_freq_mhz: '260.0'
       secondary_freq_mhz: '134.0'
@@ -62,8 +62,8 @@ ato:
       location: KHASAB AFB
       mission_type_override: AIRDEF
       altitude: E73FT
-      not_earlier_than: '2046'
-      not_later_than: '2111'
+      tot_net: '2046'
+      tot_nlt: '2111'
       aim_points:
       - coords: N26deg30'00" E056deg20'00"
         name: TGT-A
@@ -101,8 +101,8 @@ ato:
       location: JASK
       mission_type_override: SILKWORMS
       altitude: E33FT
-      not_earlier_than: '2105'
-      not_later_than: '2200'
+      tot_net: '2105'
+      tot_nlt: '2200'
       aim_points:
       - coords: N26deg20'00" E056deg15'00"
         name: SAM-1
@@ -136,8 +136,8 @@ ato:
       location: KHASAB AFB
       mission_type_override: CAS
       altitude: E74FT
-      not_earlier_than: '2108'
-      not_later_than: '2200'
+      tos_net: '2108'
+      tos_nlt: '2200'
       aim_points:
       - coords: N26deg28'00" E056deg18'00"
         name: OBJ-A
@@ -339,11 +339,6 @@ comms:
     1:  {callsign: GUARD,       freq_mhz: 243.0,   role: Emergency}
     2:  {callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary}
     3:  {callsign: INTRAFLIGHT, freq_mhz: 261.5,   role: Intraflight}
-    4:  {callsign: SPARE,       freq_mhz: null,     role: null}
-    5:  {callsign: SPARE,       freq_mhz: null,     role: null}
-    6:  {callsign: SPARE,       freq_mhz: null,     role: null}
-    7:  {callsign: SPARE,       freq_mhz: null,     role: null}
-    8:  {callsign: SPARE,       freq_mhz: null,     role: null}
     9:  {callsign: LTAG TWR,    freq_mhz: 360.1,   role: ATC Tower}
     10: {callsign: LTAG APP/DEP, freq_mhz: 340.775, role: ATC Approach/Departure}
     11: {callsign: MAGIC,       freq_mhz: 265.1,   role: AWACS primary}
@@ -358,25 +353,10 @@ comms:
     20: {callsign: LTAG ATIS,   freq_mhz: 377.475, role: ATIS}
   vhf_presets:
     1:  {callsign: GUARD,    freq_mhz: 121.5,   role: Emergency}
-    2:  {callsign: SPARE,    freq_mhz: null,     role: null}
-    3:  {callsign: SPARE,    freq_mhz: null,     role: null}
-    4:  {callsign: SPARE,    freq_mhz: null,     role: null}
-    5:  {callsign: SPARE,    freq_mhz: null,     role: null}
     6:  {callsign: SHADOW 1, freq_mhz: 133.3,   role: Package lead}
     7:  {callsign: HAT 1,    freq_mhz: 120.075, role: Flight}
     8:  {callsign: "COWBOY 1 / BOLO 1", freq_mhz: 129.225, role: CAS / Strike}
-    9:  {callsign: SPARE,    freq_mhz: null,     role: null}
     10: {callsign: LTAG PAR, freq_mhz: 282.5,   role: Precision approach}
-    11: {callsign: SPARE,    freq_mhz: null,     role: null}
-    12: {callsign: SPARE,    freq_mhz: null,     role: null}
-    13: {callsign: SPARE,    freq_mhz: null,     role: null}
-    14: {callsign: SPARE,    freq_mhz: null,     role: null}
-    15: {callsign: SPARE,    freq_mhz: null,     role: null}
-    16: {callsign: SPARE,    freq_mhz: null,     role: null}
-    17: {callsign: SPARE,    freq_mhz: null,     role: null}
-    18: {callsign: SPARE,    freq_mhz: null,     role: null}
-    19: {callsign: SPARE,    freq_mhz: null,     role: null}
-    20: {callsign: SPARE,    freq_mhz: null,     role: null}
 weather:
   operation: CLEAR SKY
   metars:
