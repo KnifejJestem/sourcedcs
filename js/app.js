@@ -356,6 +356,72 @@ function loadPackage_obj(data) {
     });
   }
 
+  // ── Resolve registry carriers into ato.carriers ─────────
+  if (pkg.registry?.carriers && pkg.ato?.carriers) {
+    pkg.ato.carriers.forEach(cv => {
+      const reg = pkg.registry.carriers[cv.id];
+      if (reg) {
+        if (!cv.name)            cv.name            = reg.name;
+        if (!cv.callsign)        cv.callsign        = reg.callsign;
+        if (!cv.deploy_coords)   cv.deploy_coords   = reg.deploy_coords;
+        if (!cv.recovery_coords) cv.recovery_coords = reg.recovery_coords;
+      }
+    });
+  }
+
+  // ── Resolve registry tankers into ato.tankers ───────────
+  if (pkg.registry?.tankers && pkg.ato) {
+    if (!pkg.ato.tankers) pkg.ato.tankers = [];
+    // Build tanker list from registry if ATO has no tankers
+    if (pkg.ato.tankers.length === 0) {
+      Object.entries(pkg.registry.tankers).forEach(([id, t]) => {
+        pkg.ato.tankers.push({ id, ...t });
+      });
+    } else {
+      // Resolve existing tanker references
+      pkg.ato.tankers.forEach(t => {
+        const reg = pkg.registry.tankers[t.id];
+        if (reg) {
+          if (!t.callsign) t.callsign = reg.callsign;
+          if (!t.ar_track) t.ar_track = reg.ar_track;
+          if (!t.altitude) t.altitude = reg.altitude;
+        }
+      });
+    }
+  }
+
+  // ── Resolve registry targets into ato.targets ───────────
+  if (pkg.registry?.targets && pkg.ato) {
+    if (!pkg.ato.targets) pkg.ato.targets = [];
+    if (pkg.ato.targets.length === 0) {
+      Object.entries(pkg.registry.targets).forEach(([id, t]) => {
+        pkg.ato.targets.push({ id, ...t });
+      });
+    }
+  }
+
+  // ── Resolve registry reference_points: bullseye + marshal_points ─
+  if (pkg.registry?.reference_points && pkg.ato) {
+    // Resolve bullseye if it's a string reference
+    const gc = pkg.ato.global_control;
+    if (gc && typeof gc.bullseye === 'string') {
+      const ref = pkg.registry.reference_points[gc.bullseye];
+      if (ref) {
+        gc.bullseye = { name: ref.name || gc.bullseye, coords: ref.coords };
+      }
+    }
+
+    // Build marshal_points list from reference_points with type 'marshal'
+    if (!pkg.ato.marshal_points) pkg.ato.marshal_points = [];
+    if (pkg.ato.marshal_points.length === 0) {
+      Object.entries(pkg.registry.reference_points).forEach(([id, rp]) => {
+        if (rp.type === 'marshal') {
+          pkg.ato.marshal_points.push({ id, name: rp.name, coords: rp.coords, altitude: rp.altitude });
+        }
+      });
+    }
+  }
+
   // ── Normalize ingame start time (v1.0 uses ingame_start_time in Zulu) ─
   if (pkg.ato?.ingame_start_time && !pkg.ato.ingame_start_local) {
     pkg.ato.ingame_start_local = pkg.ato.ingame_start_time;
@@ -383,6 +449,18 @@ function loadPackage_obj(data) {
     pkg.ato.targets.forEach(t => { if (t.id) tgtMap[t.id] = t; });
 
     pkg.ato.missions.forEach(m => {
+      // Resolve target_id: pull aim_points from the referenced registry target
+      if (m.target?.target_id && tgtMap[m.target.target_id]) {
+        const ref = tgtMap[m.target.target_id];
+        if (!m.target.aim_points && ref.aim_points) {
+          m.target.aim_points = ref.aim_points.map(ap => ({
+            coords: ap.coords, name: ap.name || ap.id, elevation: ap.elevation,
+            _resolved_target: ref,
+          }));
+        }
+      }
+
+      // Resolve legacy target_ref in individual aim_points
       (m.target?.aim_points || []).forEach((ap, i, arr) => {
         if (typeof ap === 'object' && ap.target_ref && tgtMap[ap.target_ref]) {
           const ref = tgtMap[ap.target_ref];

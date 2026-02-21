@@ -21,8 +21,9 @@ header:
   classification: UNCLAS
 
 # ── Registry — canonical definitions referenced elsewhere ───
-# Callsigns, frequencies, and airfields are defined once here
-# and referenced by key throughout the rest of the document.
+# Callsigns, frequencies, airfields, carriers, tankers, targets,
+# and reference points are defined once here and referenced by key
+# throughout the rest of the document.
 registry:
   callsigns:
     SCREWTOP:    { unit: USAF, type: E-3, role: AWACS primary }
@@ -46,6 +47,69 @@ registry:
       coords: N25°06'56" E051°18'58"
       elevation_ft: 130
 
+  # ── Carriers ──────────────────────────────────────────────
+  # Carrier positions are planning estimates.
+  # deploy_coords:   position at start of ATO window
+  # recovery_coords: position at end / recovery window
+  carriers:
+    CVN-71:
+      name: USS ROOSEVELT
+      callsign: ROUGH RIDER
+      deploy_coords: N24°30'00" E059°15'00"
+      recovery_coords: N24°45'00" E059°30'00"
+
+  # ── Tankers ───────────────────────────────────────────────
+  # Missions reference tankers by id in their refuel block.
+  tankers:
+    ARCO4:
+      callsign: ARCO4
+      ar_track: AR394
+      altitude: FL240
+
+  # ── Targets ───────────────────────────────────────────────
+  # Reusable targets with nested aim_points.
+  # Missions reference targets by id via target.target_id.
+  targets:
+    SA6-NORTH:
+      name: SA-6 Battery North
+      type: SAM
+      coords: N26°30'00" E056°20'00"
+      elevation: E350FT
+      engagement_range_nm: 13
+      max_alt_ft: 40000
+      aim_points:
+        - id: SA6-N-1
+          name: SA6 North Primary
+          coords: N26°30'00" E056°20'00"
+
+    SA6-SOUTH:
+      name: SA-6 Battery South
+      type: SAM
+      coords: N26°25'00" E056°15'00"
+      elevation: E120FT
+      engagement_range_nm: 13
+      max_alt_ft: 40000
+
+    FUEL-DEPOT:
+      name: Fuel Storage Facility
+      type: BUILDING
+      coords: N26°28'00" E056°18'00"
+      elevation: E80FT
+
+  # ── Reference points ──────────────────────────────────────
+  # Bullseye, marshal points, named geographic positions.
+  # type: bullseye | marshal | ip | cp | geographic
+  reference_points:
+    COYOTE:
+      name: COYOTE
+      type: bullseye
+      coords: N26°51'19" E056°21'37"
+    MARSHAL-ALPHA:
+      name: ALPHA
+      type: marshal
+      coords: N24°45'00" E056°00'00"
+      altitude: FL250
+
 ato:
   irl_date: '2026-01-11'
   irl_time_zulu: '1900Z'
@@ -57,17 +121,7 @@ ato:
     primary_freq_mhz: '260.0'
     controlling_unit: SCREWTOP
     aircraft_type: E-3
-    bullseye:
-      name: COYOTE
-      coords: N26°51'19" E056°21'37"
-
-  # ── Tanker definitions ──────────────────────────────────────
-  # Defined once at ATO level; missions reference by tanker_id.
-  tankers:
-    - id: ARCO4
-      callsign: ARCO4
-      ar_track: AR394
-      altitude: FL240
+    bullseye: COYOTE       # references registry.reference_points.COYOTE
 
   # ── Airfields used for deploy / recovery ─────────────────
   # Plotted on map with a runway-cross symbol.
@@ -81,49 +135,11 @@ ato:
     - icao: OTBH
       role: alternate
 
-  # ── Carrier positions (estimated) ────────────────────────
-  # Carriers move — these are planning estimates only.
-  # deploy_coords:   position at start of ATO window
-  # recovery_coords: position at end / recovery window
-  # Both are plotted on the map with an anchor symbol.
+  # ── Carriers used in this ATO ────────────────────────────
+  # References registry.carriers by id.
+  # Full carrier data (name, callsign, coords) comes from registry.
   carriers:
     - id: CVN-71
-      name: USS ROOSEVELT
-      callsign: ROUGH RIDER
-      deploy_coords: N24°30'00" E059°15'00"
-      recovery_coords: N24°45'00" E059°30'00"
-
-  # ── Target definitions ───────────────────────────────────
-  # Reusable targets referenced by aim_points via target_ref.
-  # Plotted on the map as threat/point markers.
-  targets:
-    - id: SA6-NORTH
-      name: SA-6 Battery North
-      type: SAM
-      coords: N26°30'00" E056°20'00"
-      elevation: E350FT
-      engagement_range_nm: 13
-      max_alt_ft: 40000
-
-    - id: SA6-SOUTH
-      name: SA-6 Battery South
-      type: SAM
-      coords: N26°25'00" E056°15'00"
-      elevation: E120FT
-      engagement_range_nm: 13
-      max_alt_ft: 40000
-
-    - id: FUEL-DEPOT
-      name: Fuel Storage Facility
-      type: BUILDING
-      coords: N26°28'00" E056°18'00"
-      elevation: E80FT
-
-  marshal_points:
-    - id: MARSHAL-ALPHA
-      name: ALPHA
-      coords: N24°45'00" E056°00'00"
-      altitude: FL250
 
   missions:
     - unit: 510vFS
@@ -148,13 +164,9 @@ ato:
         #   TOS:     tos / toffs                         (Time on Station / Time OFF Station — CAP/CAS orbit missions)
         tos: '2040Z'
         toffs: '2230Z'
-        # Aim points — where weapons are released / where to ID the target.
-        aim_points:
-          - target_ref: SA6-NORTH        # inherits coords, elevation, name from target
-          - target_ref: SA6-SOUTH
-            name: SECONDARY              # override the name
-          - coords: N26°28'00" E056°18'00"
-            name: MANUAL-POINT           # plain aim point, no reference
+        # target_id references a target in registry.targets;
+        # aim_points are pulled from the target's nested aim_points.
+        target_id: SA6-NORTH
       # Steer points — route waypoints
       steer_points:
         - coords: N24°30'00" E056°00'00"

@@ -375,17 +375,38 @@ def dict_to_refuel(d):
 def yaml_to_ato(text: str) -> ATO:
     raw = yaml.safe_load(text)
     doc = raw['ato']
+    reg = raw.get('registry', {})
 
-    # v1.0: resolve tanker references from ato.tankers
+    # v1.0: resolve tanker references — check ato.tankers first, then registry.tankers
     tanker_map = {}
     for t in doc.get('tankers', []):
         if t.get('id'):
             tanker_map[t['id']] = t
+    for tid, t in reg.get('tankers', {}).items():
+        if tid not in tanker_map:
+            tanker_map[tid] = t
+
+    # v1.0: resolve target references from registry.targets
+    target_map = {}
+    for t in doc.get('targets', []):
+        if t.get('id'):
+            target_map[t['id']] = t
+    for tid, t in reg.get('targets', {}).items():
+        if tid not in target_map:
+            target_map[tid] = {**t, 'id': tid}
 
     gc_d = doc.get('global_control', {})
+
+    # Resolve bullseye if it's a string reference to registry.reference_points
+    bullseye_d = gc_d.get('bullseye')
+    if isinstance(bullseye_d, str):
+        ref_pts = reg.get('reference_points', {})
+        rp = ref_pts.get(bullseye_d, {})
+        bullseye_d = {'name': rp.get('name', bullseye_d), 'coords': rp.get('coords', '')}
+
     gc = GlobalControl(primary_freq=gc_d.get('primary_freq_mhz'), modulation=gc_d.get('modulation'),
                        unit=gc_d.get('controlling_unit'), aircraft_type=gc_d.get('aircraft_type'),
-                       bullseye=dict_to_bullseye(gc_d['bullseye']) if 'bullseye' in gc_d else None)
+                       bullseye=dict_to_bullseye(bullseye_d) if bullseye_d else None)
     missions = []
     for md in doc.get('missions', []):
         refuel_d = md.get('refuel')
@@ -395,12 +416,22 @@ def yaml_to_ato(text: str) -> ATO:
             refuel_d.setdefault('ar_track', t.get('ar_track', ''))
             refuel_d.setdefault('altitude', t.get('altitude', ''))
 
+        # Resolve target_id: pull aim_points from the referenced registry target
+        target_d = md.get('target')
+        if target_d and target_d.get('target_id') and target_d['target_id'] in target_map:
+            ref = target_map[target_d['target_id']]
+            if not target_d.get('aim_points') and ref.get('aim_points'):
+                target_d['aim_points'] = [
+                    {'coords': ap.get('coords'), 'name': ap.get('name', ap.get('id', ''))}
+                    for ap in ref['aim_points']
+                ]
+
         m = Mission(unit=md.get('unit',''), home_base=md.get('home_base_icao',''),
                     mission_number=md.get('mission_number'), callsign=md.get('callsign'),
                     mission_type=md.get('mission_type'), deploy_loc=md.get('deploy_location_icao'),
                     aar_loc=md.get('aar_location_icao'),
                     aircraft=dict_to_aircraft(md['aircraft']) if 'aircraft' in md else None,
-                    target=dict_to_target(md['target'])       if 'target'   in md else None,
+                    target=dict_to_target(target_d)           if target_d   else None,
                     control=dict_to_control(md['control'])    if 'control'  in md else None,
                     refuel=dict_to_refuel(refuel_d)           if refuel_d   else None,
                     bullseye=dict_to_bullseye(md['bullseye']) if 'bullseye' in md else None)
@@ -409,9 +440,14 @@ def yaml_to_ato(text: str) -> ATO:
     # v1.0 uses ingame_start_time (Zulu); legacy uses ingame_start_local
     ingame = doc.get('ingame_start_time') or doc.get('ingame_start_local')
 
+    # Collect targets list for the ATO object
+    targets = doc.get('targets', [])
+    if not targets:
+        targets = [{**t, 'id': tid} for tid, t in reg.get('targets', {}).items()]
+
     return ATO(irl_date=doc.get('irl_date',''), irl_time=doc.get('irl_time_zulu',''),
                ingame_start_local=ingame, extra_flags=doc.get('ae_flags',[]),
-               global_control=gc, missions=missions, targets=doc.get('targets', []))
+               global_control=gc, missions=missions, targets=targets)
 
 # ---------------------------------------------------------------------------
 # SERIALIZER
