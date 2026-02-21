@@ -422,6 +422,32 @@ function loadPackage_obj(data) {
     }
   }
 
+  // ── Resolve registry control_agencies into global_control + mission control ─
+  if (pkg.registry?.control_agencies && pkg.ato) {
+    const gc = pkg.ato.global_control;
+    if (gc?.agency_id) {
+      const ag = pkg.registry.control_agencies[gc.agency_id];
+      if (ag) {
+        if (!gc.controlling_unit) gc.controlling_unit = ag.callsign;
+        if (!gc.aircraft_type)    gc.aircraft_type    = ag.platform;
+        if (!gc.primary_freq_mhz) gc.primary_freq_mhz = ag.primary_freq_mhz;
+        gc._agency = ag;
+      }
+    }
+
+    (pkg.ato.missions || []).forEach(m => {
+      if (m.control?.agency_id) {
+        const ag = pkg.registry.control_agencies[m.control.agency_id];
+        if (ag) {
+          if (!m.control.primary_freq_mhz)   m.control.primary_freq_mhz   = ag.primary_freq_mhz;
+          if (!m.control.secondary_freq_mhz) m.control.secondary_freq_mhz = ag.secondary_freq_mhz;
+          if (!m.control.net_name)            m.control.net_name            = ag.callsign;
+          m.control._agency = ag;
+        }
+      }
+    });
+  }
+
   // ── Normalize ingame start time (v1.0 uses ingame_start_time in Zulu) ─
   if (pkg.ato?.ingame_start_time && !pkg.ato.ingame_start_local) {
     pkg.ato.ingame_start_local = pkg.ato.ingame_start_time;
@@ -453,10 +479,27 @@ function loadPackage_obj(data) {
       if (m.target?.target_id && tgtMap[m.target.target_id]) {
         const ref = tgtMap[m.target.target_id];
         if (!m.target.aim_points && ref.aim_points) {
+          // No explicit aim_points — pull all from the target
           m.target.aim_points = ref.aim_points.map(ap => ({
             coords: ap.coords, name: ap.name || ap.id, elevation: ap.elevation,
             _resolved_target: ref,
           }));
+        } else if (m.target.aim_points && ref.aim_points) {
+          // Explicit aim_points — resolve aim_point_id references
+          const apMap = {};
+          ref.aim_points.forEach(ap => { if (ap.id) apMap[ap.id] = ap; });
+          m.target.aim_points = m.target.aim_points.map(ap => {
+            if (ap.aim_point_id && apMap[ap.aim_point_id]) {
+              const resolved = apMap[ap.aim_point_id];
+              return {
+                coords: ap.coords || resolved.coords,
+                name: ap.name || resolved.name || resolved.id,
+                elevation: ap.elevation || resolved.elevation,
+                _resolved_target: ref,
+              };
+            }
+            return ap;
+          });
         }
       }
 
@@ -522,7 +565,8 @@ function renderHeader(ato) {
     ['INGAME START', ingame,  'ingame'],
   ];
   const unit = ato.global_control?.controlling_unit;
-  if (unit) items.push(['AWACS / GCI', unit, '']);
+  const agencyType = ato.global_control?._agency?.type;
+  if (unit) items.push([agencyType || 'AWACS / GCI', unit, '']);
 
   // Header shows: date, ingame start, AWACS — concise identifiers only.
   // Full detail (freq, bullseye, etc.) is in the ATO intel strip.

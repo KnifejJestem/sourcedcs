@@ -86,7 +86,7 @@ function renderIntelStrip(gc, ato) {
       ['PFREQ', gc.primary_freq_mhz ? gc.primary_freq_mhz + ' MHz' : '—', 'freq'],
     ]),
     buildIntelSection([
-      ['AWACS / GCI', gc.controlling_unit || '—'],
+      [gc._agency?.type || 'AWACS / GCI', gc.controlling_unit || '—'],
       ['PLATFORM',    gc.aircraft_type    || '—'],
     ]),
   ];
@@ -774,6 +774,11 @@ function selectMission(idx) {
 
   // COL 5 — Comms
   inner.appendChild(buildDetailColumn('COMMS', function (col) {
+    var agency = m.control ? m.control._agency : null;
+    if (agency) {
+      detailField(col, 'CONTROL AGENCY', (agency.type || '') + ' — ' + (agency.callsign || '—'));
+    }
+
     var primaryFreq   = m.control && m.control.primary_freq_mhz
       ? m.control.primary_freq_mhz + ' MHz' : '—';
     var secondaryFreq = m.control && m.control.secondary_freq_mhz

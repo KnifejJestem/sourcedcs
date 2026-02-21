@@ -104,6 +104,18 @@ registry:
       type: marshal
       coords: N24°45'00" E056°00'00"
       altitude: FL250
+  control_agencies:
+    SCREWTOP:
+      type: AWACS
+      callsign: SCREWTOP
+      platform: E-3
+      primary_freq_mhz: '260.0'
+      secondary_freq_mhz: '134.0'
+    DARKSTAR:
+      type: CRC
+      callsign: DARKSTAR
+      primary_freq_mhz: '265.0'
+      secondary_freq_mhz: '135.0'
 
 ato:
   irl_date: '2026-01-11'
@@ -114,10 +126,7 @@ ato:
   - IRL
   - INGAME
   global_control:
-    primary_freq_mhz: '260.0'
-    modulation: U5
-    controlling_unit: SCREWTOP
-    aircraft_type: E-3
+    agency_id: SCREWTOP
     bullseye: COYOTE
   airfields:
   - icao: OMAM
@@ -129,11 +138,11 @@ ato:
   carriers:
   - id: CVN-71
   missions:
-  - unit: 510vFS
-    home_base_icao: OMAM
-    mission_number: MSN3266
+  - mission_number: MSN3266
     callsign: FALCON5
     mission_type: CAP
+    unit: 510vFS
+    home_base_icao: OMAM
     deploy_location_icao: OMAM
     aar_location_icao: OMAM
     takeoff_time: '2000Z'
@@ -147,9 +156,7 @@ ato:
       tos: '2040Z'
       toffs: '2230Z'
     control:
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-      net_name: SCREWTOP
+      agency_id: SCREWTOP
     refuel:
       tanker_id: ARCO4
       not_earlier_than: '2143Z'
@@ -161,11 +168,11 @@ ato:
       name: SP2
     - coords: N26°00'00" E056°10'00"
       name: SP3
-  - unit: 510vFS
-    home_base_icao: OMAM
-    mission_number: MSN3267
+  - mission_number: MSN3267
     callsign: DRAGON6
     mission_type: BAI
+    unit: 510vFS
+    home_base_icao: OMAM
     deploy_location_icao: OMAM
     aar_location_icao: OMAM
     takeoff_time: '2010Z'
@@ -183,10 +190,10 @@ ato:
       tot_net: '2046Z'
       tot_nlt: '2111Z'
       target_id: SAM-1
+      aim_points:
+      - aim_point_id: TGT-A
     control:
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-      net_name: SCREWTOP
+      agency_id: SCREWTOP
     refuel:
       tanker_id: TEXACO2
       not_earlier_than: '2121Z'
@@ -202,11 +209,11 @@ ato:
       name: SP2
     - coords: N26°00'00" E056°00'00"
       name: IP
-  - unit: 510vFS+132nd
-    home_base_icao: OMAM
-    mission_number: MSN3268
+  - mission_number: MSN3268
     callsign: BUZZARD4
     mission_type: BAI
+    unit: 510vFS+132nd
+    home_base_icao: OMAM
     deploy_location_icao: OMAM
     aar_location_icao: OMAM
     takeoff_time: '2015Z'
@@ -225,9 +232,7 @@ ato:
       tot_nlt: '2200Z'
       target_id: SAM-2
     control:
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-      net_name: SCREWTOP
+      agency_id: DARKSTAR
     refuel:
       tanker_id: SHELL3
       not_earlier_than: '2045Z'
@@ -241,11 +246,11 @@ ato:
       name: SP1
     - coords: N25°10'00" E055°40'00"
       name: SP2
-  - unit: 1 AAC
-    home_base_icao: OMRK
-    mission_number: AA7511
+  - mission_number: AA7511
     callsign: COWBOY7
     mission_type: CAS
+    unit: 1 AAC
+    home_base_icao: OMRK
     deploy_location_icao: OMRK
     aar_location_icao: OMRK
     takeoff_time: '2030Z'
@@ -262,9 +267,7 @@ ato:
       toffs: '2200Z'
       target_id: OBJ-A
     control:
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-      net_name: SCREWTOP
+      agency_id: SCREWTOP
     steer_points:
     - coords: N26°10'00" E056°05'00"
       name: SP1

@@ -397,6 +397,14 @@ def yaml_to_ato(text: str) -> ATO:
 
     gc_d = doc.get('global_control', {})
 
+    # Resolve control_agencies: resolve agency_id in global_control
+    agency_map = reg.get('control_agencies', {})
+    if gc_d.get('agency_id') and gc_d['agency_id'] in agency_map:
+        ag = agency_map[gc_d['agency_id']]
+        gc_d.setdefault('controlling_unit', ag.get('callsign', ''))
+        gc_d.setdefault('aircraft_type', ag.get('platform', ''))
+        gc_d.setdefault('primary_freq_mhz', ag.get('primary_freq_mhz', ''))
+
     # Resolve bullseye if it's a string reference to registry.reference_points
     bullseye_d = gc_d.get('bullseye')
     if isinstance(bullseye_d, str):
@@ -416,15 +424,38 @@ def yaml_to_ato(text: str) -> ATO:
             refuel_d.setdefault('ar_track', t.get('ar_track', ''))
             refuel_d.setdefault('altitude', t.get('altitude', ''))
 
+        # Resolve control agency_id in mission control block
+        ctrl_d = md.get('control')
+        if ctrl_d and ctrl_d.get('agency_id') and ctrl_d['agency_id'] in agency_map:
+            ag = agency_map[ctrl_d['agency_id']]
+            ctrl_d.setdefault('primary_freq_mhz', ag.get('primary_freq_mhz', ''))
+            ctrl_d.setdefault('secondary_freq_mhz', ag.get('secondary_freq_mhz', ''))
+            ctrl_d.setdefault('net_name', ag.get('callsign', ''))
+
         # Resolve target_id: pull aim_points from the referenced registry target
         target_d = md.get('target')
         if target_d and target_d.get('target_id') and target_d['target_id'] in target_map:
             ref = target_map[target_d['target_id']]
             if not target_d.get('aim_points') and ref.get('aim_points'):
+                # No explicit aim_points — pull all from the target
                 target_d['aim_points'] = [
                     {'coords': ap.get('coords'), 'name': ap.get('name', ap.get('id', ''))}
                     for ap in ref['aim_points']
                 ]
+            elif target_d.get('aim_points') and ref.get('aim_points'):
+                # Resolve aim_point_id references to specific aim_points
+                ap_map = {ap['id']: ap for ap in ref['aim_points'] if ap.get('id')}
+                resolved = []
+                for ap in target_d['aim_points']:
+                    if isinstance(ap, dict) and ap.get('aim_point_id') and ap['aim_point_id'] in ap_map:
+                        src = ap_map[ap['aim_point_id']]
+                        resolved.append({
+                            'coords': ap.get('coords') or src.get('coords'),
+                            'name': ap.get('name') or src.get('name', src.get('id', '')),
+                        })
+                    else:
+                        resolved.append(ap)
+                target_d['aim_points'] = resolved
 
         m = Mission(unit=md.get('unit',''), home_base=md.get('home_base_icao',''),
                     mission_number=md.get('mission_number'), callsign=md.get('callsign'),
