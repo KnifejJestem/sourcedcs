@@ -9,6 +9,28 @@
 let _refreshPopup = null;
 function mapRefreshPopup() { if (_refreshPopup) _refreshPopup(); }
 
+// ── Measurement helpers ────────────────────────────────────────
+// Speed used for transit-time calculation on the measurement band.
+const MEAS_SPEED_KT = 400;
+
+// Great-circle distance between two lat/lon points in nautical miles.
+function haversineNm(lat1, lon1, lat2, lon2) {
+  const R   = 3440.065; // Earth radius in NM
+  const toR = d => d * Math.PI / 180;
+  const dLat = toR(lat2 - lat1);
+  const dLon = toR(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+          + Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Format a decimal-hour duration as "Xh XXm" or "XXm".
+function fmtMeasureTime(hours) {
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+}
+
 // ── Main draw ──────────────────────────────────────────────
 // Architecture:
 //   SVG
@@ -178,6 +200,99 @@ function drawMap(container, points, routes, geoData, airspaces) {
   const gridLabels = createGridLabelOverlay(ctx);
   svg.appendChild(gridLabels.overlay);
 
+  // ── Measurement overlay ──────────────────────────────────
+  // All measurement SVG elements live in this group which sits in SVG
+  // coordinate space (not the panned/zoomed content group).  Points are
+  // stored in content-space so the band tracks the map on pan/zoom.
+  const measureLayer = makeSvgEl('g', { 'pointer-events': 'none' });
+  svg.appendChild(measureLayer);
+
+  // Measurement state — mode drives the control flow:
+  //   'off'   — inactive, button not highlighted
+  //   'waitA' — active, waiting for first click to place start point
+  //   'waitB' — start point fixed, end point tracks cursor live
+  //   'fixed' — both points placed; any left-click clears the band
+  const measure = { mode: 'off', ptA: null, ptB: null };
+
+  // Convert content-space (cx, cy) → current SVG overlay coords
+  function contentToOverlay(cx, cy) {
+    return { x: cx * state.sc + state.tx, y: cy * state.sc + state.ty };
+  }
+
+  // Convert a client mouse position → content-space + lat/lon.
+  // Uses svg.getScreenCTM() to correctly handle any viewBox scaling /
+  // preserveAspectRatio letterbox offset (avoids the horizontal-offset bug).
+  function clientToContent(clientX, clientY) {
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { cx: 0, cy: 0, lat: 0, lon: 0 };
+    const { x: sx, y: sy } = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
+    const cx = (sx - state.tx) / state.sc;
+    const cy = (sy - state.ty) / state.sc;
+    const lat = vMaxLat - cy / H * vLat;
+    const lon = vMinLon + cx / W * vLon;
+    return { cx, cy, lat, lon };
+  }
+
+  const MEAS_COL     = '#e8c84a'; // muted gold — less harsh than pure yellow
+  const MEAS_FONT    = 10;
+  const MEAS_STROKE  = 1.5;
+
+  function redrawMeasure() {
+    measureLayer.innerHTML = '';
+    if (!measure.ptA) return;
+
+    const a = contentToOverlay(measure.ptA.cx, measure.ptA.cy);
+    // Endpoint A — circle + dot
+    measureLayer.appendChild(makeSvgEl('circle', {
+      cx: a.x, cy: a.y, r: 5,
+      fill: 'none', stroke: MEAS_COL, 'stroke-width': MEAS_STROKE,
+    }));
+    measureLayer.appendChild(makeSvgEl('circle', {
+      cx: a.x, cy: a.y, r: 2, fill: MEAS_COL,
+    }));
+
+    if (!measure.ptB) return;
+
+    const b = contentToOverlay(measure.ptB.cx, measure.ptB.cy);
+
+    // Dashed line
+    measureLayer.appendChild(makeSvgEl('line', {
+      x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+      stroke: MEAS_COL, 'stroke-width': MEAS_STROKE, 'stroke-dasharray': '6 3',
+    }));
+
+    // Endpoint B
+    measureLayer.appendChild(makeSvgEl('circle', {
+      cx: b.x, cy: b.y, r: 5,
+      fill: 'none', stroke: MEAS_COL, 'stroke-width': MEAS_STROKE,
+    }));
+    measureLayer.appendChild(makeSvgEl('circle', {
+      cx: b.x, cy: b.y, r: 2, fill: MEAS_COL,
+    }));
+
+    // Distance + time label at midpoint
+    const nm  = haversineNm(measure.ptA.lat, measure.ptA.lon, measure.ptB.lat, measure.ptB.lon);
+    const hrs = nm / MEAS_SPEED_KT;
+    const lbl = `${nm.toFixed(1)} NM  ·  ${fmtMeasureTime(hrs)} @ ${MEAS_SPEED_KT} KT`;
+    const mx  = (a.x + b.x) / 2;
+    const my  = (a.y + b.y) / 2;
+
+    // Translucent background pill for readability
+    const bgRect = makeSvgEl('rect', {
+      x: mx - 84, y: my - 18, width: 168, height: 16,
+      rx: 3, fill: '#000000', opacity: '0.55',
+    });
+    measureLayer.appendChild(bgRect);
+
+    measureLayer.appendChild(svgText(lbl, {
+      x: mx, y: my - 6,
+      'font-size': MEAS_FONT,
+      'font-family': MONO_FONT,
+      fill: MEAS_COL,
+      'text-anchor': 'middle',
+    }));
+  }
+
   container.appendChild(svg);
 
   // Close popup when clicking the map background
@@ -208,6 +323,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
       m.setAttribute('transform', `translate(${m._baseX},${m._baseY}) scale(${invSc.toFixed(5)})`);
     });
     gridLabels.redraw(state.tx, state.ty, state.sc);
+    redrawMeasure();
   }
 
   function clamp() {
@@ -226,7 +342,96 @@ function drawMap(container, points, routes, geoData, airspaces) {
     applyTransform();
   });
 
-  setupInteraction(svg, MAP_WIDTH, MAP_HEIGHT, MIN_ZOOM, MAX_ZOOM, state, applyTransform, clamp);
+  // ── Measure mode helpers ──────────────────────────────────
+  function setMeasureMode(mode) {
+    measure.mode = mode;
+    sidebar._measureBtn.classList.toggle('map-msn-active', mode !== 'off');
+    svg.style.cursor = (mode === 'waitA' || mode === 'waitB') ? 'crosshair' : 'grab';
+  }
+
+  function deactivateMeasure() {
+    measure.ptA = null;
+    measure.ptB = null;
+    setMeasureMode('off');
+    redrawMeasure();
+  }
+
+  // ── Measure button toggle ─────────────────────────────────
+  sidebar._measureBtn.addEventListener('click', () => {
+    if (measure.mode === 'off') setMeasureMode('waitA');
+    else deactivateMeasure();
+  });
+
+  // ── Left-click on SVG (click-mode flow) ──────────────────
+  // 'off'   → ignore (let interact handle pan)
+  // 'waitA' → place ptA, switch to 'waitB' (ptB tracks cursor)
+  // 'waitB' → fix ptB, switch to 'fixed'
+  // 'fixed' → deactivate (let interact handle pan)
+  svg.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (measure.mode === 'off') return;
+    if (measure.mode === 'fixed') { deactivateMeasure(); return; }
+    e.preventDefault(); // suppress pan while actively measuring
+    if (measure.mode === 'waitA') {
+      measure.ptA = clientToContent(e.clientX, e.clientY);
+      measure.ptB = null;
+      setMeasureMode('waitB');
+    } else { // waitB → fix second point
+      measure.ptB = clientToContent(e.clientX, e.clientY);
+      setMeasureMode('fixed');
+      e.stopImmediatePropagation(); // prevent interact handler from starting a drag
+    }
+    redrawMeasure();
+  });
+
+  // Any left-click anywhere while in 'fixed' state → deactivate
+  window.addEventListener('mousedown', e => {
+    if (!svg.isConnected) return;
+    if (e.button !== 0 || measure.mode !== 'fixed') return;
+    deactivateMeasure();
+  });
+
+  // ── Middle-click-and-hold ─────────────────────────────────
+  let midMeasuring = false;
+  svg.addEventListener('mousedown', e => {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    midMeasuring = true;
+    measure.ptA = clientToContent(e.clientX, e.clientY);
+    measure.ptB = null;
+    setMeasureMode('waitB'); // highlight button + crosshair cursor
+    redrawMeasure();
+  });
+
+  // Live cursor tracking — used by waitB (click mode) and middle-drag
+  let measureRafPending = false;
+  let measureMoveX = 0, measureMoveY = 0;
+  window.addEventListener('mousemove', e => {
+    if (!svg.isConnected) return;
+    if (!midMeasuring && measure.mode !== 'waitB') return;
+    measureMoveX = e.clientX;
+    measureMoveY = e.clientY;
+    if (measureRafPending) return;
+    measureRafPending = true;
+    requestAnimationFrame(() => {
+      measureRafPending = false;
+      if (!midMeasuring && measure.mode !== 'waitB') return;
+      measure.ptB = clientToContent(measureMoveX, measureMoveY);
+      redrawMeasure();
+    });
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (!svg.isConnected) return;
+    if (e.button !== 1 || !midMeasuring) return;
+    midMeasuring = false;
+    // Transition to 'fixed' so the band stays visible after releasing middle button
+    if (measure.ptB) setMeasureMode('fixed');
+    else deactivateMeasure();
+  });
+
+  setupInteraction(svg, MAP_WIDTH, MAP_HEIGHT, MIN_ZOOM, MAX_ZOOM, state, applyTransform, clamp,
+    () => measure.mode === 'waitA' || measure.mode === 'waitB');
 
   // Initial render
   applyTransform();
