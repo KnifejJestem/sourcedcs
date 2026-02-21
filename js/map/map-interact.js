@@ -57,7 +57,7 @@ function setupInteraction(svg, W, H, MIN_SC, MAX_SC, state, applyTransform, clam
 
   window.addEventListener('mouseup', () => {
     drag = null;
-    svg.style.cursor = 'grab';
+    svg.style.cursor = (isMeasureActive && isMeasureActive()) ? 'crosshair' : 'grab';
   });
 
   // ── Touch (pan + pinch-to-zoom) ──────────────────────────

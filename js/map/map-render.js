@@ -207,19 +207,25 @@ function drawMap(container, points, routes, geoData, airspaces) {
   const measureLayer = makeSvgEl('g', { 'pointer-events': 'none' });
   svg.appendChild(measureLayer);
 
-  // Measurement state — two optional anchor points in content-space + lat/lon
-  const measure = { ptA: null, ptB: null, clickMode: false };
+  // Measurement state — mode drives the control flow:
+  //   'off'   — inactive, button not highlighted
+  //   'waitA' — active, waiting for first click to place start point
+  //   'waitB' — start point fixed, end point tracks cursor live
+  //   'fixed' — both points placed; any left-click clears the band
+  const measure = { mode: 'off', ptA: null, ptB: null };
 
   // Convert content-space (cx, cy) → current SVG overlay coords
   function contentToOverlay(cx, cy) {
     return { x: cx * state.sc + state.tx, y: cy * state.sc + state.ty };
   }
 
-  // Convert a client mouse position → content-space + lat/lon
+  // Convert a client mouse position → content-space + lat/lon.
+  // Uses svg.getScreenCTM() to correctly handle any viewBox scaling /
+  // preserveAspectRatio letterbox offset (avoids the horizontal-offset bug).
   function clientToContent(clientX, clientY) {
-    const rect = svg.getBoundingClientRect();
-    const sx = (clientX - rect.left) / rect.width  * W;
-    const sy = (clientY - rect.top)  / rect.height * H;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { cx: 0, cy: 0, lat: 0, lon: 0 };
+    const { x: sx, y: sy } = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
     const cx = (sx - state.tx) / state.sc;
     const cy = (sy - state.ty) / state.sc;
     const lat = vMaxLat - cy / H * vLat;
@@ -227,7 +233,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
     return { cx, cy, lat, lon };
   }
 
-  const MEAS_COL     = '#ffdd00';
+  const MEAS_COL     = '#e8c84a'; // muted gold — less harsh than pure yellow
   const MEAS_FONT    = 10;
   const MEAS_STROKE  = 1.5;
 
@@ -336,69 +342,96 @@ function drawMap(container, points, routes, geoData, airspaces) {
     applyTransform();
   });
 
-  // ── Measure button (legend toggle) ───────────────────────
+  // ── Measure mode helpers ──────────────────────────────────
+  function setMeasureMode(mode) {
+    measure.mode = mode;
+    sidebar._measureBtn.classList.toggle('map-msn-active', mode !== 'off');
+    svg.style.cursor = (mode === 'waitA' || mode === 'waitB') ? 'crosshair' : 'grab';
+  }
+
+  function deactivateMeasure() {
+    measure.ptA = null;
+    measure.ptB = null;
+    setMeasureMode('off');
+    redrawMeasure();
+  }
+
+  // ── Measure button toggle ─────────────────────────────────
   sidebar._measureBtn.addEventListener('click', () => {
-    measure.clickMode = !measure.clickMode;
-    if (!measure.clickMode) {
-      measure.ptA = null;
-      measure.ptB = null;
-      redrawMeasure();
-    }
-    sidebar._measureBtn.classList.toggle('map-msn-active', measure.clickMode);
-    svg.style.cursor = measure.clickMode ? 'crosshair' : 'grab';
+    if (measure.mode === 'off') setMeasureMode('waitA');
+    else deactivateMeasure();
   });
 
-  // Left-click in measure-click-mode: place point A then point B
+  // ── Left-click on SVG (click-mode flow) ──────────────────
+  // 'off'   → ignore (let interact handle pan)
+  // 'waitA' → place ptA, switch to 'waitB' (ptB tracks cursor)
+  // 'waitB' → fix ptB, switch to 'fixed'
+  // 'fixed' → deactivate (let interact handle pan)
   svg.addEventListener('mousedown', e => {
-    if (e.button !== 0 || !measure.clickMode) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const pt = clientToContent(e.clientX, e.clientY);
-    if (!measure.ptA || measure.ptB) {
-      // Start a fresh measurement
-      measure.ptA = pt;
+    if (e.button !== 0) return;
+    if (measure.mode === 'off') return;
+    if (measure.mode === 'fixed') { deactivateMeasure(); return; }
+    e.preventDefault(); // suppress pan while actively measuring
+    if (measure.mode === 'waitA') {
+      measure.ptA = clientToContent(e.clientX, e.clientY);
       measure.ptB = null;
-    } else {
-      // Place endpoint — keep displayed
-      measure.ptB = pt;
+      setMeasureMode('waitB');
+    } else { // waitB → fix second point
+      measure.ptB = clientToContent(e.clientX, e.clientY);
+      setMeasureMode('fixed');
+      e.stopImmediatePropagation(); // prevent interact handler from starting a drag
     }
     redrawMeasure();
   });
 
-  // Middle-click-and-hold: always available regardless of click mode
+  // Any left-click anywhere while in 'fixed' state → deactivate
+  window.addEventListener('mousedown', e => {
+    if (!svg.isConnected) return;
+    if (e.button !== 0 || measure.mode !== 'fixed') return;
+    deactivateMeasure();
+  });
+
+  // ── Middle-click-and-hold ─────────────────────────────────
   let midMeasuring = false;
-  let measureRafPending = false; // throttle live redraws to animation frames
   svg.addEventListener('mousedown', e => {
     if (e.button !== 1) return;
     e.preventDefault();
     midMeasuring = true;
-    const pt = clientToContent(e.clientX, e.clientY);
-    measure.ptA = pt;
+    measure.ptA = clientToContent(e.clientX, e.clientY);
     measure.ptB = null;
+    setMeasureMode('waitB'); // highlight button + crosshair cursor
     redrawMeasure();
   });
 
+  // Live cursor tracking — used by waitB (click mode) and middle-drag
+  let measureRafPending = false;
+  let measureMoveX = 0, measureMoveY = 0;
   window.addEventListener('mousemove', e => {
-    if (!midMeasuring && !(measure.clickMode && measure.ptA && !measure.ptB)) return;
+    if (!svg.isConnected) return;
+    if (!midMeasuring && measure.mode !== 'waitB') return;
+    measureMoveX = e.clientX;
+    measureMoveY = e.clientY;
     if (measureRafPending) return;
     measureRafPending = true;
     requestAnimationFrame(() => {
       measureRafPending = false;
-      const pt = clientToContent(e.clientX, e.clientY);
-      measure.ptB = pt;
+      if (!midMeasuring && measure.mode !== 'waitB') return;
+      measure.ptB = clientToContent(measureMoveX, measureMoveY);
       redrawMeasure();
     });
   });
 
   window.addEventListener('mouseup', e => {
-    if (e.button === 1 && midMeasuring) {
-      midMeasuring = false;
-      // Leave the measurement displayed until the user starts a new one
-    }
+    if (!svg.isConnected) return;
+    if (e.button !== 1 || !midMeasuring) return;
+    midMeasuring = false;
+    // Transition to 'fixed' so the band stays visible after releasing middle button
+    if (measure.ptB) setMeasureMode('fixed');
+    else deactivateMeasure();
   });
 
   setupInteraction(svg, MAP_WIDTH, MAP_HEIGHT, MIN_ZOOM, MAX_ZOOM, state, applyTransform, clamp,
-    () => measure.clickMode);
+    () => measure.mode === 'waitA' || measure.mode === 'waitB');
 
   // Initial render
   applyTransform();

@@ -942,11 +942,11 @@ header {
 }
 
 .map-measure-btn.map-msn-active {
-  border-color: #ffdd00;
-  color: #ffdd00;
+  border-color: #c8a830;
+  color: #c8a830;
 }
 .map-measure-btn.map-msn-active:hover {
-  background: rgba(255,221,0,0.12);
+  background: rgba(200,168,48,0.12);
 }
 
 /* Remove old map-wrap / map-legend styles that conflict */
