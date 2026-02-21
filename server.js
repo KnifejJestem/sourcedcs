@@ -24,7 +24,15 @@ const path    = require('path');
 const { Server } = require('socket.io');
 
 function hashPassword(pw) {
-  return crypto.createHash('sha256').update(pw).digest('hex');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(pw, salt, 64).toString('hex');
+  return salt + ':' + hash;
+}
+
+function verifyPassword(pw, stored) {
+  const [salt, hash] = stored.split(':');
+  const check = crypto.scryptSync(pw, salt, 64).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'));
 }
 
 const app    = express();
@@ -91,11 +99,11 @@ io.on('connection', (socket) => {
         session.presenterId = null;
       }
 
-      const pwHash = hashPassword(typeof password === 'string' ? password : '');
+      const pw = typeof password === 'string' ? password : '';
       if (session.presenterPassword === null) {
         // First presenter sets the room password (stored hashed)
-        session.presenterPassword = pwHash;
-      } else if (session.presenterPassword !== pwHash) {
+        session.presenterPassword = hashPassword(pw);
+      } else if (!verifyPassword(pw, session.presenterPassword)) {
         socket.emit('join-error', { message: 'Wrong presenter password' });
         return;
       }
