@@ -151,3 +151,115 @@ header {
 .view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
 .view.active { display: flex; }
 
+/* ── Join Room Dialog ────────────────────────────────────── */
+.dialog-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9000;
+}
+:root.movie .dialog-overlay { background: rgba(0,0,0,.7); }
+
+.dialog-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  padding: 28px 32px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: var(--shadow-md);
+}
+.dialog-title {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--text);
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+:root.movie .dialog-title { color: var(--cap); }
+.dialog-label {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+.dialog-input {
+  display: block;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.dialog-input:focus { border-color: var(--text); }
+:root.movie .dialog-input { background: var(--bg2); border-color: var(--border); color: var(--text); }
+:root.movie .dialog-input:focus { border-color: var(--cap); }
+
+.dialog-role-toggle {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  overflow: hidden;
+}
+.dialog-role-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.dialog-role-btn.active { background: var(--text); color: var(--text-inv); }
+:root.movie .dialog-role-btn.active { background: var(--cap); color: #000; }
+
+.dialog-error {
+  font-size: 10px;
+  color: var(--red);
+  min-height: 16px;
+  margin-top: 8px;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+.dialog-btn {
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  padding: 6px 16px;
+  cursor: pointer;
+}
+.dialog-btn:hover { background: var(--text); color: var(--text-inv); }
+:root.movie .dialog-btn:hover { background: var(--cap); color: #000; }
+.dialog-btn-join { font-weight: 600; }
+
+.drop-hint { font-size: 10px; color: var(--text-3); }
+
+/* ── Session status indicator ────────────────────────────── */
+.session-indicator {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.session-indicator.role-presenter { border-color: var(--green); color: var(--green); }
+.session-indicator.role-presentee { border-color: var(--blue);  color: var(--blue); }
+:root.movie .session-indicator.role-presenter { border-color: var(--cap);  color: var(--cap); }
+:root.movie .session-indicator.role-presentee { border-color: var(--blue); color: var(--blue); }
+

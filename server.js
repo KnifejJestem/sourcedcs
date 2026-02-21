@@ -50,11 +50,12 @@ const sessions = new Map();
 function getOrCreateSession(sessionId) {
   if (!sessions.has(sessionId)) {
     sessions.set(sessionId, {
-      presenterId: null,
-      packageYaml: null,
-      currentTab:  'ato',
-      theme:       'pro',
-      display:     { timeMode: 'Z', coordMode: 'dm' },
+      presenterId:     null,
+      presenterPassword: null,  // set by the first presenter
+      packageYaml:     null,
+      currentTab:      'ato',
+      theme:           'pro',
+      display:         { timeMode: 'Z', coordMode: 'dm' },
     });
   }
   return sessions.get(sessionId);
@@ -66,14 +67,27 @@ io.on('connection', (socket) => {
   let currentRole      = null;
 
   // ── Join a session ─────────────────────────────────────────
-  socket.on('join', ({ sessionId, role }) => {
+  socket.on('join', ({ sessionId, role, password }) => {
     if (!sessionId || typeof sessionId !== 'string') return;
 
-    currentSessionId = sessionId;
-    currentRole = role === 'presenter' ? 'presenter' : 'presentee';
-    socket.join(sessionId);
-
     const session = getOrCreateSession(sessionId);
+    const wantedRole = role === 'presenter' ? 'presenter' : 'presentee';
+
+    // ── Presenter password gate ─────────────────────────────
+    if (wantedRole === 'presenter') {
+      const pw = typeof password === 'string' ? password : '';
+      if (session.presenterPassword === null) {
+        // First presenter sets the room password (may be empty)
+        session.presenterPassword = pw;
+      } else if (session.presenterPassword !== pw) {
+        socket.emit('join-error', { message: 'Wrong presenter password' });
+        return;
+      }
+    }
+
+    currentSessionId = sessionId;
+    currentRole = wantedRole;
+    socket.join(sessionId);
 
     if (currentRole === 'presenter') {
       session.presenterId = socket.id;

@@ -31,6 +31,7 @@
       </div>
       <button class="load-btn" onclick="document.getElementById('fileInput').click()">LOAD PACKAGE</button>
       <input type="file" id="fileInput" accept=".yaml,.yml" style="display:none">
+      <button class="load-btn" onclick="openJoinDialog()">JOIN ROOM</button>
     </div>
   </header>
 
@@ -120,6 +121,29 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Join Room Dialog -->
+<div class="dialog-overlay" id="joinDialog" style="display:none">
+  <div class="dialog-box">
+    <div class="dialog-title">JOIN BRIEFING ROOM</div>
+    <label class="dialog-label" for="joinRoomId">ROOM ID</label>
+    <input class="dialog-input" id="joinRoomId" type="text" placeholder="e.g. briefing-alpha" autocomplete="off">
+    <label class="dialog-label" for="joinRole">ROLE</label>
+    <div class="dialog-role-toggle" id="joinRoleToggle">
+      <button class="dialog-role-btn active" data-role="presentee" onclick="selectJoinRole('presentee')">PRESENTEE</button>
+      <button class="dialog-role-btn" data-role="presenter" onclick="selectJoinRole('presenter')">PRESENTER</button>
+    </div>
+    <div id="joinPasswordRow" style="display:none">
+      <label class="dialog-label" for="joinPassword">PRESENTER PASSWORD</label>
+      <input class="dialog-input" id="joinPassword" type="password" placeholder="Set or enter room password" autocomplete="off">
+    </div>
+    <div class="dialog-error" id="joinError"></div>
+    <div class="dialog-actions">
+      <button class="dialog-btn dialog-btn-cancel" onclick="closeJoinDialog()">CANCEL</button>
+      <button class="dialog-btn dialog-btn-join" onclick="submitJoinDialog()">JOIN</button>
     </div>
   </div>
 </div>
