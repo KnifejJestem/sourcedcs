@@ -208,12 +208,15 @@ function editorItemRow(parent, label, onEdit, onDelete) {
 // ── Re-render after edits ────────────────────────────────────
 // Re-runs the full load pipeline so registry references are resolved,
 // then re-renders all views.  Preserves the current tab and selection.
-function editorReRender() {
+// syncFrom — optional key of the section that was just saved ('ato', 'aco', …).
+//   When provided its operation/ato_day values are treated as canonical and
+//   propagated to all other sections so the header bar and every view stay
+//   consistent.  Callers that don't touch operation/ato_day can omit it.
+function editorReRender(syncFrom) {
   if (!STATE.pkg) return;
 
   // Sync shared header fields across all sections before re-render.
-  // If any section has operation or ato_day, propagate to all others.
-  _syncHeaders();
+  _syncHeaders(syncFrom);
 
   var savedTab = STATE.currentTab;
   var savedIdx = STATE.selectedIdx;
@@ -241,36 +244,57 @@ function editorReRender() {
 }
 
 // ── Sync shared header fields ────────────────────────────────
-// Updates the top-level pkg.header from whatever section values exist.
-// Each section keeps its own independently-edited value; we do NOT
-// cross-propagate between sections (that would overwrite edits in the
-// just-saved section with stale values from the other sections).
-// loadPackage_obj already handles header→section propagation on each
-// re-render, using "only fill in if the section lacks the value".
-function _syncHeaders() {
+// Propagates operation / ato_day so all sections and the top-level
+// header stay consistent after a section edit.
+//
+// syncFrom — key of the section that was just saved.  That section's
+//   values are treated as authoritative and written to every other
+//   section and to pkg.header.  When omitted (e.g. mission / registry
+//   edits that don't touch these fields) we fall back to first-non-null
+//   across all sections and only update the header.
+//
+// Note: sections use 'ato_day' while header uses 'ato_date' — this is
+// the existing naming convention in the data model (see loadPackage_obj).
+function _syncHeaders(syncFrom) {
   var pkg = STATE.pkg;
   if (!pkg) return;
 
-  // Walk sections and keep the first non-empty value seen.  Sections
-  // that were just edited will appear early in user-edit workflows; we
-  // just need any representative value to update the package header so
-  // renderHeader() can show the right text in the browser title bar.
-  // Note: sections use 'ato_day' while header uses 'ato_date' — this is
-  // the existing naming convention in the data model (see loadPackage_obj).
+  var SECTIONS = ['ato', 'aco', 'spins', 'comms', 'weather'];
   var operation = null;
   var atoDay    = null;
+  var propagateToSections = false;
 
-  ['ato', 'aco', 'spins', 'comms', 'weather'].forEach(function (key) {
-    var sec = pkg[key];
-    if (!sec) return;
-    if (!operation && sec.operation) operation = sec.operation;
-    if (!atoDay    && sec.ato_day)   atoDay    = sec.ato_day;
-  });
+  if (syncFrom && pkg[syncFrom]) {
+    // Use the just-saved section as the single source of truth
+    var src = pkg[syncFrom];
+    operation = src.operation || null;
+    atoDay    = src.ato_day   || null;
+    propagateToSections = true;
+  } else {
+    // Fallback: first non-null across all sections (e.g. mission/registry edits)
+    SECTIONS.forEach(function (key) {
+      var sec = pkg[key];
+      if (!sec) return;
+      if (!operation && sec.operation) operation = sec.operation;
+      if (!atoDay    && sec.ato_day)   atoDay    = sec.ato_day;
+    });
+  }
 
-  // Update only the top-level header — sections keep their own values
+  // Always update the top-level header
   if (!pkg.header) pkg.header = {};
   if (operation) pkg.header.operation = operation;
   if (atoDay)    pkg.header.ato_date  = atoDay;
+
+  // When saving a section editor, push the new values to every other
+  // section so the header bar and all views show the updated text.
+  if (propagateToSections) {
+    SECTIONS.forEach(function (key) {
+      var sec = pkg[key];
+      if (!sec) return;
+      if (operation) sec.operation = operation;
+      if (atoDay)    sec.ato_day   = atoDay;
+    });
+  }
 }
 
 // ── Clean package for export ─────────────────────────────────

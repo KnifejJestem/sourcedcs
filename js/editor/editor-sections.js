@@ -39,7 +39,7 @@ function openTimesEditor() {
     ato.irl_time_zulu     = _normalizeZulu(f.time.value);
     ato.ingame_start_time = _normalizeZulu(f.ingame.value);
 
-    editorReRender();
+    editorReRender('ato');
   });
 }
 
@@ -90,7 +90,7 @@ function openACOEditor() {
     aco.distributing_agency = h.dist.value || undefined;
     aco.acms                = body._acoAcms;
 
-    editorReRender();
+    editorReRender('aco');
   });
 }
 
@@ -351,7 +351,7 @@ function openSpinsEditor() {
     sp.version        = h.ver.value || undefined;
     sp.classification = h.cls.value || undefined;
     sp.sections       = body._spinsSections;
-    editorReRender();
+    editorReRender('spins');
   });
 }
 
@@ -470,7 +470,7 @@ function openCommsEditor() {
     cm.classification = h.cls.value || undefined;
     cm.uhf_presets    = _collectPresets(body._uhfFields);
     cm.vhf_presets    = _collectPresets(body._vhfFields);
-    editorReRender();
+    editorReRender('comms');
   });
 }
 
@@ -590,7 +590,7 @@ function openWeatherEditor() {
     // Mission weather
     wx.mission_wx = body._msnWx.filter(function (mw) { return mw.mission_ref || mw.notes; });
 
-    editorReRender();
+    editorReRender('weather');
   });
 }
 
