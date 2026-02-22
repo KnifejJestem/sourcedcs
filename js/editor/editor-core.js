@@ -241,44 +241,36 @@ function editorReRender() {
 }
 
 // ── Sync shared header fields ────────────────────────────────
-// Finds the most recently set operation/ato_day across all sections
-// and propagates them, so editing one view's header updates all others.
+// Updates the top-level pkg.header from whatever section values exist.
+// Each section keeps its own independently-edited value; we do NOT
+// cross-propagate between sections (that would overwrite edits in the
+// just-saved section with stale values from the other sections).
+// loadPackage_obj already handles header→section propagation on each
+// re-render, using "only fill in if the section lacks the value".
 function _syncHeaders() {
   var pkg = STATE.pkg;
   if (!pkg) return;
 
-  var sections = ['ato', 'aco', 'spins', 'comms', 'weather'];
+  // Walk sections and keep the first non-empty value seen.  Sections
+  // that were just edited will appear early in user-edit workflows; we
+  // just need any representative value to update the package header so
+  // renderHeader() can show the right text in the browser title bar.
+  // Note: sections use 'ato_day' while header uses 'ato_date' — this is
+  // the existing naming convention in the data model (see loadPackage_obj).
   var operation = null;
   var atoDay    = null;
 
-  // Find the latest non-empty values across all sections
-  // Note: sections use 'ato_day' while header uses 'ato_date' — this is the
-  // existing naming convention in the data model (see loadPackage_obj).
-  sections.forEach(function (key) {
+  ['ato', 'aco', 'spins', 'comms', 'weather'].forEach(function (key) {
     var sec = pkg[key];
     if (!sec) return;
-    if (sec.operation) operation = sec.operation;
-    if (sec.ato_day)   atoDay   = sec.ato_day;
+    if (!operation && sec.operation) operation = sec.operation;
+    if (!atoDay    && sec.ato_day)   atoDay    = sec.ato_day;
   });
 
-  // Also check header
-  if (pkg.header) {
-    if (pkg.header.operation) operation = pkg.header.operation;
-    if (pkg.header.ato_date)  atoDay   = pkg.header.ato_date;
-  }
-
-  // Propagate to all sections and header
-  if (operation || atoDay) {
-    sections.forEach(function (key) {
-      var sec = pkg[key];
-      if (!sec) return;
-      if (operation) sec.operation = operation;
-      if (atoDay)    sec.ato_day   = atoDay;
-    });
-    if (!pkg.header) pkg.header = {};
-    if (operation) pkg.header.operation = operation;
-    if (atoDay)    pkg.header.ato_date  = atoDay;
-  }
+  // Update only the top-level header — sections keep their own values
+  if (!pkg.header) pkg.header = {};
+  if (operation) pkg.header.operation = operation;
+  if (atoDay)    pkg.header.ato_date  = atoDay;
 }
 
 // ── Clean package for export ─────────────────────────────────
