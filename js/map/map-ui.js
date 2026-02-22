@@ -197,7 +197,7 @@ function createSidebar(opts) {
   sidebar.appendChild(el('div', 'map-sidebar-title', 'ROUTES'));
 
   // null = all visible, '__none__' = all hidden, key = solo highlight
-  let highlighted = null;
+  let highlighted = (typeof STATE !== 'undefined' && STATE.mapUI) ? STATE.mapUI.highlighted : null;
 
   function applyVisibility() {
     Object.entries(opts.msnGroups).forEach(([key, g]) => {
@@ -217,6 +217,8 @@ function createSidebar(opts) {
     });
     sidebar.querySelector('.map-all-btn')?.classList.toggle('map-msn-active',   highlighted === null);
     sidebar.querySelector('.map-none-btn')?.classList.toggle('map-msn-active',  highlighted === '__none__');
+    // Persist to centralized state
+    if (typeof STATE !== 'undefined' && STATE.mapUI) STATE.mapUI.highlighted = highlighted;
   }
 
   opts.routes.forEach(r => {
@@ -254,25 +256,36 @@ function createSidebar(opts) {
     sidebar.appendChild(el('div', 'map-sidebar-title', 'OVERLAYS'));
 
     if (hasEngZones) {
-      let engVisible = true;
-      const engBtn = el('button', 'map-msn-btn map-msn-active', '◯ ENG ZONES');
+      let engVisible = (typeof STATE !== 'undefined' && STATE.mapUI) ? STATE.mapUI.engVisible !== false : true;
+      const engBtn = el('button', 'map-msn-btn' + (engVisible ? ' map-msn-active' : ''), '◯ ENG ZONES');
       engBtn.addEventListener('click', () => {
         engVisible = !engVisible;
         opts.engZoneG.setAttribute('display', engVisible ? '' : 'none');
         if (opts.threatG) opts.threatG.setAttribute('display', engVisible ? '' : 'none');
         engBtn.classList.toggle('map-msn-active', engVisible);
+        if (typeof STATE !== 'undefined' && STATE.mapUI) STATE.mapUI.engVisible = engVisible;
       });
+      // Apply initial visibility from saved state
+      if (!engVisible) {
+        opts.engZoneG.setAttribute('display', 'none');
+        if (opts.threatG) opts.threatG.setAttribute('display', 'none');
+      }
       sidebar.appendChild(engBtn);
     }
 
     if (hasAirspaces) {
-      let airspaceVisible = true;
-      const airspaceBtn = el('button', 'map-msn-btn map-msn-active', '◯ AIRSPACES');
+      let airspaceVisible = (typeof STATE !== 'undefined' && STATE.mapUI) ? STATE.mapUI.airVisible !== false : true;
+      const airspaceBtn = el('button', 'map-msn-btn' + (airspaceVisible ? ' map-msn-active' : ''), '◯ AIRSPACES');
       airspaceBtn.addEventListener('click', () => {
         airspaceVisible = !airspaceVisible;
         opts.airspaceG.setAttribute('display', airspaceVisible ? '' : 'none');
         airspaceBtn.classList.toggle('map-msn-active', airspaceVisible);
+        if (typeof STATE !== 'undefined' && STATE.mapUI) STATE.mapUI.airVisible = airspaceVisible;
       });
+      // Apply initial visibility from saved state
+      if (!airspaceVisible) {
+        opts.airspaceG.setAttribute('display', 'none');
+      }
       sidebar.appendChild(airspaceBtn);
     }
 
