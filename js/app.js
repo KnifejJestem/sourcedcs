@@ -14,6 +14,16 @@ const STATE = {
     timeMode:  'Z',   // 'Z' = Zulu, 'L' = local (uses ato.local_offset_hours)
     coordMode: 'dm',  // 'dm' = decimal minutes, 'dms' = deg/min/sec, 'mgrs'
   },
+  // ── Centralised map UI state ─────────────────────────────
+  // Preserved across tab switches and editor saves so the map view
+  // is not reset every time the package is re-rendered.
+  mapUI: {
+    tx: 0, ty: 0, sc: 1,   // pan/zoom (content-group transform)
+    highlighted:  null,     // route filter: null=all, '__none__'=none, key=solo
+    engVisible:   true,     // engagement-zone overlay visibility
+    airVisible:   true,     // airspace overlay visibility
+    measureMode:  'off',    // 'off' | 'waitA' | 'waitB' | 'fixed'
+  },
 };
 
 // ── Shared helpers ───────────────────────────────────────────
@@ -553,11 +563,15 @@ function loadPackage_obj(data) {
 }
 
 // ── Header population ─────────────────────────────────────────
-// Only shows high-level package info. IRL/Ingame times live in
-// the ATO intel strip (view-ato.js) to avoid duplication.
+// Shows high-level package info: operation, ATO day, IRL/Ingame times.
 function renderHeader(ato) {
   const meta = document.getElementById('header-meta');
   if (!ato) { meta.innerHTML = ''; return; }
+
+  const op  = ato.operation || STATE.pkg?.header?.operation || null;
+  // Note: sections store the date as 'ato_day'; the top-level header stores it
+  // as 'ato_date' (per the existing data-model convention in loadPackage_obj).
+  const day = ato.ato_day   || STATE.pkg?.header?.ato_date  || null;
 
   // IRL time is always displayed in Zulu — it's a real-world reference
   const irlTimeRaw = ato.irl_time_zulu ? String(ato.irl_time_zulu).replace(/[ZL]/i, '').padStart(4, '0') + 'Z' : null;
@@ -566,19 +580,46 @@ function renderHeader(ato) {
   const ingame = ato._ingame_is_zulu
     ? fmtTime(ato.ingame_start_time)
     : fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
-  const items = [
-    ['IRL START',    irl,     ''],
-    ['INGAME START', ingame,  'ingame'],
-  ];
 
-  // Header shows: date + ingame start only — full detail (AWACS, freq,
-  // bullseye, etc.) is in the ATO intel strip.
+  const items = [];
+  if (op)  items.push(['OP',          op,     '']);
+  if (day) items.push(['ATO DAY',     day,    '']);
+  items.push(           ['IRL START',  irl,    '']);
+  items.push(           ['INGAME',     ingame, 'ingame']);
+
   meta.innerHTML = '';
   items.forEach(([lbl, val, cls]) => {
     const block = el('div', 'meta-block');
     block.appendChild(el('div', 'meta-label', lbl));
     block.appendChild(el('div', `meta-value${cls ? ' ' + cls : ''}`, val));
     meta.appendChild(block);
+  });
+}
+
+// ── Package unload ────────────────────────────────────────────
+// Resets STATE and the UI back to the upload screen.
+// Called before joining a session room so the room package takes over.
+function unloadPackage() {
+  STATE.pkg         = null;
+  STATE.selectedIdx = -1;
+
+  // Reset map UI state so the next render starts fresh
+  STATE.mapUI.tx          = 0;
+  STATE.mapUI.ty          = 0;
+  STATE.mapUI.sc          = 1;
+  STATE.mapUI.highlighted = null;
+  STATE.mapUI.engVisible  = true;
+  STATE.mapUI.airVisible  = true;
+  STATE.mapUI.measureMode = 'off';
+
+  document.getElementById('upload-screen').style.display = '';
+  document.getElementById('main-content').style.display  = 'none';
+
+  renderHeader(null);
+
+  ['ato', 'aco', 'spins', 'comms', 'map', 'weather'].forEach(tab => {
+    const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+    if (btn) btn.disabled = true;
   });
 }
 

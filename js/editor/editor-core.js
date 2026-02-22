@@ -208,12 +208,15 @@ function editorItemRow(parent, label, onEdit, onDelete) {
 // ── Re-render after edits ────────────────────────────────────
 // Re-runs the full load pipeline so registry references are resolved,
 // then re-renders all views.  Preserves the current tab and selection.
-function editorReRender() {
+// syncFrom — optional key of the section that was just saved ('ato', 'aco', …).
+//   When provided its operation/ato_day values are treated as canonical and
+//   propagated to all other sections so the header bar and every view stay
+//   consistent.  Callers that don't touch operation/ato_day can omit it.
+function editorReRender(syncFrom) {
   if (!STATE.pkg) return;
 
   // Sync shared header fields across all sections before re-render.
-  // If any section has operation or ato_day, propagate to all others.
-  _syncHeaders();
+  _syncHeaders(syncFrom);
 
   var savedTab = STATE.currentTab;
   var savedIdx = STATE.selectedIdx;
@@ -241,43 +244,56 @@ function editorReRender() {
 }
 
 // ── Sync shared header fields ────────────────────────────────
-// Finds the most recently set operation/ato_day across all sections
-// and propagates them, so editing one view's header updates all others.
-function _syncHeaders() {
+// Propagates operation / ato_day so all sections and the top-level
+// header stay consistent after a section edit.
+//
+// syncFrom — key of the section that was just saved.  That section's
+//   values are treated as authoritative and written to every other
+//   section and to pkg.header.  When omitted (e.g. mission / registry
+//   edits that don't touch these fields) we fall back to first-non-null
+//   across all sections and only update the header.
+//
+// Note: sections use 'ato_day' while header uses 'ato_date' — this is
+// the existing naming convention in the data model (see loadPackage_obj).
+function _syncHeaders(syncFrom) {
   var pkg = STATE.pkg;
   if (!pkg) return;
 
-  var sections = ['ato', 'aco', 'spins', 'comms', 'weather'];
+  var SECTIONS = ['ato', 'aco', 'spins', 'comms', 'weather'];
   var operation = null;
   var atoDay    = null;
+  var propagateToSections = false;
 
-  // Find the latest non-empty values across all sections
-  // Note: sections use 'ato_day' while header uses 'ato_date' — this is the
-  // existing naming convention in the data model (see loadPackage_obj).
-  sections.forEach(function (key) {
-    var sec = pkg[key];
-    if (!sec) return;
-    if (sec.operation) operation = sec.operation;
-    if (sec.ato_day)   atoDay   = sec.ato_day;
-  });
-
-  // Also check header
-  if (pkg.header) {
-    if (pkg.header.operation) operation = pkg.header.operation;
-    if (pkg.header.ato_date)  atoDay   = pkg.header.ato_date;
+  if (syncFrom && pkg[syncFrom]) {
+    // Use the just-saved section as the single source of truth
+    var src = pkg[syncFrom];
+    operation = src.operation || null;
+    atoDay    = src.ato_day   || null;
+    propagateToSections = true;
+  } else {
+    // Fallback: first non-null across all sections (e.g. mission/registry edits)
+    SECTIONS.forEach(function (key) {
+      var sec = pkg[key];
+      if (!sec) return;
+      if (!operation && sec.operation) operation = sec.operation;
+      if (!atoDay    && sec.ato_day)   atoDay    = sec.ato_day;
+    });
   }
 
-  // Propagate to all sections and header
-  if (operation || atoDay) {
-    sections.forEach(function (key) {
+  // Always update the top-level header
+  if (!pkg.header) pkg.header = {};
+  if (operation) pkg.header.operation = operation;
+  if (atoDay)    pkg.header.ato_date  = atoDay;
+
+  // When saving a section editor, push the new values to every other
+  // section so the header bar and all views show the updated text.
+  if (propagateToSections) {
+    SECTIONS.forEach(function (key) {
       var sec = pkg[key];
       if (!sec) return;
       if (operation) sec.operation = operation;
       if (atoDay)    sec.ato_day   = atoDay;
     });
-    if (!pkg.header) pkg.header = {};
-    if (operation) pkg.header.operation = operation;
-    if (atoDay)    pkg.header.ato_date  = atoDay;
   }
 }
 

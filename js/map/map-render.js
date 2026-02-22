@@ -347,7 +347,13 @@ function drawMap(container, points, routes, geoData, airspaces) {
   container.appendChild(sidebar);
 
   // ── Pan / Zoom ───────────────────────────────────────────
-  const state = { tx: 0, ty: 0, sc: 1 };
+  // Restore from centralized state so pan/zoom survives tab switches
+  // and editor re-renders.
+  const state = {
+    tx: STATE.mapUI.tx || 0,
+    ty: STATE.mapUI.ty || 0,
+    sc: STATE.mapUI.sc || 1,
+  };
 
   function applyTransform() {
     content.setAttribute('transform',
@@ -359,6 +365,10 @@ function drawMap(container, points, routes, geoData, airspaces) {
     });
     gridLabels.redraw(state.tx, state.ty, state.sc);
     redrawMeasure();
+    // Persist to centralized state
+    STATE.mapUI.tx = state.tx;
+    STATE.mapUI.ty = state.ty;
+    STATE.mapUI.sc = state.sc;
   }
 
   function clamp() {
@@ -380,6 +390,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
   // ── Measure mode helpers ──────────────────────────────────
   function setMeasureMode(mode) {
     measure.mode = mode;
+    STATE.mapUI.measureMode = mode;
     sidebar._measureBtn.classList.toggle('map-msn-active', mode !== 'off');
     svg.style.cursor = (mode === 'waitA' || mode === 'waitB') ? 'crosshair' : 'grab';
   }

@@ -12,11 +12,12 @@
 //   ?session=<id>&role=presenter   → join as presenter
 //   (no ?session)                  → standalone mode (shows dialog option)
 //
-// Presenter: every UI action (load package, switch tab, change
-//   theme / display mode) is broadcast to all presentees.
+// Presenter: loads packages and broadcasts them to presentees.
+//   Tab navigation, theme and display-mode changes are local only.
 //
-// Presentee: the UI is read-only — file loading is disabled,
-//   and all state is received from the presenter in real-time.
+// Presentee: the UI is read-only — file loading and editing are
+//   disabled. Navigation, theme and display mode are fully
+//   independent from the presenter.
 
 'use strict';
 
@@ -28,13 +29,11 @@ const SESSION = {
   _syncing:  false,  // true while applying remote state
 };
 
-// ── Original function references (captured once) ─────────────
-// Saved before the first joinSession() call wraps the globals.
-let _origLoadPackage  = null;
-let _origShowTab      = null;
-let _origSetTheme     = null;
-let _origSetTimeMode  = null;
-let _origSetCoordMode = null;
+// ── Original loadPackage reference (captured once) ───────────
+// Only loadPackage is wrapped for presenter broadcasting; all other
+// UI functions (showTab, setTheme, etc.) remain unwrapped so that
+// each user navigates independently.
+let _origLoadPackage = null;
 
 // ── Dialog helpers (global, called from onclick in HTML) ─────
 function openJoinDialog() {
@@ -87,23 +86,13 @@ function joinSession(sessionId, role, password) {
   SESSION.sessionId = sessionId;
   SESSION.role = role === 'presenter' ? 'presenter' : 'presentee';
 
-  // Capture originals exactly once (before any wrapping)
+  // Capture the original loadPackage exactly once
   if (!_origLoadPackage) {
-    _origLoadPackage  = window.loadPackage;
-    _origShowTab      = window.showTab;
-    _origSetTheme     = window.setTheme;
-    _origSetTimeMode  = window.setTimeMode;
-    _origSetCoordMode = window.setCoordMode;
+    _origLoadPackage = window.loadPackage;
   }
+  const _loadPackage = _origLoadPackage;
 
-  // Always restore originals first, then wrap if presenter
-  const _loadPackage  = _origLoadPackage;
-  const _showTab      = _origShowTab;
-  const _setTheme     = _origSetTheme;
-  const _setTimeMode  = _origSetTimeMode;
-  const _setCoordMode = _origSetCoordMode;
-
-  // ── Wrap global functions for presenter sync ──────────────
+  // ── Wrap loadPackage for presenter so edits/loads are broadcast ──
   if (SESSION.role === 'presenter') {
     window.loadPackage = function (yamlText) {
       _loadPackage(yamlText);
@@ -111,41 +100,9 @@ function joinSession(sessionId, role, password) {
         SESSION.socket.emit('package-loaded', yamlText);
       }
     };
-
-    window.showTab = function (name) {
-      _showTab(name);
-      if (SESSION.connected && !SESSION._syncing) {
-        SESSION.socket.emit('tab-changed', name);
-      }
-    };
-
-    window.setTheme = function (t) {
-      _setTheme(t);
-      if (SESSION.connected && !SESSION._syncing) {
-        SESSION.socket.emit('theme-changed', t);
-      }
-    };
-
-    window.setTimeMode = function (m) {
-      _setTimeMode(m);
-      if (SESSION.connected && !SESSION._syncing) {
-        SESSION.socket.emit('display-changed', { timeMode: m });
-      }
-    };
-
-    window.setCoordMode = function (m) {
-      _setCoordMode(m);
-      if (SESSION.connected && !SESSION._syncing) {
-        SESSION.socket.emit('display-changed', { coordMode: m });
-      }
-    };
   } else {
-    // Presentee: restore originals (don't broadcast)
-    window.loadPackage  = _loadPackage;
-    window.showTab      = _showTab;
-    window.setTheme     = _setTheme;
-    window.setTimeMode  = _setTimeMode;
-    window.setCoordMode = _setCoordMode;
+    // Presentee: ensure the unwrapped original is active
+    window.loadPackage = _loadPackage;
   }
 
   // ── Connect to server ─────────────────────────────────────
@@ -169,62 +126,39 @@ function joinSession(sessionId, role, password) {
     SESSION.connected = false;
     SESSION.role = null;
     SESSION.sessionId = null;
-    // Restore originals
-    window.loadPackage  = _loadPackage;
-    window.showTab      = _showTab;
-    window.setTheme     = _setTheme;
-    window.setTimeMode  = _setTimeMode;
-    window.setCoordMode = _setCoordMode;
+    // Restore unwrapped loadPackage
+    window.loadPackage = _loadPackage;
   });
 
   // ── Receive initial session state ──────────────────────────
   SESSION.socket.on('session-state', (state) => {
-    // Close dialog on successful join
+    // Successful join — close dialog and update UI chrome
     closeJoinDialog();
     showSessionIndicator(SESSION.sessionId, SESSION.role);
+    _showRoomButtons(true);
+
+    // Always unload the local package so the room package takes over.
+    // If the room has no package yet, the upload screen is shown and
+    // the presenter can load one; presentees see the waiting message.
+    unloadPackage();
 
     if (SESSION.role === 'presentee') {
       applyPresenteeUI();
+    }
+
+    // Load room package if one already exists
+    if (state.packageYaml) {
       SESSION._syncing = true;
-      if (state.theme)               _setTheme(state.theme);
-      if (state.display?.timeMode)   _setTimeMode(state.display.timeMode);
-      if (state.display?.coordMode)  _setCoordMode(state.display.coordMode);
-      if (state.packageYaml)         _loadPackage(state.packageYaml);
-      if (state.currentTab)          _showTab(state.currentTab);
+      _loadPackage(state.packageYaml);
       SESSION._syncing = false;
     }
   });
 
-  // ── Live updates from presenter ────────────────────────────
+  // ── Live package updates from presenter ───────────────────
   SESSION.socket.on('package-loaded', (yamlText) => {
     if (SESSION.role === 'presentee') {
       SESSION._syncing = true;
       _loadPackage(yamlText);
-      SESSION._syncing = false;
-    }
-  });
-
-  SESSION.socket.on('tab-changed', (tab) => {
-    if (SESSION.role === 'presentee') {
-      SESSION._syncing = true;
-      _showTab(tab);
-      SESSION._syncing = false;
-    }
-  });
-
-  SESSION.socket.on('theme-changed', (theme) => {
-    if (SESSION.role === 'presentee') {
-      SESSION._syncing = true;
-      _setTheme(theme);
-      SESSION._syncing = false;
-    }
-  });
-
-  SESSION.socket.on('display-changed', (display) => {
-    if (SESSION.role === 'presentee') {
-      SESSION._syncing = true;
-      if (display.timeMode)  _setTimeMode(display.timeMode);
-      if (display.coordMode) _setCoordMode(display.coordMode);
       SESSION._syncing = false;
     }
   });
@@ -238,6 +172,29 @@ function joinSession(sessionId, role, password) {
   });
 }
 
+// ── Leave a session ──────────────────────────────────────────
+function leaveSession() {
+  if (SESSION.socket) {
+    SESSION.socket.disconnect();
+    SESSION.socket = null;
+  }
+  SESSION.connected = false;
+  SESSION.role      = null;
+  SESSION.sessionId = null;
+
+  // Restore unwrapped loadPackage
+  if (_origLoadPackage) window.loadPackage = _origLoadPackage;
+
+  // Remove the session indicator badge
+  const existing = document.querySelector('.session-indicator');
+  if (existing) existing.remove();
+
+  // Restore full UI and unload the room package
+  _restoreDefaultUI();
+  _showRoomButtons(false);
+  unloadPackage();
+}
+
 // ── Auto-join from URL parameters (backwards compatible) ─────
 (function initFromURL() {
   const params    = new URLSearchParams(window.location.search);
@@ -248,16 +205,27 @@ function joinSession(sessionId, role, password) {
 })();
 
 // ── UI helpers ───────────────────────────────────────────────
-function applyPresenteeUI() {
-  // Hide the LOAD PACKAGE button
-  const loadBtn = document.querySelector('.load-btn');
-  if (loadBtn) loadBtn.style.display = 'none';
 
-  // Disable file input
+// Toggle JOIN ROOM / LEAVE ROOM button visibility.
+function _showRoomButtons(inRoom) {
+  const joinBtn  = document.getElementById('joinRoomBtn');
+  const leaveBtn = document.getElementById('leaveRoomBtn');
+  if (joinBtn)  joinBtn.style.display  = inRoom ? 'none' : '';
+  if (leaveBtn) leaveBtn.style.display = inRoom ? ''     : 'none';
+}
+
+// Apply presentee restrictions: hide LOAD PACKAGE + EDIT buttons,
+// disable file input, replace drop zone with a waiting message.
+function applyPresenteeUI() {
+  const loadPkgBtn = document.getElementById('loadPackageBtn');
+  if (loadPkgBtn) loadPkgBtn.style.display = 'none';
+
+  const editBtn = document.getElementById('editModeBtn');
+  if (editBtn) editBtn.style.display = 'none';
+
   const fileInput = document.getElementById('fileInput');
   if (fileInput) fileInput.disabled = true;
 
-  // Replace drop-zone content with a waiting message
   const dropZone = document.getElementById('dropZone');
   if (dropZone) {
     dropZone.innerHTML =
@@ -265,6 +233,29 @@ function applyPresenteeUI() {
       '<div class="drop-label">WAITING FOR PRESENTER</div>' +
       '<div class="drop-sub">The presenter will load the briefing package.</div>';
     dropZone.style.pointerEvents = 'none';
+  }
+}
+
+// Restore the default (standalone) UI after leaving a session.
+function _restoreDefaultUI() {
+  const loadPkgBtn = document.getElementById('loadPackageBtn');
+  if (loadPkgBtn) loadPkgBtn.style.display = '';
+
+  const editBtn = document.getElementById('editModeBtn');
+  if (editBtn) editBtn.style.display = '';
+
+  const fileInput = document.getElementById('fileInput');
+  if (fileInput) fileInput.disabled = false;
+
+  const dropZone = document.getElementById('dropZone');
+  if (dropZone) {
+    dropZone.innerHTML =
+      '<div class="drop-icon">\u2295</div>' +
+      '<div class="drop-label">LOAD ATO PACKAGE</div>' +
+      '<div class="drop-sub">Drop a <strong>package.yaml</strong> here, or click to browse.<br>' +
+      'Top-level keys: <code>ato</code>, <code>aco</code>, <code>spins</code>, <code>comms</code>, <code>weather</code></div>' +
+      '<div class="drop-hint">Try: <code>demo-package.yaml</code></div>';
+    dropZone.style.pointerEvents = '';
   }
 }
 
@@ -279,3 +270,4 @@ function showSessionIndicator(sessionId, role) {
   const headerRight = document.querySelector('.header-right');
   if (headerRight) headerRight.prepend(indicator);
 }
+
