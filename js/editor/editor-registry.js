@@ -59,7 +59,7 @@ var REGISTRY_CATEGORIES = {
   },
   reference_points: {
     label: 'REFERENCE POINTS',
-    idLabel: 'ID',
+    isList: true,
     fields: [
       { key: 'name',     label: 'Name',     placeholder: 'e.g. COYOTE' },
       { key: 'type',     label: 'Type',     placeholder: 'bullseye / marshal' },
@@ -87,17 +87,29 @@ function openRegistryEditor() {
 
     Object.keys(REGISTRY_CATEGORIES).forEach(function (catKey) {
       var cat   = REGISTRY_CATEGORIES[catKey];
-      var items = reg[catKey] || {};
-      var ids   = Object.keys(items);
+      var raw   = reg[catKey];
 
-      editorListBlock(body, cat.label, ids, function (container, id) {
-        var item  = items[id];
-        var label = id + (item.name ? ' — ' + item.name : '');
-        editorItemRow(container, label,
-          function () { editRegistryItem(catKey, id); },
-          function () { deleteRegistryItem(catKey, id); }
-        );
-      }, function () { addRegistryItem(catKey); });
+      if (cat.isList) {
+        var items = Array.isArray(raw) ? raw : [];
+        var ids   = items.map(function (i) { return i.name; });
+        editorListBlock(body, cat.label, ids, function (container, id) {
+          editorItemRow(container, id,
+            function () { editRegistryItem(catKey, id); },
+            function () { deleteRegistryItem(catKey, id); }
+          );
+        }, function () { addRegistryItem(catKey); });
+      } else {
+        var items = raw || {};
+        var ids   = Object.keys(items);
+        editorListBlock(body, cat.label, ids, function (container, id) {
+          var item  = items[id];
+          var label = id + (item.name ? ' — ' + item.name : '');
+          editorItemRow(container, label,
+            function () { editRegistryItem(catKey, id); },
+            function () { deleteRegistryItem(catKey, id); }
+          );
+        }, function () { addRegistryItem(catKey); });
+      }
     });
   }, function () {
     // no-op on save for list view — individual items save themselves
@@ -108,8 +120,15 @@ function openRegistryEditor() {
 function editRegistryItem(catKey, id) {
   var cat = REGISTRY_CATEGORIES[catKey];
   var reg = editorEnsureRegistry();
-  if (!reg[catKey]) reg[catKey] = {};
-  var item = reg[catKey][id] || {};
+
+  var item;
+  if (cat.isList) {
+    if (!Array.isArray(reg[catKey])) reg[catKey] = [];
+    item = reg[catKey].find(function (i) { return i.name === id; }) || {};
+  } else {
+    if (!reg[catKey]) reg[catKey] = {};
+    item = reg[catKey][id] || {};
+  }
 
   openEditorDialog('EDIT ' + cat.label.slice(0, -1) + ' — ' + id, function (body) {
     var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO REGISTRY');
@@ -118,14 +137,18 @@ function editRegistryItem(catKey, id) {
 
     var fields = {};
 
-    // ID field (read-only for existing items)
-    editorField(body, cat.idLabel, id, { disabled: true, hint: 'ID cannot be changed' });
+    if (!cat.isList) {
+      // ID field (read-only for existing items)
+      editorField(body, cat.idLabel, id, { disabled: true, hint: 'ID cannot be changed' });
+    }
 
     cat.fields.forEach(function (f) {
       fields[f.key] = editorField(body, f.label, item[f.key] || '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
         coordPick:   f.coordPick || false,
+        disabled:    cat.isList && f.key === 'name' ? true : false,
+        hint:        cat.isList && f.key === 'name' ? 'Name cannot be changed here' : undefined,
       });
     });
 
@@ -155,10 +178,13 @@ function addRegistryItem(catKey) {
 
     var fields = {};
 
-    var idInput = editorField(body, cat.idLabel, '', {
-      placeholder: 'Unique identifier',
-      required: true,
-    });
+    if (!cat.isList) {
+      var idInput = editorField(body, cat.idLabel, '', {
+        placeholder: 'Unique identifier',
+        required: true,
+      });
+      body._idInput = idInput;
+    }
 
     cat.fields.forEach(function (f) {
       fields[f.key] = editorField(body, f.label, '', {
@@ -169,7 +195,6 @@ function addRegistryItem(catKey) {
     });
 
     body._editorFields = fields;
-    body._idInput = idInput;
     body._catKey = catKey;
     body._isNew = true;
   }, function () {
@@ -182,7 +207,15 @@ function deleteRegistryItem(catKey, id) {
   if (!confirm('Delete ' + id + '?')) return;
 
   var reg = editorEnsureRegistry();
-  if (reg[catKey]) delete reg[catKey][id];
+  var cat = REGISTRY_CATEGORIES[catKey];
+
+  if (cat.isList) {
+    if (Array.isArray(reg[catKey])) {
+      reg[catKey] = reg[catKey].filter(function (i) { return i.name !== id; });
+    }
+  } else {
+    if (reg[catKey]) delete reg[catKey][id];
+  }
 
   // Cascade: remove all references to the deleted item in missions & global_control
   _cascadeRegistryDelete(catKey, id);
@@ -238,17 +271,7 @@ function _saveRegistryItem(catKey) {
   var body   = document.getElementById('editorBody');
   var fields = body._editorFields;
   var reg    = editorEnsureRegistry();
-  if (!reg[catKey]) reg[catKey] = {};
-
-  // Determine ID
-  var id;
-  if (body._isNew) {
-    id = (body._idInput.value || '').trim();
-    if (!id) { alert('ID is required'); return; }
-    if (reg[catKey][id]) { alert('ID already exists'); return; }
-  } else {
-    id = body._editId;
-  }
+  var cat    = REGISTRY_CATEGORIES[catKey];
 
   // Build item from form fields
   var item = body._editItem ? Object.assign({}, body._editItem) : {};
@@ -268,7 +291,33 @@ function _saveRegistryItem(catKey) {
     item.aim_points = body._aimPoints;
   }
 
-  reg[catKey][id] = item;
+  if (cat.isList) {
+    if (!Array.isArray(reg[catKey])) reg[catKey] = [];
+    if (body._isNew) {
+      var name = (item.name || '').trim();
+      if (!name) { alert('Name is required'); return; }
+      if (reg[catKey].some(function (i) { return i.name === name; })) {
+        alert('Name already exists'); return;
+      }
+      reg[catKey].push(item);
+    } else {
+      var idx = reg[catKey].findIndex(function (i) { return i.name === body._editId; });
+      if (idx >= 0) reg[catKey][idx] = item;
+      else reg[catKey].push(item);
+    }
+  } else {
+    if (!reg[catKey]) reg[catKey] = {};
+    var id;
+    if (body._isNew) {
+      id = (body._idInput.value || '').trim();
+      if (!id) { alert('ID is required'); return; }
+      if (reg[catKey][id]) { alert('ID already exists'); return; }
+    } else {
+      id = body._editId;
+    }
+    reg[catKey][id] = item;
+  }
+
   editorReRender();
 }
 

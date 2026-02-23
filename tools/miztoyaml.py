@@ -560,12 +560,13 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
     ci = content.rfind(f'["{coalition}"] =')
     be_m = re.search(r'\["bullseye"\].*?\["y"\] = ([0-9eE.+\-]+).*?\["x"\] = ([0-9eE.+\-]+)',
                      content[ci:ci+2000], re.DOTALL)
-    ref_pts = {}
+    ref_pts = []
     if be_m:
         blat, blon = dcs_to_wgs84(float(be_m.group(2)), float(be_m.group(1)), theatre)
-        ref_pts["BULLSEYE"] = {"name": "BULLSEYE", "type": "bullseye",
-                               "coords": wgs84_to_dms(blat, blon)}
-        print(f"[+] {coalition.upper()} bullseye: {ref_pts['BULLSEYE']['coords']}")
+        be_entry = {"name": "BULLSEYE", "type": "bullseye",
+                    "coords": wgs84_to_dms(blat, blon)}
+        ref_pts.append(be_entry)
+        print(f"[+] {coalition.upper()} bullseye: {be_entry['coords']}")
 
     # -- ACO --
     acms = parse_drawings_common(content, theatre)
@@ -605,7 +606,7 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
             "ae_flags":           None,
             "global_control": {
                 "agency_id": None,
-                "bullseye":  ref_pts["BULLSEYE"]["coords"] if "BULLSEYE" in ref_pts else None,
+                "bullseye":  next((rp["coords"] for rp in ref_pts if rp.get("type") == "bullseye"), None),
             },
             "airfields": None,
             "carriers":  None,
