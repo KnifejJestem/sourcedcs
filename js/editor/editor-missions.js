@@ -111,17 +111,23 @@ function _buildTimingSection(body, m, f) {
 }
 
 function _buildTargetSection(body, m, f) {
-  editorSectionTitle(body, 'TARGET');
-  var tgt = (m.targets && m.targets[0]) || {};
-  f.tgt_location = editorField(body, 'Location',  tgt.location,   { placeholder: 'e.g. KHASAB' });
-  f.tgt_altitude = editorField(body, 'Altitude',  tgt.altitude,   { placeholder: 'e.g. E73FT' });
+  editorSectionTitle(body, 'TARGETS');
+  var targets = (m.targets || []).map(function (t) { return Object.assign({}, t); });
+  body._targets = targets;
+
   var tgtOpts = _registryOptions('targets', function (id, t) { return id + (t.name ? ' — ' + t.name : ''); });
-  f.tgt_target_id = editorField(body, 'Target', tgt.target_id, { type: 'select', options: tgtOpts });
-  f.tgt_mission_type_override = editorField(body, 'Mission Type Override', tgt.mission_type_override, { placeholder: 'e.g. AIRDEF' });
-  f.tgt_tot_net  = editorField(body, 'TOT NET',   tgt.tot_net,    { placeholder: '2046' });
-  f.tgt_tot_nlt  = editorField(body, 'TOT NLT',   tgt.tot_nlt,    { placeholder: '2111' });
-  f.tgt_tos      = editorField(body, 'TOS',       tgt.tos,        { placeholder: '2040' });
-  f.tgt_toffs    = editorField(body, 'TOFFS',     tgt.toffs,      { placeholder: '2230' });
+
+  var tgtListEl = el('div', 'ef-list-items');
+  _renderTargetsList(tgtListEl, targets, tgtOpts);
+  body.appendChild(tgtListEl);
+
+  var addTgtBtn = el('button', 'ef-btn ef-btn-add', '+ ADD TARGET');
+  addTgtBtn.type = 'button';
+  addTgtBtn.addEventListener('click', function () {
+    targets.push({});
+    _renderTargetsList(tgtListEl, targets, tgtOpts);
+  });
+  body.appendChild(addTgtBtn);
 }
 
 function _buildControlSection(body, m, f) {
@@ -194,21 +200,11 @@ function _saveMissionFromForm(onSave) {
   m.vul_start     = f.vul_start.value || undefined;
   m.vul_end       = f.vul_end.value || undefined;
 
-  // Target
-  var hasTgt = f.tgt_location.value || f.tgt_target_id.value ||
-               f.tgt_tot_net.value || f.tgt_tos.value;
-  if (hasTgt) {
-    m.targets = m.targets || [{}];
-    m.targets[0] = m.targets[0] || {};
-    m.targets[0].location              = f.tgt_location.value || undefined;
-    m.targets[0].altitude              = f.tgt_altitude.value || undefined;
-    m.targets[0].target_id             = f.tgt_target_id.value || undefined;
-    m.targets[0].mission_type_override = f.tgt_mission_type_override.value || undefined;
-    m.targets[0].tot_net               = f.tgt_tot_net.value || undefined;
-    m.targets[0].tot_nlt               = f.tgt_tot_nlt.value || undefined;
-    m.targets[0].tos                   = f.tgt_tos.value || undefined;
-    m.targets[0].toffs                 = f.tgt_toffs.value || undefined;
-  }
+  // Targets
+  var savedTargets = (body._targets || []).filter(function (t) {
+    return t.location || t.target_id || t.tot_net || t.tos;
+  });
+  m.targets = savedTargets.length ? savedTargets : undefined;
 
   // Control
   if (f.ctrl_agency_id.value || f.ctrl_primary.value) {
@@ -231,6 +227,43 @@ function _saveMissionFromForm(onSave) {
   m.steer_points = steerPts.length ? steerPts : undefined;
 
   onSave(m);
+}
+
+// ── Targets list renderer ────────────────────────────────────
+function _renderTargetsList(container, targets, tgtOpts) {
+  container.innerHTML = '';
+  targets.forEach(function (tgt, i) {
+    var block = el('div', 'ef-target-block');
+
+    var hdr = el('div', 'ef-target-header');
+    hdr.appendChild(el('span', 'ef-list-title', 'TARGET ' + (i + 1)));
+    var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '✕ REMOVE');
+    delBtn.type = 'button';
+    delBtn.addEventListener('click', function () {
+      targets.splice(i, 1);
+      _renderTargetsList(container, targets, tgtOpts);
+    });
+    hdr.appendChild(delBtn);
+    block.appendChild(hdr);
+
+    function _bindInput(input, key) {
+      input.addEventListener('input', function () { tgt[key] = this.value || undefined; });
+    }
+    function _bindSelect(input, key) {
+      input.addEventListener('change', function () { tgt[key] = this.value || undefined; });
+    }
+
+    _bindInput(editorField(block, 'Location', tgt.location, { placeholder: 'e.g. KHASAB' }), 'location');
+    _bindInput(editorField(block, 'Altitude', tgt.altitude, { placeholder: 'e.g. E73FT' }), 'altitude');
+    _bindSelect(editorField(block, 'Target', tgt.target_id, { type: 'select', options: tgtOpts }), 'target_id');
+    _bindInput(editorField(block, 'Mission Type Override', tgt.mission_type_override, { placeholder: 'e.g. AIRDEF' }), 'mission_type_override');
+    _bindInput(editorField(block, 'TOT NET', tgt.tot_net, { placeholder: '2046' }), 'tot_net');
+    _bindInput(editorField(block, 'TOT NLT', tgt.tot_nlt, { placeholder: '2111' }), 'tot_nlt');
+    _bindInput(editorField(block, 'TOS', tgt.tos, { placeholder: '2040' }), 'tos');
+    _bindInput(editorField(block, 'TOFFS', tgt.toffs, { placeholder: '2230' }), 'toffs');
+
+    container.appendChild(block);
+  });
 }
 
 // ── Steer points list renderer ──────────────────────────────
