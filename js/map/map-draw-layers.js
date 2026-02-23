@@ -114,26 +114,99 @@ function drawTileBackground(ctx, mode, effectiveVLon, tileBounds) {
   return tileG;
 }
 
-// ── Tile preloader ────────────────────────────────────────
-// Warms the browser HTTP cache for all zoom levels from z0 to TILE_MAX_ZOOM.
+// ── Tile image cache + Canvas 2D renderer ────────────────
 //
-// Coverage strategy — balances completeness vs tile count:
-//   z0        full base viewport (~100 tiles)    ← awaited for loading screen
-//   z0+1      full base viewport (~400 tiles)    ← fired immediately in parallel
-//   z0+2      full base viewport (~1600 tiles)   ← fired immediately in parallel
-//   z0+3 …    centroid-scaled (~100 tiles each)  ← fired immediately in parallel
+// Production mapping libraries (Leaflet, Mapbox GL) draw tiles onto a
+// single <canvas> element and pan/zoom it via CSS transform — this keeps
+// the compositor layer count at ONE regardless of how many tiles are
+// loaded, eliminating the per-<image> composite cost that makes SVG tile
+// layers slow.
 //
-// All zoom levels start downloading at the SAME time so background tiles
-// are already in-flight while the loading screen waits for z0.
-// No timeout: onerror() resolves individual tile promises so the loading
-// screen can never hang forever even if tiles fail.
-//
-// onProgress(loaded, total) is called with the count of z0 tiles loaded
-// so the caller can show real progress in the loading bar.
+// _tileImageCache stores live HTMLImageElement objects.  Tiles that were
+// preloaded are already `img.complete` here, so drawTilesOnCanvas() can
+// call drawImage() synchronously — no deferred promise needed.
 
-// Track which (mode/z/tx/ty) combos have been preloaded so repeated
-// map renders or mode switches don't re-fire Image() requests that the
-// browser cache already satisfies.
+// Persistent store of loaded HTMLImageElement objects.
+// Key: the tile URL string.  Value: HTMLImageElement.
+const _tileImageCache = new Map();
+
+// Monotonically incrementing token — used to cancel stale onload callbacks
+// when the canvas zoom level changes mid-render.
+let _canvasDrawVersion = 0;
+
+// Draw all tiles for a given effective viewport longitude span onto canvas2d.
+// seaColor is drawn as background first so areas without a tile are not blank.
+// Any tile whose Image isn't complete yet registers an onload handler that
+// draws just that tile when it arrives (guarded by the draw-version token).
+function drawTilesOnCanvas(canvas2d, ctx, mode, effectiveVLon, seaColor) {
+  const urlFn = TILE_URLS[mode];
+  if (!urlFn) return;
+
+  const myVersion = ++_canvasDrawVersion;
+  const z   = _tileZoom(effectiveVLon, TILE_MAX_ZOOM[mode]);
+  const pow = Math.pow(2, z);
+
+  const txMin = Math.max(0,       Math.floor((ctx.vMinLon + 180) / 360 * pow) - 1);
+  const txMax = Math.min(pow - 1, Math.ceil( (ctx.vMaxLon + 180) / 360 * pow));
+  const tyMin = Math.max(0,       _latToTileY(ctx.vMaxLat, z) - 1);
+  const tyMax = Math.min(pow - 1, _latToTileY(ctx.vMinLat, z) + 1);
+
+  // Background fill — visible only while tiles load (typically invisible after
+  // preloading because all images are already complete).
+  canvas2d.fillStyle = seaColor;
+  canvas2d.fillRect(0, 0, ctx.W, ctx.H);
+
+  for (let tx = txMin; tx <= txMax; tx++) {
+    for (let ty = tyMin; ty <= tyMax; ty++) {
+      const url  = urlFn(z, tx, ty);
+      let   img  = _tileImageCache.get(url);
+      if (!img) {
+        img = new Image();
+        _tileImageCache.set(url, img);
+        img.src = url;
+      }
+
+      // Tile SVG-unit position (same coordinate space as the canvas content)
+      const lon0 = tx       / pow * 360 - 180;
+      const lon1 = (tx + 1) / pow * 360 - 180;
+      const lat0 = _tileYToLat(ty,     z);
+      const lat1 = _tileYToLat(ty + 1, z);
+      const x = ctx.bx(lon0);
+      const y = ctx.by(lat0);
+      const w = Math.max(0, ctx.bx(lon1) - x);
+      const h = Math.max(0, ctx.by(lat1) - y);
+
+      if (img.complete && img.naturalWidth > 0) {
+        canvas2d.drawImage(img, x, y, w, h);
+      } else {
+        // Register onload so the tile paints as soon as it arrives.
+        // The version check ensures stale callbacks from a previous zoom
+        // level don't paint onto a canvas that has already been redrawn.
+        const _x = x, _y = y, _w = w, _h = h;
+        img.addEventListener('load', function handler() {
+          img.removeEventListener('load', handler);
+          if (_canvasDrawVersion === myVersion) canvas2d.drawImage(img, _x, _y, _w, _h);
+        });
+      }
+    }
+  }
+}
+
+// ── Tile preloader ────────────────────────────────────────
+// Warms both the browser HTTP cache AND _tileImageCache for all zoom
+// levels from z0 to TILE_MAX_ZOOM so that:
+//   • The loading screen shows accurate progress (z0 tiles awaited).
+//   • Any subsequent zoom is drawn from in-memory Image objects (instant).
+//
+// Coverage:
+//   z0, z0+1, z0+2 — full base viewport (pan-safe at 1×–4× zoom)
+//   z0+3 …         — centroid-scaled (~100 tiles each) for deeper zoom
+//
+// All zoom levels fire simultaneously — nothing waits for z0 to finish
+// before starting the background levels.
+
+// Tracks which (mode/z/tx/ty) combos are already in _tileImageCache so
+// repeated renders don't create duplicate Image objects.
 const _preloadedKeys = new Set();
 
 function preloadTiles(ctx, mode, onProgress) {
@@ -145,8 +218,6 @@ function preloadTiles(ctx, mode, onProgress) {
   const lonCtr = (ctx.vMinLon + ctx.vMaxLon) / 2;
   const latCtr = (ctx.vMinLat + ctx.vMaxLat) / 2;
 
-  // Build URL list for a geographic bounding box at a given zoom level.
-  // Already-preloaded tiles (by key) are skipped to avoid double-fetching.
   function tilesForZBounds(z, minLon, maxLon, minLat, maxLat) {
     const pow  = Math.pow(2, z);
     const txMn = Math.max(0,       Math.floor((minLon + 180) / 360 * pow) - 1);
@@ -166,55 +237,45 @@ function preloadTiles(ctx, mode, onProgress) {
     return urls;
   }
 
-  // ── Collect tiles for every zoom level ───────────────────
-  // z0, z0+1, z0+2 — full base viewport (covers panning at typical zoom).
-  // z0+3 and above  — centroid-scaled so tile count stays ~constant per level.
-  const z0Urls = tilesForZBounds(z0,
-    ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat);
+  const z0Urls = tilesForZBounds(z0, ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat);
   const bgUrls = [];
   for (let z = z0 + 1; z <= maxZ; z++) {
     const k = z - z0;
-    let levelUrls;
     if (k <= 2) {
-      // Full base viewport — covers panning at 2× and 4× zoom
-      levelUrls = tilesForZBounds(z,
-        ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat);
+      bgUrls.push(...tilesForZBounds(z, ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat));
     } else {
-      // Centroid-scaled — keeps tile count ~constant while covering deep zoom
       const scale   = Math.pow(2, k);
       const halfLon = ctx.vLon / (2 * scale);
       const halfLat = ctx.vLat / (2 * scale);
-      levelUrls = tilesForZBounds(z,
-        lonCtr - halfLon, lonCtr + halfLon,
-        latCtr - halfLat, latCtr + halfLat);
+      bgUrls.push(...tilesForZBounds(z,
+        lonCtr - halfLon, lonCtr + halfLon, latCtr - halfLat, latCtr + halfLat));
     }
-    bgUrls.push(...levelUrls);
   }
 
-  // ── Fire ALL tiles immediately ────────────────────────────
-  // z0 tiles track real progress for the loading bar.
-  // Background tiles are fire-and-forget (no blocking).
   const z0Total  = z0Urls.length;
   let   z0Loaded = 0;
 
+  // Load a URL: reuse an existing cache entry if available, otherwise create
+  // a new Image, store it in _tileImageCache, and resolve when done.
   function loadOne(url, isZ0) {
-    return new Promise(resolve => {
-      const img = new Image();
-      img.onload = img.onerror = () => {
-        if (isZ0) {
-          z0Loaded++;
-          if (onProgress) onProgress(z0Loaded, z0Total);
-        }
-        resolve();
-      };
+    let img = _tileImageCache.get(url);
+    if (!img) {
+      img = new Image();
+      _tileImageCache.set(url, img);
       img.src = url;
+    }
+    if (img.complete) {
+      if (isZ0) { z0Loaded++; if (onProgress) onProgress(z0Loaded, z0Total); }
+      return Promise.resolve();
+    }
+    return new Promise(resolve => {
+      img.addEventListener('load',  function h() { img.removeEventListener('load',  h); img.removeEventListener('error', h); if (isZ0) { z0Loaded++; if (onProgress) onProgress(z0Loaded, z0Total); } resolve(); });
+      img.addEventListener('error', function h() { img.removeEventListener('load',  h); img.removeEventListener('error', h); if (isZ0) { z0Loaded++; if (onProgress) onProgress(z0Loaded, z0Total); } resolve(); });
     });
   }
 
-  // Background tiles — start downloading right now alongside z0
+  // All levels start simultaneously.
   bgUrls.forEach(url => loadOne(url, false));
-
-  // z0 tiles — await these for the loading screen
   const z0Promise = z0Total > 0
     ? Promise.all(z0Urls.map(url => loadOne(url, true)))
     : Promise.resolve();

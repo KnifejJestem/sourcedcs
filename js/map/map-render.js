@@ -67,11 +67,8 @@ const BBOX_MIN_SPAN      = 1.5;  // minimum bbox span in degrees (avoids degener
 const PAN_MARGIN_RATIO = 0.1; // fraction of MAP_WIDTH
 
 // ── Tile holdover delay ────────────────────────────────────────
-// When refreshTilesIfNeeded() replaces the tile layer, the old layer stays
-// visible in the DOM for this many ms while the new tiles paint from cache.
-// 5000 ms lets z0+1/z0+2 tiles (which start downloading in parallel with z0)
-// finish their downloads and render before the previous zoom level is removed.
-const TILE_HOLDOVER_MS = 5000;
+// (kept for reference; no longer used since tiles draw to canvas
+// which is a single compositor layer — no DOM node swaps needed)
 
 // ── Marker scale damping ───────────────────────────────────────
 // Markers scale by 1/zoom^DAMPING — they shrink as you zoom in, but slowly.
@@ -163,9 +160,14 @@ function drawMap(container, points, routes, geoData, airspaces) {
     constantSizeMarkers,
   };
 
+  // ── Map viewport wrapper ──────────────────────────────────
+  // Wraps the tile canvas + SVG overlay so they can be stacked with
+  // position:absolute while the sidebar remains a flex sibling.
+  const mapViewport = el('div', 'map-viewport');
+
   // ── SVG skeleton ──────────────────────────────────────────
   const svg = makeSvgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%' });
-  svg.style.cssText = 'display:block;cursor:grab;touch-action:none;';
+  svg.style.cssText = 'display:block;cursor:grab;touch-action:none;position:absolute;inset:0;';
 
   // Clip path — hard edge so nothing drawn outside the canvas bounds is visible
   const clip = makeSvgEl('clipPath', { id: 'mvc' });
@@ -173,9 +175,6 @@ function drawMap(container, points, routes, geoData, airspaces) {
   const defs = svgEl('defs');
   defs.appendChild(clip);
   svg.appendChild(defs);
-
-  // Static sea background fills the entire canvas
-  svg.appendChild(makeSvgEl('rect', { x: 0, y: 0, width: W, height: H, fill: C.sea }));
 
   // Clip wrapper — contains all map content
   const clipWrap = makeSvgEl('g', { 'clip-path': 'url(#mvc)' });
@@ -186,7 +185,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
   clipWrap.appendChild(content);
 
   // ── Pan/Zoom state ────────────────────────────────────────
-  // Declared early so tile init can read the restored scale.
+  // Declared early so tile canvas init can read the restored scale.
   const state = {
     tx: STATE.mapUI.tx || 0,
     ty: STATE.mapUI.ty || 0,
@@ -196,22 +195,38 @@ function drawMap(container, points, routes, geoData, airspaces) {
   // ── Draw layers ──────────────────────────────────────────
   const mapMode = STATE.mapUI.mapMode || 'chart';
   let effectiveCtx = ctx; // ctx used for grid + grid labels
-  // Tile layer references — updated by refreshTilesIfNeeded() on zoom.
-  let tileLayerG = null;
-  let lastTileZ  = -1;
+
+  // Tile canvas — used in non-chart modes.
+  // A single <canvas> element replaces 1000+ SVG <image> nodes.
+  // Pan/zoom is applied via CSS transform (GPU, zero JS per frame).
+  // Only redrawn when the tile zoom level changes.
+  let tileCanvas  = null;
+  let tileCtx2d   = null;
+  let lastTileZ   = -1;
 
   if (mapMode === 'chart') {
+    // Chart mode: SVG sea rect + vector layers
+    svg.insertBefore(
+      makeSvgEl('rect', { x: 0, y: 0, width: W, height: H, fill: C.sea }),
+      clipWrap,
+    );
     content.appendChild(drawGrid(ctx));
     content.appendChild(drawLand(ctx, geoData));
     content.appendChild(drawCities(ctx, geoData));
   } else {
-    // Tile modes: raster tiles as background, coordinate grid on top.
-    // Always draw the FULL base viewport (ctx.vLon) at z0 regardless of the
-    // restored pan/zoom state — this ensures the entire map is tile-covered
-    // so panning after loading never shows blank areas.
-    tileLayerG = drawTileBackground(ctx, mapMode, ctx.vLon);
-    lastTileZ  = _tileZoom(ctx.vLon, TILE_MAX_ZOOM[mapMode]);
-    content.appendChild(tileLayerG);
+    // Tile modes: Canvas 2D background + SVG grid/routes/markers overlay.
+    // The canvas is positioned absolutely beneath the (transparent) SVG.
+    tileCanvas = document.createElement('canvas');
+    tileCanvas.width  = W;
+    tileCanvas.height = H;
+    tileCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;transform-origin:0 0;will-change:transform;';
+    mapViewport.appendChild(tileCanvas);
+    tileCtx2d = tileCanvas.getContext('2d');
+
+    // Draw initial tiles at z0 (all images are in _tileImageCache from preload)
+    drawTilesOnCanvas(tileCtx2d, ctx, mapMode, ctx.vLon / state.sc, C.sea);
+    lastTileZ = _tileZoom(ctx.vLon / state.sc, TILE_MAX_ZOOM[mapMode]);
+
     // Grid with higher contrast so it is readable over imagery.
     effectiveCtx = Object.assign({}, ctx, {
       C: Object.assign({}, ctx.C, {
@@ -223,7 +238,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
   }
 
   // ── Popup (needed by subsequent draw calls) ──────────────
-  const { showPopup: _showPopup, refreshPopup } = createPopup(container);
+  const { showPopup: _showPopup, refreshPopup } = createPopup(mapViewport);
   _refreshPopup = refreshPopup;
 
   // Wrap showPopup so that coord-pick mode intercepts marker clicks:
@@ -353,7 +368,10 @@ function drawMap(container, points, routes, geoData, airspaces) {
     }));
   }
 
-  container.appendChild(svg);
+  // SVG goes inside the viewport wrapper (on top of the tile canvas).
+  // In chart mode, mapViewport only contains SVG (no tile canvas).
+  mapViewport.appendChild(svg);
+  container.appendChild(mapViewport);
 
   // Track mousedown position so we can distinguish a clean click from a drag.
   // Only fire coord pick if the mouse didn't move significantly.
@@ -381,7 +399,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
       return;
     }
     _pickStart = null;
-    const popup = container.querySelector('.map-popup');
+    const popup = mapViewport.querySelector('.map-popup');
     if (popup) popup.style.display = 'none';
   });
 
@@ -401,15 +419,27 @@ function drawMap(container, points, routes, geoData, airspaces) {
   if (attrText) {
     const attrDiv = el('div', 'map-tile-attr');
     attrDiv.textContent = attrText;
-    container.appendChild(attrDiv);
+    mapViewport.appendChild(attrDiv);
   }
 
   // ── Pan / Zoom ───────────────────────────────────────────
   // (state is declared early above so tile init can read the restored scale)
 
   function applyTransform() {
+    // SVG content group — routes, markers, grid
     content.setAttribute('transform',
       `translate(${state.tx.toFixed(2)},${state.ty.toFixed(2)}) scale(${state.sc.toFixed(5)})`);
+
+    // Tile canvas CSS transform — GPU composited, zero JS per frame for pan.
+    // The canvas content is drawn in SVG coordinate units (0–W × 0–H), so
+    // the CSS translate must be converted to CSS pixels via the ratio.
+    if (tileCanvas) {
+      // clientWidth is a cached layout value — no forced reflow.
+      const ratio = mapViewport.clientWidth / W;
+      tileCanvas.style.transform =
+        `translate(${(state.tx * ratio).toFixed(2)}px,${(state.ty * ratio).toFixed(2)}px) scale(${state.sc.toFixed(5)})`;
+    }
+
     // Damped inverse scaling keeps markers readable as you zoom in
     const invSc = 1 / Math.pow(state.sc, MARKER_SCALE_DAMPING);
     constantSizeMarkers.forEach(m => {
@@ -424,30 +454,18 @@ function drawMap(container, points, routes, geoData, airspaces) {
     STATE.mapUI.sc = state.sc;
   }
 
-  // Replace the tile layer when the user zooms far enough to warrant
-  // higher/lower-detail tiles.  Called on every applyTransform(); exits
-  // immediately (no DOM change) when the needed zoom level hasn't changed.
-  //
-  // Each tile layer always covers the FULL base viewport — tiles for the
-  // whole map are preloaded into the browser cache so there is no download
-  // penalty and panning never reveals blank areas.
+  // Redraw the tile canvas when the zoom level changes.
+  // Pan events update only the CSS transform — no canvas redraw at all.
   function refreshTilesIfNeeded() {
-    if (!tileLayerG) return; // chart mode — no tiles
+    if (!tileCtx2d) return; // chart mode — no tile canvas
     const effectiveVLon = ctx.vLon / state.sc;
     const neededZ = _tileZoom(effectiveVLon, TILE_MAX_ZOOM[mapMode]);
-    if (neededZ === lastTileZ) return; // same zoom level — nothing to do
+    if (neededZ === lastTileZ) return; // same zoom level — CSS transform handles it
 
-    // Draw a fresh full-base-viewport tile layer at the new zoom level.
-    // Tiles come from the browser cache so they render nearly instantly.
-    const newTileG = drawTileBackground(ctx, mapMode, effectiveVLon);
-    // Holdover: insert new group AFTER the old one (painted on top), then
-    // schedule old group removal.  Old tiles remain visible as a fallback
-    // for TILE_HOLDOVER_MS so any tiles still downloading have time to arrive.
-    tileLayerG.after(newTileG);
-    const evictG  = tileLayerG;
-    tileLayerG    = newTileG;
-    lastTileZ     = neededZ;
-    setTimeout(() => evictG.remove(), TILE_HOLDOVER_MS);
+    // Redraw canvas with new zoom level.  All tiles are in _tileImageCache
+    // from preloading so drawImage() calls are synchronous (no blank flash).
+    drawTilesOnCanvas(tileCtx2d, ctx, mapMode, effectiveVLon, C.sea);
+    lastTileZ = neededZ;
   }
 
   function clamp() {
