@@ -126,9 +126,19 @@ function drawMap(container, points, routes, geoData, airspaces) {
   const aSpan = Math.max(maxLat - minLat, BBOX_MIN_SPAN);
   const lMarg = Math.max(lSpan * BBOX_PADDING_RATIO, BBOX_MIN_SPAN);
   const aMarg = Math.max(aSpan * BBOX_PADDING_RATIO, BBOX_MIN_SPAN);
-  const vMinLon = minLon - lMarg, vMaxLon = maxLon + lMarg;
-  const vMinLat = minLat - aMarg, vMaxLat = maxLat + aMarg;
-  const vLon = vMaxLon - vMinLon, vLat = vMaxLat - vMinLat;
+  let vMinLon = minLon - lMarg, vMaxLon = maxLon + lMarg;
+  let vMinLat = minLat - aMarg, vMaxLat = maxLat + aMarg;
+  let vLon = vMaxLon - vMinLon, vLat = vMaxLat - vMinLat;
+
+  // Expand the narrower axis so the viewport aspect ratio matches the canvas,
+  // preventing the geo data from appearing squished vertically.
+  if (vLon / vLat < W / H) {
+    const extra = (vLat * (W / H) - vLon) / 2;
+    vMinLon -= extra; vMaxLon += extra; vLon = vMaxLon - vMinLon;
+  } else {
+    const extra = (vLon / (W / H) - vLat) / 2;
+    vMinLat -= extra; vMaxLat += extra; vLat = vMaxLat - vMinLat;
+  }
 
   // Base projection (zoom=1, pan=0,0) — fills canvas exactly
   const bx     = lon => (lon    - vMinLon) / vLon * W;
