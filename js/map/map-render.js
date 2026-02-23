@@ -445,7 +445,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
           tileCanvas.height = vpH;
         }
         drawTilesOnCanvas(tileCtx2d, ctx, mapMode,
-          state.tx, state.ty, state.sc, vpW, vpH, C.sea);
+          state.tx, state.ty, state.sc, vpW, vpH, C.sea, applyTransform);
       }
     }
 

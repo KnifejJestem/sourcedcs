@@ -137,10 +137,12 @@ const _preloadedKeys = new Set();
 
 // Paint all tiles visible at the current pan/zoom onto canvas2d.
 // vpW × vpH: canvas bitmap dimensions (= mapViewport.clientWidth/Height).
-// stateTx, stateTy, stateSc: current pan/zoom state (SVG user-unit coords).
-// Tiles from _tileImageCache are drawn at their exact CSS pixel position;
-// cache-miss tiles are silently skipped (sea-color background shows through).
-function drawTilesOnCanvas(canvas2d, ctx, mode, tx, ty, sc, vpW, vpH, seaColor) {
+// tx, ty, sc: current pan/zoom state (SVG user-unit coords).
+// onTileLoaded (optional): called when any tile not yet in cache finishes
+//   loading — use it to trigger a canvas repaint so newly arrived tiles appear.
+// Tiles already in _tileImageCache are drawn synchronously; cache-miss tiles
+// are requested lazily and will appear after onTileLoaded fires a repaint.
+function drawTilesOnCanvas(canvas2d, ctx, mode, tx, ty, sc, vpW, vpH, seaColor, onTileLoaded) {
   const urlFn = TILE_URLS[mode];
   if (!urlFn || vpW <= 0 || vpH <= 0) return;
 
@@ -180,8 +182,21 @@ function drawTilesOnCanvas(canvas2d, ctx, mode, tx, ty, sc, vpW, vpH, seaColor) 
   for (let tileX = tileXMin; tileX <= tileXMax; tileX++) {
     for (let tileY = tileYMin; tileY <= tileYMax; tileY++) {
       const url = urlFn(z, tileX, tileY);
-      const img = _tileImageCache.get(url);
-      if (!img || !img.complete || img.naturalWidth === 0) continue;
+      let img = _tileImageCache.get(url);
+
+      if (!img) {
+        // Lazy-load: request tile on first encounter; repaint when it arrives.
+        img = new Image();
+        _tileImageCache.set(url, img);
+        if (onTileLoaded) {
+          // Only trigger repaint on success — error tiles are skipped on next
+          // draw (naturalWidth === 0) and don't need to force a redraw.
+          img.addEventListener('load', onTileLoaded, { once: true });
+        }
+        img.src = url;
+      }
+
+      if (!img.complete || img.naturalWidth === 0) continue; // not yet loaded
 
       // Geographic bounds of this tile
       const lon0 = tileX       / pow * 360 - 180;
@@ -205,24 +220,22 @@ function drawTilesOnCanvas(canvas2d, ctx, mode, tx, ty, sc, vpW, vpH, seaColor) 
 }
 
 // ── Tile preloader ────────────────────────────────────────
-// Downloads all tiles for every zoom level (z0 → TILE_MAX_ZOOM) into
-// _tileImageCache before buildLodCanvases() is called.
+// Warms _tileImageCache with tiles for the initial viewport at zoom levels
+// z0, z0+1, and z0+2.  This covers sc=1 through sc≈4× without any lazy-load
+// delay for the most common interaction range.
 //
-// Coverage per zoom level:
-//   z0, z0+1, z0+2 — full base viewport (pan-safe at 1×–4× zoom)
-//   z0+3 …         — centroid-scaled (~100 tiles each, deeper zoom)
+// Higher zoom levels (sc > 4×) are handled lazily by drawTilesOnCanvas():
+// cache-miss tiles are fetched on demand and the canvas repainted on arrival.
 //
 // onProgress(loaded, total) fires as each tile resolves — use it to drive
-// a real progress bar covering all zoom levels, not just the first one.
+// a real progress bar.
 
 function preloadTiles(ctx, mode, onProgress) {
   const urlFn = TILE_URLS[mode];
   if (!urlFn) return Promise.resolve();
 
-  const maxZ   = TILE_MAX_ZOOM[mode];
-  const z0     = _tileZoom(ctx.vLon, maxZ);
-  const lonCtr = (ctx.vMinLon + ctx.vMaxLon) / 2;
-  const latCtr = (ctx.vMinLat + ctx.vMaxLat) / 2;
+  const maxZ = TILE_MAX_ZOOM[mode];
+  const z0   = _tileZoom(ctx.vLon, maxZ);
 
   // Collect tile URLs for a geographic bounding box at zoom z.
   function tilesForZBounds(z, minLon, maxLon, minLat, maxLat) {
@@ -244,20 +257,11 @@ function preloadTiles(ctx, mode, onProgress) {
     return urls;
   }
 
-  // Collect all URLs for all zoom levels simultaneously.
+  // Preload full viewport at z0, z0+1, z0+2.
+  // z0+3 and deeper are lazy-loaded on demand in drawTilesOnCanvas().
   const allUrls = [];
-  for (let z = z0; z <= maxZ; z++) {
-    const k = z - z0;
-    if (k <= 2) {
-      allUrls.push(...tilesForZBounds(z, ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat));
-    } else {
-      // Centroid-scaled: 1/2^k of the viewport on each side of the centre
-      const scale   = Math.pow(2, k);
-      const halfLon = ctx.vLon / (2 * scale);
-      const halfLat = ctx.vLat / (2 * scale);
-      allUrls.push(...tilesForZBounds(z,
-        lonCtr - halfLon, lonCtr + halfLon, latCtr - halfLat, latCtr + halfLat));
-    }
+  for (let z = z0; z <= Math.min(z0 + 2, maxZ); z++) {
+    allUrls.push(...tilesForZBounds(z, ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat));
   }
 
   if (allUrls.length === 0) return Promise.resolve();
