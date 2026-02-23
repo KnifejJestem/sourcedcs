@@ -66,6 +66,10 @@ const BBOX_MIN_SPAN      = 1.5;  // minimum bbox span in degrees (avoids degener
 // How far the content edge may move beyond the canvas boundary before clamping.
 const PAN_MARGIN_RATIO = 0.1; // fraction of MAP_WIDTH
 
+// ── Tile holdover delay ────────────────────────────────────────
+// (kept for reference; no longer used since tiles draw to canvas
+// which is a single compositor layer — no DOM node swaps needed)
+
 // ── Marker scale damping ───────────────────────────────────────
 // Markers scale by 1/zoom^DAMPING — they shrink as you zoom in, but slowly.
 const MARKER_SCALE_DAMPING = 0.8;
@@ -156,9 +160,21 @@ function drawMap(container, points, routes, geoData, airspaces) {
     constantSizeMarkers,
   };
 
+  // ── Map viewport wrapper ──────────────────────────────────
+  // Wraps the tile canvas + SVG overlay so they can be stacked with
+  // position:absolute while the sidebar remains a flex sibling.
+  const mapViewport = el('div', 'map-viewport');
+
   // ── SVG skeleton ──────────────────────────────────────────
-  const svg = makeSvgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%' });
-  svg.style.cssText = 'display:block;cursor:grab;touch-action:none;';
+  // preserveAspectRatio="none" makes the SVG fill the viewport exactly,
+  // matching the canvas element which also stretches to fill its container.
+  // Without this the SVG letterboxes (xMidYMid meet) but the canvas does not,
+  // causing a pixel-level misalignment between tiles and SVG overlays.
+  const svg = makeSvgEl('svg', {
+    viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%',
+    preserveAspectRatio: 'none',
+  });
+  svg.style.cssText = 'display:block;cursor:grab;touch-action:none;position:absolute;inset:0;';
 
   // Clip path — hard edge so nothing drawn outside the canvas bounds is visible
   const clip = makeSvgEl('clipPath', { id: 'mvc' });
@@ -166,9 +182,6 @@ function drawMap(container, points, routes, geoData, airspaces) {
   const defs = svgEl('defs');
   defs.appendChild(clip);
   svg.appendChild(defs);
-
-  // Static sea background fills the entire canvas
-  svg.appendChild(makeSvgEl('rect', { x: 0, y: 0, width: W, height: H, fill: C.sea }));
 
   // Clip wrapper — contains all map content
   const clipWrap = makeSvgEl('g', { 'clip-path': 'url(#mvc)' });
@@ -178,13 +191,56 @@ function drawMap(container, points, routes, geoData, airspaces) {
   const content = makeSvgEl('g', { id: 'map-content' });
   clipWrap.appendChild(content);
 
+  // ── Pan/Zoom state ────────────────────────────────────────
+  // Declared early so tile canvas init can read the restored scale.
+  const state = {
+    tx: STATE.mapUI.tx || 0,
+    ty: STATE.mapUI.ty || 0,
+    sc: STATE.mapUI.sc || 1,
+  };
+
   // ── Draw layers ──────────────────────────────────────────
-  content.appendChild(drawGrid(ctx));
-  content.appendChild(drawLand(ctx, geoData));
-  content.appendChild(drawCities(ctx, geoData));
+  const mapMode = STATE.mapUI.mapMode || 'chart';
+  let effectiveCtx = ctx; // ctx used for grid + grid labels
+
+  // Tile canvas — used in non-chart modes.
+  // Viewport-sized bitmap (set lazily in applyTransform once in DOM).
+  // No CSS transform — tiles are drawn at CSS pixel positions directly.
+  // Repainted on every applyTransform() call from _tileImageCache (fast).
+  let tileCanvas = null;
+  let tileCtx2d  = null;
+
+  if (mapMode === 'chart') {
+    // Chart mode: SVG sea rect + vector layers
+    svg.insertBefore(
+      makeSvgEl('rect', { x: 0, y: 0, width: W, height: H, fill: C.sea }),
+      clipWrap,
+    );
+    content.appendChild(drawGrid(ctx));
+    content.appendChild(drawLand(ctx, geoData));
+    content.appendChild(drawCities(ctx, geoData));
+  } else {
+    // Tile modes: single canvas background + SVG grid/routes/markers overlay.
+    // Canvas is viewport-sized (no CSS transform — drawn in CSS pixel coords).
+    tileCanvas = document.createElement('canvas');
+    tileCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+    mapViewport.appendChild(tileCanvas);
+    tileCtx2d = tileCanvas.getContext('2d');
+    // Canvas bitmap dimensions set lazily in applyTransform() once the
+    // mapViewport is in the DOM and clientWidth/Height are available.
+
+    // Grid with higher contrast so it is readable over imagery.
+    effectiveCtx = Object.assign({}, ctx, {
+      C: Object.assign({}, ctx.C, {
+        grid:    mapMode === 'satellite' ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.20)',
+        gridLbl: mapMode === 'satellite' ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.50)',
+      }),
+    });
+    content.appendChild(drawGrid(effectiveCtx));
+  }
 
   // ── Popup (needed by subsequent draw calls) ──────────────
-  const { showPopup: _showPopup, refreshPopup } = createPopup(container);
+  const { showPopup: _showPopup, refreshPopup } = createPopup(mapViewport);
   _refreshPopup = refreshPopup;
 
   // Wrap showPopup so that coord-pick mode intercepts marker clicks:
@@ -218,7 +274,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
   content.appendChild(threatG);
 
   // ── Grid label overlay ───────────────────────────────────
-  const gridLabels = createGridLabelOverlay(ctx);
+  const gridLabels = createGridLabelOverlay(effectiveCtx);
   svg.appendChild(gridLabels.overlay);
 
   // ── Measurement overlay ──────────────────────────────────
@@ -314,7 +370,10 @@ function drawMap(container, points, routes, geoData, airspaces) {
     }));
   }
 
-  container.appendChild(svg);
+  // SVG goes inside the viewport wrapper (on top of the tile canvas).
+  // In chart mode, mapViewport only contains SVG (no tile canvas).
+  mapViewport.appendChild(svg);
+  container.appendChild(mapViewport);
 
   // Track mousedown position so we can distinguish a clean click from a drag.
   // Only fire coord pick if the mouse didn't move significantly.
@@ -342,7 +401,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
       return;
     }
     _pickStart = null;
-    const popup = container.querySelector('.map-popup');
+    const popup = mapViewport.querySelector('.map-popup');
     if (popup) popup.style.display = 'none';
   });
 
@@ -356,18 +415,40 @@ function drawMap(container, points, routes, geoData, airspaces) {
   });
   container.appendChild(sidebar);
 
+  // ── Tile attribution overlay ─────────────────────────────
+  // Required by tile provider terms of use when showing raster tiles.
+  const attrText = TILE_ATTRIBUTION[mapMode];
+  if (attrText) {
+    const attrDiv = el('div', 'map-tile-attr');
+    attrDiv.textContent = attrText;
+    mapViewport.appendChild(attrDiv);
+  }
+
   // ── Pan / Zoom ───────────────────────────────────────────
-  // Restore from centralized state so pan/zoom survives tab switches
-  // and editor re-renders.
-  const state = {
-    tx: STATE.mapUI.tx || 0,
-    ty: STATE.mapUI.ty || 0,
-    sc: STATE.mapUI.sc || 1,
-  };
+  // (state is declared early above so tile init can read the restored scale)
 
   function applyTransform() {
+    // SVG content group — routes, markers, grid
     content.setAttribute('transform',
       `translate(${state.tx.toFixed(2)},${state.ty.toFixed(2)}) scale(${state.sc.toFixed(5)})`);
+
+    // Tile canvas — painted in CSS pixel coordinates so 1 bitmap pixel = 1
+    // CSS display pixel at all zoom levels (no CSS scale = no pixelation).
+    if (tileCtx2d) {
+      const vpW = mapViewport.clientWidth;
+      const vpH = mapViewport.clientHeight;
+      // Lazily set bitmap dimensions to match the viewport (first call only,
+      // or after a resize).  Setting canvas.width also clears the bitmap.
+      if (vpW > 0 && vpH > 0) {
+        if (tileCanvas.width !== vpW || tileCanvas.height !== vpH) {
+          tileCanvas.width  = vpW;
+          tileCanvas.height = vpH;
+        }
+        drawTilesOnCanvas(tileCtx2d, ctx, mapMode,
+          state.tx, state.ty, state.sc, vpW, vpH, C.sea, applyTransform);
+      }
+    }
+
     // Damped inverse scaling keeps markers readable as you zoom in
     const invSc = 1 / Math.pow(state.sc, MARKER_SCALE_DAMPING);
     constantSizeMarkers.forEach(m => {

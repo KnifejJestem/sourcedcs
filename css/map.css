@@ -33,7 +33,17 @@
   gap: 0;
 }
 
-.map-container svg {
+/* Wrapper for the tile canvas + SVG overlay stack */
+.map-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-width: 0; /* prevent flex overflow */
+}
+
+/* SVG inside .map-viewport is position:absolute;inset:0 (inline) — no additional sizing needed.
+   The rule below only affects chart-mode SVGs that are not inside .map-viewport. */
+.map-container > svg {
   max-width: 100%;
   height: auto;
 }
@@ -190,6 +200,102 @@
 }
 .map-measure-btn.map-msn-active:hover {
   background: rgba(200,168,48,0.12);
+}
+
+/* ── Map mode buttons ────────────────────────────────────── */
+.map-mode-btn.map-msn-active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ── Tile provider attribution ───────────────────────────── */
+.map-tile-attr {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  font-size: 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.75);
+  text-shadow: 0 0 3px rgba(0,0,0,0.8);
+  pointer-events: none;
+  z-index: 10;
+  max-width: 420px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Tile preload overlay ────────────────────────────────── */
+.map-preload-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--bg);
+  z-index: 50;
+  pointer-events: none;
+  animation: map-preload-fadein 0.15s ease;
+}
+@keyframes map-preload-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.map-preload-overlay.map-preload-fadeout {
+  animation: map-preload-fadeout 0.35s ease forwards;
+}
+@keyframes map-preload-fadeout {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Spinning radar-style ring */
+.map-preload-spinner {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: map-preload-spin 0.9s linear infinite;
+  position: relative;
+}
+.map-preload-spinner::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  border-top-color: var(--accent-2, rgba(100,160,255,0.4));
+  animation: map-preload-spin 1.6s linear infinite reverse;
+}
+@keyframes map-preload-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Label + progress bar */
+.map-preload-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  font-family: 'IBM Plex Mono', monospace;
+  text-align: center;
+}
+.map-preload-bar-wrap {
+  width: 140px;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.map-preload-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 1px;
+  transition: width 0.25s ease;
 }
 
 /* Remove old map-wrap / map-legend styles that conflict */

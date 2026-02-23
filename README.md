@@ -235,14 +235,19 @@ See [`docs/yaml-format.md`](docs/yaml-format.md) for the full schema reference.
 
 # TODO
 
-map types + higher accuracy
+map types + higher accuracy ?
 airfeild and lfight Information ma
 isr data
 + documetns
 
-marker edit should be able to do from map (not having to go to ato or registry)
 pdf Export
 kneeboard Export
 yaml Export
 
 miz -> yaml converter
+
+issues:
+miz yaml converter:
+    not reading alittude of targets
+    dense points
+    comms 
