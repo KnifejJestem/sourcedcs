@@ -178,16 +178,33 @@ function drawMap(container, points, routes, geoData, airspaces) {
   const content = makeSvgEl('g', { id: 'map-content' });
   clipWrap.appendChild(content);
 
+  // ── Pan/Zoom state ────────────────────────────────────────
+  // Declared early so tile init can read the restored scale.
+  const state = {
+    tx: STATE.mapUI.tx || 0,
+    ty: STATE.mapUI.ty || 0,
+    sc: STATE.mapUI.sc || 1,
+  };
+
   // ── Draw layers ──────────────────────────────────────────
   const mapMode = STATE.mapUI.mapMode || 'chart';
   let effectiveCtx = ctx; // ctx used for grid + grid labels
+  // Tile layer references — updated by refreshTilesIfNeeded() on zoom.
+  let tileLayerG = null;
+  let lastTileZ  = -1;
+
   if (mapMode === 'chart') {
     content.appendChild(drawGrid(ctx));
     content.appendChild(drawLand(ctx, geoData));
     content.appendChild(drawCities(ctx, geoData));
   } else {
     // Tile modes: raster tiles as background, coordinate grid on top.
-    content.appendChild(drawTileBackground(ctx, mapMode));
+    // At sc=1 the visible area is the full base viewport, so no tileBounds needed.
+    // refreshTilesIfNeeded() in applyTransform() will refine this on first zoom/pan.
+    const initVLon = ctx.vLon / state.sc;
+    tileLayerG = drawTileBackground(ctx, mapMode, initVLon);
+    lastTileZ  = _tileZoom(initVLon, TILE_MAX_ZOOM[mapMode]);
+    content.appendChild(tileLayerG);
     // Grid with higher contrast so it is readable over imagery.
     effectiveCtx = Object.assign({}, ctx, {
       C: Object.assign({}, ctx.C, {
@@ -381,13 +398,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
   }
 
   // ── Pan / Zoom ───────────────────────────────────────────
-  // Restore from centralized state so pan/zoom survives tab switches
-  // and editor re-renders.
-  const state = {
-    tx: STATE.mapUI.tx || 0,
-    ty: STATE.mapUI.ty || 0,
-    sc: STATE.mapUI.sc || 1,
-  };
+  // (state is declared early above so tile init can read the restored scale)
 
   function applyTransform() {
     content.setAttribute('transform',
@@ -399,10 +410,70 @@ function drawMap(container, points, routes, geoData, airspaces) {
     });
     gridLabels.redraw(state.tx, state.ty, state.sc);
     redrawMeasure();
+    refreshTilesIfNeeded();
     // Persist to centralized state
     STATE.mapUI.tx = state.tx;
     STATE.mapUI.ty = state.ty;
     STATE.mapUI.sc = state.sc;
+  }
+
+  // Replace the tile layer with higher/lower-detail tiles when the user
+  // has zoomed in or out enough to warrant a different tile zoom level,
+  // or has panned far enough that the visible area approaches the edge
+  // of the previously loaded tile coverage.
+  // Called on every applyTransform(); exits early (no DOM change) when
+  // the current tiles already cover the visible area at the right zoom.
+  let lastCoverage = null; // geo bounds covered by the current tile layer
+
+  function _visibleGeoBounds() {
+    const cx_min = -state.tx / state.sc;
+    const cx_max = (W - state.tx) / state.sc;
+    const cy_min = -state.ty / state.sc;
+    const cy_max = (H - state.ty) / state.sc;
+    return {
+      minLon: ctx.vMinLon + cx_min / W * ctx.vLon,
+      maxLon: ctx.vMinLon + cx_max / W * ctx.vLon,
+      maxLat: ctx.vMaxLat - cy_min / H * ctx.vLat,
+      minLat: ctx.vMaxLat - cy_max / H * ctx.vLat,
+    };
+  }
+
+  function refreshTilesIfNeeded() {
+    if (!tileLayerG) return; // chart mode — no tiles
+    const effectiveVLon = ctx.vLon / state.sc;
+    const neededZ = _tileZoom(effectiveVLon, TILE_MAX_ZOOM[mapMode]);
+    const vis = _visibleGeoBounds();
+
+    // Skip refresh if the zoom level is the same AND the visible area is
+    // well inside the already-loaded tile coverage (with a small margin).
+    if (neededZ === lastTileZ && lastCoverage) {
+      const margin = 0.05; // 5% of coverage span — trigger before the edge
+      const covLon = lastCoverage.maxLon - lastCoverage.minLon;
+      const covLat = lastCoverage.maxLat - lastCoverage.minLat;
+      if (vis.minLon >= lastCoverage.minLon + covLon * margin &&
+          vis.maxLon <= lastCoverage.maxLon - covLon * margin &&
+          vis.minLat >= lastCoverage.minLat + covLat * margin &&
+          vis.maxLat <= lastCoverage.maxLat - covLat * margin) {
+        return;
+      }
+    }
+
+    // Coverage: visible geo area expanded by 1× visible span on each side.
+    // Clamped to the base viewport so we never request tiles outside the map.
+    const lonBuf = vis.maxLon - vis.minLon;
+    const latBuf = vis.maxLat - vis.minLat;
+    const coverage = {
+      minLon: Math.max(ctx.vMinLon, vis.minLon - lonBuf),
+      maxLon: Math.min(ctx.vMaxLon, vis.maxLon + lonBuf),
+      minLat: Math.max(ctx.vMinLat, vis.minLat - latBuf),
+      maxLat: Math.min(ctx.vMaxLat, vis.maxLat + latBuf),
+    };
+
+    const newTileG = drawTileBackground(ctx, mapMode, effectiveVLon, coverage);
+    tileLayerG.replaceWith(newTileG);
+    tileLayerG = newTileG;
+    lastTileZ   = neededZ;
+    lastCoverage = coverage;
   }
 
   function clamp() {

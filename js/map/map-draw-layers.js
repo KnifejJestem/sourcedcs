@@ -28,6 +28,13 @@ const TILE_ATTRIBUTION = {
   satellite: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics',
 };
 
+// Maximum tile zoom per provider (provider hard limits / practical detail caps).
+const TILE_MAX_ZOOM = {
+  tactical:  15, // OpenStreetMap goes up to z19; z15 already very detailed
+  elevation: 12, // OpenTopoMap caps at z17; z12 is the sweet spot for topo
+  satellite: 15, // ESRI World Imagery goes up to z23; z15 crisp satellite detail
+};
+
 // Convert geographic latitude to the web-mercator tile-Y index.
 function _latToTileY(lat, z) {
   const latR = Math.max(-85.05, Math.min(85.05, lat)) * Math.PI / 180;
@@ -42,28 +49,39 @@ function _tileYToLat(ty, z) {
   return Math.atan(Math.sinh(n)) * 180 / Math.PI;
 }
 
-// Pick a zoom level that produces approximately 6–9 tiles per row.
-function _tileZoom(vLon) {
-  return Math.max(3, Math.min(9, Math.round(Math.log2(7.5 * 360 / vLon))));
+// Pick a tile zoom level for the given longitude span (degrees).
+// maxZ caps the result so we don't exceed provider limits.
+function _tileZoom(vLon, maxZ) {
+  return Math.max(3, Math.min(maxZ ?? 15, Math.round(Math.log2(7.5 * 360 / vLon))));
 }
 
 // Returns a <g> containing SVG <image> elements for the tile background.
-function drawTileBackground(ctx, mode) {
+// effectiveVLon is the currently-visible longitude span (ctx.vLon / state.sc).
+// Passing a smaller effectiveVLon selects a higher zoom level for more detail.
+// tileBounds (optional) restricts which tiles are generated to the given
+// geographic area — use this when zoomed in to avoid giant tile counts.
+function drawTileBackground(ctx, mode, effectiveVLon, tileBounds) {
   const tileG = svgEl('g');
   const urlFn = TILE_URLS[mode];
   if (!urlFn) return tileG;
 
-  const z   = _tileZoom(ctx.vLon);
+  const z   = _tileZoom(effectiveVLon ?? ctx.vLon, TILE_MAX_ZOOM[mode]);
   const pow = Math.pow(2, z);
+
+  // Use provided bounds or fall back to the full base viewport.
+  const bMinLon = tileBounds ? tileBounds.minLon : ctx.vMinLon;
+  const bMaxLon = tileBounds ? tileBounds.maxLon : ctx.vMaxLon;
+  const bMinLat = tileBounds ? tileBounds.minLat : ctx.vMinLat;
+  const bMaxLat = tileBounds ? tileBounds.maxLat : ctx.vMaxLat;
 
   // Tile x range covering the viewport longitude span.
   // (+180 shifts from [-180,180] lon space to [0,360] for tile indexing.)
-  const txMin = Math.max(0,       Math.floor((ctx.vMinLon + 180) / 360 * pow) - 1);
-  const txMax = Math.min(pow - 1, Math.ceil( (ctx.vMaxLon + 180) / 360 * pow));
+  const txMin = Math.max(0,       Math.floor((bMinLon + 180) / 360 * pow) - 1);
+  const txMax = Math.min(pow - 1, Math.ceil( (bMaxLon + 180) / 360 * pow));
 
   // Tile y range — y increases southward in tile coords.
-  const tyMin = Math.max(0,       _latToTileY(ctx.vMaxLat, z) - 1);
-  const tyMax = Math.min(pow - 1, _latToTileY(ctx.vMinLat, z) + 1);
+  const tyMin = Math.max(0,       _latToTileY(bMaxLat, z) - 1);
+  const tyMax = Math.min(pow - 1, _latToTileY(bMinLat, z) + 1);
 
   for (let tx = txMin; tx <= txMax; tx++) {
     for (let ty = tyMin; ty <= tyMax; ty++) {
