@@ -134,13 +134,21 @@ function drawMap(container, points, routes, geoData, airspaces) {
   let vMinLat = minLat - aMarg, vMaxLat = maxLat + aMarg;
   let vLon = vMaxLon - vMinLon, vLat = vMaxLat - vMinLat;
 
-  // Expand the narrower axis so the viewport aspect ratio matches the canvas,
-  // preventing the geo data from appearing squished vertically.
-  if (vLon / vLat < W / H) {
-    const extra = (vLat * (W / H) - vLon) / 2;
+  // Expand the narrower axis so the viewport aspect ratio matches the canvas.
+  // Apply a cos(lat) correction so that 1° of longitude (which covers less
+  // ground distance than 1° of latitude at mid-latitudes) is scaled correctly.
+  // Without this the map appears squished vertically at ~30–45°N.
+  const midLatRad = ((vMinLat + vMaxLat) / 2) * Math.PI / 180;
+  const cosLat    = Math.cos(midLatRad);
+  // geoRatio: ground-distance aspect ratio of the visible data window
+  const geoRatio  = (vLon * cosLat) / vLat;
+  if (geoRatio < W / H) {
+    // Data taller than canvas — expand longitude span to fill width
+    const extra = (vLat * (W / H) / cosLat - vLon) / 2;
     vMinLon -= extra; vMaxLon += extra; vLon = vMaxLon - vMinLon;
   } else {
-    const extra = (vLon / (W / H) - vLat) / 2;
+    // Data wider than canvas — expand latitude span to fill height
+    const extra = (vLon * cosLat / (W / H) - vLat) / 2;
     vMinLat -= extra; vMaxLat += extra; vLat = vMaxLat - vMinLat;
   }
 

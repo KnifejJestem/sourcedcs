@@ -29,6 +29,11 @@ function collectData(ato, aco) {
   //   Marshal pts keyed by name (e.g. 'ALPHA')
   const namedLocs = {};
 
+  // Separate map for carrier recovery positions (keyed by carrier id / callsign).
+  // Used in step 4 so the recovery route endpoint lands at the carrier's projected
+  // recovery position rather than the deploy position stored in namedLocs.
+  const carrierRecoveryLocs = {};
+
   (ato.airfields || []).forEach(af => {
     const p = parseCoord(af.coords);
     if (p && af.icao) namedLocs[af.icao.trim().toUpperCase()] = p;
@@ -40,6 +45,13 @@ function collectData(ato, aco) {
         // Key by callsign AND by registry id so both "ROUGH RIDER" and "CVN-71" resolve
         if (cv.callsign) namedLocs[cv.callsign.trim().toUpperCase()] = p;
         if (cv.id)       namedLocs[cv.id.trim().toUpperCase()]       = p;
+      }
+    }
+    if (cv.recovery_coords) {
+      const rp = parseCoord(cv.recovery_coords);
+      if (rp) {
+        if (cv.callsign) carrierRecoveryLocs[cv.callsign.trim().toUpperCase()] = rp;
+        if (cv.id)       carrierRecoveryLocs[cv.id.trim().toUpperCase()]       = rp;
       }
     }
   });
@@ -202,8 +214,12 @@ function collectData(ato, aco) {
       });
     });
 
-    // 4. Recovery location
-    const recLoc = resolve(m.aar_location_icao) || resolve(m.deploy_location_icao);
+    // 4. Recovery location — carriers use their projected recovery position,
+    //    not the deploy position stored in namedLocs.
+    const aarKey = (m.aar_location_icao || '').trim().toUpperCase();
+    const recLoc = carrierRecoveryLocs[aarKey]
+                || resolve(m.aar_location_icao)
+                || resolve(m.deploy_location_icao);
     if (recLoc) route.pts.push({ ...recLoc, kind: 'route-node' });
 
     if (route.pts.length >= 2) routes.push(route);
