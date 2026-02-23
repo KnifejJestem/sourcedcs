@@ -1,0 +1,133 @@
+"""extract — top-level extract() function and CLI entry point."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import zipfile
+from pathlib import Path
+
+import yaml
+
+from .build_doc import build_doc
+from .build_targets import build_acms, build_targets
+from .dtc import load_dtc_files, parse_spins_md
+from .lua import lua_get_block
+from .parse import parse_bullseye, parse_drawings, parse_groups
+from .parse_flights import parse_flights_and_carriers, parse_weather
+
+
+def extract(miz_path: str, coalition: str = "blue") -> dict:
+    opposing = "red" if coalition == "blue" else "blue"
+
+    with zipfile.ZipFile(miz_path) as z:
+        mission_text = z.read("mission").decode("utf-8", errors="replace")
+        theatre = z.read("theatre").decode().strip() \
+                  if "theatre" in z.namelist() else "Syria"
+        dtcs = load_dtc_files(z)
+
+    if dtcs:
+        print(f"[+] Found DTC files: {', '.join(sorted(dtcs))}")
+
+    print(f"[+] Theatre={theatre}  coalition={coalition}  targets_from={opposing}")
+
+    # Date
+    dm = re.search(
+        r'\["date"\].*?\["Year"\] = (\d+).*?\["Day"\] = (\d+).*?\["Month"\] = (\d+)',
+        mission_text, re.DOTALL)
+    year, day, month = (int(dm.group(1)), int(dm.group(2)), int(dm.group(3))) \
+                       if dm else (2024, 1, 1)
+    mission_date = f"{year}-{month:02d}-{day:02d}"
+
+    # Coalition blocks
+    coal_block = lua_get_block(mission_text, 'coalition')
+    if not coal_block:
+        raise ValueError("No coalition block found")
+    opp_block = lua_get_block(coal_block, opposing)
+    own_block = lua_get_block(coal_block, coalition)
+
+    # Targets
+    print(f"[+] Parsing {opposing} groups…")
+    opp_groups = parse_groups(opp_block or '', theatre)
+    print(f"    {len(opp_groups)} groups")
+    targets = build_targets(opp_groups)
+    print(f"[+] {len(targets)} targets")
+
+    # Bullseye
+    ref_pts: dict = {}
+    if own_block:
+        be = parse_bullseye(own_block, theatre)
+        if be:
+            ref_pts["BULLSEYE"] = {"name": "BULLSEYE", "type": "bullseye", "coords": be}
+            print(f"[+] Bullseye: {be}")
+
+    # Flights + carriers (own coalition)
+    print(f"[+] Parsing {coalition} flights and carriers…")
+    flights, carriers = parse_flights_and_carriers(own_block or '', theatre)
+    print(f"    {len(flights)} flights  |  {len(carriers)} carriers")
+    for f in flights:
+        dtc_label = f"  dtc={f.dtc_cartridge}" if f.dtc_cartridge else ""
+        print(f"  {f.id}: {f.name!r}  task={f.task}  ac={f.aircraft_type}  "
+              f"x{len(f.units)}  freq={f.freq_mhz}{dtc_label}")
+    for c in carriers:
+        print(f"  {c.id}: {c.type}  {c.name}  {c.deploy_coords}")
+
+    # Summarise DTC comms coverage
+    flights_with_dtc = [f for f in flights if f.dtc_cartridge and f.dtc_cartridge in dtcs]
+    if flights_with_dtc:
+        print(f"[+] DTC comms available for {len(flights_with_dtc)} flights: "
+              + ", ".join(f"'{f.name}'→{f.dtc_cartridge}" for f in flights_with_dtc))
+    elif dtcs:
+        print(f"[!] No DTC cartridges matched to flights; available: {', '.join(sorted(dtcs))}")
+
+    # ACO drawings
+    print("[+] Parsing drawings…")
+    drawings = parse_drawings(mission_text)
+    acms = build_acms(drawings, theatre)
+    print(f"[+] {len(acms)} ACMs")
+
+    # Weather
+    metar, wx_notes = parse_weather(mission_text, day)
+    print(f"[+] {metar}")
+
+    # SPINS — look for spins.md in the same directory as the .miz file
+    spins_sections = None
+    spins_path = Path(miz_path).parent / 'spins.md'
+    if spins_path.exists():
+        spins_text = spins_path.read_text(encoding='utf-8', errors='replace')
+        spins_sections = parse_spins_md(spins_text)
+        print(f"[+] Loaded SPINS from '{spins_path.name}': {len(spins_sections or [])} sections")
+    else:
+        print(f"[i] No spins.md found at '{spins_path}' — spins will be empty")
+
+    return build_doc(
+        mission_name=Path(miz_path).stem,
+        mission_date=mission_date,
+        theatre=theatre,
+        year=year, month=month,
+        targets=targets,
+        ref_pts=ref_pts,
+        acms=acms,
+        metar=metar,
+        wx_notes=wx_notes,
+        flights=flights,
+        carriers=carriers,
+        dtcs=dtcs,
+        spins_sections=spins_sections,
+    )
+
+
+def main():
+    ap = argparse.ArgumentParser(description="DCS .miz → ATO brief YAML")
+    ap.add_argument("miz")
+    ap.add_argument("--coalition", "-c", default="blue", choices=["blue", "red"])
+    ap.add_argument("--output",    "-o", default=None)
+    args = ap.parse_args()
+
+    out = args.output or (Path(args.miz).stem + ".yaml")
+    doc = extract(args.miz, args.coalition)
+
+    with open(out, "w", encoding="utf-8") as f:
+        yaml.dump(doc, f, allow_unicode=True, sort_keys=False,
+                  default_flow_style=False, width=120)
+    print(f"\n[OK] {out}")

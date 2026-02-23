@@ -1,0 +1,69 @@
+"""projection — DCS Cartesian (x=north, y=east) → WGS84 lat/lon."""
+
+from __future__ import annotations
+
+import math
+
+
+# Transverse Mercator constants from pydcs / projections.rs
+_TM: dict[str, dict] = {
+    "PersianGulf":    dict(lon0= 57,  fe=  75756.0,    fn=-2894933.0,   k0=0.9996),
+    "Falklands":      dict(lon0=-57,  fe= 147640.0,    fn= 5815417.0,   k0=0.9996),
+    "Caucasus":       dict(lon0= 33,  fe= -99517.0,    fn=-4998115.0,   k0=0.9996),
+    "MarianaIslands": dict(lon0=147,  fe= 238418.0,    fn=-1491840.0,   k0=0.9996),
+    "Nevada":         dict(lon0=-117, fe=-193996.81,   fn=-4410028.064, k0=0.9996),
+    "Normandy":       dict(lon0= -3,  fe=-195526.0,    fn=-5484813.0,   k0=0.9996),
+    "Syria":          dict(lon0= 39,  fe= 282801.0,    fn=-3879866.0,   k0=0.9996),
+    "SinaiMap":       dict(lon0= 33,  fe= 169222.0,    fn=-3325313.0,   k0=0.9996),
+}
+
+_A   = 6378137.0
+_F   = 1 / 298.257223563
+_E2  = 2 * _F - _F**2
+_EP2 = _E2 / (1 - _E2)
+
+
+def dcs_to_latlon(x: float, y: float, theatre: str) -> tuple[float, float]:
+    p = _TM.get(theatre, _TM["Syria"])
+    lon0, fe, fn, k0 = math.radians(p["lon0"]), p["fe"], p["fn"], p["k0"]
+
+    E, N = y - fe, x - fn
+    e1 = (1 - math.sqrt(1 - _E2)) / (1 + math.sqrt(1 - _E2))
+    mu = (N / k0) / (_A * (1 - _E2/4 - 3*_E2**2/64 - 5*_E2**3/256))
+    phi1 = (mu
+        + (3*e1/2     - 27*e1**3/32)    * math.sin(2*mu)
+        + (21*e1**2/16 - 55*e1**4/32)  * math.sin(4*mu)
+        + (151*e1**3/96)                * math.sin(6*mu)
+        + (1097*e1**4/512)              * math.sin(8*mu))
+
+    sp = math.sin(phi1); tp = math.tan(phi1); cp = math.cos(phi1)
+    N1 = _A / math.sqrt(1 - _E2*sp**2)
+    T1 = tp**2; C1 = _EP2*cp**2
+    R1 = _A*(1 - _E2) / (1 - _E2*sp**2)**1.5
+    D  = E / (N1*k0)
+
+    lat = phi1 - (N1*tp/R1) * (
+          D**2/2
+        - (5 + 3*T1 + 10*C1 - 4*C1**2 - 9*_EP2)                  * D**4/24
+        + (61 + 90*T1 + 298*C1 + 45*T1**2 - 252*_EP2 - 3*C1**2)  * D**6/720)
+    lon = lon0 + (
+          D
+        - (1 + 2*T1 + C1)                                         * D**3/6
+        + (5 - 2*C1 + 28*T1 - 3*C1**2 + 8*_EP2 + 24*T1**2)       * D**5/120
+    ) / cp
+
+    return math.degrees(lat), math.degrees(lon)
+
+
+def dms(lat: float, lon: float) -> str:
+    """(lat, lon) → 'N36°09'23\" E037°16'55\"'"""
+    def _fmt(deg, pos, neg):
+        c = pos if deg >= 0 else neg
+        d = abs(deg)
+        dd, rem = divmod(d, 1)
+        mm, rem = divmod(rem * 60, 1)
+        ss = round(rem * 60)
+        if ss == 60: ss, mm = 0, mm + 1
+        if mm == 60: mm, dd = 0, dd + 1
+        return f"{c}{int(dd):02d}\u00b0{int(mm):02d}'{ss:02d}\""
+    return f"{_fmt(lat,'N','S')} {_fmt(lon,'E','W')}"
