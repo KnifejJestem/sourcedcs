@@ -115,50 +115,39 @@ function drawTileBackground(ctx, mode, effectiveVLon, tileBounds) {
 }
 
 // ── Tile preloader ────────────────────────────────────────
-// Warms the browser HTTP cache for all tiles visible at the initial
-// viewport zoom (z) and the next two finer zoom levels (z+1, z+2).
-// Returns a Promise that resolves when all z-level tiles have settled
-// (loaded or errored), or after PRELOAD_TIMEOUT_MS, whichever comes first.
-// z+1 and z+2 tiles are started in the background but not awaited.
+// Warms the browser HTTP cache for ALL tile zoom levels from z0 to
+// TILE_MAX_ZOOM so that any amount of zooming after the loading screen
+// is stutter-free.
 //
-// PRELOAD_TIMEOUT_MS: 8 s is generous for a typical ~100-tile initial viewport
-// on a 10 Mbit connection (~2.5 KB/tile × 100 ≈ 250 KB → ~0.2 s), but gives
-// plenty of headroom for slow connections or high-latency tile servers.
+// Strategy — keeps tile count manageable at every level:
+//   z0 : full base viewport  → awaited (loading screen stays until done)
+//   z0+k: centroid-centred viewport shrunk by 1/2^k per axis so the
+//          geographic area shrinks 4× while tile density grows 4×, keeping
+//          the tile count approximately the same (~100) at every level.
+//
+// All higher-zoom levels are fired as background Image() requests immediately
+// after z0 resolves, without blocking the caller.
+//
+// PRELOAD_TIMEOUT_MS: 8 s is generous for ~100 tiles at ~25 KB each
+// on a 10 Mbit connection (~250 KB → 0.2 s), but handles slow / high-
+// latency tile servers gracefully.
 const PRELOAD_TIMEOUT_MS = 8000;
 
-// Track which (mode, z, tx, ty) tiles have been preloaded so repeated
-// map renders don't re-fire Image requests that the browser already has.
+// Track which (mode/z/tx/ty) combos have been preloaded so repeated
+// map renders or mode switches don't re-fire Image() requests that the
+// browser cache already satisfies.
 const _preloadedKeys = new Set();
 
 function preloadTiles(ctx, mode) {
   const urlFn = TILE_URLS[mode];
   if (!urlFn) return Promise.resolve();
 
-  // Compute the three zoom levels to warm.
   const maxZ = TILE_MAX_ZOOM[mode];
   const z0   = _tileZoom(ctx.vLon, maxZ);
-  const z1   = Math.min(maxZ, z0 + 1);
-  const z2   = Math.min(maxZ, z0 + 2);
 
-  // Build the list of tiles for a given zoom level (full base viewport).
-  function tilesForZ(z) {
-    const pow  = Math.pow(2, z);
-    const txMn = Math.max(0,       Math.floor((ctx.vMinLon + 180) / 360 * pow) - 1);
-    const txMx = Math.min(pow - 1, Math.ceil( (ctx.vMaxLon + 180) / 360 * pow));
-    const tyMn = Math.max(0,       _latToTileY(ctx.vMaxLat, z) - 1);
-    const tyMx = Math.min(pow - 1, _latToTileY(ctx.vMinLat, z) + 1);
-    const tiles = [];
-    for (let tx = txMn; tx <= txMx; tx++) {
-      for (let ty = tyMn; ty <= tyMx; ty++) {
-        const key = `${mode}/${z}/${tx}/${ty}`;
-        if (!_preloadedKeys.has(key)) {
-          _preloadedKeys.add(key);
-          tiles.push(urlFn(z, tx, ty));
-        }
-      }
-    }
-    return tiles;
-  }
+  // Data centroid — the geographic centre of the initial viewport.
+  const lonCtr = (ctx.vMinLon + ctx.vMaxLon) / 2;
+  const latCtr = (ctx.vMinLat + ctx.vMaxLat) / 2;
 
   // Fire an Image request for a URL; resolves on load or error.
   function loadOne(url) {
@@ -170,16 +159,52 @@ function preloadTiles(ctx, mode) {
     });
   }
 
-  // z0 tiles — we await these (they're the first-visible tiles).
-  const z0Urls = tilesForZ(z0);
+  // Build URL list for a given zoom level over a geographic bounding box.
+  // Skips tiles already tracked in _preloadedKeys.
+  function tilesForZBounds(z, minLon, maxLon, minLat, maxLat) {
+    const pow  = Math.pow(2, z);
+    const txMn = Math.max(0,       Math.floor((minLon + 180) / 360 * pow) - 1);
+    const txMx = Math.min(pow - 1, Math.ceil( (maxLon + 180) / 360 * pow));
+    const tyMn = Math.max(0,       _latToTileY(maxLat, z) - 1);
+    const tyMx = Math.min(pow - 1, _latToTileY(minLat, z) + 1);
+    const urls = [];
+    for (let tx = txMn; tx <= txMx; tx++) {
+      for (let ty = tyMn; ty <= tyMx; ty++) {
+        const key = `${mode}/${z}/${tx}/${ty}`;
+        if (!_preloadedKeys.has(key)) {
+          _preloadedKeys.add(key);
+          urls.push(urlFn(z, tx, ty));
+        }
+      }
+    }
+    return urls;
+  }
+
+  // ── z0: full base viewport — awaited by the loading screen ───
+  const z0Urls = tilesForZBounds(z0,
+    ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat);
   const z0Promise = z0Urls.length > 0
     ? Promise.all(z0Urls.map(loadOne))
     : Promise.resolve();
 
-  // z+1 and z+2 tiles — background, not awaited.
-  [...tilesForZ(z1), ...tilesForZ(z2)].forEach(url => loadOne(url));
+  // ── z0+1 … maxZ: centroid-scaled viewports — background ──────
+  // At level z0+k the viewport is shrunk by 1/2^k on each axis (area ×1/4^k)
+  // which keeps the tile count roughly the same as z0 at every level.
+  // All levels fire immediately after z0 resolves; they do NOT block the
+  // caller — the caller only awaits z0.
+  z0Promise.then(() => {
+    for (let z = z0 + 1; z <= maxZ; z++) {
+      const scale   = Math.pow(2, z - z0);
+      const halfLon = ctx.vLon / (2 * scale);
+      const halfLat = ctx.vLat / (2 * scale);
+      const urls = tilesForZBounds(z,
+        lonCtr - halfLon, lonCtr + halfLon,
+        latCtr - halfLat, latCtr + halfLat);
+      urls.forEach(loadOne); // fire-and-forget
+    }
+  });
 
-  // Resolve when z0 tiles are done or after the timeout, whichever first.
+  // Resolve when z0 tiles are done or after the fallback timeout.
   const timeout = new Promise(resolve => setTimeout(resolve, PRELOAD_TIMEOUT_MS));
   return Promise.race([z0Promise, timeout]);
 }

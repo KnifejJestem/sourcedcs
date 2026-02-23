@@ -66,6 +66,13 @@ const BBOX_MIN_SPAN      = 1.5;  // minimum bbox span in degrees (avoids degener
 // How far the content edge may move beyond the canvas boundary before clamping.
 const PAN_MARGIN_RATIO = 0.1; // fraction of MAP_WIDTH
 
+// ── Tile holdover delay ────────────────────────────────────────
+// When refreshTilesIfNeeded() replaces the tile layer, the old layer stays
+// visible in the DOM for this many ms while the new tiles paint from cache.
+// 300 ms is ample for a cache hit (~1 frame); keeps the old tiles as a
+// visual fallback so the map never shows a blank flash during zoom/pan.
+const TILE_HOLDOVER_MS = 300;
+
 // ── Marker scale damping ───────────────────────────────────────
 // Markers scale by 1/zoom^DAMPING — they shrink as you zoom in, but slowly.
 const MARKER_SCALE_DAMPING = 0.8;
@@ -470,10 +477,16 @@ function drawMap(container, points, routes, geoData, airspaces) {
     };
 
     const newTileG = drawTileBackground(ctx, mapMode, effectiveVLon, coverage);
-    tileLayerG.replaceWith(newTileG);
-    tileLayerG = newTileG;
-    lastTileZ   = neededZ;
+    // Holdover: insert new tiles AFTER the old group in the SVG paint order
+    // (later = painted on top).  Old tiles stay visible underneath while the
+    // browser paints the new ones (nearly instant from cache).
+    // After a short delay the old group is removed to free memory.
+    tileLayerG.after(newTileG);
+    const evictG = tileLayerG;
+    tileLayerG   = newTileG;
+    lastTileZ    = neededZ;
     lastCoverage = coverage;
+    setTimeout(() => evictG.remove(), TILE_HOLDOVER_MS);
   }
 
   function clamp() {
