@@ -4,6 +4,16 @@
 
 'use strict';
 
+// Orbit/anchor airspaces closer than this threshold are merged into one
+const ORBIT_MERGE_NM = 2.0;
+
+/** Approximate great-circle distance in NM between two lat/lon points */
+function _distNm(lat1, lon1, lat2, lon2) {
+  const dlat = (lat1 - lat2) * 60;
+  const dlon = (lon1 - lon2) * 60 * Math.cos((lat1 + lat2) * Math.PI / 180 / 2);
+  return Math.sqrt(dlat * dlat + dlon * dlon);
+}
+
 // ── Collect all plottable data ─────────────────────────────
 function collectData(ato, aco) {
   const points = [];
@@ -19,14 +29,30 @@ function collectData(ato, aco) {
   //   Marshal pts keyed by name (e.g. 'ALPHA')
   const namedLocs = {};
 
+  // Separate map for carrier recovery positions (keyed by carrier id / callsign).
+  // Used in step 4 so the recovery route endpoint lands at the carrier's projected
+  // recovery position rather than the deploy position stored in namedLocs.
+  const carrierRecoveryLocs = {};
+
   (ato.airfields || []).forEach(af => {
     const p = parseCoord(af.coords);
     if (p && af.icao) namedLocs[af.icao.trim().toUpperCase()] = p;
   });
   (ato.carriers || []).forEach(cv => {
-    if (cv.deploy_coords && cv.callsign) {
+    if (cv.deploy_coords) {
       const p = parseCoord(cv.deploy_coords);
-      if (p) namedLocs[cv.callsign.trim().toUpperCase()] = p;
+      if (p) {
+        // Key by callsign AND by registry id so both "ROUGH RIDER" and "CVN-71" resolve
+        if (cv.callsign) namedLocs[cv.callsign.trim().toUpperCase()] = p;
+        if (cv.id)       namedLocs[cv.id.trim().toUpperCase()]       = p;
+      }
+    }
+    if (cv.recovery_coords) {
+      const rp = parseCoord(cv.recovery_coords);
+      if (rp) {
+        if (cv.callsign) carrierRecoveryLocs[cv.callsign.trim().toUpperCase()] = rp;
+        if (cv.id)       carrierRecoveryLocs[cv.id.trim().toUpperCase()]       = rp;
+      }
     }
   });
   (ato.marshal_points || []).forEach(mp => {
@@ -117,36 +143,83 @@ function collectData(ato, aco) {
 
     // 2. Steer points — support both inline coords and name_ref to namedLocs.
     //    name_ref takes precedence over coords when both are present.
+    //    Steer points with an aim_point_id are drawn as target-approach legs
+    //    (thicker dashed line) and shown as diamond target markers instead of
+    //    hollow steer circles.  If a steer point has an 'orbit' block, also
+    //    push an anchor airspace so the racetrack pattern is drawn on the map.
     (m.steer_points || []).forEach((sp, i) => {
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
       const raw     = typeof sp === 'string' ? sp : sp.coords;
       const label   = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i + 1}`;
+      const apId    = typeof sp === 'object' ? sp.aim_point_id : null;
       const p       = nameRef ? resolve(nameRef) : parseCoord(raw);
       if (p) {
-        route.pts.push({ ...p, kind: 'route-node' });
+        // Aim-point steer points use a thicker target-approach line on the route
+        route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
         points.push({
-          ...p, kind: 'steer',
+          ...p, kind: apId ? 'target' : 'steer',
           label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
           sub: label, color, msnType: m.mission_type, mission: m,
         });
+        // Orbit/anchor track: render a racetrack on the map.
+        // Skip if a near-identical orbit has already been pushed (proximity dedup).
+        if (typeof sp === 'object' && sp.orbit) {
+          const orb = sp.orbit;
+          const alreadyDrawn = airspaces.some(
+            a => a.shape === 'anchor' && _distNm(p.lat, p.lon, a.lat, a.lon) < ORBIT_MERGE_NM
+          );
+          if (!alreadyDrawn) {
+            airspaces.push({
+              kind: 'airspace',
+              name: label || `${callsign} ORBIT`,
+              type: m.mission_type === 'TANKER' ? 'REFUEL' : 'ORBIT',
+              altLower: orb.alt_ft != null ? Math.round(orb.alt_ft / 100) * 100 + 'ft' : null,
+              altUpper: null,
+              lat: p.lat, lon: p.lon,
+              shape: 'anchor',
+              anchorPt: p,
+              headingDeg: orb.heading_deg || 0,
+              legLengthNm: orb.leg_nm || 10,
+              widthNm: orb.width_nm || 5,
+              direction: orb.cw === false ? 'ccw' : 'cw',
+              speedKts: orb.speed_kts,
+              missions: [msnNum].filter(Boolean),
+            });
+          }
+        }
       }
     });
 
-    // 3. Aim points (target markers)
+    // 3. Target aim-point markers.
+    //    Aim points already referenced by a steer_point (via aim_point_id) are
+    //    drawn as target diamonds in step 2 above and are skipped here to avoid
+    //    duplicate overlapping markers.
+    //    IMPORTANT: we do NOT push any route.pts nodes here — adding target nodes
+    //    after all steer_points would cause the route line to detour to the targets
+    //    again after the egress waypoints, before the recovery.
+    const coveredAimIds = new Set(
+      (m.steer_points || [])
+        .filter(sp => typeof sp === 'object' && sp.aim_point_id)
+        .map(sp => sp.aim_point_id)
+    );
     (m.targets || []).forEach(target => {
       (target.aim_points || []).forEach((ap, i) => {
+        if (ap._aim_point_id && coveredAimIds.has(ap._aim_point_id)) return;
         const raw  = typeof ap === 'string' ? ap : ap.coords;
         const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i + 1}`;
         const p    = parseCoord(raw);
         if (p) {
-          route.pts.push({ ...p, kind: 'target-node' });
           points.push({ ...p, kind: 'target', label: callsign, sub: name, color, msnType: m.mission_type, mission: m });
         }
       });
     });
 
-    // 4. Recovery location
-    const recLoc = resolve(m.aar_location_icao) || resolve(m.deploy_location_icao);
+    // 4. Recovery location — carriers use their projected recovery position,
+    //    not the deploy position stored in namedLocs.
+    const aarKey = (m.aar_location_icao || '').trim().toUpperCase();
+    const recLoc = carrierRecoveryLocs[aarKey]
+                || resolve(m.aar_location_icao)
+                || resolve(m.deploy_location_icao);
     if (recLoc) route.pts.push({ ...recLoc, kind: 'route-node' });
 
     if (route.pts.length >= 2) routes.push(route);

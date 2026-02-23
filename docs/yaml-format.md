@@ -56,22 +56,22 @@ header:
 ## `registry:` — Canonical Reference Definitions
 
 The `registry` block defines entities once so they can be referenced by key
-throughout the rest of the file.  It contains: `callsigns`, `frequencies`,
+throughout the rest of the file.  It contains: `callsigns`,
 `airfields`, `carriers`, `tankers`, `targets` (with nested aim points),
 `reference_points` (bullseye, marshal points, named positions), and
 `control_agencies` (AWACS, CRC).
 
 ### `callsigns:` (map)
 
-A mapping of callsign name → metadata.  Keys are the callsign strings used
-elsewhere in the file.
+A mapping of callsign name → metadata.  The callsign is the group / flight
+name used throughout the file.  AWACS flights are excluded here and appear
+in `control_agencies` instead.
 
 ```yaml
 registry:
   callsigns:
-    SCREWTOP:    { unit: USAF, type: E-3, role: AWACS primary }
-    FALCON5:     { unit: 510vFS, type: F16C, role: CAP flight lead }
-    ARCO4:       { type: KC-135, role: Tanker }
+    SHADOW-1:    { type: F16C, role: CAP flight lead }
+    TEXACO:      { type: KC135, role: TANKER }
     ROUGH RIDER: { type: CVN, role: Carrier }
 ```
 
@@ -80,25 +80,6 @@ registry:
 | `unit` | string | Operating unit (optional) |
 | `type` | string | Platform / aircraft type |
 | `role` | string | Role description |
-
-### `frequencies:` (list)
-
-A list of all frequencies used in the package.
-
-```yaml
-registry:
-  frequencies:
-    - { freq_mhz: 243.0,   callsign: GUARD,       band: UHF, role: Emergency }
-    - { freq_mhz: 260.0,   callsign: PACKAGE,     band: UHF, role: Package primary }
-    - { freq_mhz: 121.5,   callsign: GUARD,       band: VHF, role: Emergency }
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `freq_mhz` | number | Frequency in MHz |
-| `callsign` | string | Net / station callsign |
-| `band` | string | `UHF` or `VHF` |
-| `role` | string | Free-text role description |
 
 ### `airfields:` (map)
 
@@ -148,30 +129,33 @@ registry:
 | `deploy_coords` | coord string | Estimated position at start of ATO window |
 | `recovery_coords` | coord string | Estimated position at end / recovery window |
 
-### `tankers:` (map)
+### `tankers:` (list)
 
-A mapping of tanker id → tanker data.  Missions reference tankers by id
-in their `refuel.tanker_id` field; only mission-specific timing is stored
-in the mission.
+A **list** of tanker entries.  Missions reference tankers by callsign via
+`refuel.tanker_id`.  The `miz-to-yaml` tool populates this automatically
+from tanker flights (including orbit altitude and speed extracted from the
+DCS route).
 
 ```yaml
 registry:
   tankers:
-    ARCO4:
-      callsign: ARCO4
-      ar_track: AR394
-      altitude: FL240
-    TEXACO2:
-      callsign: TEXACO2
-      ar_track: AR392
-      altitude: FL220
+  - callsign: TEXACO
+    altitude_ft: 19000
+    speed_kts: 370
+  - callsign: SHELL
+    altitude_ft: 24000
+    speed_kts: 400
+    ar_track: AR394      # optional — not extracted from .miz
+    altitude: FL240      # optional human-readable altitude string
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `callsign` | string | Tanker callsign |
-| `ar_track` | string | AR track identifier |
-| `altitude` | string | Refueling altitude (e.g. `FL240`) |
+| `callsign` | string | Tanker group / callsign — matches `refuel.tanker_id` |
+| `altitude_ft` | integer | Refueling altitude in feet (from DCS orbit params) |
+| `speed_kts` | integer | Refueling speed in knots (from DCS orbit params) |
+| `ar_track` | string | AR track identifier (optional, manual) |
+| `altitude` | string | Human-readable altitude string e.g. `FL240` (optional, manual) |
 
 ### `targets:` (map)
 
@@ -218,11 +202,11 @@ pulled into the mission.
 | `name` | string | Display name |
 | `coords` | coord string | Position |
 
-### `reference_points:` (map)
+### `reference_points:` (list)
 
-A mapping of id → positional reference data.  This section contains reusable
-named positions: bullseye, marshal points, IP/CP designations, and any other
-named geographic positions that multiple flights might reference.
+A list of named positional references: bullseye, marshal points, IP/CP
+designations, and any other named geographic positions that multiple flights
+might reference.
 
 Mission-specific steer points (SP1, SP2, SP3 chains) do **not** belong here —
 they stay in the mission's `steer_points` block.
@@ -230,12 +214,10 @@ they stay in the mission's `steer_points` block.
 ```yaml
 registry:
   reference_points:
-    COYOTE:
-      name: COYOTE
+    - name: COYOTE
       type: bullseye
       coords: N26°51'19" E056°21'37"
-    MARSHAL-ALPHA:
-      name: ALPHA
+    - name: ALPHA
       type: marshal
       coords: N24°45'00" E056°00'00"
       altitude: FL250
@@ -243,7 +225,7 @@ registry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | string | Display name |
+| `name` | string | Display name (used as the bullseye reference key in `global_control.bullseye`) |
 | `type` | string | `bullseye` / `marshal` / `ip` / `cp` / `geographic` |
 | `coords` | coord string | Position |
 | `altitude` | string | Holding altitude (optional, mainly for marshal points) |
@@ -255,16 +237,20 @@ are defined here.  The `global_control.agency_id` and each mission's
 `control.agency_id` reference these by key; frequencies, callsign, and
 platform are resolved from the registry at load time.
 
+The `miz-to-yaml` tool automatically extracts AWACS groups from the DCS
+mission (task=AWACS) and populates this section.  The key is the DCS group
+name (which also becomes the `callsign`).  If exactly one AWACS is found,
+it is automatically set as the `global_control.agency_id`.
+
 ```yaml
 registry:
   control_agencies:
-    SCREWTOP:
+    AWACS DARKSTAR:
       type: AWACS
-      callsign: SCREWTOP
-      platform: E-3
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-    DARKSTAR:
+      callsign: AWACS DARKSTAR
+      platform: E-3A
+      primary_freq_mhz: '251.0'
+    DARKSTAR:            # manually added CRC example
       type: CRC
       callsign: DARKSTAR
       primary_freq_mhz: '265.0'
@@ -274,17 +260,17 @@ registry:
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | string | Agency type: `AWACS` or `CRC` |
-| `callsign` | string | Agency callsign |
+| `callsign` | string | Agency callsign / group name |
 | `platform` | string | Platform / aircraft type (optional — mainly for AWACS) |
 | `primary_freq_mhz` | string | Primary frequency in MHz |
-| `secondary_freq_mhz` | string | Secondary frequency in MHz |
+| `secondary_freq_mhz` | string | Secondary frequency in MHz (optional) |
 
 ---
 
 ## Coordinate strings
 
 All `coords` / `anchor_point` / `center` / `boundary` values are strings in
-**DMS (degrees-minutes-seconds) format** using the `°` symbol:
+**DMS (degrees-minutes-seconds) format** using the `°` symbol (Unicode U+00B0):
 
 ```
 N26°30'00" E056°20'00"
@@ -293,9 +279,13 @@ N26°30'00" E056°20'00"
 | Rule | Detail |
 |------|--------|
 | Hemisphere | `N`/`S` and `E`/`W` prefix, required, before the degrees |
-| Degrees | Whole number followed by `°` |
+| Degrees | Whole number followed by `°` (U+00B0 — not `\xb0` or `&deg;`) |
 | Minutes | Whole number followed by `'` |
 | Seconds | Whole number (no decimals) followed by `"` |
+
+YAML files must be **UTF-8 encoded** so the `°` character is stored as bytes
+`0xC2 0xB0`.  The `miztoyaml.py` tool always writes UTF-8.  If you author YAML
+by hand, ensure your editor is set to UTF-8.
 
 The viewer reformats every stored coordinate on the fly when you switch the
 `DM / DMS / MGRS` toggle, so no re-authoring of the YAML is needed when
@@ -404,11 +394,12 @@ be listed first in each mission entry.
 |-------|------|-------------|
 | `mission_number` | string | ATO mission number (e.g. `MSN3266`) — **primary key**, listed first.  Used as the cross-reference ID throughout the file |
 | `callsign` | string | Flight callsign |
-| `mission_type` | string | `CAP` / `BAI` / `CAS` / `SEAD` / `STRIKE` (drives color coding) |
+| `mission_type` | string | `CAP` / `BAI` / `CAS` / `SEAD` / `STRIKE` / `TANKER` (drives color coding) |
 | `unit` | string | Operating unit |
 | `home_base_icao` | string | Home base ICAO (display only) |
-| `deploy_location_icao` | string | ICAO or coord string — start of route on map |
-| `aar_location_icao` | string | ICAO or coord string — recovery / end of route on map |
+| `deploy_location_icao` | string | Start of route on map — accepts an airfield ICAO, a carrier registry ID (e.g. `CVN-71`), a carrier callsign, a marshal point name, or a raw DMS coordinate string |
+| `aar_location_icao` | string | Recovery / end of route on map — same resolution as `deploy_location_icao` |
+| `dtc_cartridge` | string | Name of the DCS DTC file assigned to this flight (auto-generated by `miztoyaml.py`) |
 
 #### `aircraft:`
 
@@ -417,6 +408,7 @@ be listed first in each mission entry.
 | `count` | number | Number of aircraft in the flight |
 | `type` | string | Aircraft designation (e.g. `F16C`) |
 | `loadout` | string | Loadout code — see [Loadout format](#loadout-format) |
+| `weapons` | list of strings | Human-readable weapon list (e.g. `['5× AIM-120C', 'AIM-9M', '2× GBU-38']`) — auto-generated by `miztoyaml.py`; companion to the compact `loadout` code |
 
 #### `targets:` (list)
 
@@ -522,13 +514,32 @@ steer_points:
     name: SP2
   - name_ref: ALPHA        # reference a marshal point by name
     name: MARSHAL ALPHA    # optional display label (defaults to the referenced name)
+  - coords: N26°30'00" E056°20'00"
+    name: SAM-1 TR         # this waypoint lies on an aim point
+    aim_point_id: TGT-A    # informational — set by miztoyaml.py when the waypoint
+                           # overlaps an aim point; not used by the viewer
+  - coords: N35°24'25" E038°07'30"
+    name: ANCHOR           # orbit/racetrack anchor point (e.g. CAP station, tanker track)
+    orbit:
+      alt_ft:      25000   # orbit altitude in feet
+      speed_kts:   270     # orbit airspeed in knots
+      width_nm:    20.0    # track width (turn diameter) in NM
+      leg_nm:      49.9    # hot-leg length in NM
+      heading_deg: 5       # hot-leg heading in degrees true
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `coords` | coord string | Waypoint position (used when `name_ref` is not set) |
-| `name_ref` | string | Name of an airfield (ICAO), carrier (callsign), or marshal point to use as the waypoint position |
+| `name_ref` | string | Name of an airfield (ICAO), carrier callsign or ID, or marshal point to use as the waypoint position |
 | `name` | string | Waypoint label shown on map |
+| `aim_point_id` | string | Optional — informational link to a registry aim point id.  Set by `miztoyaml.py` when a flight waypoint lies on an aim point; ignored by the viewer |
+| `orbit` | object | Optional — present when the waypoint has a DCS Orbit task (CAP station, tanker track).  The map renders a racetrack pattern using these parameters. |
+| `orbit.alt_ft` | number | Orbit altitude in feet |
+| `orbit.speed_kts` | number | Orbit airspeed in knots |
+| `orbit.width_nm` | number | Track width (total, i.e. turn diameter) in NM; the map uses half this value as the turn radius |
+| `orbit.leg_nm` | number | Hot-leg length in NM |
+| `orbit.heading_deg` | number | Hot-leg heading in degrees true |
 
 #### `control:`
 
@@ -659,6 +670,9 @@ reordered freely without any code changes.
 The SPINS section no longer needs its own `operation`, `ato_day`, or
 `classification` fields — these are propagated from `header`.
 
+SPINS content can also be loaded from a `spins.md` file placed in the same
+directory as the `.miz` file — see [Authoring SPINS in Markdown](#authoring-spins-in-markdown).
+
 ### Top-level fields
 
 | Field | Type | Description |
@@ -737,33 +751,79 @@ A structured entry that replaces embedding positional data in bullet text.
 The COMMS section no longer needs its own `operation`, `ato_day`, or
 `classification` fields — these are propagated from `header`.
 
+Comms are **per-flight**: each flight in the package has its own preset table
+derived from its assigned DTC (Data Transfer Cartridge).  This reflects the
+real-world configuration where different aircraft types carry different cartridges.
+
 ### Top-level fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `wing_lead` | string | Wing lead callsign (display only) |
 
-### `uhf_presets:` and `vhf_presets:`
+### `flights:` (list) — per-flight preset tables
 
-Both use the same format: a mapping from channel number to preset data.  Only
-list channels that have assigned frequencies — the viewer automatically fills
-channels 1–20 with SPARE entries for any channel not defined in the YAML.
+Each entry corresponds to one flight group and its assigned DTC cartridge.
 
 ```yaml
-uhf_presets:
-  1:  { callsign: GUARD,       freq_mhz: 243.000, role: Emergency }
-  2:  { callsign: PACKAGE,     freq_mhz: 260.000, role: Package primary }
-  3:  { callsign: INTRAFLIGHT, freq_mhz: 261.500, role: Intraflight }
+comms:
+  wing_lead: FALCON5
+  flights:
+    - group: SHADOW-1
+      callsign: Viper11
+      dtc_cartridge: Broomstick_F16
+      uhf_presets:
+        1:  { callsign: GUARD,       freq_mhz: 243.0,   role: Emergency }
+        2:  { callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary }
+        9:  { callsign: INTRAFLIGHT, freq_mhz: 360.1,   role: Intraflight }
+      vhf_presets:
+        1:  { callsign: GUARD,       freq_mhz: 121.5,   role: Emergency }
+        6:  { callsign: FALCON5,     freq_mhz: 133.3,   role: Package lead }
+    - group: HAT1
+      callsign: Enfield11
+      dtc_cartridge: Broomstick_F18
+      uhf_presets:
+        1:  { callsign: null, freq_mhz: 305.0, role: null }
+      vhf_presets:
+        5:  { callsign: null, freq_mhz: 133.3, role: null }
 ```
-
-Channel keys are integers.  Channels are sorted numerically, so any ordering
-in the YAML file is accepted.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `callsign` | string | Net / station callsign |
+| `group` | string | Flight group name (from ATO) |
+| `callsign` | string | Flight lead callsign |
+| `dtc_cartridge` | string | Name of the DTC file providing these presets |
+| `uhf_presets` | map | Channel number → preset data (see below) |
+| `vhf_presets` | map | Channel number → preset data (see below) |
+
+### Preset channel format
+
+Both `uhf_presets` and `vhf_presets` use a mapping from channel number to preset
+data.  Only list channels that have assigned frequencies — the viewer
+automatically fills channels 1–20 with SPARE entries for unassigned channels.
+
+Channel keys are integers.  Channels are sorted numerically.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `callsign` | string or null | Net / station callsign |
 | `freq_mhz` | number or null | Frequency in MHz.  `null` marks an empty / SPARE slot |
 | `role` | string or null | Free-text role description |
+
+### Legacy flat format (backward compatible)
+
+If no `flights` list is present, the viewer falls back to a single shared
+preset table using the top-level `uhf_presets` / `vhf_presets` keys:
+
+```yaml
+comms:
+  wing_lead: FALCON5
+  uhf_presets:
+    1:  { callsign: GUARD,       freq_mhz: 243.000, role: Emergency }
+    2:  { callsign: PACKAGE,     freq_mhz: 260.000, role: Package primary }
+  vhf_presets:
+    1:  { callsign: GUARD,       freq_mhz: 121.5,   role: Emergency }
+```
 
 ---
 
@@ -987,3 +1047,44 @@ Plain-English notes linked to missions by mission number.
 | `mission_ref` | string | Mission number (cross-reference to ATO) |
 | `notes` | string | Free-text weather note |
 | `style` | string | Optional color tint: `amber` / `red` / `green` / `blue` |
+
+---
+
+## Authoring SPINS in Markdown
+
+When extracting a package from a `.miz` file with `miztoyaml.py`, the tool
+looks for a `spins.md` file in the same directory as the `.miz` file.  If
+found, the Markdown content is parsed and placed in `spins.sections`.
+
+### Markdown format for `spins.md`
+
+```markdown
+## C1 — COMMAND & CONTROL
+
+NOTE: All C2 passes through package commander.
+
+PRIMARY AWACS: MAGIC / 265.1 MHz
+SECONDARY: DARKSTAR / 265.0 MHz
+- Bullet point text
+- Another bullet
+
+## C3 — IFF / SIF
+
+NOTE: Squawk assigned code. Mode 4 mandatory.
+
+| MSN | MODE | CODE |
+|-----|------|------|
+| MSN001 | 3 | 4821 |
+```
+
+| Markdown element | Produces |
+|-----------------|----------|
+| `## Section Title` | New section with `title: Section Title` |
+| `NOTE: text` | `note:` field at the top of the current section |
+| `KEY: value` (UPPERCASE key) | `{label: KEY, value: value}` entry |
+| `- bullet text` | `{bullet: bullet text}` entry |
+| Markdown table | `table: {headers, rows}` sub-block |
+| Other lines | `{value: line}` (plain objective text) |
+
+Sections without any `entries` (only a `table`) are fully supported.
+The NOTE line must come before any key-value, bullet, or table rows.

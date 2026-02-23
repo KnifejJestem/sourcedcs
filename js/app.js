@@ -390,21 +390,34 @@ function loadPackage_obj(data) {
   }
 
   // ── Resolve registry tankers into ato.tankers ───────────
+  // Supports both list format (new: [{callsign, altitude_ft, ...}]) and
+  // dict format (legacy: {CALLSIGN: {callsign, ar_track, ...}}).
   if (pkg.registry?.tankers && pkg.ato) {
-    if (!pkg.ato.tankers || pkg.ato.tankers.length === 0) {
-      // Build tanker list from registry
-      pkg.ato.tankers = [];
-      Object.entries(pkg.registry.tankers).forEach(([id, t]) => {
-        pkg.ato.tankers.push({ id, ...t });
-      });
+    const tankerReg = pkg.registry.tankers;
+    // Normalise registry to a map keyed by callsign for fast lookup
+    const tankerRegMap = {};
+    if (Array.isArray(tankerReg)) {
+      tankerReg.forEach(t => { if (t.callsign) tankerRegMap[t.callsign] = t; });
     } else {
-      // Resolve existing tanker references — registry always wins
+      Object.entries(tankerReg).forEach(([id, t]) => { tankerRegMap[id] = { ...t, id: t.id ?? id }; });
+    }
+
+    if (!pkg.ato.tankers || pkg.ato.tankers.length === 0) {
+      // Build tanker list directly from registry
+      pkg.ato.tankers = Object.values(tankerRegMap).map(t => ({
+        id: t.id ?? t.callsign,
+        ...t,
+      }));
+    } else {
+      // Resolve existing tanker references — registry wins for known fields
       pkg.ato.tankers.forEach(t => {
-        const reg = pkg.registry.tankers[t.id];
+        const reg = tankerRegMap[t.id] ?? tankerRegMap[t.callsign];
         if (reg) {
-          if (reg.callsign != null) t.callsign = reg.callsign;
-          if (reg.ar_track != null) t.ar_track = reg.ar_track;
-          if (reg.altitude != null) t.altitude = reg.altitude;
+          if (reg.callsign   != null) t.callsign   = reg.callsign;
+          if (reg.ar_track   != null) t.ar_track   = reg.ar_track;
+          if (reg.altitude   != null) t.altitude   = reg.altitude;
+          if (reg.altitude_ft!= null) t.altitude_ft= reg.altitude_ft;
+          if (reg.speed_kts  != null) t.speed_kts  = reg.speed_kts;
         }
       });
     }
@@ -530,6 +543,7 @@ function loadPackage_obj(data) {
                   name: ap.name || resolved.name || resolved.id,
                   elevation: ap.elevation || resolved.elevation,
                   _resolved_target: ref,
+                  _aim_point_id: ap.aim_point_id, // preserve for map dedup
                 };
               }
               return ap;

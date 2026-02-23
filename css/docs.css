@@ -109,6 +109,21 @@
 :root.movie .freq-mhz { color: var(--cap); }
 .freq-role { font-size: 9px; color: var(--text-3); }
 .freq-empty td { color: var(--text-3); font-size: 9px; }
+/* Per-flight comms blocks */
+.comms-flight-block { margin-bottom: 24px; }
+.comms-flight-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.comms-flight-cs   { font-weight: 700; font-size: 13px; color: var(--text-1); }
+.comms-flight-group { font-size: 11px; color: var(--text-3); margin-left: 4px; }
+.comms-flight-dtc  { font-size: 9px; letter-spacing: 1px; color: var(--text-3);
+                     margin-left: auto; background: var(--bg3);
+                     padding: 2px 6px; border: 1px solid var(--border); }
 
 /* ═══════════════════════════════════════════════════════════
    SPINS-SPECIFIC

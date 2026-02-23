@@ -16,13 +16,6 @@ registry:
     TEXACO2:     { type: KC-135, role: Tanker }
     SHELL3:      { type: KC-135, role: Tanker }
     ROUGH RIDER: { type: CVN, role: Carrier }
-  frequencies:
-    - { freq_mhz: 243.0,   callsign: GUARD,       band: UHF, role: Emergency }
-    - { freq_mhz: 260.0,   callsign: PACKAGE,     band: UHF, role: Package primary }
-    - { freq_mhz: 261.5,   callsign: INTRAFLIGHT, band: UHF, role: Intraflight }
-    - { freq_mhz: 265.1,   callsign: SCREWTOP,    band: UHF, role: AWACS primary }
-    - { freq_mhz: 134.0,   callsign: SCREWTOP,    band: UHF, role: AWACS secondary }
-    - { freq_mhz: 121.5,   callsign: GUARD,       band: VHF, role: Emergency }
   airfields:
     OMAM:
       name: Al Dhafra AB
@@ -47,18 +40,15 @@ registry:
       deploy_coords: N24°30'00" E059°15'00"
       recovery_coords: N24°45'00" E059°30'00"
   tankers:
-    ARCO4:
-      callsign: ARCO4
-      ar_track: AR394
-      altitude: FL240
-    TEXACO2:
-      callsign: TEXACO2
-      ar_track: AR392
-      altitude: FL220
-    SHELL3:
-      callsign: SHELL3
-      ar_track: AR393
-      altitude: FL230
+  - callsign: ARCO4
+    ar_track: AR394
+    altitude: FL240
+  - callsign: TEXACO2
+    ar_track: AR392
+    altitude: FL220
+  - callsign: SHELL3
+    ar_track: AR393
+    altitude: FL230
   targets:
     SAM-1:
       name: SA-2 Guideline
