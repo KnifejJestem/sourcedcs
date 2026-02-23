@@ -21,10 +21,10 @@ sdist/
 var/
 wheels/
 share/python-wheels/
-data/
 *.egg-info/
 .installed.cfg
 *.egg
+*.yaml
 MANIFEST
 
 # PyInstaller
