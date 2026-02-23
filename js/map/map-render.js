@@ -69,9 +69,9 @@ const PAN_MARGIN_RATIO = 0.1; // fraction of MAP_WIDTH
 // ── Tile holdover delay ────────────────────────────────────────
 // When refreshTilesIfNeeded() replaces the tile layer, the old layer stays
 // visible in the DOM for this many ms while the new tiles paint from cache.
-// 300 ms is ample for a cache hit (~1 frame); keeps the old tiles as a
-// visual fallback so the map never shows a blank flash during zoom/pan.
-const TILE_HOLDOVER_MS = 300;
+// 5000 ms lets z0+1/z0+2 tiles (which start downloading in parallel with z0)
+// finish their downloads and render before the previous zoom level is removed.
+const TILE_HOLDOVER_MS = 5000;
 
 // ── Marker scale damping ───────────────────────────────────────
 // Markers scale by 1/zoom^DAMPING — they shrink as you zoom in, but slowly.
@@ -206,11 +206,11 @@ function drawMap(container, points, routes, geoData, airspaces) {
     content.appendChild(drawCities(ctx, geoData));
   } else {
     // Tile modes: raster tiles as background, coordinate grid on top.
-    // At sc=1 the visible area is the full base viewport, so no tileBounds needed.
-    // refreshTilesIfNeeded() in applyTransform() will refine this on first zoom/pan.
-    const initVLon = ctx.vLon / state.sc;
-    tileLayerG = drawTileBackground(ctx, mapMode, initVLon);
-    lastTileZ  = _tileZoom(initVLon, TILE_MAX_ZOOM[mapMode]);
+    // Always draw the FULL base viewport (ctx.vLon) at z0 regardless of the
+    // restored pan/zoom state — this ensures the entire map is tile-covered
+    // so panning after loading never shows blank areas.
+    tileLayerG = drawTileBackground(ctx, mapMode, ctx.vLon);
+    lastTileZ  = _tileZoom(ctx.vLon, TILE_MAX_ZOOM[mapMode]);
     content.appendChild(tileLayerG);
     // Grid with higher contrast so it is readable over imagery.
     effectiveCtx = Object.assign({}, ctx, {
@@ -424,68 +424,29 @@ function drawMap(container, points, routes, geoData, airspaces) {
     STATE.mapUI.sc = state.sc;
   }
 
-  // Replace the tile layer with higher/lower-detail tiles when the user
-  // has zoomed in or out enough to warrant a different tile zoom level,
-  // or has panned far enough that the visible area approaches the edge
-  // of the previously loaded tile coverage.
-  // Called on every applyTransform(); exits early (no DOM change) when
-  // the current tiles already cover the visible area at the right zoom.
-  let lastCoverage = null; // geo bounds covered by the current tile layer
-
-  function _visibleGeoBounds() {
-    const cx_min = -state.tx / state.sc;
-    const cx_max = (W - state.tx) / state.sc;
-    const cy_min = -state.ty / state.sc;
-    const cy_max = (H - state.ty) / state.sc;
-    return {
-      minLon: ctx.vMinLon + cx_min / W * ctx.vLon,
-      maxLon: ctx.vMinLon + cx_max / W * ctx.vLon,
-      maxLat: ctx.vMaxLat - cy_min / H * ctx.vLat,
-      minLat: ctx.vMaxLat - cy_max / H * ctx.vLat,
-    };
-  }
-
+  // Replace the tile layer when the user zooms far enough to warrant
+  // higher/lower-detail tiles.  Called on every applyTransform(); exits
+  // immediately (no DOM change) when the needed zoom level hasn't changed.
+  //
+  // Each tile layer always covers the FULL base viewport — tiles for the
+  // whole map are preloaded into the browser cache so there is no download
+  // penalty and panning never reveals blank areas.
   function refreshTilesIfNeeded() {
     if (!tileLayerG) return; // chart mode — no tiles
     const effectiveVLon = ctx.vLon / state.sc;
     const neededZ = _tileZoom(effectiveVLon, TILE_MAX_ZOOM[mapMode]);
-    const vis = _visibleGeoBounds();
+    if (neededZ === lastTileZ) return; // same zoom level — nothing to do
 
-    // Skip refresh if the zoom level is the same AND the visible area is
-    // well inside the already-loaded tile coverage (with a small margin).
-    if (neededZ === lastTileZ && lastCoverage) {
-      const margin = 0.05; // 5% of coverage span — trigger before the edge
-      const covLon = lastCoverage.maxLon - lastCoverage.minLon;
-      const covLat = lastCoverage.maxLat - lastCoverage.minLat;
-      if (vis.minLon >= lastCoverage.minLon + covLon * margin &&
-          vis.maxLon <= lastCoverage.maxLon - covLon * margin &&
-          vis.minLat >= lastCoverage.minLat + covLat * margin &&
-          vis.maxLat <= lastCoverage.maxLat - covLat * margin) {
-        return;
-      }
-    }
-
-    // Coverage: visible geo area expanded by 1× visible span on each side.
-    // Clamped to the base viewport so we never request tiles outside the map.
-    const lonBuf = vis.maxLon - vis.minLon;
-    const latBuf = vis.maxLat - vis.minLat;
-    const coverage = {
-      minLon: Math.max(ctx.vMinLon, vis.minLon - lonBuf),
-      maxLon: Math.min(ctx.vMaxLon, vis.maxLon + lonBuf),
-      minLat: Math.max(ctx.vMinLat, vis.minLat - latBuf),
-      maxLat: Math.min(ctx.vMaxLat, vis.maxLat + latBuf),
-    };
-
-    const newTileG = drawTileBackground(ctx, mapMode, effectiveVLon, coverage);
-    // Holdover: insert new tiles AFTER the old group in the SVG paint order
-    // (later = painted on top).  Old tiles stay visible underneath while the
-    // browser paints the new ones (nearly instant from cache).
-    // After a short delay the old group is removed to free memory.
+    // Draw a fresh full-base-viewport tile layer at the new zoom level.
+    // Tiles come from the browser cache so they render nearly instantly.
+    const newTileG = drawTileBackground(ctx, mapMode, effectiveVLon);
+    // Holdover: insert new group AFTER the old one (painted on top), then
+    // schedule old group removal.  Old tiles remain visible as a fallback
+    // for TILE_HOLDOVER_MS so any tiles still downloading have time to arrive.
     tileLayerG.after(newTileG);
-    const evictG = tileLayerG;
-    tileLayerG   = newTileG;
-    lastTileZ    = neededZ;
-    lastCoverage = coverage;
+    const evictG  = tileLayerG;
+    tileLayerG    = newTileG;
+    lastTileZ     = neededZ;
     setTimeout(() => evictG.remove(), TILE_HOLDOVER_MS);
   }
 
