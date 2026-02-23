@@ -438,6 +438,8 @@ function _editSpinsSection(sections, index) {
 
 // ═════════════════════════════════════════════════════════════
 // COMMS EDITOR
+// Supports both per-flight comms (comms.flights[]) and the legacy
+// flat format (comms.uhf_presets / comms.vhf_presets).
 // ═════════════════════════════════════════════════════════════
 
 function openCommsEditor() {
@@ -452,13 +454,21 @@ function openCommsEditor() {
 
     body._commsHeader = { op: fOp, day: fDay, lead: fLead, cls: fCls };
 
-    // UHF presets
-    editorSectionTitle(body, 'UHF PRESETS');
-    body._uhfFields = _buildPresetFields(body, cm.uhf_presets || {});
-
-    // VHF presets
-    editorSectionTitle(body, 'VHF PRESETS');
-    body._vhfFields = _buildPresetFields(body, cm.vhf_presets || {});
+    // Per-flight comms (new format)
+    if (Array.isArray(cm.flights) && cm.flights.length > 0) {
+      editorSectionTitle(body, 'FLIGHT PRESETS (per DTC cartridge)');
+      body._commsFlights = cm.flights.map(function (flt) { return Object.assign({}, flt); });
+      var listEl = el('div', 'ef-list-items');
+      body._commsFlightListEl = listEl;
+      _renderCommsFlightList(listEl, body._commsFlights);
+      body.appendChild(listEl);
+    } else {
+      // Legacy flat format
+      editorSectionTitle(body, 'UHF PRESETS');
+      body._uhfFields = _buildPresetFields(body, cm.uhf_presets || {});
+      editorSectionTitle(body, 'VHF PRESETS');
+      body._vhfFields = _buildPresetFields(body, cm.vhf_presets || {});
+    }
 
   }, function () {
     var body = document.getElementById('editorBody');
@@ -468,8 +478,58 @@ function openCommsEditor() {
     cm.ato_day        = h.day.value || undefined;
     cm.wing_lead      = h.lead.value || undefined;
     cm.classification = h.cls.value || undefined;
-    cm.uhf_presets    = _collectPresets(body._uhfFields);
-    cm.vhf_presets    = _collectPresets(body._vhfFields);
+
+    if (body._commsFlights) {
+      cm.flights = body._commsFlights;
+    } else {
+      cm.uhf_presets = _collectPresets(body._uhfFields);
+      cm.vhf_presets = _collectPresets(body._vhfFields);
+    }
+    editorReRender('comms');
+  });
+}
+
+function _renderCommsFlightList(container, flights) {
+  container.innerHTML = '';
+  flights.forEach(function (flt, i) {
+    var label = (flt.callsign || flt.group || 'Flight ' + (i + 1));
+    if (flt.dtc_cartridge) label += ' [' + flt.dtc_cartridge + ']';
+    editorItemRow(container, label,
+      function () { _editCommsFlight(flights, i); },
+      null  // no delete — per-flight comms are auto-derived
+    );
+  });
+}
+
+function _editCommsFlight(flights, index) {
+  var flt = flights[index];
+
+  openEditorDialog('EDIT FLIGHT COMMS — ' + (flt.callsign || flt.group || ''), function (body) {
+    var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO COMMS');
+    backBtn.addEventListener('click', function () {
+      editorEnsureSection('comms').flights = flights;
+      openCommsEditor();
+    });
+    body.appendChild(backBtn);
+
+    var READONLY = { disabled: true };
+    editorField(body, 'Group',         flt.group,         READONLY);
+    editorField(body, 'Callsign',      flt.callsign,      READONLY);
+    editorField(body, 'DTC Cartridge', flt.dtc_cartridge, READONLY);
+
+    editorSectionTitle(body, 'UHF PRESETS');
+    body._fltUhfFields = _buildPresetFields(body, flt.uhf_presets || {});
+    editorSectionTitle(body, 'VHF PRESETS');
+    body._fltVhfFields = _buildPresetFields(body, flt.vhf_presets || {});
+
+    body._editFltFlights = flights;
+    body._editFltIndex   = index;
+  }, function () {
+    var body  = document.getElementById('editorBody');
+    var flt   = body._editFltFlights[body._editFltIndex];
+    flt.uhf_presets = _collectPresets(body._fltUhfFields);
+    flt.vhf_presets = _collectPresets(body._fltVhfFields);
+    editorEnsureSection('comms').flights = body._editFltFlights;
     editorReRender('comms');
   });
 }

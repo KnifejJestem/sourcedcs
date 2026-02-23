@@ -56,7 +56,7 @@ header:
 ## `registry:` — Canonical Reference Definitions
 
 The `registry` block defines entities once so they can be referenced by key
-throughout the rest of the file.  It contains: `callsigns`, `frequencies`,
+throughout the rest of the file.  It contains: `callsigns`,
 `airfields`, `carriers`, `tankers`, `targets` (with nested aim points),
 `reference_points` (bullseye, marshal points, named positions), and
 `control_agencies` (AWACS, CRC).
@@ -80,25 +80,6 @@ registry:
 | `unit` | string | Operating unit (optional) |
 | `type` | string | Platform / aircraft type |
 | `role` | string | Role description |
-
-### `frequencies:` (list)
-
-A list of all frequencies used in the package.
-
-```yaml
-registry:
-  frequencies:
-    - { freq_mhz: 243.0,   callsign: GUARD,       band: UHF, role: Emergency }
-    - { freq_mhz: 260.0,   callsign: PACKAGE,     band: UHF, role: Package primary }
-    - { freq_mhz: 121.5,   callsign: GUARD,       band: VHF, role: Emergency }
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `freq_mhz` | number | Frequency in MHz |
-| `callsign` | string | Net / station callsign |
-| `band` | string | `UHF` or `VHF` |
-| `role` | string | Free-text role description |
 
 ### `airfields:` (map)
 
@@ -659,6 +640,9 @@ reordered freely without any code changes.
 The SPINS section no longer needs its own `operation`, `ato_day`, or
 `classification` fields — these are propagated from `header`.
 
+SPINS content can also be loaded from a `spins.md` file placed in the same
+directory as the `.miz` file — see [Authoring SPINS in Markdown](#authoring-spins-in-markdown).
+
 ### Top-level fields
 
 | Field | Type | Description |
@@ -737,33 +721,79 @@ A structured entry that replaces embedding positional data in bullet text.
 The COMMS section no longer needs its own `operation`, `ato_day`, or
 `classification` fields — these are propagated from `header`.
 
+Comms are **per-flight**: each flight in the package has its own preset table
+derived from its assigned DTC (Data Transfer Cartridge).  This reflects the
+real-world configuration where different aircraft types carry different cartridges.
+
 ### Top-level fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `wing_lead` | string | Wing lead callsign (display only) |
 
-### `uhf_presets:` and `vhf_presets:`
+### `flights:` (list) — per-flight preset tables
 
-Both use the same format: a mapping from channel number to preset data.  Only
-list channels that have assigned frequencies — the viewer automatically fills
-channels 1–20 with SPARE entries for any channel not defined in the YAML.
+Each entry corresponds to one flight group and its assigned DTC cartridge.
 
 ```yaml
-uhf_presets:
-  1:  { callsign: GUARD,       freq_mhz: 243.000, role: Emergency }
-  2:  { callsign: PACKAGE,     freq_mhz: 260.000, role: Package primary }
-  3:  { callsign: INTRAFLIGHT, freq_mhz: 261.500, role: Intraflight }
+comms:
+  wing_lead: FALCON5
+  flights:
+    - group: SHADOW-1
+      callsign: Viper11
+      dtc_cartridge: Broomstick_F16
+      uhf_presets:
+        1:  { callsign: GUARD,       freq_mhz: 243.0,   role: Emergency }
+        2:  { callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary }
+        9:  { callsign: INTRAFLIGHT, freq_mhz: 360.1,   role: Intraflight }
+      vhf_presets:
+        1:  { callsign: GUARD,       freq_mhz: 121.5,   role: Emergency }
+        6:  { callsign: FALCON5,     freq_mhz: 133.3,   role: Package lead }
+    - group: HAT1
+      callsign: Enfield11
+      dtc_cartridge: Broomstick_F18
+      uhf_presets:
+        1:  { callsign: null, freq_mhz: 305.0, role: null }
+      vhf_presets:
+        5:  { callsign: null, freq_mhz: 133.3, role: null }
 ```
-
-Channel keys are integers.  Channels are sorted numerically, so any ordering
-in the YAML file is accepted.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `callsign` | string | Net / station callsign |
+| `group` | string | Flight group name (from ATO) |
+| `callsign` | string | Flight lead callsign |
+| `dtc_cartridge` | string | Name of the DTC file providing these presets |
+| `uhf_presets` | map | Channel number → preset data (see below) |
+| `vhf_presets` | map | Channel number → preset data (see below) |
+
+### Preset channel format
+
+Both `uhf_presets` and `vhf_presets` use a mapping from channel number to preset
+data.  Only list channels that have assigned frequencies — the viewer
+automatically fills channels 1–20 with SPARE entries for unassigned channels.
+
+Channel keys are integers.  Channels are sorted numerically.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `callsign` | string or null | Net / station callsign |
 | `freq_mhz` | number or null | Frequency in MHz.  `null` marks an empty / SPARE slot |
 | `role` | string or null | Free-text role description |
+
+### Legacy flat format (backward compatible)
+
+If no `flights` list is present, the viewer falls back to a single shared
+preset table using the top-level `uhf_presets` / `vhf_presets` keys:
+
+```yaml
+comms:
+  wing_lead: FALCON5
+  uhf_presets:
+    1:  { callsign: GUARD,       freq_mhz: 243.000, role: Emergency }
+    2:  { callsign: PACKAGE,     freq_mhz: 260.000, role: Package primary }
+  vhf_presets:
+    1:  { callsign: GUARD,       freq_mhz: 121.5,   role: Emergency }
+```
 
 ---
 
@@ -987,3 +1017,44 @@ Plain-English notes linked to missions by mission number.
 | `mission_ref` | string | Mission number (cross-reference to ATO) |
 | `notes` | string | Free-text weather note |
 | `style` | string | Optional color tint: `amber` / `red` / `green` / `blue` |
+
+---
+
+## Authoring SPINS in Markdown
+
+When extracting a package from a `.miz` file with `miztoyaml.py`, the tool
+looks for a `spins.md` file in the same directory as the `.miz` file.  If
+found, the Markdown content is parsed and placed in `spins.sections`.
+
+### Markdown format for `spins.md`
+
+```markdown
+## C1 — COMMAND & CONTROL
+
+NOTE: All C2 passes through package commander.
+
+PRIMARY AWACS: MAGIC / 265.1 MHz
+SECONDARY: DARKSTAR / 265.0 MHz
+- Bullet point text
+- Another bullet
+
+## C3 — IFF / SIF
+
+NOTE: Squawk assigned code. Mode 4 mandatory.
+
+| MSN | MODE | CODE |
+|-----|------|------|
+| MSN001 | 3 | 4821 |
+```
+
+| Markdown element | Produces |
+|-----------------|----------|
+| `## Section Title` | New section with `title: Section Title` |
+| `NOTE: text` | `note:` field at the top of the current section |
+| `KEY: value` (UPPERCASE key) | `{label: KEY, value: value}` entry |
+| `- bullet text` | `{bullet: bullet text}` entry |
+| Markdown table | `table: {headers, rows}` sub-block |
+| Other lines | `{value: line}` (plain objective text) |
+
+Sections without any `entries` (only a `table`) are fully supported.
+The NOTE line must come before any key-value, bullet, or table rows.

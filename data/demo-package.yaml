@@ -16,13 +16,6 @@ registry:
     TEXACO2:     { type: KC-135, role: Tanker }
     SHELL3:      { type: KC-135, role: Tanker }
     ROUGH RIDER: { type: CVN, role: Carrier }
-  frequencies:
-    - { freq_mhz: 243.0,   callsign: GUARD,       band: UHF, role: Emergency }
-    - { freq_mhz: 260.0,   callsign: PACKAGE,     band: UHF, role: Package primary }
-    - { freq_mhz: 261.5,   callsign: INTRAFLIGHT, band: UHF, role: Intraflight }
-    - { freq_mhz: 265.1,   callsign: SCREWTOP,    band: UHF, role: AWACS primary }
-    - { freq_mhz: 134.0,   callsign: SCREWTOP,    band: UHF, role: AWACS secondary }
-    - { freq_mhz: 121.5,   callsign: GUARD,       band: VHF, role: Emergency }
   airfields:
     OMAM:
       name: Al Dhafra AB

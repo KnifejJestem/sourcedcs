@@ -468,12 +468,113 @@ def build_comms_from_dtc(dtc_channels: dict[str, dict[int, float]]) -> tuple[dic
         for ch_num, freq in presets.items():
             if freq >= 225.0:
                 if ch_num not in uhf:
-                    uhf[ch_num] = {'freq_mhz': freq}
+                    uhf[ch_num] = {'callsign': None, 'freq_mhz': freq, 'role': None}
             else:
                 if ch_num not in vhf:
-                    vhf[ch_num] = {'freq_mhz': freq}
+                    vhf[ch_num] = {'callsign': None, 'freq_mhz': freq, 'role': None}
     return (dict(sorted(uhf.items())) or None,
             dict(sorted(vhf.items())) or None)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# spins  —  parse a plain-text spins.md file into YAML sections
+# ─────────────────────────────────────────────────────────────────────────────
+
+def parse_spins_md(text: str) -> list[dict]:
+    """
+    Parse a spins.md file into the YAML spins sections format.
+
+    Markdown format accepted:
+      ## Section Title          → new section
+      NOTE: text               → section-level note (first occurrence per section)
+      LABEL: value text        → {label: LABEL, value: value text}
+      - bullet text            → {bullet: bullet text}
+      |h1|h2|...|  + |--|--|   → table block
+      blank lines              → ignored
+    """
+    sections: list[dict] = []
+    current: dict | None = None
+    table_headers: list[str] | None = None
+    table_rows: list[list[str]] = []
+    in_table = False
+
+    def flush_table():
+        nonlocal table_headers, table_rows, in_table
+        if table_headers and current is not None:
+            current.setdefault('table', {
+                'headers': table_headers,
+                'rows': table_rows,
+            })
+        table_headers = None
+        table_rows = []
+        in_table = False
+
+    for raw in text.splitlines():
+        line = raw.strip()
+
+        # Section heading
+        if line.startswith('## '):
+            if in_table:
+                flush_table()
+            if current is not None:
+                sections.append(current)
+            current = {'title': line[3:].strip(), 'entries': []}
+            continue
+
+        if current is None:
+            continue
+
+        # Table line
+        if line.startswith('|'):
+            cols = [c.strip() for c in line.strip('|').split('|')]
+            # Separator row (e.g. |---|---|)
+            if all(re.match(r'^[-:]+$', c) for c in cols if c):
+                in_table = True
+                continue
+            if table_headers is None:
+                table_headers = cols
+            else:
+                table_rows.append(cols)
+            continue
+        else:
+            if in_table:
+                flush_table()
+
+        if not line:
+            continue
+
+        # Note line
+        m_note = re.match(r'^NOTE:\s*(.*)', line, re.IGNORECASE)
+        if m_note:
+            current['note'] = m_note.group(1).strip()
+            continue
+
+        # Bullet line
+        if line.startswith('- '):
+            current['entries'].append({'bullet': line[2:].strip()})
+            continue
+
+        # Key: Value line (UPPERCASE key)
+        m_kv = re.match(r'^([A-Z][A-Z0-9 /._-]+):\s*(.*)', line)
+        if m_kv:
+            current['entries'].append({'label': m_kv.group(1).strip(),
+                                       'value': m_kv.group(2).strip()})
+            continue
+
+        # Plain value / objective line
+        current['entries'].append({'value': line})
+
+    if in_table:
+        flush_table()
+    if current is not None:
+        sections.append(current)
+
+    # Clean up: remove empty 'entries' lists
+    for sec in sections:
+        if not sec.get('entries'):
+            sec.pop('entries', None)
+
+    return sections or None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1636,9 +1737,49 @@ def build_carriers_ato(carriers: list[Carrier]) -> list[dict]:
     return [{"id": c.id} for c in carriers]
 
 
+def build_callsigns_registry(flights: list[Flight]) -> dict | None:
+    """Build a callsigns registry from the extracted flights."""
+    result: dict = {}
+    for f in flights:
+        lead_callsign = f.units[0].callsign if f.units else f.name
+        ac_base = f.aircraft_type.split('_')[0]
+        ac_type = re.sub(r'[^A-Z0-9]', '', ac_base.upper())
+        result[lead_callsign] = {
+            "group":  f.name,
+            "type":   ac_type,
+            "role":   f.task + " flight lead" if not f.is_tanker else f.task,
+        }
+    return result or None
+
+
+def build_flight_comms(flights: list[Flight], dtcs: dict[str, dict]) -> list[dict] | None:
+    """
+    Build per-flight comms list.  Each entry has the flight group name,
+    lead callsign, DTC cartridge name, and UHF/VHF preset dicts.
+    Flights without a DTC (no DTC assigned or cartridge not found) are skipped.
+    """
+    entries = []
+    for f in flights:
+        if not f.dtc_cartridge:
+            continue
+        if f.dtc_cartridge not in dtcs:
+            print(f"[!] Flight '{f.name}': DTC '{f.dtc_cartridge}' not found in archive — skipping comms")
+            continue
+        uhf, vhf = build_comms_from_dtc(dtcs[f.dtc_cartridge])
+        lead_callsign = f.units[0].callsign if f.units else f.name
+        entries.append({
+            "group":         f.name,
+            "callsign":      lead_callsign,
+            "dtc_cartridge": f.dtc_cartridge,
+            "uhf_presets":   uhf,
+            "vhf_presets":   vhf,
+        })
+    return entries or None
+
+
 def build_doc(*, mission_name, mission_date, theatre,
               year, month, targets, ref_pts, acms, metar, wx_notes,
-              flights, carriers, comms=None) -> dict:
+              flights, carriers, dtcs=None, spins_sections=None) -> dict:
 
     import hashlib
     # Strike package MSN start — deterministic from filename
@@ -1661,18 +1802,20 @@ def build_doc(*, mission_name, mission_date, theatre,
     # ATO airfields list — one entry per unique airfield referenced
     ato_airfields = [{"icao": icao, "role": "deploy"} for icao in airfields] or None
 
+    # Per-flight comms from each flight's DTC cartridge
+    flight_comms = build_flight_comms(flights, dtcs or {})
+
     return {
         "schema_version": "1.0",
 
         "header": {
             "operation":      mission_name.upper().replace("_", " "),
             "ato_date":       mission_date,
-            "classification": "UNCLAS",
+            "classification": "CLASSIFIED",
         },
 
         "registry": {
-            "callsigns":        None,
-            "frequencies":      None,
+            "callsigns":        build_callsigns_registry(flights),
             "airfields":        airfields or None,
             "carriers":         build_carriers_registry(carriers) or None,
             "tankers":          None,
@@ -1705,13 +1848,14 @@ def build_doc(*, mission_name, mission_date, theatre,
 
         "spins": {
             "version":  "1.0",
-            "sections": None,
+            "sections": spins_sections,
         },
 
+        # Comms are per-flight: each flight has its own DTC-derived preset table.
+        # Flights without an assigned DTC cartridge are omitted.
         "comms": {
-            "wing_lead":   None,
-            "uhf_presets": comms.get("uhf_presets") if comms else None,
-            "vhf_presets": comms.get("vhf_presets") if comms else None,
+            "wing_lead": None,
+            "flights":   flight_comms,
         },
 
         "weather": {
@@ -1795,20 +1939,13 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
     for c in carriers:
         print(f"  {c.id}: {c.type}  {c.name}  {c.deploy_coords}")
 
-    # DTC comms: pick the primary DTC from the first non-tanker flight with one
-    primary_dtc_name = next(
-        (f.dtc_cartridge for f in flights if not f.is_tanker and f.dtc_cartridge),
-        None
-    )
-    comms: dict | None = None
-    if primary_dtc_name and primary_dtc_name in dtcs:
-        uhf, vhf = build_comms_from_dtc(dtcs[primary_dtc_name])
-        comms = {"uhf_presets": uhf, "vhf_presets": vhf}
-        n_uhf = len(uhf) if uhf else 0
-        n_vhf = len(vhf) if vhf else 0
-        print(f"[+] DTC comms from '{primary_dtc_name}': {n_uhf} UHF, {n_vhf} VHF presets")
+    # Summarise DTC comms coverage
+    flights_with_dtc = [f for f in flights if f.dtc_cartridge and f.dtc_cartridge in dtcs]
+    if flights_with_dtc:
+        print(f"[+] DTC comms available for {len(flights_with_dtc)} flights: "
+              + ", ".join(f"'{f.name}'→{f.dtc_cartridge}" for f in flights_with_dtc))
     elif dtcs:
-        print(f"[!] No DTC matched to flights; DTC files present: {', '.join(sorted(dtcs))}")
+        print(f"[!] No DTC cartridges matched to flights; available: {', '.join(sorted(dtcs))}")
 
     # ACO drawings
     print("[+] Parsing drawings…")
@@ -1819,6 +1956,16 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
     # Weather
     metar, wx_notes = parse_weather(mission_text, day)
     print(f"[+] {metar}")
+
+    # SPINS — look for spins.md in the same directory as the .miz file
+    spins_sections = None
+    spins_path = Path(miz_path).parent / 'spins.md'
+    if spins_path.exists():
+        spins_text = spins_path.read_text(encoding='utf-8', errors='replace')
+        spins_sections = parse_spins_md(spins_text)
+        print(f"[+] Loaded SPINS from '{spins_path.name}': {len(spins_sections or [])} sections")
+    else:
+        print(f"[i] No spins.md found at '{spins_path}' — spins will be empty")
 
     return build_doc(
         mission_name=Path(miz_path).stem,
@@ -1832,7 +1979,8 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
         wx_notes=wx_notes,
         flights=flights,
         carriers=carriers,
-        comms=comms,
+        dtcs=dtcs,
+        spins_sections=spins_sections,
     )
 
 
