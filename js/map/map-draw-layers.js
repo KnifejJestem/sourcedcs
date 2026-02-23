@@ -115,52 +115,38 @@ function drawTileBackground(ctx, mode, effectiveVLon, tileBounds) {
 }
 
 // ── Tile preloader ────────────────────────────────────────
-// Warms the browser HTTP cache for ALL tile zoom levels from z0 to
-// TILE_MAX_ZOOM so that any amount of zooming after the loading screen
-// is stutter-free.
+// Warms the browser HTTP cache for all zoom levels from z0 to TILE_MAX_ZOOM.
 //
-// Strategy — keeps tile count manageable at every level:
-//   z0 : full base viewport  → awaited (loading screen stays until done)
-//   z0+k: centroid-centred viewport shrunk by 1/2^k per axis so the
-//          geographic area shrinks 4× while tile density grows 4×, keeping
-//          the tile count approximately the same (~100) at every level.
+// Coverage strategy — balances completeness vs tile count:
+//   z0        full base viewport (~100 tiles)    ← awaited for loading screen
+//   z0+1      full base viewport (~400 tiles)    ← fired immediately in parallel
+//   z0+2      full base viewport (~1600 tiles)   ← fired immediately in parallel
+//   z0+3 …    centroid-scaled (~100 tiles each)  ← fired immediately in parallel
 //
-// All higher-zoom levels are fired as background Image() requests immediately
-// after z0 resolves, without blocking the caller.
+// All zoom levels start downloading at the SAME time so background tiles
+// are already in-flight while the loading screen waits for z0.
+// No timeout: onerror() resolves individual tile promises so the loading
+// screen can never hang forever even if tiles fail.
 //
-// PRELOAD_TIMEOUT_MS: 8 s is generous for ~100 tiles at ~25 KB each
-// on a 10 Mbit connection (~250 KB → 0.2 s), but handles slow / high-
-// latency tile servers gracefully.
-const PRELOAD_TIMEOUT_MS = 8000;
+// onProgress(loaded, total) is called with the count of z0 tiles loaded
+// so the caller can show real progress in the loading bar.
 
 // Track which (mode/z/tx/ty) combos have been preloaded so repeated
 // map renders or mode switches don't re-fire Image() requests that the
 // browser cache already satisfies.
 const _preloadedKeys = new Set();
 
-function preloadTiles(ctx, mode) {
+function preloadTiles(ctx, mode, onProgress) {
   const urlFn = TILE_URLS[mode];
   if (!urlFn) return Promise.resolve();
 
-  const maxZ = TILE_MAX_ZOOM[mode];
-  const z0   = _tileZoom(ctx.vLon, maxZ);
-
-  // Data centroid — the geographic centre of the initial viewport.
+  const maxZ   = TILE_MAX_ZOOM[mode];
+  const z0     = _tileZoom(ctx.vLon, maxZ);
   const lonCtr = (ctx.vMinLon + ctx.vMaxLon) / 2;
   const latCtr = (ctx.vMinLat + ctx.vMaxLat) / 2;
 
-  // Fire an Image request for a URL; resolves on load or error.
-  function loadOne(url) {
-    return new Promise(resolve => {
-      const img = new Image();
-      img.onload  = resolve;
-      img.onerror = resolve; // don't block on network failures
-      img.src = url;
-    });
-  }
-
-  // Build URL list for a given zoom level over a geographic bounding box.
-  // Skips tiles already tracked in _preloadedKeys.
+  // Build URL list for a geographic bounding box at a given zoom level.
+  // Already-preloaded tiles (by key) are skipped to avoid double-fetching.
   function tilesForZBounds(z, minLon, maxLon, minLat, maxLat) {
     const pow  = Math.pow(2, z);
     const txMn = Math.max(0,       Math.floor((minLon + 180) / 360 * pow) - 1);
@@ -180,33 +166,60 @@ function preloadTiles(ctx, mode) {
     return urls;
   }
 
-  // ── z0: full base viewport — awaited by the loading screen ───
+  // ── Collect tiles for every zoom level ───────────────────
+  // z0, z0+1, z0+2 — full base viewport (covers panning at typical zoom).
+  // z0+3 and above  — centroid-scaled so tile count stays ~constant per level.
   const z0Urls = tilesForZBounds(z0,
     ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat);
-  const z0Promise = z0Urls.length > 0
-    ? Promise.all(z0Urls.map(loadOne))
-    : Promise.resolve();
-
-  // ── z0+1 … maxZ: centroid-scaled viewports — background ──────
-  // At level z0+k the viewport is shrunk by 1/2^k on each axis (area ×1/4^k)
-  // which keeps the tile count roughly the same as z0 at every level.
-  // All levels fire immediately after z0 resolves; they do NOT block the
-  // caller — the caller only awaits z0.
-  z0Promise.then(() => {
-    for (let z = z0 + 1; z <= maxZ; z++) {
-      const scale   = Math.pow(2, z - z0);
+  const bgUrls = [];
+  for (let z = z0 + 1; z <= maxZ; z++) {
+    const k = z - z0;
+    let levelUrls;
+    if (k <= 2) {
+      // Full base viewport — covers panning at 2× and 4× zoom
+      levelUrls = tilesForZBounds(z,
+        ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat);
+    } else {
+      // Centroid-scaled — keeps tile count ~constant while covering deep zoom
+      const scale   = Math.pow(2, k);
       const halfLon = ctx.vLon / (2 * scale);
       const halfLat = ctx.vLat / (2 * scale);
-      const urls = tilesForZBounds(z,
+      levelUrls = tilesForZBounds(z,
         lonCtr - halfLon, lonCtr + halfLon,
         latCtr - halfLat, latCtr + halfLat);
-      urls.forEach(loadOne); // fire-and-forget
     }
-  });
+    bgUrls.push(...levelUrls);
+  }
 
-  // Resolve when z0 tiles are done or after the fallback timeout.
-  const timeout = new Promise(resolve => setTimeout(resolve, PRELOAD_TIMEOUT_MS));
-  return Promise.race([z0Promise, timeout]);
+  // ── Fire ALL tiles immediately ────────────────────────────
+  // z0 tiles track real progress for the loading bar.
+  // Background tiles are fire-and-forget (no blocking).
+  const z0Total  = z0Urls.length;
+  let   z0Loaded = 0;
+
+  function loadOne(url, isZ0) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = img.onerror = () => {
+        if (isZ0) {
+          z0Loaded++;
+          if (onProgress) onProgress(z0Loaded, z0Total);
+        }
+        resolve();
+      };
+      img.src = url;
+    });
+  }
+
+  // Background tiles — start downloading right now alongside z0
+  bgUrls.forEach(url => loadOne(url, false));
+
+  // z0 tiles — await these for the loading screen
+  const z0Promise = z0Total > 0
+    ? Promise.all(z0Urls.map(url => loadOne(url, true)))
+    : Promise.resolve();
+
+  return z0Promise;
 }
 
 // ── Grid ─────────────────────────────────────────────────

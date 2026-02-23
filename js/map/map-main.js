@@ -74,18 +74,11 @@ async function renderMAP(ato) {
         <div class="map-preload-bar-wrap"><div class="map-preload-bar" id="map-preload-bar"></div></div>`;
       container.appendChild(overlay);
 
-      // Animate the progress bar while tiles are loading.
-      // The bar fills to ~85% on its own; the last 15% fires when done.
+      // Real progress bar: updates as z0 tiles actually load.
       const bar = overlay.querySelector('#map-preload-bar');
-      let barPct = 0;
-      const barTimer = setInterval(() => {
-        barPct = Math.min(85, barPct + (85 - barPct) * 0.12);
-        if (bar) bar.style.width = barPct + '%';
-      }, 120);
-
-      await preloadTiles(tileCtx, mapMode);
-
-      clearInterval(barTimer);
+      await preloadTiles(tileCtx, mapMode, (loaded, total) => {
+        if (bar && total > 0) bar.style.width = Math.round(loaded / total * 100) + '%';
+      });
       if (bar) bar.style.width = '100%';
 
       // Fade the overlay out while the map renders underneath.
