@@ -133,14 +133,16 @@ function collectData(ato, aco) {
     });
 
     // 3. Aim points (target markers)
-    (m.target?.aim_points || []).forEach((ap, i) => {
-      const raw  = typeof ap === 'string' ? ap : ap.coords;
-      const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i + 1}`;
-      const p    = parseCoord(raw);
-      if (p) {
-        route.pts.push({ ...p, kind: 'target-node' });
-        points.push({ ...p, kind: 'target', label: callsign, sub: name, color, msnType: m.mission_type, mission: m });
-      }
+    (m.targets || []).forEach(target => {
+      (target.aim_points || []).forEach((ap, i) => {
+        const raw  = typeof ap === 'string' ? ap : ap.coords;
+        const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i + 1}`;
+        const p    = parseCoord(raw);
+        if (p) {
+          route.pts.push({ ...p, kind: 'target-node' });
+          points.push({ ...p, kind: 'target', label: callsign, sub: name, color, msnType: m.mission_type, mission: m });
+        }
+      });
     });
 
     // 4. Recovery location

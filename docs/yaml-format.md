@@ -418,7 +418,11 @@ be listed first in each mission entry.
 | `type` | string | Aircraft designation (e.g. `F16C`) |
 | `loadout` | string | Loadout code — see [Loadout format](#loadout-format) |
 
-#### `target:`
+#### `targets:` (list)
+
+A list of one or more target objects for this mission.  Each item has the same fields.
+The legacy singular `target:` key is still accepted for backward compatibility and is
+treated as a list containing a single item.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -452,7 +456,7 @@ The **vulnerability window** is shown as a red hatched overlay on the timeline a
 as a time pair in the detail panel.  It marks the period when the flight is
 inside the threat envelope or otherwise exposed.
 
-#### `target.aim_points:` (list)
+#### `targets[].aim_points:` (list)
 
 Aim points are typically resolved automatically from the registry target
 referenced by `target_id`.  The target's nested `aim_points` list is pulled
@@ -463,24 +467,31 @@ a target, add standalone coordinates, or use legacy `target_ref` references:
 
 ```yaml
 # Preferred: reference a registry target — all aim points come from the target
-target:
-  location: KHASAB AFB
-  target_id: SAM-1       # pulls SAM-1's nested aim_points automatically
+targets:
+  - location: KHASAB AFB
+    target_id: SAM-1       # pulls SAM-1's nested aim_points automatically
 
 # Select specific aim points from a target by aim_point_id
-target:
-  location: KHASAB AFB
-  target_id: SAM-1
-  aim_points:
-    - aim_point_id: TGT-A  # only TGT-A from SAM-1, not TGT-B
+targets:
+  - location: KHASAB AFB
+    target_id: SAM-1
+    aim_points:
+      - aim_point_id: TGT-A  # only TGT-A from SAM-1, not TGT-B
 
 # Mix: specific aim_point from target + standalone coordinate
-target:
-  target_id: SAM-1
-  aim_points:
-    - aim_point_id: TGT-A
-    - coords: N26°28'00" E056°18'00"
-      name: MANUAL-POINT
+targets:
+  - target_id: SAM-1
+    aim_points:
+      - aim_point_id: TGT-A
+      - coords: N26°28'00" E056°18'00"
+        name: MANUAL-POINT
+
+# Multiple targets for one mission
+targets:
+  - location: SAM SITE ALPHA
+    target_id: SAM-1
+  - location: SAM SITE BRAVO
+    target_id: SAM-2
 
 # Legacy: explicit aim_points list with target_ref
 aim_points:

@@ -336,7 +336,7 @@ def mission_to_dict(m):
          'mission_type': m.mission_type,
          'deploy_location_icao': m.deploy_loc, 'aar_location_icao': m.aar_loc}
     if m.aircraft: d['aircraft'] = aircraft_to_dict(m.aircraft)
-    if m.target:   d['target']   = target_to_dict(m.target)
+    if m.target:   d['targets']  = [target_to_dict(m.target)]
     if m.control:  d['control']  = control_to_dict(m.control)
     if m.refuel:   d['refuel']   = refuel_to_dict(m.refuel)
     if m.bullseye: d['bullseye'] = bullseye_to_dict(m.bullseye)
@@ -435,37 +435,44 @@ def yaml_to_ato(text: str) -> ATO:
             ctrl_d.setdefault('secondary_freq_mhz', ag.get('secondary_freq_mhz', ''))
             ctrl_d.setdefault('net_name', ag.get('callsign', ''))
 
-        # Resolve target_id: pull aim_points from the referenced registry target
-        target_d = md.get('target')
-        if target_d and target_d.get('target_id') and target_d['target_id'] in target_map:
-            ref = target_map[target_d['target_id']]
-            if not target_d.get('aim_points') and ref.get('aim_points'):
-                # No explicit aim_points — pull all from the target
-                target_d['aim_points'] = [
-                    {'coords': ap.get('coords'), 'name': ap.get('name', ap.get('id', ''))}
-                    for ap in ref['aim_points']
-                ]
-            elif target_d.get('aim_points') and ref.get('aim_points'):
-                # Resolve aim_point_id references to specific aim_points
-                ap_map = {ap['id']: ap for ap in ref['aim_points'] if ap.get('id')}
-                resolved = []
-                for ap in target_d['aim_points']:
-                    if isinstance(ap, dict) and ap.get('aim_point_id') and ap['aim_point_id'] in ap_map:
-                        src = ap_map[ap['aim_point_id']]
-                        resolved.append({
-                            'coords': ap.get('coords') or src.get('coords'),
-                            'name': ap.get('name') or src.get('name', src.get('id', '')),
-                        })
-                    else:
-                        resolved.append(ap)
-                target_d['aim_points'] = resolved
+        # Support both targets (list) and target (singular, backward compat)
+        targets_d = md.get('targets', [])
+        if not targets_d and md.get('target'):
+            targets_d = [md.get('target')]
+
+        # Resolve aim_points for all targets in the list
+        for target_d in targets_d:
+            if target_d and target_d.get('target_id') and target_d['target_id'] in target_map:
+                ref = target_map[target_d['target_id']]
+                if not target_d.get('aim_points') and ref.get('aim_points'):
+                    # No explicit aim_points — pull all from the target
+                    target_d['aim_points'] = [
+                        {'coords': ap.get('coords'), 'name': ap.get('name', ap.get('id', ''))}
+                        for ap in ref['aim_points']
+                    ]
+                elif target_d.get('aim_points') and ref.get('aim_points'):
+                    # Resolve aim_point_id references to specific aim_points
+                    ap_map = {ap['id']: ap for ap in ref['aim_points'] if ap.get('id')}
+                    resolved = []
+                    for ap in target_d['aim_points']:
+                        if isinstance(ap, dict) and ap.get('aim_point_id') and ap['aim_point_id'] in ap_map:
+                            src = ap_map[ap['aim_point_id']]
+                            resolved.append({
+                                'coords': ap.get('coords') or src.get('coords'),
+                                'name': ap.get('name') or src.get('name', src.get('id', '')),
+                            })
+                        else:
+                            resolved.append(ap)
+                    target_d['aim_points'] = resolved
+
+        first_target_d = targets_d[0] if targets_d else None
 
         m = Mission(unit=md.get('unit',''), home_base=md.get('home_base_icao',''),
                     mission_number=md.get('mission_number'), callsign=md.get('callsign'),
                     mission_type=md.get('mission_type'), deploy_loc=md.get('deploy_location_icao'),
                     aar_loc=md.get('aar_location_icao'),
                     aircraft=dict_to_aircraft(md['aircraft']) if 'aircraft' in md else None,
-                    target=dict_to_target(target_d)           if target_d   else None,
+                    target=dict_to_target(first_target_d)    if first_target_d else None,
                     control=dict_to_control(md['control'])    if 'control'  in md else None,
                     refuel=dict_to_refuel(refuel_d)           if refuel_d   else None,
                     bullseye=dict_to_bullseye(md['bullseye']) if 'bullseye' in md else None)

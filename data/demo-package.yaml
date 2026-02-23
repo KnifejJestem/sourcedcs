@@ -149,8 +149,8 @@ ato:
       count: 2
       type: F16C
       loadout: 501+
-    target:
-      location: KHASAB
+    targets:
+    - location: KHASAB
       tos: '2040Z'
       toffs: '2230Z'
     control:
@@ -181,8 +181,8 @@ ato:
       count: 2
       type: F16C
       loadout: 301+3X381X114
-    target:
-      location: KHASAB AFB
+    targets:
+    - location: KHASAB AFB
       mission_type_override: AIRDEF
       altitude: E73FT
       tot_net: '2046Z'
@@ -222,8 +222,8 @@ ato:
       count: 3
       type: F16C
       loadout: 201+2X882X381X88
-    target:
-      location: JASK
+    targets:
+    - location: JASK
       mission_type_override: SILKWORMS
       altitude: E33FT
       tot_net: '2105Z'
@@ -257,8 +257,8 @@ ato:
       count: 1
       type: AH64
       loadout: 0004X114
-    target:
-      location: KHASAB AFB
+    targets:
+    - location: KHASAB AFB
       mission_type_override: CAS
       altitude: E74FT
       tos: '2108Z'

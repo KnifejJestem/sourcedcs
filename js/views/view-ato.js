@@ -154,7 +154,7 @@ function renderMissionCards(missions) {
 
   missions.forEach(function (m, i) {
     var tk  = typeKey(m.mission_type);
-    var win = getMissionWindow(m.target);
+    var win = getMissionWindow(m.targets && m.targets[0]);
 
     var card = el('div', 'mission-card card-' + tk);
 
@@ -189,7 +189,11 @@ function renderMissionCards(missions) {
       m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '?',
       'acft'
     ));
-    body.appendChild(buildCardRow('TARGET', m.target ? m.target.location || '—' : '—'));
+    var firstTgt = m.targets && m.targets[0];
+    var tgtLabel = m.targets && m.targets.length > 1
+      ? m.targets.length + ' TARGETS'
+      : (firstTgt ? firstTgt.location || '—' : '—');
+    body.appendChild(buildCardRow('TARGET', tgtLabel));
     body.appendChild(buildCardRow(
       win.label,
       fmtTime(win.start) + ' → ' + fmtTime(win.end),
@@ -199,7 +203,7 @@ function renderMissionCards(missions) {
     if (win.hasTOS && win.hasTOT) {
       body.appendChild(buildCardRow(
         'TOS',
-        fmtTime(m.target.tos) + ' → ' + fmtTime(m.target.toffs),
+        fmtTime(firstTgt && firstTgt.tos) + ' → ' + fmtTime(firstTgt && firstTgt.toffs),
         'time'
       ));
     }
@@ -236,13 +240,14 @@ function renderMissionCards(missions) {
  * Collect all time values from a mission for range calculation.
  */
 function collectMissionTimes(m) {
+  var t0 = m.targets && m.targets[0];
   return [
-    toMins(m.target ? m.target.not_earlier_than : null),
-    toMins(m.target ? m.target.not_later_than   : null),
-    toMins(m.target ? m.target.tot_net : null),
-    toMins(m.target ? m.target.tot_nlt : null),
-    toMins(m.target ? m.target.tos     : null),
-    toMins(m.target ? m.target.toffs   : null),
+    toMins(t0 ? t0.not_earlier_than : null),
+    toMins(t0 ? t0.not_later_than   : null),
+    toMins(t0 ? t0.tot_net : null),
+    toMins(t0 ? t0.tot_nlt : null),
+    toMins(t0 ? t0.tos     : null),
+    toMins(t0 ? t0.toffs   : null),
     toMins(m.refuel ? m.refuel.not_earlier_than : null),
     toMins(m.refuel ? m.refuel.not_later_than   : null),
     toMins(m.takeoff_time),
@@ -437,7 +442,7 @@ function addVulnerabilityBar(track, m, range) {
  * Add TOT / TOS / legacy mission window bars.
  */
 function addMissionBars(track, m, missionIdx, range) {
-  var target = m.target;
+  var target = m.targets && m.targets[0];
   var hasTOT = target && (target.tot_net || target.tot_nlt);
   var hasTOS = target && (target.tos || target.toffs);
   var color  = typeColor(m.mission_type);
@@ -710,8 +715,9 @@ function selectMission(idx) {
     detailField(col, 'MISSION NO', m.mission_number || '—');
 
     var typeStr = m.mission_type || '—';
-    if (m.target && m.target.mission_type_override) {
-      typeStr += ' / ' + m.target.mission_type_override;
+    var firstTgt0 = m.targets && m.targets[0];
+    if (firstTgt0 && firstTgt0.mission_type_override) {
+      typeStr += ' / ' + firstTgt0.mission_type_override;
     }
     detailField(col, 'TYPE', typeStr);
     detailField(col, 'UNIT', m.unit || '—');
@@ -753,33 +759,41 @@ function selectMission(idx) {
 
   // COL 3 — Target
   inner.appendChild(buildDetailColumn('TARGET', function (col) {
-    detailField(col, 'LOCATION', m.target ? m.target.location || '—' : '—');
-    detailField(col, 'ALTITUDE', m.target ? m.target.altitude || '—' : '—');
-
-    var hasTOT = m.target && (m.target.tot_net || m.target.tot_nlt);
-    var hasTOS = m.target && (m.target.tos || m.target.toffs);
-
-    if (hasTOT || hasTOS) {
-      if (hasTOT) {
-        detailTimePair(col, 'TIME ON TARGET (TOT)', m.target.tot_net, m.target.tot_nlt);
-      }
-      if (hasTOS) {
-        detailTimePair(col, 'TIME ON STATION (TOS)', m.target.tos, m.target.toffs, 'TOS', 'TOFFS');
-      }
+    var targets = m.targets || [];
+    if (!targets.length) {
+      detailField(col, 'LOCATION', '—');
     } else {
-      detailTimePair(col, 'TIME ON TARGET',
-        m.target ? m.target.not_earlier_than : undefined,
-        m.target ? m.target.not_later_than   : undefined);
-    }
+      targets.forEach(function (target, ti) {
+        if (targets.length > 1) {
+          col.appendChild(el('div', 'dk', 'TARGET ' + (ti + 1)));
+        }
+        detailField(col, 'LOCATION', target.location || '—');
+        detailField(col, 'ALTITUDE', target.altitude || '—');
 
-    var aimPoints = m.target ? m.target.aim_points : null;
-    if (aimPoints && aimPoints.length) {
-      var apField = el('div', 'detail-field');
-      apField.appendChild(el('div', 'dk', 'AIM POINTS (' + aimPoints.length + ')'));
-      aimPoints.forEach(function (p) {
-        apField.appendChild(buildAimPointEntry(p));
+        var hasTOT = target.tot_net || target.tot_nlt;
+        var hasTOS = target.tos || target.toffs;
+
+        if (hasTOT || hasTOS) {
+          if (hasTOT) {
+            detailTimePair(col, 'TIME ON TARGET (TOT)', target.tot_net, target.tot_nlt);
+          }
+          if (hasTOS) {
+            detailTimePair(col, 'TIME ON STATION (TOS)', target.tos, target.toffs, 'TOS', 'TOFFS');
+          }
+        } else {
+          detailTimePair(col, 'TIME ON TARGET', target.not_earlier_than, target.not_later_than);
+        }
+
+        var aimPoints = target.aim_points;
+        if (aimPoints && aimPoints.length) {
+          var apField = el('div', 'detail-field');
+          apField.appendChild(el('div', 'dk', 'AIM POINTS (' + aimPoints.length + ')'));
+          aimPoints.forEach(function (p) {
+            apField.appendChild(buildAimPointEntry(p));
+          });
+          col.appendChild(apField);
+        }
       });
-      col.appendChild(apField);
     }
   }));
 
