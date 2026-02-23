@@ -60,6 +60,10 @@ _NM_TO_M = 1852.0
 _FT_TO_M = 0.3048
 # Proximity threshold: orbit/steer points closer than this are considered duplicates
 _ORBIT_MERGE_NM = 2.0
+# Reverse ICAO lookup set for O(1) token matching in recovery detection
+_AIRDROME_ICAO_SET: frozenset[str] = frozenset(
+    info["icao"] for info in AIRDROME_IDS.values()
+)
 
 
 def _nm_between(x1: float, y1: float, x2: float, y2: float) -> float:
@@ -266,11 +270,21 @@ def _home_base(flight: Flight, airfields: dict[str, dict],
         if carrier_id:
             recovery = carrier_id
         elif "CVN" in n or "RECOVERY" in n or "CARRIER" in n:
+            # Match carrier by DCS type string (CVN_75 → CVN-75 appears in name)
             for c in carriers:
-                if c.id in n or CVN_NAMES.get(c.type, "")[:6].upper() in n:
+                c_type_norm = c.type.replace("_", "-").upper()
+                if c.id in n or c_type_norm in n:
                     recovery = c.id
                     break
+            # If no carrier matched, scan name tokens for a known ICAO code
             if not recovery:
+                for token in n.split():
+                    token = token.strip(".,;:")
+                    if token in airfields or token in _AIRDROME_ICAO_SET:
+                        recovery = token
+                        break
+            # Only fall back to carrier if we are already carrier-deployed
+            if not recovery and deploy and deploy.startswith("CVN-"):
                 recovery = carriers[0].id if carriers else None
         elif last.airdrome_id is not None:
             info = AIRDROME_IDS.get(last.airdrome_id)
