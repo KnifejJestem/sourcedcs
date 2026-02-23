@@ -259,10 +259,11 @@ function generateRacetrack(anchorLat, anchorLon, headingDeg, legLengthNm, turnRa
   pts.push(localToGeo(0, 2 * R * s));
 
   // Turn 2: semicircle at start of hot leg, center at (0, R*s).
-  // Same outward-sweep fix: use subtraction so the arc extends forward (beyond
-  // the hot-leg start) rather than dipping behind it.
+  // Must go OUTWARD (x < 0, beyond the hot-leg start) by sweeping in the same
+  // rotational direction as Turn 1 — i.e. adding π*i/N so the arc passes
+  // through the exterior of the racetrack at (−R, R*s) before closing at (0,0).
   for (let i = 1; i <= ARC_SEGMENTS; i++) {
-    const a = s * (Math.PI / 2 - Math.PI * i / ARC_SEGMENTS);
+    const a = s * (Math.PI / 2 + Math.PI * i / ARC_SEGMENTS);
     pts.push(localToGeo(R * Math.cos(a), s * R + R * Math.sin(a)));
   }
 

@@ -131,17 +131,21 @@ function collectData(ato, aco) {
 
     // 2. Steer points — support both inline coords and name_ref to namedLocs.
     //    name_ref takes precedence over coords when both are present.
-    //    If a steer point has an 'orbit' block, also push an anchor airspace
-    //    so the racetrack pattern is drawn on the map.
+    //    Steer points with an aim_point_id are drawn as target-approach legs
+    //    (thicker dashed line) and shown as diamond target markers instead of
+    //    hollow steer circles.  If a steer point has an 'orbit' block, also
+    //    push an anchor airspace so the racetrack pattern is drawn on the map.
     (m.steer_points || []).forEach((sp, i) => {
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
       const raw     = typeof sp === 'string' ? sp : sp.coords;
       const label   = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i + 1}`;
+      const apId    = typeof sp === 'object' ? sp.aim_point_id : null;
       const p       = nameRef ? resolve(nameRef) : parseCoord(raw);
       if (p) {
-        route.pts.push({ ...p, kind: 'route-node' });
+        // Aim-point steer points use a thicker target-approach line on the route
+        route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
         points.push({
-          ...p, kind: 'steer',
+          ...p, kind: apId ? 'target' : 'steer',
           label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
           sub: label, color, msnType: m.mission_type, mission: m,
         });
@@ -174,14 +178,25 @@ function collectData(ato, aco) {
       }
     });
 
-    // 3. Aim points (target markers)
+    // 3. Target aim-point markers.
+    //    Aim points already referenced by a steer_point (via aim_point_id) are
+    //    drawn as target diamonds in step 2 above and are skipped here to avoid
+    //    duplicate overlapping markers.
+    //    IMPORTANT: we do NOT push any route.pts nodes here — adding target nodes
+    //    after all steer_points would cause the route line to detour to the targets
+    //    again after the egress waypoints, before the recovery.
+    const coveredAimIds = new Set(
+      (m.steer_points || [])
+        .filter(sp => typeof sp === 'object' && sp.aim_point_id)
+        .map(sp => sp.aim_point_id)
+    );
     (m.targets || []).forEach(target => {
       (target.aim_points || []).forEach((ap, i) => {
+        if (ap._aim_point_id && coveredAimIds.has(ap._aim_point_id)) return;
         const raw  = typeof ap === 'string' ? ap : ap.coords;
         const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i + 1}`;
         const p    = parseCoord(raw);
         if (p) {
-          route.pts.push({ ...p, kind: 'target-node' });
           points.push({ ...p, kind: 'target', label: callsign, sub: name, color, msnType: m.mission_type, mission: m });
         }
       });

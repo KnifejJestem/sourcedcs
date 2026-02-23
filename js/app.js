@@ -542,6 +542,7 @@ function loadPackage_obj(data) {
                   name: ap.name || resolved.name || resolved.id,
                   elevation: ap.elevation || resolved.elevation,
                   _resolved_target: ref,
+                  _aim_point_id: ap.aim_point_id, // preserve for map dedup
                 };
               }
               return ap;
