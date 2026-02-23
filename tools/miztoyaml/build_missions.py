@@ -58,6 +58,8 @@ CVN_NAMES: dict[str, str] = {
 
 _NM_TO_M = 1852.0
 _FT_TO_M = 0.3048
+# Proximity threshold: orbit/steer points closer than this are considered duplicates
+_ORBIT_MERGE_NM = 2.0
 
 
 def _nm_between(x1: float, y1: float, x2: float, y2: float) -> float:
@@ -110,21 +112,32 @@ def _classify_waypoints(flight: Flight,
 
     Rules:
     - Index 0  (TakeOff): skip — captured as deploy_location_icao
-    - Last wp  (landing/recovery): skip — captured as aar_location_icao
+    - Last wp  (landing/recovery): skip unless it is an orbit (e.g. tanker tracks
+      where the only working waypoint is the orbit at index 1 = last)
     - Name starts with "MARSHALL ": → marshal point in ref_pts (name_ref)
-    - Within 30m of another flight's non-takeoff waypoint with same/no name:
+    - Within 100ft of another flight's waypoint with same/no name:
         → same logical point; use shared name
     - Within 500m of a SAM aim-point: label as aim-point steer
-    - Otherwise: plain steer point with coords
+    - Orbit steer points within _ORBIT_MERGE_NM of an already-emitted orbit are
+      suppressed (the earlier entry absorbs the later duplicate)
     """
-    MERGE_M   = 100 * _FT_TO_M   # 100 ft in metres
+    MERGE_M   = 100 * _FT_TO_M   # 100 ft proximity for shared waypoints
 
     wpts = flight.waypoints
-    if len(wpts) <= 2:
+    # Need at least 2 waypoints (takeoff + one working waypoint)
+    if len(wpts) < 2:
         return []
 
-    # Inner waypoints: skip first (takeoff) and last (recovery/landing)
-    inner = wpts[1:-1]
+    # Inner waypoints: skip first (takeoff) and normally skip last (recovery).
+    # Exception: if the last waypoint has an Orbit task (tanker track, CAP anchor
+    # sitting at the very end of the route), include it.
+    if len(wpts) == 2:
+        # Only orbit at index 1 is worth including; skip plain recovery waypoints
+        inner = [wpts[1]] if wpts[1].is_orbit else []
+    else:
+        inner = wpts[1:-1]
+        if wpts[-1].is_orbit:
+            inner = inner + [wpts[-1]]
 
     # Build index of all OTHER flights' inner waypoints for proximity matching
     others: list[Waypoint] = []
@@ -133,6 +146,8 @@ def _classify_waypoints(flight: Flight,
             continue
         if len(other.waypoints) > 2:
             others.extend(other.waypoints[1:-1])
+        elif len(other.waypoints) == 2 and other.waypoints[1].is_orbit:
+            others.append(other.waypoints[1])
 
     # Build flat DMS → aim_point_id index across all targets.
     aim_by_dms: dict[str, str] = {}
@@ -142,6 +157,9 @@ def _classify_waypoints(flight: Flight,
             ap_id  = ap.get("id", "")
             if ap_dms and ap_id:
                 aim_by_dms[ap_dms] = ap_id
+
+    # Track already-emitted orbit positions to suppress near-duplicates
+    emitted_orbits: list[tuple[float, float]] = []  # (x, y) in DCS world coords
 
     result = []
     for wp in inner:
@@ -158,6 +176,16 @@ def _classify_waypoints(flight: Flight,
                 }
             result.append({"name_ref": marshal_name, "name": marshal_name})
             continue
+
+        # Orbit deduplication: skip if a very close orbit already exists
+        if wp.is_orbit:
+            too_close = any(
+                _nm_between(wp.x, wp.y, ox, oy) < _ORBIT_MERGE_NM
+                for ox, oy in emitted_orbits
+            )
+            if too_close:
+                continue
+            emitted_orbits.append((wp.x, wp.y))
 
         # Proximity check against other flights' waypoints (shared logical point)
         shared_name = None
@@ -188,6 +216,7 @@ def _classify_waypoints(flight: Flight,
                 "width_nm":    wp.orbit_width_nm,
                 "leg_nm":      wp.orbit_leg_nm,
                 "heading_deg": wp.orbit_heading_deg,
+                "cw":          wp.orbit_cw,
             }
 
         result.append(entry)

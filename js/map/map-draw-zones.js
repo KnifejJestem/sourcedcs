@@ -112,11 +112,25 @@ function drawPolygonAirspace(ctx, a, col, parent, showPopup) {
 }
 
 // ── Anchor / racetrack airspace ──────────────────────────
+// The DCS anchor point marks the END of the hot leg (where the aircraft arrives
+// before the first turn).  generateRacetrack() expects the START of the hot leg,
+// so we shift the origin backwards along the heading by legNm.
+//
+// Conversion: 60 NM = 1 degree of latitude/longitude (approximate), so
+//   distance_in_degrees = distance_in_nm / 60
 function drawAnchorAirspace(ctx, a, col, parent, showPopup) {
-  const legNm   = a.legLengthNm || DEFAULT_LEG_NM;
-  const turnR   = a.widthNm != null ? a.widthNm / 2 : legNm / 4;
+  const NM_TO_DEG = 60;  // 1° ≈ 60 NM (used to convert NM offsets to lat/lon degrees)
+  const legNm    = a.legLengthNm || DEFAULT_LEG_NM;
+  const turnR    = a.widthNm != null ? a.widthNm / 2 : legNm / 4;
+  const headRad  = (a.headingDeg || DEFAULT_HEADING) * Math.PI / 180;
+  const cosLat   = Math.cos(a.anchorPt.lat * Math.PI / 180);
+
+  // Compute hot-leg start by going backwards from the DCS anchor point
+  const startLat = a.anchorPt.lat - legNm / NM_TO_DEG * Math.cos(headRad);
+  const startLon = a.anchorPt.lon - legNm / (NM_TO_DEG * cosLat) * Math.sin(headRad);
+
   const rPts = generateRacetrack(
-    a.anchorPt.lat, a.anchorPt.lon,
+    startLat, startLon,
     a.headingDeg || DEFAULT_HEADING, legNm,
     turnR,
     a.direction === 'ccw',
@@ -136,12 +150,10 @@ function drawAnchorAirspace(ctx, a, col, parent, showPopup) {
     open,
   ));
 
-  // Direction arrow on the hot leg midpoint
-  const headRad = (a.headingDeg || DEFAULT_HEADING) * Math.PI / 180;
-  const cosLat  = Math.cos(a.anchorPt.lat * Math.PI / 180);
+  // Direction arrow at the midpoint of the hot leg (pointing in heading direction)
   const halfLen  = legNm / 2;
-  const midLat   = a.anchorPt.lat + Math.cos(headRad) * halfLen / 60;
-  const midLon   = a.anchorPt.lon + Math.sin(headRad) * halfLen / (60 * cosLat);
+  const midLat   = startLat + Math.cos(headRad) * halfLen / NM_TO_DEG;
+  const midLon   = startLon + Math.sin(headRad) * halfLen / (NM_TO_DEG * cosLat);
   const amx = ctx.bx(midLon).toFixed(1);
   const amy = ctx.by(midLat).toFixed(1);
 
@@ -160,7 +172,7 @@ function drawAnchorAirspace(ctx, a, col, parent, showPopup) {
   ctx.constantSizeMarkers.push(arrowG);
   parent.appendChild(arrowG);
 
-  // Label above anchor point
+  // Label at the DCS anchor point (top / end of hot leg)
   const lblX = ctx.bx(a.anchorPt.lon).toFixed(1);
   const lblY = (ctx.by(a.anchorPt.lat) - 5).toFixed(1);
   addMapLabel(ctx, parent, lblX, lblY,

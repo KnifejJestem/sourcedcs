@@ -51,6 +51,7 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
         task_blk   = lua_get_block(pb, 'task')
         is_orbit   = bool(task_blk and 'Orbit' in task_blk)
         orbit_alt_ft = orbit_speed_kts = orbit_width_nm = orbit_leg_nm = orbit_heading_deg = None
+        orbit_cw: bool | None = None
         if is_orbit and task_blk:
             # Navigate into task.params.tasks[1].params to find the Orbit entry
             params_blk = lua_get_block(task_blk, 'params')
@@ -64,12 +65,13 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
                             spd_ms  = lua_num(op, 'speed')
                             w_m     = lua_num(op, 'width')
                             leg_m   = lua_num(op, 'legLength')
-                            hdg_deg = lua_num(op, 'hotLegDir')
+                            hdg_rad = lua_num(op, 'hotLegDir')  # DCS stores in radians
                             if alt_m   is not None: orbit_alt_ft      = round(alt_m   * _M_TO_FT)
                             if spd_ms  is not None: orbit_speed_kts   = round(spd_ms  * _MPS_TO_KT)
                             if w_m     is not None: orbit_width_nm    = round(w_m     / _M_TO_NM, 1)
                             if leg_m   is not None: orbit_leg_nm      = round(leg_m   / _M_TO_NM, 1)
-                            if hdg_deg is not None: orbit_heading_deg = round(hdg_deg)
+                            if hdg_rad is not None: orbit_heading_deg = round(math.degrees(hdg_rad))
+                            orbit_cw = lua_bool(op, 'clockWise')
                         break
         lat, lon   = dcs_to_latlon(xy[0], xy[1], theatre)
         wpts.append(Waypoint(
@@ -83,6 +85,7 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
             orbit_width_nm=orbit_width_nm,
             orbit_leg_nm=orbit_leg_nm,
             orbit_heading_deg=orbit_heading_deg,
+            orbit_cw=orbit_cw,
         ))
     return wpts
 

@@ -4,6 +4,16 @@
 
 'use strict';
 
+// Orbit/anchor airspaces closer than this threshold are merged into one
+const ORBIT_MERGE_NM = 2.0;
+
+/** Approximate great-circle distance in NM between two lat/lon points */
+function _distNm(lat1, lon1, lat2, lon2) {
+  const dlat = (lat1 - lat2) * 60;
+  const dlon = (lon1 - lon2) * 60 * Math.cos((lat1 + lat2) * Math.PI / 180 / 2);
+  return Math.sqrt(dlat * dlat + dlon * dlon);
+}
+
 // ── Collect all plottable data ─────────────────────────────
 function collectData(ato, aco) {
   const points = [];
@@ -135,25 +145,31 @@ function collectData(ato, aco) {
           label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
           sub: label, color, msnType: m.mission_type, mission: m,
         });
-        // Orbit/anchor track: render a racetrack on the map
+        // Orbit/anchor track: render a racetrack on the map.
+        // Skip if a near-identical orbit has already been pushed (proximity dedup).
         if (typeof sp === 'object' && sp.orbit) {
           const orb = sp.orbit;
-          airspaces.push({
-            kind: 'airspace',
-            name: label || `${callsign} ORBIT`,
-            type: m.mission_type === 'TANKER' ? 'REFUEL' : 'ORBIT',
-            altLower: orb.alt_ft != null ? Math.round(orb.alt_ft / 100) * 100 + 'ft' : null,
-            altUpper: null,
-            lat: p.lat, lon: p.lon,
-            shape: 'anchor',
-            anchorPt: p,
-            headingDeg: orb.heading_deg || 0,
-            legLengthNm: orb.leg_nm || 10,
-            widthNm: orb.width_nm || 5,
-            direction: 'cw',
-            speedKts: orb.speed_kts,
-            missions: [msnNum].filter(Boolean),
-          });
+          const alreadyDrawn = airspaces.some(
+            a => a.shape === 'anchor' && _distNm(p.lat, p.lon, a.lat, a.lon) < ORBIT_MERGE_NM
+          );
+          if (!alreadyDrawn) {
+            airspaces.push({
+              kind: 'airspace',
+              name: label || `${callsign} ORBIT`,
+              type: m.mission_type === 'TANKER' ? 'REFUEL' : 'ORBIT',
+              altLower: orb.alt_ft != null ? Math.round(orb.alt_ft / 100) * 100 + 'ft' : null,
+              altUpper: null,
+              lat: p.lat, lon: p.lon,
+              shape: 'anchor',
+              anchorPt: p,
+              headingDeg: orb.heading_deg || 0,
+              legLengthNm: orb.leg_nm || 10,
+              widthNm: orb.width_nm || 5,
+              direction: orb.cw === false ? 'ccw' : 'cw',
+              speedKts: orb.speed_kts,
+              missions: [msnNum].filter(Boolean),
+            });
+          }
         }
       }
     });
