@@ -95,12 +95,10 @@ registry:
         name: OBJ-A
         coords: N26°28'00" E056°18'00"
   reference_points:
-    COYOTE:
-      name: COYOTE
+    - name: COYOTE
       type: bullseye
       coords: N26°51'19" E056°21'37"
-    MARSHAL-ALPHA:
-      name: ALPHA
+    - name: ALPHA
       type: marshal
       coords: N24°45'00" E056°00'00"
       altitude: FL250
