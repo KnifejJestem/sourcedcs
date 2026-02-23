@@ -51,25 +51,154 @@ def resolve_clsid(clsid: str) -> str:
     return clsid.strip("{}")
 
 
+# ── Loadout helpers ───────────────────────────────────────────────────────────
+
+# Substrings (lower-case) that identify a pylon as a fuel tank, pod, or ECM —
+# these stores are excluded from the loadout encoding.
+_SKIP_KEYWORDS: tuple[str, ...] = (
+    'fuel tank', 'fuel pod', 'refuel',
+    'ecm pod', 'decm pod', 'jammer',
+    'targeting pod', 'litening', 'atflir', 'lantirn',
+    'harm targeting',
+)
+
+
+# Maximum plausible munition count from a single rack station (B-2 can carry 80+,
+# but for common fighter/attack racks a practical upper bound is 30).
+_MAX_RACK_MUNITIONS = 30
+
+
+def _is_consumable(name: str) -> bool:
+    """Return True if the weapon name describes a tank, pod, or ECM store."""
+    nl = name.lower()
+    return any(kw in nl for kw in _SKIP_KEYWORDS)
+
+
+def _rack_count(name: str) -> int:
+    """
+    Extract the number of munitions carried from a rack/LAU description.
+    Handles forms like 'LAU-88 with 3 x AGM-65D', '16 x GBU-38', '3 GBU-38'.
+    """
+    # "... with N x WEAPON" — most common rack format
+    m = re.search(r'\bwith\s+(\d+)\s+x\b', name, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    # Leading "N x WEAPON"
+    m = re.match(r'^(\d+)\s+x\b', name, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    # Short form: "3 GBU-38", "2 Mk-82" — leading digit followed by space
+    m = re.match(r'^(\d+)\s+', name)
+    if m:
+        n = int(m.group(1))
+        if 2 <= n <= _MAX_RACK_MUNITIONS:   # sanity: racks don't carry more than this
+            return n
+    return 1
+
+
+def _canonical_weapon(name: str) -> str | None:
+    """
+    Map a full descriptive weapon name (from weaponsdata.json) to the short
+    canonical name used in _WEAPON_CAT for loadout encoding.
+    Returns None for unknown or non-encodable stores.
+    """
+    # AIM-120 AMRAAM — check C-7 first so it isn't consumed by the [A-Z] branch
+    if re.search(r'\bAIM-120C-7\b', name, re.IGNORECASE):
+        return 'AIM-120C-7'
+    m = re.search(r'\bAIM-120([A-Z])\b', name, re.IGNORECASE)
+    if m:
+        return f'AIM-120{m.group(1).upper()}'
+    if re.search(r'\bAIM-120\b|\bAMRAAM\b', name, re.IGNORECASE):
+        return 'AIM-120C'
+
+    # AIM-9 Sidewinder (exclude captive training rounds).
+    # Falls back to 'AIM-9X' for unrecognised suffixes because _WEAPON_CAT treats
+    # all modern IR Sidewinders as fox2 under the 'AIM-9X' key.
+    if not re.search(r'\bCATM\b|\bCaptive\b', name, re.IGNORECASE):
+        m = re.search(r'\bAIM-9(X-2|XX?|[MLJP]P?5?)\b', name, re.IGNORECASE)
+        if m:
+            s = m.group(1).upper()
+            key = f'AIM-9{s}'
+            return key if key in _WEAPON_CAT else 'AIM-9X'
+        if re.search(r'\bAIM-9\b|\bSidewinder\b', name, re.IGNORECASE):
+            return 'AIM-9X'
+
+    # AIM-7 Sparrow
+    m = re.search(r'\bAIM-7([A-Z])\b', name, re.IGNORECASE)
+    if m:
+        return f'AIM-7{m.group(1).upper()}'
+    if re.search(r'\bAIM-7\b|\bSparrow\b', name, re.IGNORECASE):
+        return 'AIM-7M'
+
+    # AGM-88 HARM
+    m = re.search(r'\bAGM-88([A-Z])\b', name, re.IGNORECASE)
+    if m:
+        s = m.group(1).upper()
+        if s == 'C':
+            return 'AGM-88C HARM'
+        if s == 'B':
+            return 'AGM-88B HARM'
+        return 'AGM-88 HARM'
+    if re.search(r'\bAGM-88\b|\bHARM\b', name, re.IGNORECASE):
+        return 'AGM-88 HARM'
+
+    # AGM-65 Maverick
+    m = re.search(r'\bAGM-65([A-Z])\b', name, re.IGNORECASE)
+    if m:
+        return f'AGM-65{m.group(1).upper()}'
+    if re.search(r'\bMaverick\b', name, re.IGNORECASE):
+        return 'AGM-65D'
+
+    # AGM-154 JSOW
+    m = re.search(r'\bAGM-154([AC])\b', name, re.IGNORECASE)
+    if m:
+        return f'AGM-154{m.group(1).upper()} JSOW'
+    if re.search(r'\bAGM-154\b|\bJSOW\b', name, re.IGNORECASE):
+        return 'AGM-154A JSOW'
+
+    # AGM-158 JASSM
+    if re.search(r'\bAGM-158\b|\bJASSM\b', name, re.IGNORECASE):
+        return 'AGM-158 JASSM'
+
+    # GBU guided bombs
+    m = re.search(r'\bGBU-(\d+)\b', name, re.IGNORECASE)
+    if m:
+        return f'GBU-{m.group(1)}'
+
+    # Mk unguided bombs — all variants (Mk-82Y, Mk-82AIR, etc.) normalize to the
+    # base type with a hyphen separator regardless of how the name is formatted.
+    m = re.search(r'\bMk[-\s]?(82|83|84)', name, re.IGNORECASE)
+    if m:
+        return f'Mk-{m.group(1)}'
+
+    # CBU cluster bombs
+    m = re.search(r'\bCBU-(\d+)\b', name, re.IGNORECASE)
+    if m:
+        return f'CBU-{m.group(1)}'
+
+    return None  # unrecognized — excluded from encoding
+
+
 def condense_loadout(weapons: list[str]) -> list[str]:
     """
-    Collapse repeated weapon names into 'N× NAME' entries, drop tanks/pods.
-    Weapons already containing '×' (pre-counted LAU racks) are expanded first
-    so counts are summed correctly (e.g. two '2× AIM-120C' racks → '4× AIM-120C').
+    Convert a raw per-pylon weapon name list into a condensed 'N× NAME' list
+    using canonical short names suitable for encode_loadout().
+
+    Steps per pylon:
+      1. Skip fuel tanks, pods, and ECM stores.
+      2. Extract a multiplier from rack-style names (e.g. 'LAU-88 with 3 x …').
+      3. Normalize the full descriptive name to a canonical short name.
+      4. Accumulate counts by canonical name.
     """
-    SKIP = {"300gal Tank", "Fuel Tank", "AAR Pod", "ALQ-184 ECM",
-            "ALQ-131 ECM", "HTS Pod", "Litening Pod", "ATFLIR Pod"}
     counts: dict[str, int] = {}
     for w in weapons:
-        if w in SKIP:
+        if _is_consumable(w):
             continue
-        # expand pre-counted entries like '2× AIM-120C'
-        m = re.match(r'^(\d+)[×x]\s+(.+)$', w)
-        if m:
-            name, n = m.group(2), int(m.group(1))
-        else:
-            name, n = w, 1
-        counts[name] = counts.get(name, 0) + n
+        n = _rack_count(w)
+        canon = _canonical_weapon(w)
+        if canon is None:
+            continue  # unrecognized store — not encodable
+        counts[canon] = counts.get(canon, 0) + n
     result = []
     for name, n in counts.items():
         result.append(f"{n}× {name}" if n > 1 else name)
@@ -80,7 +209,8 @@ def condense_loadout(weapons: list[str]) -> list[str]:
 _WEAPON_CAT: dict[str, tuple[str, str | None]] = {
     # ── Air-to-Air ───────────────────────────────────────────────────────────
     "AIM-120C": ("fox3", None), "AIM-120C-7": ("fox3", None),
-    "AIM-120B": ("fox3", None), "AIM-120":    ("fox3", None),
+    "AIM-120B": ("fox3", None), "AIM-120D":   ("fox3", None),
+    "AIM-120":  ("fox3", None),
     "AIM-7M":   ("fox1", None), "AIM-7F":     ("fox1", None),
     "AIM-9M":   ("fox2", None), "AIM-9X":     ("fox2", None),
     "AIM-9X-2": ("fox2", None), "AIM-9L":     ("fox2", None),
