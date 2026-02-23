@@ -1799,8 +1799,11 @@ def build_doc(*, mission_name, mission_date, theatre,
     # Supply/tanker package gets a separate block of numbers (+500)
     tanker_msn_start = msn_start + 500
 
-    # Bullseye key references registry.reference_points
-    bullseye_key = list(ref_pts.keys())[0] if ref_pts else None
+    # Bullseye name references registry.reference_points (first bullseye entry)
+    bullseye_key = next(
+        (v["name"] for v in ref_pts.values() if v.get("type") == "bullseye"),
+        list(ref_pts.keys())[0] if ref_pts else None,
+    )
 
     # Build airfields from flight takeoff waypoints (deduplicated)
     airfields = build_airfields_registry(flights, carriers, theatre)
@@ -1832,7 +1835,7 @@ def build_doc(*, mission_name, mission_date, theatre,
             "carriers":         build_carriers_registry(carriers) or None,
             "tankers":          None,
             "targets":          targets   or None,
-            "reference_points": ref_pts   or None,
+            "reference_points": list(ref_pts.values()) or None,
             "control_agencies": None,
         },
 

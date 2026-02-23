@@ -199,11 +199,11 @@ pulled into the mission.
 | `name` | string | Display name |
 | `coords` | coord string | Position |
 
-### `reference_points:` (map)
+### `reference_points:` (list)
 
-A mapping of id → positional reference data.  This section contains reusable
-named positions: bullseye, marshal points, IP/CP designations, and any other
-named geographic positions that multiple flights might reference.
+A list of named positional references: bullseye, marshal points, IP/CP
+designations, and any other named geographic positions that multiple flights
+might reference.
 
 Mission-specific steer points (SP1, SP2, SP3 chains) do **not** belong here —
 they stay in the mission's `steer_points` block.
@@ -211,12 +211,10 @@ they stay in the mission's `steer_points` block.
 ```yaml
 registry:
   reference_points:
-    COYOTE:
-      name: COYOTE
+    - name: COYOTE
       type: bullseye
       coords: N26°51'19" E056°21'37"
-    MARSHAL-ALPHA:
-      name: ALPHA
+    - name: ALPHA
       type: marshal
       coords: N24°45'00" E056°00'00"
       altitude: FL250
@@ -224,7 +222,7 @@ registry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | string | Display name |
+| `name` | string | Display name (used as the bullseye reference key in `global_control.bullseye`) |
 | `type` | string | `bullseye` / `marshal` / `ip` / `cp` / `geographic` |
 | `coords` | coord string | Position |
 | `altitude` | string | Holding altitude (optional, mainly for marshal points) |
