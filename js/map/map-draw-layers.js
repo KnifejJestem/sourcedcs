@@ -114,6 +114,76 @@ function drawTileBackground(ctx, mode, effectiveVLon, tileBounds) {
   return tileG;
 }
 
+// ── Tile preloader ────────────────────────────────────────
+// Warms the browser HTTP cache for all tiles visible at the initial
+// viewport zoom (z) and the next two finer zoom levels (z+1, z+2).
+// Returns a Promise that resolves when all z-level tiles have settled
+// (loaded or errored), or after PRELOAD_TIMEOUT_MS, whichever comes first.
+// z+1 and z+2 tiles are started in the background but not awaited.
+//
+// PRELOAD_TIMEOUT_MS: 8 s is generous for a typical ~100-tile initial viewport
+// on a 10 Mbit connection (~2.5 KB/tile × 100 ≈ 250 KB → ~0.2 s), but gives
+// plenty of headroom for slow connections or high-latency tile servers.
+const PRELOAD_TIMEOUT_MS = 8000;
+
+// Track which (mode, z, tx, ty) tiles have been preloaded so repeated
+// map renders don't re-fire Image requests that the browser already has.
+const _preloadedKeys = new Set();
+
+function preloadTiles(ctx, mode) {
+  const urlFn = TILE_URLS[mode];
+  if (!urlFn) return Promise.resolve();
+
+  // Compute the three zoom levels to warm.
+  const maxZ = TILE_MAX_ZOOM[mode];
+  const z0   = _tileZoom(ctx.vLon, maxZ);
+  const z1   = Math.min(maxZ, z0 + 1);
+  const z2   = Math.min(maxZ, z0 + 2);
+
+  // Build the list of tiles for a given zoom level (full base viewport).
+  function tilesForZ(z) {
+    const pow  = Math.pow(2, z);
+    const txMn = Math.max(0,       Math.floor((ctx.vMinLon + 180) / 360 * pow) - 1);
+    const txMx = Math.min(pow - 1, Math.ceil( (ctx.vMaxLon + 180) / 360 * pow));
+    const tyMn = Math.max(0,       _latToTileY(ctx.vMaxLat, z) - 1);
+    const tyMx = Math.min(pow - 1, _latToTileY(ctx.vMinLat, z) + 1);
+    const tiles = [];
+    for (let tx = txMn; tx <= txMx; tx++) {
+      for (let ty = tyMn; ty <= tyMx; ty++) {
+        const key = `${mode}/${z}/${tx}/${ty}`;
+        if (!_preloadedKeys.has(key)) {
+          _preloadedKeys.add(key);
+          tiles.push(urlFn(z, tx, ty));
+        }
+      }
+    }
+    return tiles;
+  }
+
+  // Fire an Image request for a URL; resolves on load or error.
+  function loadOne(url) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload  = resolve;
+      img.onerror = resolve; // don't block on network failures
+      img.src = url;
+    });
+  }
+
+  // z0 tiles — we await these (they're the first-visible tiles).
+  const z0Urls = tilesForZ(z0);
+  const z0Promise = z0Urls.length > 0
+    ? Promise.all(z0Urls.map(loadOne))
+    : Promise.resolve();
+
+  // z+1 and z+2 tiles — background, not awaited.
+  [...tilesForZ(z1), ...tilesForZ(z2)].forEach(url => loadOne(url));
+
+  // Resolve when z0 tiles are done or after the timeout, whichever first.
+  const timeout = new Promise(resolve => setTimeout(resolve, PRELOAD_TIMEOUT_MS));
+  return Promise.race([z0Promise, timeout]);
+}
+
 // ── Grid ─────────────────────────────────────────────────
 // Returns the grid <g> element.
 function drawGrid(ctx) {

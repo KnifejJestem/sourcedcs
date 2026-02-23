@@ -52,6 +52,104 @@ async function renderMAP(ato) {
       </div>`);
     return;
   }
+
+  // ── Tile preload ──────────────────────────────────────────
+  // For tile modes (non-chart), warm the browser cache for the initial
+  // viewport tiles before rendering.  We show a loading overlay while
+  // preloading; on subsequent renders the tiles are already cached so
+  // preloadTiles() resolves almost instantly.
+  const mapMode = STATE.mapUI?.mapMode || 'chart';
+  if (mapMode !== 'chart') {
+    // Build the same ctx geometry that drawMap() will use, so we can
+    // compute the right tile list before the SVG is created.
+    const tileCtx = _buildTileCtx(points, routes, airspaces);
+    if (tileCtx) {
+      container.innerHTML = '';
+
+      // Show loading overlay
+      const overlay = el('div', 'map-preload-overlay');
+      overlay.innerHTML = `
+        <div class="map-preload-spinner"></div>
+        <div class="map-preload-label">LOADING MAP TILES…</div>
+        <div class="map-preload-bar-wrap"><div class="map-preload-bar" id="map-preload-bar"></div></div>`;
+      container.appendChild(overlay);
+
+      // Animate the progress bar while tiles are loading.
+      // The bar fills to ~85% on its own; the last 15% fires when done.
+      const bar = overlay.querySelector('#map-preload-bar');
+      let barPct = 0;
+      const barTimer = setInterval(() => {
+        barPct = Math.min(85, barPct + (85 - barPct) * 0.12);
+        if (bar) bar.style.width = barPct + '%';
+      }, 120);
+
+      await preloadTiles(tileCtx, mapMode);
+
+      clearInterval(barTimer);
+      if (bar) bar.style.width = '100%';
+
+      // Fade the overlay out while the map renders underneath.
+      // The overlay is pointer-events:none so it doesn't block interaction.
+      overlay.classList.add('map-preload-fadeout');
+      overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
+
+      // Draw the map into the container now (overlay is still visible but fading).
+      // Do NOT clear innerHTML — the overlay is still animating.
+      drawMap(container, points, routes, geoData, airspaces);
+      return; // skip the default drawMap call below
+    }
+  }
+
   container.innerHTML = '';
   drawMap(container, points, routes, geoData, airspaces);
+}
+
+// ── Tile ctx geometry builder ─────────────────────────────
+// Replicates the bounding-box / projection arithmetic from drawMap() so
+// preloadTiles() can compute the correct tile range before the SVG exists.
+// NOTE: W and H must match MAP_WIDTH / MAP_HEIGHT in map-render.js.
+function _buildTileCtx(points, routes, airspaces) {
+  const W = 1400, H = 780; // must match MAP_WIDTH / MAP_HEIGHT in map-render.js
+  const BBOX_PADDING_RATIO = 0.28;
+  const BBOX_MIN_SPAN      = 1.5;
+
+  let minLon=Infinity,maxLon=-Infinity,minLat=Infinity,maxLat=-Infinity;
+  const expand = p => {
+    minLon=Math.min(minLon,p.lon); maxLon=Math.max(maxLon,p.lon);
+    minLat=Math.min(minLat,p.lat); maxLat=Math.max(maxLat,p.lat);
+  };
+  points.forEach(expand);
+  routes.forEach(r => r.pts.forEach(expand));
+  airspaces.forEach(a => {
+    if (a.shape === 'circle') {
+      const d = (a.radiusNm || 20) / 60;
+      expand({ lon: a.lon - d, lat: a.lat - d });
+      expand({ lon: a.lon + d, lat: a.lat + d });
+    } else if (a.shape === 'polygon' && a.boundary) {
+      a.boundary.forEach(expand);
+    } else if (a.shape === 'anchor' && a.anchorPt) {
+      const r = ((a.legLengthNm || 20) * 1.5) / 60;
+      expand({ lon: a.anchorPt.lon - r, lat: a.anchorPt.lat - r });
+      expand({ lon: a.anchorPt.lon + r, lat: a.anchorPt.lat + r });
+    }
+  });
+  if (!isFinite(minLon)) return null;
+
+  const lSpan = Math.max(maxLon - minLon, BBOX_MIN_SPAN);
+  const aSpan = Math.max(maxLat - minLat, BBOX_MIN_SPAN);
+  const lMarg = Math.max(lSpan * BBOX_PADDING_RATIO, BBOX_MIN_SPAN);
+  const aMarg = Math.max(aSpan * BBOX_PADDING_RATIO, BBOX_MIN_SPAN);
+  let vMinLon = minLon - lMarg, vMaxLon = maxLon + lMarg;
+  let vMinLat = minLat - aMarg, vMaxLat = maxLat + aMarg;
+  let vLon    = vMaxLon - vMinLon, vLat = vMaxLat - vMinLat;
+
+  if (vLon / vLat < W / H) {
+    const extra = (vLat * (W / H) - vLon) / 2;
+    vMinLon -= extra; vMaxLon += extra; vLon = vMaxLon - vMinLon;
+  } else {
+    const extra = (vLon / (W / H) - vLat) / 2;
+    vMinLat -= extra; vMaxLat += extra; vLat = vMaxLat - vMinLat;
+  }
+
+  return { vMinLon, vMaxLon, vMinLat, vMaxLat, vLon, vLat };
 }
