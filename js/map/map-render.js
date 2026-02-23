@@ -179,9 +179,24 @@ function drawMap(container, points, routes, geoData, airspaces) {
   clipWrap.appendChild(content);
 
   // ── Draw layers ──────────────────────────────────────────
-  content.appendChild(drawGrid(ctx));
-  content.appendChild(drawLand(ctx, geoData));
-  content.appendChild(drawCities(ctx, geoData));
+  const mapMode = STATE.mapUI.mapMode || 'chart';
+  let effectiveCtx = ctx; // ctx used for grid + grid labels
+  if (mapMode === 'chart') {
+    content.appendChild(drawGrid(ctx));
+    content.appendChild(drawLand(ctx, geoData));
+    content.appendChild(drawCities(ctx, geoData));
+  } else {
+    // Tile modes: raster tiles as background, coordinate grid on top.
+    content.appendChild(drawTileBackground(ctx, mapMode));
+    // Grid with higher contrast so it is readable over imagery.
+    effectiveCtx = Object.assign({}, ctx, {
+      C: Object.assign({}, ctx.C, {
+        grid:    mapMode === 'satellite' ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.20)',
+        gridLbl: mapMode === 'satellite' ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.50)',
+      }),
+    });
+    content.appendChild(drawGrid(effectiveCtx));
+  }
 
   // ── Popup (needed by subsequent draw calls) ──────────────
   const { showPopup: _showPopup, refreshPopup } = createPopup(container);
@@ -218,7 +233,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
   content.appendChild(threatG);
 
   // ── Grid label overlay ───────────────────────────────────
-  const gridLabels = createGridLabelOverlay(ctx);
+  const gridLabels = createGridLabelOverlay(effectiveCtx);
   svg.appendChild(gridLabels.overlay);
 
   // ── Measurement overlay ──────────────────────────────────
@@ -355,6 +370,15 @@ function drawMap(container, points, routes, geoData, airspaces) {
     defaultAirspaceCol: airResult.defaultCol,
   });
   container.appendChild(sidebar);
+
+  // ── Tile attribution overlay ─────────────────────────────
+  // Required by tile provider terms of use when showing raster tiles.
+  const attrText = TILE_ATTRIBUTION[mapMode];
+  if (attrText) {
+    const attrDiv = el('div', 'map-tile-attr');
+    attrDiv.textContent = attrText;
+    container.appendChild(attrDiv);
+  }
 
   // ── Pan / Zoom ───────────────────────────────────────────
   // Restore from centralized state so pan/zoom survives tab switches

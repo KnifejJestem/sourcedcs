@@ -23,6 +23,7 @@ const STATE = {
     engVisible:   true,     // engagement-zone overlay visibility
     airVisible:   true,     // airspace overlay visibility
     measureMode:  'off',    // 'off' | 'waitA' | 'waitB' | 'fixed'
+    mapMode:      'chart',  // 'chart' | 'tactical' | 'elevation' | 'satellite'
   },
 };
 
@@ -611,6 +612,7 @@ function unloadPackage() {
   STATE.mapUI.engVisible  = true;
   STATE.mapUI.airVisible  = true;
   STATE.mapUI.measureMode = 'off';
+  STATE.mapUI.mapMode     = 'chart';
 
   document.getElementById('upload-screen').style.display = '';
   document.getElementById('main-content').style.display  = 'none';

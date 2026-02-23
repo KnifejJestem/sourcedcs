@@ -192,6 +192,30 @@
   background: rgba(200,168,48,0.12);
 }
 
+/* ── Map mode buttons ────────────────────────────────────── */
+.map-mode-btn.map-msn-active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ── Tile provider attribution ───────────────────────────── */
+.map-tile-attr {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  font-size: 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.75);
+  text-shadow: 0 0 3px rgba(0,0,0,0.8);
+  pointer-events: none;
+  z-index: 10;
+  max-width: 420px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Remove old map-wrap / map-legend styles that conflict */
 .map-legend { display: none; }
 
