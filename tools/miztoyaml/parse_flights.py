@@ -184,6 +184,7 @@ def parse_flights_and_carriers(
             freq_raw = lua_num(gb, 'frequency') or 0.0
             freq_mhz = freq_raw / 1e6 if freq_raw > 1e6 else freq_raw
             is_tanker = (task == 'TANKER')
+            is_awacs  = (task == 'AWACS')
 
             ub_blk = lua_get_block(gb, 'units')
             if not ub_blk:
@@ -243,6 +244,7 @@ def parse_flights_and_carriers(
                 units=flight_units,
                 waypoints=wpts,
                 is_tanker=is_tanker,
+                is_awacs=is_awacs,
                 dtc_cartridge=flight_dtc,
             ))
             flt_seq += 1

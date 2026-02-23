@@ -63,15 +63,15 @@ throughout the rest of the file.  It contains: `callsigns`,
 
 ### `callsigns:` (map)
 
-A mapping of callsign name → metadata.  Keys are the callsign strings used
-elsewhere in the file.
+A mapping of callsign name → metadata.  The callsign is the group / flight
+name used throughout the file.  AWACS flights are excluded here and appear
+in `control_agencies` instead.
 
 ```yaml
 registry:
   callsigns:
-    SCREWTOP:    { unit: USAF, type: E-3, role: AWACS primary }
-    FALCON5:     { unit: 510vFS, type: F16C, role: CAP flight lead }
-    ARCO4:       { type: KC-135, role: Tanker }
+    SHADOW-1:    { type: F16C, role: CAP flight lead }
+    TEXACO:      { type: KC135, role: TANKER }
     ROUGH RIDER: { type: CVN, role: Carrier }
 ```
 
@@ -129,30 +129,33 @@ registry:
 | `deploy_coords` | coord string | Estimated position at start of ATO window |
 | `recovery_coords` | coord string | Estimated position at end / recovery window |
 
-### `tankers:` (map)
+### `tankers:` (list)
 
-A mapping of tanker id → tanker data.  Missions reference tankers by id
-in their `refuel.tanker_id` field; only mission-specific timing is stored
-in the mission.
+A **list** of tanker entries.  Missions reference tankers by callsign via
+`refuel.tanker_id`.  The `miz-to-yaml` tool populates this automatically
+from tanker flights (including orbit altitude and speed extracted from the
+DCS route).
 
 ```yaml
 registry:
   tankers:
-    ARCO4:
-      callsign: ARCO4
-      ar_track: AR394
-      altitude: FL240
-    TEXACO2:
-      callsign: TEXACO2
-      ar_track: AR392
-      altitude: FL220
+  - callsign: TEXACO
+    altitude_ft: 19000
+    speed_kts: 370
+  - callsign: SHELL
+    altitude_ft: 24000
+    speed_kts: 400
+    ar_track: AR394      # optional — not extracted from .miz
+    altitude: FL240      # optional human-readable altitude string
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `callsign` | string | Tanker callsign |
-| `ar_track` | string | AR track identifier |
-| `altitude` | string | Refueling altitude (e.g. `FL240`) |
+| `callsign` | string | Tanker group / callsign — matches `refuel.tanker_id` |
+| `altitude_ft` | integer | Refueling altitude in feet (from DCS orbit params) |
+| `speed_kts` | integer | Refueling speed in knots (from DCS orbit params) |
+| `ar_track` | string | AR track identifier (optional, manual) |
+| `altitude` | string | Human-readable altitude string e.g. `FL240` (optional, manual) |
 
 ### `targets:` (map)
 
@@ -234,16 +237,20 @@ are defined here.  The `global_control.agency_id` and each mission's
 `control.agency_id` reference these by key; frequencies, callsign, and
 platform are resolved from the registry at load time.
 
+The `miz-to-yaml` tool automatically extracts AWACS groups from the DCS
+mission (task=AWACS) and populates this section.  The key is the DCS group
+name (which also becomes the `callsign`).  If exactly one AWACS is found,
+it is automatically set as the `global_control.agency_id`.
+
 ```yaml
 registry:
   control_agencies:
-    SCREWTOP:
+    AWACS DARKSTAR:
       type: AWACS
-      callsign: SCREWTOP
-      platform: E-3
-      primary_freq_mhz: '260.0'
-      secondary_freq_mhz: '134.0'
-    DARKSTAR:
+      callsign: AWACS DARKSTAR
+      platform: E-3A
+      primary_freq_mhz: '251.0'
+    DARKSTAR:            # manually added CRC example
       type: CRC
       callsign: DARKSTAR
       primary_freq_mhz: '265.0'
@@ -253,10 +260,10 @@ registry:
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | string | Agency type: `AWACS` or `CRC` |
-| `callsign` | string | Agency callsign |
+| `callsign` | string | Agency callsign / group name |
 | `platform` | string | Platform / aircraft type (optional — mainly for AWACS) |
 | `primary_freq_mhz` | string | Primary frequency in MHz |
-| `secondary_freq_mhz` | string | Secondary frequency in MHz |
+| `secondary_freq_mhz` | string | Secondary frequency in MHz (optional) |
 
 ---
 

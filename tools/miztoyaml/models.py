@@ -64,6 +64,7 @@ class Flight:
     units: list[FlightUnit] = field(default_factory=list)
     waypoints: list[Waypoint] = field(default_factory=list)
     is_tanker: bool = False
+    is_awacs: bool = False
     dtc_cartridge: str | None = None  # primary DTC cartridge used by this flight
 
 

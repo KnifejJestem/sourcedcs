@@ -348,6 +348,8 @@ def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
     strike_i = tanker_i = 0
 
     for f in flights:
+        if f.is_awacs:
+            continue  # AWACS go to registry.control_agencies, not missions
         if f.is_tanker:
             msn_num = f"MSN{tanker_msn_start + tanker_i}"
             tanker_i += 1
@@ -355,7 +357,7 @@ def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
             msn_num = f"MSN{msn_start + strike_i}"
             strike_i += 1
 
-        callsign = f.units[0].callsign if f.units else f.name
+        callsign = f.name  # group name is the mission callsign
         ac_base  = f.aircraft_type.split('_')[0]
         ac_type  = re.sub(r'[^A-Z0-9]', '', ac_base.upper())
         count    = len(f.units)

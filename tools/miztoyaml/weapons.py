@@ -101,6 +101,7 @@ TASK_LABELS: dict[str, str] = {
     "Transport":    "TRANSPORT",
     "Ground Attack":"STRIKE",
     "Nothing":      "FERRY",
+    "AWACS":        "AWACS",
 }
 
 

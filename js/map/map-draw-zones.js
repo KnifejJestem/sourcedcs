@@ -247,18 +247,22 @@ function generateRacetrack(anchorLat, anchorLon, headingDeg, legLengthNm, turnRa
   pts.push(localToGeo(0, 0));
   pts.push(localToGeo(L, 0));
 
-  // Turn 1: semicircle at end of hot leg, center at (L, R*s)
+  // Turn 1: semicircle at end of hot leg, center at (L, R*s).
+  // The arc must sweep OUTWARD (beyond the hot leg end) — achieved by multiplying
+  // the sweep direction by s so CCW arcs go CW in standard maths and vice-versa.
   for (let i = 1; i <= ARC_SEGMENTS; i++) {
-    const a = -s * Math.PI / 2 + Math.PI * i / ARC_SEGMENTS;
+    const a = s * (-Math.PI / 2 + Math.PI * i / ARC_SEGMENTS);
     pts.push(localToGeo(L + R * Math.cos(a), s * R + R * Math.sin(a)));
   }
 
   // Return leg: (L, 2R*s) → (0, 2R*s)
   pts.push(localToGeo(0, 2 * R * s));
 
-  // Turn 2: semicircle at start of hot leg, center at (0, R*s)
+  // Turn 2: semicircle at start of hot leg, center at (0, R*s).
+  // Same outward-sweep fix: use subtraction so the arc extends forward (beyond
+  // the hot-leg start) rather than dipping behind it.
   for (let i = 1; i <= ARC_SEGMENTS; i++) {
-    const a = s * (Math.PI / 2 + Math.PI * i / ARC_SEGMENTS);
+    const a = s * (Math.PI / 2 - Math.PI * i / ARC_SEGMENTS);
     pts.push(localToGeo(R * Math.cos(a), s * R + R * Math.sin(a)));
   }
 

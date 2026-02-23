@@ -40,18 +40,15 @@ registry:
       deploy_coords: N24°30'00" E059°15'00"
       recovery_coords: N24°45'00" E059°30'00"
   tankers:
-    ARCO4:
-      callsign: ARCO4
-      ar_track: AR394
-      altitude: FL240
-    TEXACO2:
-      callsign: TEXACO2
-      ar_track: AR392
-      altitude: FL220
-    SHELL3:
-      callsign: SHELL3
-      ar_track: AR393
-      altitude: FL230
+  - callsign: ARCO4
+    ar_track: AR394
+    altitude: FL240
+  - callsign: TEXACO2
+    ar_track: AR392
+    altitude: FL220
+  - callsign: SHELL3
+    ar_track: AR393
+    altitude: FL230
   targets:
     SAM-1:
       name: SA-2 Guideline
