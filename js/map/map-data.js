@@ -121,6 +121,8 @@ function collectData(ato, aco) {
 
     // 2. Steer points — support both inline coords and name_ref to namedLocs.
     //    name_ref takes precedence over coords when both are present.
+    //    If a steer point has an 'orbit' block, also push an anchor airspace
+    //    so the racetrack pattern is drawn on the map.
     (m.steer_points || []).forEach((sp, i) => {
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
       const raw     = typeof sp === 'string' ? sp : sp.coords;
@@ -133,6 +135,26 @@ function collectData(ato, aco) {
           label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
           sub: label, color, msnType: m.mission_type, mission: m,
         });
+        // Orbit/anchor track: render a racetrack on the map
+        if (typeof sp === 'object' && sp.orbit) {
+          const orb = sp.orbit;
+          airspaces.push({
+            kind: 'airspace',
+            name: label || `${callsign} ORBIT`,
+            type: m.mission_type === 'TANKER' ? 'REFUEL' : 'ORBIT',
+            altLower: orb.alt_ft != null ? Math.round(orb.alt_ft / 100) * 100 + 'ft' : null,
+            altUpper: null,
+            lat: p.lat, lon: p.lon,
+            shape: 'anchor',
+            anchorPt: p,
+            headingDeg: orb.heading_deg || 0,
+            legLengthNm: orb.leg_nm || 10,
+            widthNm: orb.width_nm || 5,
+            direction: 'cw',
+            speedKts: orb.speed_kts,
+            missions: [msnNum].filter(Boolean),
+          });
+        }
       }
     });
 

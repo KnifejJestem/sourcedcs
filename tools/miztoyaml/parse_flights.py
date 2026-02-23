@@ -10,6 +10,10 @@ from .parse import _group_outer_name, _strip_dcs_suffix
 from .projection import dcs_to_latlon, dms
 from .weapons import CARRIER_TYPES, TASK_LABELS, condense_loadout, resolve_clsid
 
+_M_TO_FT  = 3.28084    # metres → feet
+_MPS_TO_KT = 1.94384   # m/s → knots
+_M_TO_NM  = 1852.0     # metres per nautical mile
+
 
 def _parse_callsign(cs_block: str | None) -> str:
     """Extract callsign name from the callsign sub-block."""
@@ -43,9 +47,30 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
         name       = lua_str(pb, 'name')
         airdrome   = lua_num(pb, 'airdromeId')
         link_unit  = lua_num(pb, 'linkUnit')
-        # Detect orbit task (tanker track anchor)
+        # Detect orbit task (tanker track anchor) and extract its parameters
         task_blk   = lua_get_block(pb, 'task')
         is_orbit   = bool(task_blk and 'Orbit' in task_blk)
+        orbit_alt_ft = orbit_speed_kts = orbit_width_nm = orbit_leg_nm = orbit_heading_deg = None
+        if is_orbit and task_blk:
+            # Navigate into task.params.tasks[1].params to find the Orbit entry
+            params_blk = lua_get_block(task_blk, 'params')
+            tasks_blk  = lua_get_block(params_blk, 'tasks') if params_blk else None
+            if tasks_blk:
+                for _ti, tb in lua_iter_array(tasks_blk):
+                    if lua_str(tb, 'id') == 'Orbit':
+                        op = lua_get_block(tb, 'params')
+                        if op:
+                            alt_m   = lua_num(op, 'altitude')
+                            spd_ms  = lua_num(op, 'speed')
+                            w_m     = lua_num(op, 'width')
+                            leg_m   = lua_num(op, 'legLength')
+                            hdg_deg = lua_num(op, 'hotLegDir')
+                            if alt_m   is not None: orbit_alt_ft      = round(alt_m   * _M_TO_FT)
+                            if spd_ms  is not None: orbit_speed_kts   = round(spd_ms  * _MPS_TO_KT)
+                            if w_m     is not None: orbit_width_nm    = round(w_m     / _M_TO_NM, 1)
+                            if leg_m   is not None: orbit_leg_nm      = round(leg_m   / _M_TO_NM, 1)
+                            if hdg_deg is not None: orbit_heading_deg = round(hdg_deg)
+                        break
         lat, lon   = dcs_to_latlon(xy[0], xy[1], theatre)
         wpts.append(Waypoint(
             name=name, x=xy[0], y=xy[1], lat=lat, lon=lon,
@@ -53,6 +78,11 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
             airdrome_id=int(airdrome) if airdrome is not None else None,
             link_unit_id=int(link_unit) if link_unit is not None else None,
             is_orbit=is_orbit,
+            orbit_alt_ft=orbit_alt_ft,
+            orbit_speed_kts=orbit_speed_kts,
+            orbit_width_nm=orbit_width_nm,
+            orbit_leg_nm=orbit_leg_nm,
+            orbit_heading_deg=orbit_heading_deg,
         ))
     return wpts
 

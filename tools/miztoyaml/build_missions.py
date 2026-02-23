@@ -180,6 +180,15 @@ def _classify_waypoints(flight: Flight,
             entry["aim_point_id"] = aim_point_id
         if shared_name is not None:
             entry["shared"] = True
+        # Orbit/anchor track — include parameters so the map can render a racetrack
+        if wp.is_orbit:
+            entry["orbit"] = {
+                "alt_ft":      wp.orbit_alt_ft,
+                "speed_kts":   wp.orbit_speed_kts,
+                "width_nm":    wp.orbit_width_nm,
+                "leg_nm":      wp.orbit_leg_nm,
+                "heading_deg": wp.orbit_heading_deg,
+            }
 
         result.append(entry)
 

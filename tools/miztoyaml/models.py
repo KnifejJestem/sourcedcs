@@ -46,6 +46,11 @@ class Waypoint:
     airdrome_id: int | None    # set for TakeOff waypoints from airfields
     link_unit_id: int | None   # set for TakeOff from carriers (unit id)
     is_orbit: bool             # waypoint has an Orbit task (tanker track)
+    orbit_alt_ft: float | None = None      # orbit altitude in feet
+    orbit_speed_kts: float | None = None   # orbit speed in knots
+    orbit_width_nm: float | None = None    # orbit track width in NM
+    orbit_leg_nm: float | None = None      # orbit leg length in NM
+    orbit_heading_deg: float | None = None  # hot leg heading in degrees
 
 
 @dataclass

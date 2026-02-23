@@ -511,6 +511,14 @@ steer_points:
     name: SAM-1 TR         # this waypoint lies on an aim point
     aim_point_id: TGT-A    # informational — set by miztoyaml.py when the waypoint
                            # overlaps an aim point; not used by the viewer
+  - coords: N35°24'25" E038°07'30"
+    name: ANCHOR           # orbit/racetrack anchor point (e.g. CAP station, tanker track)
+    orbit:
+      alt_ft:      25000   # orbit altitude in feet
+      speed_kts:   270     # orbit airspeed in knots
+      width_nm:    20.0    # track width (turn diameter) in NM
+      leg_nm:      49.9    # hot-leg length in NM
+      heading_deg: 5       # hot-leg heading in degrees true
 ```
 
 | Field | Type | Description |
@@ -519,6 +527,12 @@ steer_points:
 | `name_ref` | string | Name of an airfield (ICAO), carrier callsign or ID, or marshal point to use as the waypoint position |
 | `name` | string | Waypoint label shown on map |
 | `aim_point_id` | string | Optional — informational link to a registry aim point id.  Set by `miztoyaml.py` when a flight waypoint lies on an aim point; ignored by the viewer |
+| `orbit` | object | Optional — present when the waypoint has a DCS Orbit task (CAP station, tanker track).  The map renders a racetrack pattern using these parameters. |
+| `orbit.alt_ft` | number | Orbit altitude in feet |
+| `orbit.speed_kts` | number | Orbit airspeed in knots |
+| `orbit.width_nm` | number | Track width (total, i.e. turn diameter) in NM; the map uses half this value as the turn radius |
+| `orbit.leg_nm` | number | Hot-leg length in NM |
+| `orbit.heading_deg` | number | Hot-leg heading in degrees true |
 
 #### `control:`
 

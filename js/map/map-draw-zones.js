@@ -114,10 +114,11 @@ function drawPolygonAirspace(ctx, a, col, parent, showPopup) {
 // ── Anchor / racetrack airspace ──────────────────────────
 function drawAnchorAirspace(ctx, a, col, parent, showPopup) {
   const legNm   = a.legLengthNm || DEFAULT_LEG_NM;
+  const turnR   = a.widthNm != null ? a.widthNm / 2 : legNm / 4;
   const rPts = generateRacetrack(
     a.anchorPt.lat, a.anchorPt.lon,
     a.headingDeg || DEFAULT_HEADING, legNm,
-    legNm / 4,
+    turnR,
     a.direction === 'ccw',
   );
   const d = rPts.map((pt, i) =>
