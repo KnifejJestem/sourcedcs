@@ -17,6 +17,7 @@ Modules (in order):
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import re
 import zipfile
@@ -396,6 +397,86 @@ def condense_loadout(weapons: list[str]) -> list[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# dtc  —  DCS Data Transfer Cartridge parsing
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _dtc_freq(ch: dict) -> float | None:
+    """Return frequency from a DTC channel dict (handles 'freq' and 'frequency' keys)."""
+    f = ch.get('freq') or ch.get('frequency')
+    return float(f) if f is not None else None
+
+
+def _dtc_ch_num(key: str) -> int | None:
+    """Return channel number from 'Channel_N' key, or None for non-numeric keys (C, G, M, S)."""
+    m = re.match(r'^Channel_(\d+)$', key)
+    return int(m.group(1)) if m else None
+
+
+def parse_dtc_file(content: bytes) -> dict[str, dict[int, float]]:
+    """
+    Parse a DCS DTC JSON file.
+    Returns {radio_key: {channel_num: freq_mhz}} for COMM1, COMM2, etc.
+    Special non-numeric channels (GUARD, CUE, MAN) are skipped.
+    """
+    try:
+        data = json.loads(content.decode('utf-8', errors='replace'))['data']
+    except (json.JSONDecodeError, KeyError):
+        return {}
+    result: dict[str, dict[int, float]] = {}
+    for radio_key, channels in data.get('COMM', {}).items():
+        if not isinstance(channels, dict):
+            continue
+        presets: dict[int, float] = {}
+        for ch_key, ch_val in channels.items():
+            if not isinstance(ch_val, dict):
+                continue
+            n = _dtc_ch_num(ch_key)
+            if n is None:
+                continue
+            freq = _dtc_freq(ch_val)
+            if freq is not None:
+                presets[n] = freq
+        if presets:
+            result[radio_key] = presets
+    return result
+
+
+def load_dtc_files(z: zipfile.ZipFile) -> dict[str, dict]:
+    """
+    Load all DTC files from the miz archive.
+    Returns {dtc_name: {radio: {channel_num: freq_mhz}}}.
+    DTC name is the stem of the file (e.g. 'Broomstick_F16').
+    """
+    dtcs: dict[str, dict] = {}
+    for fname in z.namelist():
+        if fname.startswith('DTC/') and fname.endswith('.dtc'):
+            stem = Path(fname).stem
+            dtcs[stem] = parse_dtc_file(z.read(fname))
+    return dtcs
+
+
+def build_comms_from_dtc(dtc_channels: dict[str, dict[int, float]]) -> tuple[dict | None, dict | None]:
+    """
+    Classify DTC COMM channels into UHF (≥225 MHz) and VHF (<225 MHz) preset dicts.
+    Returns (uhf_presets, vhf_presets) where each is {channel_num: {freq_mhz: X}} or None.
+    Channels from COMM1 take priority; COMM2 fills in any gaps.
+    """
+    uhf: dict[int, dict] = {}
+    vhf: dict[int, dict] = {}
+    for radio in ('COMM1', 'COMM2'):
+        presets = dtc_channels.get(radio, {})
+        for ch_num, freq in presets.items():
+            if freq >= 225.0:
+                if ch_num not in uhf:
+                    uhf[ch_num] = {'freq_mhz': freq}
+            else:
+                if ch_num not in vhf:
+                    vhf[ch_num] = {'freq_mhz': freq}
+    return (dict(sorted(uhf.items())) or None,
+            dict(sorted(vhf.items())) or None)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # parse  —  Lua text → typed Python objects
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -426,6 +507,7 @@ class FlightUnit:
     onboard_num: str    # e.g. "101"
     skill: str          # Client / Excellent / High / etc.
     loadout: list[str]  # condensed weapon list
+    dtc_cartridge: str | None = None  # DTC cartridge name e.g. "Broomstick_F16"
 
 
 @dataclass
@@ -444,13 +526,14 @@ class Waypoint:
 @dataclass
 class Flight:
     id: str             # auto-assigned e.g. "FLT-1"
-    name: str           # group name e.g. "MARSHALL NORTH"
+    name: str           # group name e.g. "SHADOW-1"
     task: str           # human label e.g. "CAP"
     aircraft_type: str  # from first unit
     freq_mhz: float
     units: list[FlightUnit] = field(default_factory=list)
     waypoints: list[Waypoint] = field(default_factory=list)
     is_tanker: bool = False
+    dtc_cartridge: str | None = None  # primary DTC cartridge used by this flight
 
 
 @dataclass
@@ -499,6 +582,24 @@ def _strip_dcs_suffix(name: str) -> str:
          'EFTA07-4-1'         → 'EFTA07'
     """
     return re.sub(r'-\d+-\d+$', '', name)
+
+
+def _group_outer_name(gb: str) -> str | None:
+    """
+    Extract the group's own ["name"] field, ignoring nested sub-blocks.
+
+    In DCS Lua, a plane group block contains 'route' (with waypoint names) and
+    'units' (with unit names and callsign names) BEFORE the group-level name.
+    A flat search picks up the wrong name; this function strips those sub-blocks
+    first to ensure we only search the group's outer fields.
+    """
+    stripped = gb
+    for key in ('route', 'units'):
+        m = re.search(rf'\["{key}"\]\s*=\s*\{{', stripped)
+        if m:
+            close = lua_block_end(stripped, m.end() - 1)
+            stripped = stripped[:m.start()] + stripped[close + 1:]
+    return lua_str(stripped, 'name')
 
 
 def parse_groups(coalition_block: str, theatre: str) -> list[Group]:
@@ -769,7 +870,7 @@ def parse_flights_and_carriers(
             continue
 
         for _gi, gb in lua_iter_array(grp):
-            raw_name = lua_str(gb, 'name') or f"FLT-{flt_seq}"
+            raw_name = _group_outer_name(gb) or f"FLT-{flt_seq}"
             gname    = _strip_dcs_suffix(raw_name)
             task_raw = lua_str(gb, 'task') or 'Nothing'
             task     = TASK_LABELS.get(task_raw, task_raw.upper())
@@ -800,9 +901,21 @@ def parse_flights_and_carriers(
                         clsid = lua_str(pb, 'CLSID')
                         if clsid:
                             weapons_raw.append(resolve_clsid(clsid))
+                # Extract DTC cartridge name from this unit's DTC block
+                unit_dtc: str | None = None
+                unit_dtc_blk = lua_get_block(ub, 'DTC')
+                if unit_dtc_blk:
+                    carts_blk = lua_get_block(unit_dtc_blk, 'Cartridges')
+                    if carts_blk:
+                        for _ci, cb in lua_iter_array(carts_blk):
+                            n = lua_str(cb, 'name')
+                            if n:
+                                unit_dtc = n
+                                break
                 flight_units.append(FlightUnit(
                     type=utype, callsign=cs, onboard_num=onboard,
                     skill=skill, loadout=condense_loadout(weapons_raw),
+                    dtc_cartridge=unit_dtc,
                 ))
 
             if not flight_units:
@@ -812,6 +925,9 @@ def parse_flights_and_carriers(
             route  = lua_get_block(gb, 'route')
             wpts   = _parse_waypoints(route, theatre) if route else []
 
+            # Primary DTC for this flight = first unit that has one
+            flight_dtc = next((u.dtc_cartridge for u in flight_units if u.dtc_cartridge), None)
+
             flights.append(Flight(
                 id=f"FLT-{flt_seq}",
                 name=gname, task=task,
@@ -820,6 +936,7 @@ def parse_flights_and_carriers(
                 units=flight_units,
                 waypoints=wpts,
                 is_tanker=is_tanker,
+                dtc_cartridge=flight_dtc,
             ))
             flt_seq += 1
 
@@ -1471,6 +1588,11 @@ def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
         # Build targets list from aim_point hits in the route
         msn_targets = None if f.is_tanker else             _build_mission_targets(steer_pts, targets, f.task)
 
+        # Human-readable weapon list (e.g. ['5× AIM-120C', 'AIM-9M']) from the
+        # first unit — representative of the whole flight when all carry the same
+        # loadout. Companion to the compact ATO 'loadout' code (e.g. '603+').
+        first_unit_weapons = f.units[0].loadout or None if f.units else None
+
         msn: dict = {
             "mission_number":       msn_num,
             "callsign":             callsign,
@@ -1484,12 +1606,14 @@ def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
             "aircraft": {
                 "count":   count,
                 "type":    ac_type,
-                "loadout": loadout_str,
+                "loadout": loadout_str,   # compact ATO code e.g. "603+"
+                "weapons": first_unit_weapons,  # human-readable names
             },
-            "targets":      msn_targets,
-            "control":      {"agency_id": None},
-            "refuel":       None,
-            "steer_points": steer_pts or None,
+            "targets":         msn_targets,
+            "control":         {"agency_id": None},
+            "refuel":          None,
+            "steer_points":    steer_pts or None,
+            "dtc_cartridge":   f.dtc_cartridge,
         }
 
         missions.append(msn)
@@ -1514,7 +1638,7 @@ def build_carriers_ato(carriers: list[Carrier]) -> list[dict]:
 
 def build_doc(*, mission_name, mission_date, theatre,
               year, month, targets, ref_pts, acms, metar, wx_notes,
-              flights, carriers) -> dict:
+              flights, carriers, comms=None) -> dict:
 
     import hashlib
     # Strike package MSN start — deterministic from filename
@@ -1586,8 +1710,8 @@ def build_doc(*, mission_name, mission_date, theatre,
 
         "comms": {
             "wing_lead":   None,
-            "uhf_presets": None,
-            "vhf_presets": None,
+            "uhf_presets": comms.get("uhf_presets") if comms else None,
+            "vhf_presets": comms.get("vhf_presets") if comms else None,
         },
 
         "weather": {
@@ -1622,6 +1746,11 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
         mission_text = z.read("mission").decode("utf-8", errors="replace")
         theatre = z.read("theatre").decode().strip() \
                   if "theatre" in z.namelist() else "Syria"
+        # Load all DTC files from the archive
+        dtcs = load_dtc_files(z)
+
+    if dtcs:
+        print(f"[+] Found DTC files: {', '.join(sorted(dtcs))}")
 
     print(f"[+] Theatre={theatre}  coalition={coalition}  targets_from={opposing}")
 
@@ -1660,10 +1789,26 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
     flights, carriers = parse_flights_and_carriers(own_block or '', theatre)
     print(f"    {len(flights)} flights  |  {len(carriers)} carriers")
     for f in flights:
+        dtc_label = f"  dtc={f.dtc_cartridge}" if f.dtc_cartridge else ""
         print(f"  {f.id}: {f.name!r}  task={f.task}  ac={f.aircraft_type}  "
-              f"x{len(f.units)}  freq={f.freq_mhz}")
+              f"x{len(f.units)}  freq={f.freq_mhz}{dtc_label}")
     for c in carriers:
         print(f"  {c.id}: {c.type}  {c.name}  {c.deploy_coords}")
+
+    # DTC comms: pick the primary DTC from the first non-tanker flight with one
+    primary_dtc_name = next(
+        (f.dtc_cartridge for f in flights if not f.is_tanker and f.dtc_cartridge),
+        None
+    )
+    comms: dict | None = None
+    if primary_dtc_name and primary_dtc_name in dtcs:
+        uhf, vhf = build_comms_from_dtc(dtcs[primary_dtc_name])
+        comms = {"uhf_presets": uhf, "vhf_presets": vhf}
+        n_uhf = len(uhf) if uhf else 0
+        n_vhf = len(vhf) if vhf else 0
+        print(f"[+] DTC comms from '{primary_dtc_name}': {n_uhf} UHF, {n_vhf} VHF presets")
+    elif dtcs:
+        print(f"[!] No DTC matched to flights; DTC files present: {', '.join(sorted(dtcs))}")
 
     # ACO drawings
     print("[+] Parsing drawings…")
@@ -1687,6 +1832,7 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
         wx_notes=wx_notes,
         flights=flights,
         carriers=carriers,
+        comms=comms,
     )
 
 
