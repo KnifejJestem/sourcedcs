@@ -114,59 +114,48 @@ function drawTileBackground(ctx, mode, effectiveVLon, tileBounds) {
   return tileG;
 }
 
-// ── Tile image cache + Canvas 2D renderer ────────────────
+// ── LOD canvas pipeline ───────────────────────────────────
 //
-// Production mapping libraries (Leaflet, Mapbox GL) draw tiles onto a
-// single <canvas> element and pan/zoom it via CSS transform — this keeps
-// the compositor layer count at ONE regardless of how many tiles are
-// loaded, eliminating the per-<image> composite cost that makes SVG tile
-// layers slow.
+// Pure LOD (Level-Of-Detail) approach:
+//   1. During the loading screen, one <canvas> per zoom level is created and
+//      fully painted with tiles from _tileImageCache.
+//   2. During interaction, zoom level change = show/hide the right canvas.
+//      Zero canvas redraws happen during pan or zoom.
 //
-// _tileImageCache stores live HTMLImageElement objects.  Tiles that were
-// preloaded are already `img.complete` here, so drawTilesOnCanvas() can
-// call drawImage() synchronously — no deferred promise needed.
+// _tileImageCache stores live HTMLImageElement objects so drawTilesOnCanvas()
+// can call drawImage() synchronously — all images are loaded before painting.
 
 // Persistent store of loaded HTMLImageElement objects.
-// Key: the tile URL string.  Value: HTMLImageElement.
+// Key: tile URL string.  Value: HTMLImageElement.
 const _tileImageCache = new Map();
 
-// Monotonically incrementing token — used to cancel stale onload callbacks
-// when the canvas zoom level changes mid-render.
-let _canvasDrawVersion = 0;
+// Set of (mode/z/tx/ty) keys already in _tileImageCache to avoid duplicate
+// Image objects across re-renders or mode switches.
+const _preloadedKeys = new Set();
 
-// Draw all tiles for a given effective viewport longitude span onto canvas2d.
-// seaColor is drawn as background first so areas without a tile are not blank.
-// Any tile whose Image isn't complete yet registers an onload handler that
-// draws just that tile when it arrives (guarded by the draw-version token).
-function drawTilesOnCanvas(canvas2d, ctx, mode, effectiveVLon, seaColor) {
+// Paint all tiles for zoom level z onto canvas2d.
+// All tiles must already be in _tileImageCache (call preloadTiles first).
+// Tiles not in the cache (or not loaded) are silently skipped — the sea-color
+// background fill makes those gaps obvious only on un-preloaded deep zooms.
+function drawTilesOnCanvas(canvas2d, ctx, mode, z, seaColor) {
   const urlFn = TILE_URLS[mode];
   if (!urlFn) return;
 
-  const myVersion = ++_canvasDrawVersion;
-  const z   = _tileZoom(effectiveVLon, TILE_MAX_ZOOM[mode]);
-  const pow = Math.pow(2, z);
-
+  const pow  = Math.pow(2, z);
   const txMin = Math.max(0,       Math.floor((ctx.vMinLon + 180) / 360 * pow) - 1);
   const txMax = Math.min(pow - 1, Math.ceil( (ctx.vMaxLon + 180) / 360 * pow));
   const tyMin = Math.max(0,       _latToTileY(ctx.vMaxLat, z) - 1);
   const tyMax = Math.min(pow - 1, _latToTileY(ctx.vMinLat, z) + 1);
 
-  // Background fill — visible only while tiles load (typically invisible after
-  // preloading because all images are already complete).
   canvas2d.fillStyle = seaColor;
   canvas2d.fillRect(0, 0, ctx.W, ctx.H);
 
   for (let tx = txMin; tx <= txMax; tx++) {
     for (let ty = tyMin; ty <= tyMax; ty++) {
-      const url  = urlFn(z, tx, ty);
-      let   img  = _tileImageCache.get(url);
-      if (!img) {
-        img = new Image();
-        _tileImageCache.set(url, img);
-        img.src = url;
-      }
+      const url = urlFn(z, tx, ty);
+      const img = _tileImageCache.get(url);
+      if (!img || !img.complete || img.naturalWidth === 0) continue; // skip un-loaded
 
-      // Tile SVG-unit position (same coordinate space as the canvas content)
       const lon0 = tx       / pow * 360 - 180;
       const lon1 = (tx + 1) / pow * 360 - 180;
       const lat0 = _tileYToLat(ty,     z);
@@ -175,39 +164,39 @@ function drawTilesOnCanvas(canvas2d, ctx, mode, effectiveVLon, seaColor) {
       const y = ctx.by(lat0);
       const w = Math.max(0, ctx.bx(lon1) - x);
       const h = Math.max(0, ctx.by(lat1) - y);
-
-      if (img.complete && img.naturalWidth > 0) {
-        canvas2d.drawImage(img, x, y, w, h);
-      } else {
-        // Register onload so the tile paints as soon as it arrives.
-        // The version check ensures stale callbacks from a previous zoom
-        // level don't paint onto a canvas that has already been redrawn.
-        const _x = x, _y = y, _w = w, _h = h;
-        img.addEventListener('load', function handler() {
-          img.removeEventListener('load', handler);
-          if (_canvasDrawVersion === myVersion) canvas2d.drawImage(img, _x, _y, _w, _h);
-        });
-      }
+      canvas2d.drawImage(img, x, y, w, h);
     }
   }
 }
 
-// ── Tile preloader ────────────────────────────────────────
-// Warms both the browser HTTP cache AND _tileImageCache for all zoom
-// levels from z0 to TILE_MAX_ZOOM so that:
-//   • The loading screen shows accurate progress (z0 tiles awaited).
-//   • Any subsequent zoom is drawn from in-memory Image objects (instant).
-//
-// Coverage:
-//   z0, z0+1, z0+2 — full base viewport (pan-safe at 1×–4× zoom)
-//   z0+3 …         — centroid-scaled (~100 tiles each) for deeper zoom
-//
-// All zoom levels fire simultaneously — nothing waits for z0 to finish
-// before starting the background levels.
+// Build one pre-painted <canvas> per zoom level (z0 → TILE_MAX_ZOOM).
+// Called synchronously after preloadTiles() resolves so all images are complete.
+// Returns Map<zoomLevel, HTMLCanvasElement>.
+function buildLodCanvases(ctx, mode, seaColor) {
+  const maxZ     = TILE_MAX_ZOOM[mode];
+  const z0       = _tileZoom(ctx.vLon, maxZ);
+  const canvases = new Map();
 
-// Tracks which (mode/z/tx/ty) combos are already in _tileImageCache so
-// repeated renders don't create duplicate Image objects.
-const _preloadedKeys = new Set();
+  for (let z = z0; z <= maxZ; z++) {
+    const canvas  = document.createElement('canvas');
+    canvas.width  = ctx.W;
+    canvas.height = ctx.H;
+    drawTilesOnCanvas(canvas.getContext('2d'), ctx, mode, z, seaColor);
+    canvases.set(z, canvas);
+  }
+  return canvases;
+}
+
+// ── Tile preloader ────────────────────────────────────────
+// Downloads all tiles for every zoom level (z0 → TILE_MAX_ZOOM) into
+// _tileImageCache before buildLodCanvases() is called.
+//
+// Coverage per zoom level:
+//   z0, z0+1, z0+2 — full base viewport (pan-safe at 1×–4× zoom)
+//   z0+3 …         — centroid-scaled (~100 tiles each, deeper zoom)
+//
+// onProgress(loaded, total) fires as each tile resolves — use it to drive
+// a real progress bar covering all zoom levels, not just the first one.
 
 function preloadTiles(ctx, mode, onProgress) {
   const urlFn = TILE_URLS[mode];
@@ -218,6 +207,7 @@ function preloadTiles(ctx, mode, onProgress) {
   const lonCtr = (ctx.vMinLon + ctx.vMaxLon) / 2;
   const latCtr = (ctx.vMinLat + ctx.vMaxLat) / 2;
 
+  // Collect tile URLs for a geographic bounding box at zoom z.
   function tilesForZBounds(z, minLon, maxLon, minLat, maxLat) {
     const pow  = Math.pow(2, z);
     const txMn = Math.max(0,       Math.floor((minLon + 180) / 360 * pow) - 1);
@@ -237,27 +227,28 @@ function preloadTiles(ctx, mode, onProgress) {
     return urls;
   }
 
-  const z0Urls = tilesForZBounds(z0, ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat);
-  const bgUrls = [];
-  for (let z = z0 + 1; z <= maxZ; z++) {
+  // Collect all URLs for all zoom levels simultaneously.
+  const allUrls = [];
+  for (let z = z0; z <= maxZ; z++) {
     const k = z - z0;
     if (k <= 2) {
-      bgUrls.push(...tilesForZBounds(z, ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat));
+      allUrls.push(...tilesForZBounds(z, ctx.vMinLon, ctx.vMaxLon, ctx.vMinLat, ctx.vMaxLat));
     } else {
+      // Centroid-scaled: 1/2^k of the viewport on each side of the centre
       const scale   = Math.pow(2, k);
       const halfLon = ctx.vLon / (2 * scale);
       const halfLat = ctx.vLat / (2 * scale);
-      bgUrls.push(...tilesForZBounds(z,
+      allUrls.push(...tilesForZBounds(z,
         lonCtr - halfLon, lonCtr + halfLon, latCtr - halfLat, latCtr + halfLat));
     }
   }
 
-  const z0Total  = z0Urls.length;
-  let   z0Loaded = 0;
+  if (allUrls.length === 0) return Promise.resolve();
 
-  // Load a URL: reuse an existing cache entry if available, otherwise create
-  // a new Image, store it in _tileImageCache, and resolve when done.
-  function loadOne(url, isZ0) {
+  const total  = allUrls.length;
+  let   loaded = 0;
+
+  function loadOne(url) {
     let img = _tileImageCache.get(url);
     if (!img) {
       img = new Image();
@@ -265,22 +256,22 @@ function preloadTiles(ctx, mode, onProgress) {
       img.src = url;
     }
     if (img.complete) {
-      if (isZ0) { z0Loaded++; if (onProgress) onProgress(z0Loaded, z0Total); }
+      loaded++;
+      if (onProgress) onProgress(loaded, total);
       return Promise.resolve();
     }
     return new Promise(resolve => {
-      img.addEventListener('load',  function h() { img.removeEventListener('load',  h); img.removeEventListener('error', h); if (isZ0) { z0Loaded++; if (onProgress) onProgress(z0Loaded, z0Total); } resolve(); });
-      img.addEventListener('error', function h() { img.removeEventListener('load',  h); img.removeEventListener('error', h); if (isZ0) { z0Loaded++; if (onProgress) onProgress(z0Loaded, z0Total); } resolve(); });
+      function done() { loaded++; if (onProgress) onProgress(loaded, total); resolve(); }
+      img.addEventListener('load',  function h() {
+        img.removeEventListener('load', h); img.removeEventListener('error', h); done();
+      });
+      img.addEventListener('error', function h() {
+        img.removeEventListener('load', h); img.removeEventListener('error', h); done();
+      });
     });
   }
 
-  // All levels start simultaneously.
-  bgUrls.forEach(url => loadOne(url, false));
-  const z0Promise = z0Total > 0
-    ? Promise.all(z0Urls.map(url => loadOne(url, true)))
-    : Promise.resolve();
-
-  return z0Promise;
+  return Promise.all(allUrls.map(loadOne));
 }
 
 // ── Grid ─────────────────────────────────────────────────

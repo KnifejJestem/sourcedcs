@@ -74,12 +74,17 @@ async function renderMAP(ato) {
         <div class="map-preload-bar-wrap"><div class="map-preload-bar" id="map-preload-bar"></div></div>`;
       container.appendChild(overlay);
 
-      // Real progress bar: updates as z0 tiles actually load.
+      // Real progress bar: updates as tiles actually load (all zoom levels).
       const bar = overlay.querySelector('#map-preload-bar');
       await preloadTiles(tileCtx, mapMode, (loaded, total) => {
         if (bar && total > 0) bar.style.width = Math.round(loaded / total * 100) + '%';
       });
       if (bar) bar.style.width = '100%';
+
+      // Build one pre-painted canvas per zoom level (LOD).
+      // All tiles are complete in _tileImageCache, so this is synchronous.
+      const sea = (STATE.theme === 'movie') ? '#06111e' : '#7aaec8';
+      STATE.mapUI._lodCanvases = buildLodCanvases(tileCtx, mapMode, sea);
 
       // Fade the overlay out while the map renders underneath.
       // The overlay is pointer-events:none so it doesn't block interaction.
@@ -144,5 +149,8 @@ function _buildTileCtx(points, routes, airspaces) {
     vMinLat -= extra; vMaxLat += extra; vLat = vMaxLat - vMinLat;
   }
 
-  return { vMinLon, vMaxLon, vMinLat, vMaxLat, vLon, vLat };
+  // bx/by: project lon/lat → SVG pixel coordinates (equirectangular).
+  return { vMinLon, vMaxLon, vMinLat, vMaxLat, vLon, vLat, W, H,
+           bx: lon => (lon - vMinLon) / vLon * W,
+           by: lat => (vMaxLat - lat) / vLat * H };
 }
