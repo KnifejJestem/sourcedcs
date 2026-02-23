@@ -408,8 +408,11 @@ def yaml_to_ato(text: str) -> ATO:
     # Resolve bullseye if it's a string reference to registry.reference_points
     bullseye_d = gc_d.get('bullseye')
     if isinstance(bullseye_d, str):
-        ref_pts = reg.get('reference_points', {})
-        rp = ref_pts.get(bullseye_d, {})
+        ref_pts = reg.get('reference_points', [])
+        if isinstance(ref_pts, list):
+            rp = next((r for r in ref_pts if r.get('name') == bullseye_d), {})
+        else:
+            rp = ref_pts.get(bullseye_d, {})
         bullseye_d = {'name': rp.get('name', bullseye_d), 'coords': rp.get('coords', '')}
 
     gc = GlobalControl(primary_freq=gc_d.get('primary_freq_mhz'), modulation=gc_d.get('modulation'),

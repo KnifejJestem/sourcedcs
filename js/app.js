@@ -420,20 +420,26 @@ function loadPackage_obj(data) {
 
   // ── Resolve registry reference_points: bullseye + marshal_points ─
   if (pkg.registry?.reference_points && pkg.ato) {
+    const refPts = pkg.registry.reference_points;
+    // Support both list (new) and dict (legacy) formats
+    const refList = Array.isArray(refPts)
+      ? refPts
+      : Object.entries(refPts).map(([id, rp]) => ({ name: id, ...rp }));
+
     // Resolve bullseye if it's a string reference
     const gc = pkg.ato.global_control;
     if (gc && typeof gc.bullseye === 'string') {
-      const ref = pkg.registry.reference_points[gc.bullseye];
+      const ref = refList.find(rp => rp.name === gc.bullseye);
       if (ref) {
-        gc.bullseye = { name: ref.name || gc.bullseye, coords: ref.coords };
+        gc.bullseye = { name: ref.name, coords: ref.coords };
       }
     }
 
     // Always rebuild marshal_points from registry so edits are reflected
     pkg.ato.marshal_points = [];
-    Object.entries(pkg.registry.reference_points).forEach(([id, rp]) => {
+    refList.forEach(rp => {
       if (rp.type === 'marshal') {
-        pkg.ato.marshal_points.push({ id, name: rp.name, coords: rp.coords, altitude: rp.altitude });
+        pkg.ato.marshal_points.push({ name: rp.name, coords: rp.coords, altitude: rp.altitude });
       }
     });
   }
