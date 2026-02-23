@@ -491,50 +491,62 @@ function loadPackage_obj(data) {
     });
   }
 
+  // Normalize: target (singular) → targets (list) for backward compatibility
+  (pkg.ato?.missions || []).forEach(m => {
+    if (m.target && !m.targets) {
+      m.targets = [m.target];
+      delete m.target;
+    } else if (!m.targets) {
+      m.targets = [];
+    }
+  });
+
   // Resolve target references in aim_points
   if (pkg.ato?.targets && pkg.ato?.missions) {
     const tgtMap = {};
     pkg.ato.targets.forEach(t => { if (t.id) tgtMap[t.id] = t; });
 
     pkg.ato.missions.forEach(m => {
-      // Resolve target_id: pull aim_points from the referenced registry target
-      if (m.target?.target_id && tgtMap[m.target.target_id]) {
-        const ref = tgtMap[m.target.target_id];
-        if (!m.target.aim_points && ref.aim_points) {
-          // No explicit aim_points — pull all from the target
-          m.target.aim_points = ref.aim_points.map(ap => ({
-            coords: ap.coords, name: ap.name || ap.id, elevation: ap.elevation,
-            _resolved_target: ref,
-          }));
-        } else if (m.target.aim_points && ref.aim_points) {
-          // Explicit aim_points — resolve aim_point_id references
-          const apMap = {};
-          ref.aim_points.forEach(ap => { if (ap.id) apMap[ap.id] = ap; });
-          m.target.aim_points = m.target.aim_points.map(ap => {
-            if (ap.aim_point_id && apMap[ap.aim_point_id]) {
-              const resolved = apMap[ap.aim_point_id];
-              return {
-                coords: ap.coords || resolved.coords,
-                name: ap.name || resolved.name || resolved.id,
-                elevation: ap.elevation || resolved.elevation,
-                _resolved_target: ref,
-              };
-            }
-            return ap;
-          });
+      (m.targets || []).forEach(target => {
+        // Resolve target_id: pull aim_points from the referenced registry target
+        if (target.target_id && tgtMap[target.target_id]) {
+          const ref = tgtMap[target.target_id];
+          if (!target.aim_points && ref.aim_points) {
+            // No explicit aim_points — pull all from the target
+            target.aim_points = ref.aim_points.map(ap => ({
+              coords: ap.coords, name: ap.name || ap.id, elevation: ap.elevation,
+              _resolved_target: ref,
+            }));
+          } else if (target.aim_points && ref.aim_points) {
+            // Explicit aim_points — resolve aim_point_id references
+            const apMap = {};
+            ref.aim_points.forEach(ap => { if (ap.id) apMap[ap.id] = ap; });
+            target.aim_points = target.aim_points.map(ap => {
+              if (ap.aim_point_id && apMap[ap.aim_point_id]) {
+                const resolved = apMap[ap.aim_point_id];
+                return {
+                  coords: ap.coords || resolved.coords,
+                  name: ap.name || resolved.name || resolved.id,
+                  elevation: ap.elevation || resolved.elevation,
+                  _resolved_target: ref,
+                };
+              }
+              return ap;
+            });
+          }
         }
-      }
 
-      // Resolve legacy target_ref in individual aim_points
-      (m.target?.aim_points || []).forEach((ap, i, arr) => {
-        if (typeof ap === 'object' && ap.target_ref && tgtMap[ap.target_ref]) {
-          const ref = tgtMap[ap.target_ref];
-          if (!ap.coords)    ap.coords    = ref.coords;
-          if (!ap.elevation) ap.elevation = ref.elevation;
-          if (!ap.name)      ap.name      = ref.name || ref.id;
-          ap._resolved_target = ref;  // full target metadata for the UI
-          arr[i] = ap;
-        }
+        // Resolve legacy target_ref in individual aim_points
+        (target.aim_points || []).forEach((ap, i, arr) => {
+          if (typeof ap === 'object' && ap.target_ref && tgtMap[ap.target_ref]) {
+            const ref = tgtMap[ap.target_ref];
+            if (!ap.coords)    ap.coords    = ref.coords;
+            if (!ap.elevation) ap.elevation = ref.elevation;
+            if (!ap.name)      ap.name      = ref.name || ref.id;
+            ap._resolved_target = ref;  // full target metadata for the UI
+            arr[i] = ap;
+          }
+        });
       });
     });
   }

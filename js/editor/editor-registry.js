@@ -242,7 +242,9 @@ function _cascadeRegistryDelete(catKey, id) {
     });
   } else if (catKey === 'targets') {
     missions.forEach(function (m) {
-      if (m.target && m.target.target_id === id) m.target.target_id = undefined;
+      (m.targets || []).forEach(function (t) {
+        if (t.target_id === id) t.target_id = undefined;
+      });
     });
   } else if (catKey === 'control_agencies') {
     // Clear global_control reference

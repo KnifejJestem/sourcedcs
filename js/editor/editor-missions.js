@@ -112,7 +112,7 @@ function _buildTimingSection(body, m, f) {
 
 function _buildTargetSection(body, m, f) {
   editorSectionTitle(body, 'TARGET');
-  var tgt = m.target || {};
+  var tgt = (m.targets && m.targets[0]) || {};
   f.tgt_location = editorField(body, 'Location',  tgt.location,   { placeholder: 'e.g. KHASAB' });
   f.tgt_altitude = editorField(body, 'Altitude',  tgt.altitude,   { placeholder: 'e.g. E73FT' });
   var tgtOpts = _registryOptions('targets', function (id, t) { return id + (t.name ? ' — ' + t.name : ''); });
@@ -198,15 +198,16 @@ function _saveMissionFromForm(onSave) {
   var hasTgt = f.tgt_location.value || f.tgt_target_id.value ||
                f.tgt_tot_net.value || f.tgt_tos.value;
   if (hasTgt) {
-    m.target = m.target || {};
-    m.target.location              = f.tgt_location.value || undefined;
-    m.target.altitude              = f.tgt_altitude.value || undefined;
-    m.target.target_id             = f.tgt_target_id.value || undefined;
-    m.target.mission_type_override = f.tgt_mission_type_override.value || undefined;
-    m.target.tot_net               = f.tgt_tot_net.value || undefined;
-    m.target.tot_nlt               = f.tgt_tot_nlt.value || undefined;
-    m.target.tos                   = f.tgt_tos.value || undefined;
-    m.target.toffs                 = f.tgt_toffs.value || undefined;
+    m.targets = m.targets || [{}];
+    m.targets[0] = m.targets[0] || {};
+    m.targets[0].location              = f.tgt_location.value || undefined;
+    m.targets[0].altitude              = f.tgt_altitude.value || undefined;
+    m.targets[0].target_id             = f.tgt_target_id.value || undefined;
+    m.targets[0].mission_type_override = f.tgt_mission_type_override.value || undefined;
+    m.targets[0].tot_net               = f.tgt_tot_net.value || undefined;
+    m.targets[0].tot_nlt               = f.tgt_tot_nlt.value || undefined;
+    m.targets[0].tos                   = f.tgt_tos.value || undefined;
+    m.targets[0].toffs                 = f.tgt_toffs.value || undefined;
   }
 
   // Control
