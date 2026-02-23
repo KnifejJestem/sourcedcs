@@ -41,7 +41,9 @@
   min-width: 0; /* prevent flex overflow */
 }
 
-.map-container svg {
+/* SVG inside .map-viewport is position:absolute;inset:0 (inline) — no additional sizing needed.
+   The rule below only affects chart-mode SVGs that are not inside .map-viewport. */
+.map-container > svg {
   max-width: 100%;
   height: auto;
 }

@@ -166,7 +166,14 @@ function drawMap(container, points, routes, geoData, airspaces) {
   const mapViewport = el('div', 'map-viewport');
 
   // ── SVG skeleton ──────────────────────────────────────────
-  const svg = makeSvgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%' });
+  // preserveAspectRatio="none" makes the SVG fill the viewport exactly,
+  // matching the canvas element which also stretches to fill its container.
+  // Without this the SVG letterboxes (xMidYMid meet) but the canvas does not,
+  // causing a pixel-level misalignment between tiles and SVG overlays.
+  const svg = makeSvgEl('svg', {
+    viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%',
+    preserveAspectRatio: 'none',
+  });
   svg.style.cssText = 'display:block;cursor:grab;touch-action:none;position:absolute;inset:0;';
 
   // Clip path — hard edge so nothing drawn outside the canvas bounds is visible
@@ -432,12 +439,15 @@ function drawMap(container, points, routes, geoData, airspaces) {
 
     // Tile canvas CSS transform — GPU composited, zero JS per frame for pan.
     // The canvas content is drawn in SVG coordinate units (0–W × 0–H), so
-    // the CSS translate must be converted to CSS pixels via the ratio.
+    // the CSS translate must be converted to CSS pixels via ratioX / ratioY.
+    // Both the SVG (preserveAspectRatio="none") and the canvas (width:100%;
+    // height:100%) fill the viewport with the same scale factors, so this
+    // formula guarantees pixel-perfect alignment between tiles and overlays.
     if (tileCanvas) {
-      // clientWidth is a cached layout value — no forced reflow.
-      const ratio = mapViewport.clientWidth / W;
+      const rX = mapViewport.clientWidth  / W;
+      const rY = mapViewport.clientHeight / H;
       tileCanvas.style.transform =
-        `translate(${(state.tx * ratio).toFixed(2)}px,${(state.ty * ratio).toFixed(2)}px) scale(${state.sc.toFixed(5)})`;
+        `translate(${(state.tx * rX).toFixed(2)}px,${(state.ty * rY).toFixed(2)}px) scale(${state.sc.toFixed(5)})`;
     }
 
     // Damped inverse scaling keeps markers readable as you zoom in
