@@ -24,9 +24,13 @@ function collectData(ato, aco) {
     if (p && af.icao) namedLocs[af.icao.trim().toUpperCase()] = p;
   });
   (ato.carriers || []).forEach(cv => {
-    if (cv.deploy_coords && cv.callsign) {
+    if (cv.deploy_coords) {
       const p = parseCoord(cv.deploy_coords);
-      if (p) namedLocs[cv.callsign.trim().toUpperCase()] = p;
+      if (p) {
+        // Key by callsign AND by registry id so both "ROUGH RIDER" and "CVN-71" resolve
+        if (cv.callsign) namedLocs[cv.callsign.trim().toUpperCase()] = p;
+        if (cv.id)       namedLocs[cv.id.trim().toUpperCase()]       = p;
+      }
     }
   });
   (ato.marshal_points || []).forEach(mp => {

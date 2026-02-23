@@ -1682,6 +1682,18 @@ def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
             f.units[0].loadout if f.units else [], f.task)
 
         deploy, recovery = _home_base(f, airfields, carriers)
+        # For tanker flights that couldn't resolve a home base from waypoints,
+        # fall back to home_base_icao so at least a deploy marker appears on the map.
+        if not deploy and f.is_tanker:
+            # Look for any airfield in waypoints by scanning airdrome IDs
+            for wp in (f.waypoints or []):
+                if wp.airdrome_id is not None:
+                    info = AIRDROME_IDS.get(wp.airdrome_id)
+                    if info:
+                        deploy = info["icao"]
+                        break
+        if not recovery and deploy:
+            recovery = deploy
 
         # Build steer points — also mutates ref_pts to add any marshal points
         steer_pts = _classify_waypoints(f, flights, targets, carriers, ref_pts)
@@ -1994,7 +2006,7 @@ def main():
     out = args.output or (Path(args.miz).stem + ".yaml")
     doc = extract(args.miz, args.coalition)
 
-    with open(out, "w") as f:
+    with open(out, "w", encoding="utf-8") as f:
         yaml.dump(doc, f, allow_unicode=True, sort_keys=False,
                   default_flow_style=False, width=120)
     print(f"\n[OK] {out}")
