@@ -215,14 +215,14 @@ _WEAPON_CAT: dict[str, tuple[str, str | None]] = {
     "AIM-9M":   ("fox2", None), "AIM-9X":     ("fox2", None),
     "AIM-9X-2": ("fox2", None), "AIM-9L":     ("fox2", None),
     # ── AGM SEAD ─────────────────────────────────────────────────────────────
-    "AGM-88C HARM": ("agm", "88"), "AGM-88B HARM": ("agm", "88"),
+    "AGM-88C HARM": ("agm", "88C"), "AGM-88B HARM": ("agm", "88B"),
     "AGM-88 HARM":  ("agm", "88"),
     # ── AGM Maverick ─────────────────────────────────────────────────────────
-    "AGM-65D": ("agm", "65"), "AGM-65E": ("agm", "65"), "AGM-65F": ("agm", "65"),
-    "AGM-65G": ("agm", "65"), "AGM-65H": ("agm", "65"), "AGM-65K": ("agm", "65"),
-    "AGM-65L": ("agm", "65"), "AGM-65R": ("agm", "65"),
+    "AGM-65D": ("agm", "65D"), "AGM-65E": ("agm", "65E"), "AGM-65F": ("agm", "65F"),
+    "AGM-65G": ("agm", "65G"), "AGM-65H": ("agm", "65H"), "AGM-65K": ("agm", "65K"),
+    "AGM-65L": ("agm", "65L"), "AGM-65R": ("agm", "65R"),
     # ── AGM Stand-off ────────────────────────────────────────────────────────
-    "AGM-154A JSOW": ("agm", "154"), "AGM-154C JSOW": ("agm", "154"),
+    "AGM-154A JSOW": ("agm", "154A"), "AGM-154C JSOW": ("agm", "154C"),
     "AGM-158 JASSM": ("agm", "158"),
     # ── GBU Paveway ──────────────────────────────────────────────────────────
     "GBU-10": ("agm", "10"), "GBU-12": ("agm", "12"),
@@ -244,7 +244,13 @@ _GUN_TASKS = {"CAP", "CAS", "SEAD", "STRIKE", "ESCORT", "INTERCEPT", "FAC(A)"}
 
 
 def encode_loadout(condensed: list[str], task: str) -> str:
-    """Convert condensed weapon list to the compact AAA+NXccc loadout code."""
+    """Convert condensed weapon list to the compact AAA+NXccc[L] loadout code.
+
+    The weapon code after 'X' is purely numeric for single-variant weapon families
+    (e.g. '38' for GBU-38).  For families that have multiple variants sharing the
+    same base number, a letter suffix disambiguates them (e.g. '65D' vs '65K' for
+    AGM-65D vs AGM-65K, '88C' for AGM-88C HARM, '154A' for AGM-154A JSOW).
+    """
     fox3 = fox1 = fox2 = 0
     agm_groups: dict[str, int] = {}
 
