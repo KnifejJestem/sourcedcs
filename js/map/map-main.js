@@ -81,11 +81,6 @@ async function renderMAP(ato) {
       });
       if (bar) bar.style.width = '100%';
 
-      // Build one pre-painted canvas per zoom level (LOD).
-      // All tiles are complete in _tileImageCache, so this is synchronous.
-      const sea = (STATE.theme === 'movie') ? '#06111e' : '#7aaec8';
-      STATE.mapUI._lodCanvases = buildLodCanvases(tileCtx, mapMode, sea);
-
       // Fade the overlay out while the map renders underneath.
       // The overlay is pointer-events:none so it doesn't block interaction.
       overlay.classList.add('map-preload-fadeout');

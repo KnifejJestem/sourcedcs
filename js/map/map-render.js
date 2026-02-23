@@ -204,12 +204,11 @@ function drawMap(container, points, routes, geoData, airspaces) {
   let effectiveCtx = ctx; // ctx used for grid + grid labels
 
   // Tile canvas — used in non-chart modes.
-  // One pre-painted <canvas> per zoom level sits inside lodContainer.
-  // Pan/zoom → CSS transform on lodContainer (GPU, zero JS per frame).
-  // Zoom level change → toggle display on child canvases (zero redraw).
-  let lodContainer = null;
-  let lodCanvases  = null; // Map<z, HTMLCanvasElement>
-  let activeZ      = -1;
+  // Viewport-sized bitmap (set lazily in applyTransform once in DOM).
+  // No CSS transform — tiles are drawn at CSS pixel positions directly.
+  // Repainted on every applyTransform() call from _tileImageCache (fast).
+  let tileCanvas = null;
+  let tileCtx2d  = null;
 
   if (mapMode === 'chart') {
     // Chart mode: SVG sea rect + vector layers
@@ -221,23 +220,14 @@ function drawMap(container, points, routes, geoData, airspaces) {
     content.appendChild(drawLand(ctx, geoData));
     content.appendChild(drawCities(ctx, geoData));
   } else {
-    // Tile modes: LOD canvas stack + SVG grid/routes/markers overlay.
-    // STATE.mapUI._lodCanvases contains one pre-painted canvas per zoom level,
-    // built by buildLodCanvases() in map-main.js after preloadTiles() resolved.
-    lodCanvases = STATE.mapUI._lodCanvases || new Map();
-    activeZ     = _tileZoom(ctx.vLon / state.sc, TILE_MAX_ZOOM[mapMode]);
-
-    // Single container div that receives the CSS pan/zoom transform.
-    // All LOD canvases sit inside it — only the active one is visible.
-    lodContainer = document.createElement('div');
-    lodContainer.style.cssText = 'position:absolute;inset:0;transform-origin:0 0;will-change:transform;';
-    mapViewport.appendChild(lodContainer);
-
-    lodCanvases.forEach((canvas, z) => {
-      canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
-      canvas.style.display = (z === activeZ) ? '' : 'none';
-      lodContainer.appendChild(canvas);
-    });
+    // Tile modes: single canvas background + SVG grid/routes/markers overlay.
+    // Canvas is viewport-sized (no CSS transform — drawn in CSS pixel coords).
+    tileCanvas = document.createElement('canvas');
+    tileCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+    mapViewport.appendChild(tileCanvas);
+    tileCtx2d = tileCanvas.getContext('2d');
+    // Canvas bitmap dimensions set lazily in applyTransform() once the
+    // mapViewport is in the DOM and clientWidth/Height are available.
 
     // Grid with higher contrast so it is readable over imagery.
     effectiveCtx = Object.assign({}, ctx, {
@@ -442,14 +432,21 @@ function drawMap(container, points, routes, geoData, airspaces) {
     content.setAttribute('transform',
       `translate(${state.tx.toFixed(2)},${state.ty.toFixed(2)}) scale(${state.sc.toFixed(5)})`);
 
-    // LOD container CSS transform — GPU composited, one assignment for all canvases.
-    // The container is drawn in SVG coordinate units (0–W × 0–H); CSS translate
-    // is scaled to CSS pixels via separate ratioX / ratioY (non-square viewports).
-    if (lodContainer) {
-      const rX = mapViewport.clientWidth  / W;
-      const rY = mapViewport.clientHeight / H;
-      lodContainer.style.transform =
-        `translate(${(state.tx * rX).toFixed(2)}px,${(state.ty * rY).toFixed(2)}px) scale(${state.sc.toFixed(5)})`;
+    // Tile canvas — painted in CSS pixel coordinates so 1 bitmap pixel = 1
+    // CSS display pixel at all zoom levels (no CSS scale = no pixelation).
+    if (tileCtx2d) {
+      const vpW = mapViewport.clientWidth;
+      const vpH = mapViewport.clientHeight;
+      // Lazily set bitmap dimensions to match the viewport (first call only,
+      // or after a resize).  Setting canvas.width also clears the bitmap.
+      if (vpW > 0 && vpH > 0) {
+        if (tileCanvas.width !== vpW || tileCanvas.height !== vpH) {
+          tileCanvas.width  = vpW;
+          tileCanvas.height = vpH;
+        }
+        drawTilesOnCanvas(tileCtx2d, ctx, mapMode,
+          state.tx, state.ty, state.sc, vpW, vpH, C.sea);
+      }
     }
 
     // Damped inverse scaling keeps markers readable as you zoom in
@@ -459,25 +456,10 @@ function drawMap(container, points, routes, geoData, airspaces) {
     });
     gridLabels.redraw(state.tx, state.ty, state.sc);
     redrawMeasure();
-    refreshTilesIfNeeded();
     // Persist to centralized state
     STATE.mapUI.tx = state.tx;
     STATE.mapUI.ty = state.ty;
     STATE.mapUI.sc = state.sc;
-  }
-
-  // Switch to the LOD canvas whose zoom level matches the current state.sc.
-  // Zoom level change = show the right canvas, hide the rest.  Zero redraw.
-  function refreshTilesIfNeeded() {
-    if (!lodCanvases || !lodCanvases.size) return;
-    const neededZ = _tileZoom(ctx.vLon / state.sc, TILE_MAX_ZOOM[mapMode]);
-    if (neededZ === activeZ) return; // same LOD — CSS transform already handles it
-
-    const prev = lodCanvases.get(activeZ);
-    const next = lodCanvases.get(neededZ);
-    if (prev) prev.style.display = 'none';
-    if (next) next.style.display = '';
-    activeZ = neededZ;
   }
 
   function clamp() {

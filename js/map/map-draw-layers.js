@@ -114,77 +114,94 @@ function drawTileBackground(ctx, mode, effectiveVLon, tileBounds) {
   return tileG;
 }
 
-// ── LOD canvas pipeline ───────────────────────────────────
+// ── Canvas tile renderer ──────────────────────────────────
 //
-// Pure LOD (Level-Of-Detail) approach:
-//   1. During the loading screen, one <canvas> per zoom level is created and
-//      fully painted with tiles from _tileImageCache.
-//   2. During interaction, zoom level change = show/hide the right canvas.
-//      Zero canvas redraws happen during pan or zoom.
+// All tiles preloaded into _tileImageCache are drawn synchronously via
+// drawImage().  The canvas uses CSS pixel coordinates so that 1 bitmap
+// pixel = 1 CSS display pixel — no upscaling, no pixelation at any zoom.
 //
-// _tileImageCache stores live HTMLImageElement objects so drawTilesOnCanvas()
-// can call drawImage() synchronously — all images are loaded before painting.
+// On every pan/zoom event drawTilesOnCanvas() is called with the current
+// (stateTx, stateTy, stateSc) values.  Tile positions are computed as:
+//   cssX = (ctx.bx(lon) * stateSc + stateTx) * rX
+//   cssY = (ctx.by(lat) * stateSc + stateTy) * rY
+// which exactly matches the SVG content-group transform, keeping tile and
+// overlay layers pixel-perfectly aligned without any CSS transform on the canvas.
 
 // Persistent store of loaded HTMLImageElement objects.
 // Key: tile URL string.  Value: HTMLImageElement.
 const _tileImageCache = new Map();
 
-// Set of (mode/z/tx/ty) keys already in _tileImageCache to avoid duplicate
-// Image objects across re-renders or mode switches.
+// Set of (mode/z/tileX/tileY) keys already in _tileImageCache to avoid
+// duplicate Image objects across re-renders or mode switches.
 const _preloadedKeys = new Set();
 
-// Paint all tiles for zoom level z onto canvas2d.
-// All tiles must already be in _tileImageCache (call preloadTiles first).
-// Tiles not in the cache (or not loaded) are silently skipped — the sea-color
-// background fill makes those gaps obvious only on un-preloaded deep zooms.
-function drawTilesOnCanvas(canvas2d, ctx, mode, z, seaColor) {
+// Paint all tiles visible at the current pan/zoom onto canvas2d.
+// vpW × vpH: canvas bitmap dimensions (= mapViewport.clientWidth/Height).
+// stateTx, stateTy, stateSc: current pan/zoom state (SVG user-unit coords).
+// Tiles from _tileImageCache are drawn at their exact CSS pixel position;
+// cache-miss tiles are silently skipped (sea-color background shows through).
+function drawTilesOnCanvas(canvas2d, ctx, mode, tx, ty, sc, vpW, vpH, seaColor) {
   const urlFn = TILE_URLS[mode];
-  if (!urlFn) return;
+  if (!urlFn || vpW <= 0 || vpH <= 0) return;
 
-  const pow  = Math.pow(2, z);
-  const txMin = Math.max(0,       Math.floor((ctx.vMinLon + 180) / 360 * pow) - 1);
-  const txMax = Math.min(pow - 1, Math.ceil( (ctx.vMaxLon + 180) / 360 * pow));
-  const tyMin = Math.max(0,       _latToTileY(ctx.vMaxLat, z) - 1);
-  const tyMax = Math.min(pow - 1, _latToTileY(ctx.vMinLat, z) + 1);
+  // Scale factors: SVG user units → CSS pixels
+  // (preserveAspectRatio="none" on SVG, so X and Y scale independently)
+  const rX = vpW / ctx.W;
+  const rY = vpH / ctx.H;
 
+  // Tile zoom level matching the current effective visible lon span
+  const z   = _tileZoom(ctx.vLon / sc, TILE_MAX_ZOOM[mode]);
+  const pow = Math.pow(2, z);
+
+  // Visible SVG user-unit range (what's on screen right now):
+  //   cssX = (svgX * sc + tx) * rX = 0  → svgX = -tx / sc
+  //   cssX = vpW                         → svgX = (ctx.W - tx) / sc
+  const svgXMin = -tx / sc;
+  const svgXMax = (ctx.W - tx) / sc;
+  const svgYMin = -ty / sc;
+  const svgYMax = (ctx.H  - ty) / sc;
+
+  // Convert SVG unit range → geographic bounds
+  const visMinLon = svgXMin / ctx.W * ctx.vLon + ctx.vMinLon;
+  const visMaxLon = svgXMax / ctx.W * ctx.vLon + ctx.vMinLon;
+  const visMaxLat = ctx.vMaxLat - svgYMin / ctx.H * ctx.vLat;
+  const visMinLat = ctx.vMaxLat - svgYMax / ctx.H * ctx.vLat;
+
+  // Tile indices covering the visible area (±1 tile buffer)
+  const tileXMin = Math.max(0,       Math.floor((visMinLon + 180) / 360 * pow) - 1);
+  const tileXMax = Math.min(pow - 1, Math.ceil( (visMaxLon + 180) / 360 * pow));
+  const tileYMin = Math.max(0,       _latToTileY(visMaxLat, z) - 1);
+  const tileYMax = Math.min(pow - 1, _latToTileY(visMinLat, z) + 1);
+
+  // Sea-color background — shows only where tiles are missing from cache
   canvas2d.fillStyle = seaColor;
-  canvas2d.fillRect(0, 0, ctx.W, ctx.H);
+  canvas2d.fillRect(0, 0, vpW, vpH);
 
-  for (let tx = txMin; tx <= txMax; tx++) {
-    for (let ty = tyMin; ty <= tyMax; ty++) {
-      const url = urlFn(z, tx, ty);
+  for (let tileX = tileXMin; tileX <= tileXMax; tileX++) {
+    for (let tileY = tileYMin; tileY <= tileYMax; tileY++) {
+      const url = urlFn(z, tileX, tileY);
       const img = _tileImageCache.get(url);
-      if (!img || !img.complete || img.naturalWidth === 0) continue; // skip un-loaded
+      if (!img || !img.complete || img.naturalWidth === 0) continue;
 
-      const lon0 = tx       / pow * 360 - 180;
-      const lon1 = (tx + 1) / pow * 360 - 180;
-      const lat0 = _tileYToLat(ty,     z);
-      const lat1 = _tileYToLat(ty + 1, z);
-      const x = ctx.bx(lon0);
-      const y = ctx.by(lat0);
-      const w = Math.max(0, ctx.bx(lon1) - x);
-      const h = Math.max(0, ctx.by(lat1) - y);
-      canvas2d.drawImage(img, x, y, w, h);
+      // Geographic bounds of this tile
+      const lon0 = tileX       / pow * 360 - 180;
+      const lon1 = (tileX + 1) / pow * 360 - 180;
+      const lat0 = _tileYToLat(tileY,     z);
+      const lat1 = _tileYToLat(tileY + 1, z);
+
+      // SVG user-unit positions
+      const svgX0 = ctx.bx(lon0);  const svgX1 = ctx.bx(lon1);
+      const svgY0 = ctx.by(lat0);  const svgY1 = ctx.by(lat1);
+
+      // CSS pixel positions — same formula as SVG content-group transform
+      const cssX = (svgX0 * sc + tx) * rX;
+      const cssY = (svgY0 * sc + ty) * rY;
+      const cssW = (svgX1 - svgX0) * sc * rX;
+      const cssH = (svgY1 - svgY0) * sc * rY;
+
+      canvas2d.drawImage(img, cssX, cssY, cssW, cssH);
     }
   }
-}
-
-// Build one pre-painted <canvas> per zoom level (z0 → TILE_MAX_ZOOM).
-// Called synchronously after preloadTiles() resolves so all images are complete.
-// Returns Map<zoomLevel, HTMLCanvasElement>.
-function buildLodCanvases(ctx, mode, seaColor) {
-  const maxZ     = TILE_MAX_ZOOM[mode];
-  const z0       = _tileZoom(ctx.vLon, maxZ);
-  const canvases = new Map();
-
-  for (let z = z0; z <= maxZ; z++) {
-    const canvas  = document.createElement('canvas');
-    canvas.width  = ctx.W;
-    canvas.height = ctx.H;
-    drawTilesOnCanvas(canvas.getContext('2d'), ctx, mode, z, seaColor);
-    canvases.set(z, canvas);
-  }
-  return canvases;
 }
 
 // ── Tile preloader ────────────────────────────────────────
