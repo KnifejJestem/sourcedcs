@@ -260,6 +260,142 @@ def identify_system(unit_types: list[str]) -> SamSystem | None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# weapons  —  CLSID → human-readable name
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Known DCS weapon / store CLSIDs.  Unknown CLSIDs are returned as-is (stripped
+# of braces) so they still appear in the output rather than silently disappearing.
+CLSID_NAMES: dict[str, str] = {
+    # ── Air-to-Air ───────────────────────────────────────────────────────────
+    # AIM-120 AMRAAM
+    "{40EF17B7-F508-45de-8566-6FFECC0C1AB8}": "AIM-120C",
+    "{A111396E-D3E8-4b9c-8AC9-2432489304D5}": "AIM-120B",
+    "{F376DBEE-4CAE-41BA-ADD9-B2910AC95DEC}": "AIM-120C",
+    "{B06DD79A-F55E-4740-8ECF-9ED1FF8F5CEB}": "AIM-120C-7",
+    # AIM-9 Sidewinder
+    "{E6A6262A-CA08-4B3D-B030-E1A993B98452}": "AIM-9M",
+    "{E6A6262A-CA08-4B3D-B030-E1A993B98453}": "AIM-9X",
+    "{5CE2FF2A-645A-4197-B48D-8720AC69394F}": "AIM-9X",
+    "{6CEB49FC-DED8-4DED-B053-E1F033FF72D3}": "AIM-9X-2",
+    # AIM-7 Sparrow
+    "{8D399B27-BEFD-4020-A398-CA5579BCDBD1}": "AIM-7M",
+    "{AB8B8299-F1CC-4359-89B5-2172E0CF4A5A}": "AIM-7F",
+    # ── AGM — SEAD ───────────────────────────────────────────────────────────
+    "{7A44FF09-57A9-4223-9480-249400A97B4B}": "AGM-88C HARM",
+    "{0267FF4B-340A-4674-B4B3-FE7B84D6B24E}": "AGM-88B HARM",
+    "{E8D4B10D-A846-42C5-A046-E3F74ED36B80}": "AGM-88 HARM",
+    "{HAM_HARM}":                              "AGM-88 HARM",
+    # ── AGM — Maverick ───────────────────────────────────────────────────────
+    "{AGM_65D}": "AGM-65D", "{AGM_65E}": "AGM-65E", "{AGM_65F}": "AGM-65F",
+    "{AGM_65G}": "AGM-65G", "{AGM_65H}": "AGM-65H", "{AGM_65K}": "AGM-65K",
+    "{AGM_65L}": "AGM-65L", "{AGM_65R}": "AGM-65R",
+    # ── AGM — Cruise / Stand-off ─────────────────────────────────────────────
+    "{AGM_154A}": "AGM-154A JSOW", "{AGM_154C}": "AGM-154C JSOW",
+    "{AGM_158}":  "AGM-158 JASSM",
+    # ── GBU — Paveway laser-guided ───────────────────────────────────────────
+    "{GBU-10}":  "GBU-10",   "{GBU_10}":  "GBU-10",
+    "{GBU-12}":  "GBU-12",   "{GBU_12}":  "GBU-12",
+    "{GBU-16}":  "GBU-16",   "{GBU_16}":  "GBU-16",
+    "{GBU-24}":  "GBU-24",   "{GBU_24}":  "GBU-24",
+    "{GBU-27}":  "GBU-27",
+    "{GBU-28}":  "GBU-28",
+    # ── GBU — JDAM GPS-guided ────────────────────────────────────────────────
+    "{GBU-31}":       "GBU-31",  "{GBU_31}":       "GBU-31",
+    "{GBU-31_V3B}":   "GBU-31",  "{GBU_31_V3B}":   "GBU-31",
+    "{GBU-32_V2B}":   "GBU-32",  "{GBU_32_V2B}":   "GBU-32",
+    "{GBU-38}":       "GBU-38",  "{GBU_38}":       "GBU-38",
+    "{GBU-38_V1B}":   "GBU-38",  "{GBU_38_V1B}":   "GBU-38",
+    "{GBU-54_V1B}":   "GBU-54",  "{GBU_54_V1B}":   "GBU-54",
+    # ── GBU — Small Diameter Bomb ────────────────────────────────────────────
+    "{GBU-39}":                        "GBU-39",
+    "{GBU-39_B_WITH_FINS_UNIT_ASSEMBLY}": "GBU-39",
+    # ── Unguided bombs ───────────────────────────────────────────────────────
+    "{Mk_82}": "Mk-82",  "{Mk-82}": "Mk-82",  "{MK_82}": "Mk-82",
+    "{Mk_82Y}": "Mk-82",
+    "{Mk_83}": "Mk-83",  "{Mk-83}": "Mk-83",  "{MK_83}": "Mk-83",
+    "{Mk_84}": "Mk-84",  "{Mk-84}": "Mk-84",  "{MK_84}": "Mk-84",
+    # ── CBU cluster ──────────────────────────────────────────────────────────
+    "{CBU_87}": "CBU-87",  "{CBU-87}": "CBU-87",
+    "{CBU_97}": "CBU-97",  "{CBU-97}": "CBU-97",
+    "{CBU_103}": "CBU-103", "{CBU-103}": "CBU-103",
+    "{CBU_105}": "CBU-105", "{CBU-105}": "CBU-105",
+    # ── Fuel tanks ───────────────────────────────────────────────────────────
+    "{FPU_8A_FUEL_TANK}": "300gal Tank",
+    "{Sullivan_TANK}":    "Fuel Tank",
+    "{A_A_refuel_pod}":   "AAR Pod",
+    # ── Pods / ECM ───────────────────────────────────────────────────────────
+    "{AN_ASQ_213}":         "HTS Pod",
+    "{AN_AAQ_28_LITENING}": "Litening Pod",
+    "{AN_ASQ_228}":         "ATFLIR Pod",
+    "ALQ_184_Long":         "ALQ-184 ECM",
+    "ALQ_184":              "ALQ-184 ECM",
+    "{AN_ALQ_131}":         "ALQ-131 ECM",
+    # ── LAU racks (FA-18) ────────────────────────────────────────────────────
+    "LAU-115_2*LAU-127_AIM-120C": "2× AIM-120C",
+    "LAU-115C_with_AIM-7F":       "AIM-7F",
+    "LAU-115_LAU-127_AIM-9M":     "AIM-9M",
+    "LAU-115_LAU-127_AIM-9X":     "AIM-9X",
+    "LAU-115_2*LAU-127_AIM-9X":   "2× AIM-9X",
+}
+
+# DCS ship types that are fixed-wing carriers
+CARRIER_TYPES: frozenset[str] = frozenset({
+    "CVN_71", "CVN_72", "CVN_73", "CVN_74", "CVN_75",
+    "CVN_76", "CVN_77", "LHA_Tarawa", "Kuznetsov",
+})
+
+# DCS group task → mission type label
+TASK_LABELS: dict[str, str] = {
+    "CAP":          "CAP",
+    "CAS":          "CAS",
+    "SEAD":         "SEAD",
+    "Strike":       "STRIKE",
+    "Antiship Strike": "ANTISHIP",
+    "Intercept":    "INTERCEPT",
+    "Escort":       "ESCORT",
+    "Refueling":    "TANKER",
+    "AFAC":         "FAC(A)",
+    "Reconnaissance": "RECCE",
+    "Transport":    "TRANSPORT",
+    "Ground Attack":"STRIKE",
+    "Nothing":      "FERRY",
+}
+
+
+def resolve_clsid(clsid: str) -> str:
+    """Return a human-readable weapon name for a DCS CLSID string."""
+    if clsid in CLSID_NAMES:
+        return CLSID_NAMES[clsid]
+    # Strip braces for unknown CLSIDs so output stays readable
+    return clsid.strip("{}")
+
+
+def condense_loadout(weapons: list[str]) -> list[str]:
+    """
+    Collapse repeated weapon names into 'N× NAME' entries, drop tanks/pods.
+    Weapons already containing '×' (pre-counted LAU racks) are expanded first
+    so counts are summed correctly (e.g. two '2× AIM-120C' racks → '4× AIM-120C').
+    """
+    SKIP = {"300gal Tank", "Fuel Tank", "AAR Pod", "ALQ-184 ECM",
+            "ALQ-131 ECM", "HTS Pod", "Litening Pod", "ATFLIR Pod"}
+    counts: dict[str, int] = {}
+    for w in weapons:
+        if w in SKIP:
+            continue
+        # expand pre-counted entries like '2× AIM-120C'
+        m = re.match(r'^(\d+)[×x]\s+(.+)$', w)
+        if m:
+            name, n = m.group(2), int(m.group(1))
+        else:
+            name, n = w, 1
+        counts[name] = counts.get(name, 0) + n
+    result = []
+    for name, n in counts.items():
+        result.append(f"{n}× {name}" if n > 1 else name)
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # parse  —  Lua text → typed Python objects
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -281,6 +417,50 @@ class Group:
     lat: float
     lon: float
     units: list[Unit] = field(default_factory=list)
+
+
+@dataclass
+class FlightUnit:
+    type: str           # DCS aircraft type e.g. "F-16C_50"
+    callsign: str       # e.g. "Viper11"
+    onboard_num: str    # e.g. "101"
+    skill: str          # Client / Excellent / High / etc.
+    loadout: list[str]  # condensed weapon list
+
+
+@dataclass
+class Waypoint:
+    name: str | None    # DCS waypoint name (may be None)
+    x: float            # DCS north
+    y: float            # DCS east
+    lat: float
+    lon: float
+    typ: str            # DCS type: TakeOffParking, Turning Point, etc.
+    airdrome_id: int | None    # set for TakeOff waypoints from airfields
+    link_unit_id: int | None   # set for TakeOff from carriers (unit id)
+    is_orbit: bool             # waypoint has an Orbit task (tanker track)
+
+
+@dataclass
+class Flight:
+    id: str             # auto-assigned e.g. "FLT-1"
+    name: str           # group name e.g. "MARSHALL NORTH"
+    task: str           # human label e.g. "CAP"
+    aircraft_type: str  # from first unit
+    freq_mhz: float
+    units: list[FlightUnit] = field(default_factory=list)
+    waypoints: list[Waypoint] = field(default_factory=list)
+    is_tanker: bool = False
+
+
+@dataclass
+class Carrier:
+    id: str             # e.g. "CVN-1"
+    type: str           # "CVN_75"
+    name: str           # group name
+    unit_id: int        # DCS unitId (used to match takeoff linkUnit)
+    deploy_coords: str  # DMS at mission start
+    recovery_coords: str  # DMS projected 4h ahead
 
 
 @dataclass
@@ -402,26 +582,38 @@ def parse_drawings(mission_text: str) -> list[Drawing]:
                 origin_x=origin_x, origin_y=origin_y,
                 width_m=lua_num(ob, 'width'),
                 height_m=lua_num(ob, 'height'),
-                angle_deg=lua_num(ob, 'angle'),
+                angle_deg=lua_num(ob, 'angle') or 0.0,
             ))
 
         elif pmode == 'free':
             pts_block = lua_get_block(ob, 'points')
             rel_points: list[tuple[float, float]] = []
             if pts_block:
-                # Collect points sorted by their Lua index, skip zero padding
+                # Collect all points sorted by Lua index.
+                # In DCS, (0,0) means the mapX/mapY origin IS a real vertex —
+                # it is NOT padding.  Multiple (0,0) entries are duplicates
+                # of the same origin vertex; keep only one.
+                # The last point is a polygon-close back to the first; drop it.
                 raw: list[tuple[int, float, float]] = []
                 for idx, pb in lua_iter_array(pts_block):
                     xy = lua_xy(pb)
-                    if xy and not (abs(xy[0]) < 1 and abs(xy[1]) < 1):
+                    if xy:
                         raw.append((idx, xy[0], xy[1]))
-                # Sort by index to preserve intended vertex order, deduplicate
+                raw.sort()
+
                 seen: set[tuple[float, float]] = set()
-                for _idx, rx, ry in sorted(raw):
+                for _idx, rx, ry in raw:
                     pt = (round(rx, 1), round(ry, 1))
                     if pt not in seen:
                         seen.add(pt)
                         rel_points.append((rx, ry))
+
+                # Drop trailing close-vertex if it duplicates the first
+                if len(rel_points) >= 2:
+                    first = (round(rel_points[0][0], 1), round(rel_points[0][1], 1))
+                    last  = (round(rel_points[-1][0], 1), round(rel_points[-1][1], 1))
+                    if first == last:
+                        rel_points.pop()
 
             if len(rel_points) >= 3:
                 result.append(Drawing(
@@ -442,6 +634,196 @@ def parse_bullseye(coalition_block: str, theatre: str) -> str | None:
         return None
     lat, lon = dcs_to_latlon(xy[0], xy[1], theatre)
     return dms(lat, lon)
+
+
+def _parse_callsign(cs_block: str | None) -> str:
+    """Extract callsign name from the callsign sub-block."""
+    if not cs_block:
+        return ""
+    return lua_str(cs_block, 'name') or ""
+
+
+def _project_position(x1: float, y1: float, x2: float, y2: float,
+                      speed_ms: float, hours: float) -> tuple[float, float]:
+    """Project a position along a track vector N hours ahead at given speed."""
+    dx, dy = x2 - x1, y2 - y1
+    dist = math.sqrt(dx*dx + dy*dy)
+    if dist < 1:
+        return x1, y1
+    t = hours * 3600
+    return x1 + (dx/dist)*speed_ms*t, y1 + (dy/dist)*speed_ms*t
+
+
+def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
+    """Parse route.points into Waypoint objects."""
+    points_block = lua_get_block(route_block, 'points')
+    if not points_block:
+        return []
+    wpts: list[Waypoint] = []
+    for _pi, pb in lua_iter_array(points_block):
+        xy = lua_xy(pb)
+        if not xy:
+            continue
+        typ        = lua_str(pb, 'type') or ''
+        name       = lua_str(pb, 'name')
+        airdrome   = lua_num(pb, 'airdromeId')
+        link_unit  = lua_num(pb, 'linkUnit')
+        # Detect orbit task (tanker track anchor)
+        task_blk   = lua_get_block(pb, 'task')
+        is_orbit   = bool(task_blk and 'Orbit' in task_blk)
+        lat, lon   = dcs_to_latlon(xy[0], xy[1], theatre)
+        wpts.append(Waypoint(
+            name=name, x=xy[0], y=xy[1], lat=lat, lon=lon,
+            typ=typ,
+            airdrome_id=int(airdrome) if airdrome is not None else None,
+            link_unit_id=int(link_unit) if link_unit is not None else None,
+            is_orbit=is_orbit,
+        ))
+    return wpts
+
+
+def parse_flights_and_carriers(
+    coalition_block: str, theatre: str
+) -> tuple[list[Flight], list[Carrier]]:
+    """
+    Walk all countries in a coalition block.
+    - 'plane' groups  → Flight objects (with parsed waypoints)
+    - 'ship' groups   → Carrier objects (with 4-hour projected recovery position)
+    """
+    flights: list[Flight]   = []
+    carriers: list[Carrier] = []
+    flt_seq = car_seq = 1
+
+    country_block = lua_get_block(coalition_block, 'country')
+    if not country_block:
+        return flights, carriers
+
+    for _ci, country in lua_iter_array(country_block):
+
+        # ── Carriers ────────────────────────────────────────────
+        ship_block = lua_get_block(country, 'ship')
+        if ship_block:
+            grp = lua_get_block(ship_block, 'group')
+            if grp:
+                for _gi, gb in lua_iter_array(grp):
+                    gname  = lua_str(gb, 'name')
+                    ub_blk = lua_get_block(gb, 'units')
+                    if not ub_blk:
+                        continue
+
+                    # Collect carrier unit + route for projection
+                    route  = lua_get_block(gb, 'route')
+                    r_wpts = _parse_waypoints(route, theatre) if route else []
+
+                    for _ui, ub in lua_iter_array(ub_blk):
+                        utype   = lua_str(ub, 'type')
+                        uname   = lua_str(ub, 'name')
+                        unit_id = lua_num(ub, 'unitId')
+                        if utype not in CARRIER_TYPES:
+                            continue
+                        xy = lua_xy(ub)
+                        if not xy:
+                            continue
+
+                        deploy_lat, deploy_lon = dcs_to_latlon(xy[0], xy[1], theatre)
+                        deploy_c = dms(deploy_lat, deploy_lon)
+
+                        # Project 4h ahead from carrier unit position along route heading
+                        recovery_c = deploy_c
+                        pts_blk = lua_get_block(route, 'points') if route else None
+                        if pts_blk and len(r_wpts) >= 2:
+                            spd = 0.0
+                            for _ri, rp in lua_iter_array(pts_blk):
+                                s = lua_num(rp, 'speed')
+                                if s and s > 0:
+                                    spd = s
+                                    break
+                            # Project from carrier unit's actual xy toward second route wp
+                            rx, ry = _project_position(
+                                xy[0], xy[1],
+                                r_wpts[1].x, r_wpts[1].y,
+                                spd, 4.0)
+                            rec_lat, rec_lon = dcs_to_latlon(rx, ry, theatre)
+                            recovery_c = dms(rec_lat, rec_lon)
+
+                        c_obj = Carrier(
+                            id=f"CVN-{car_seq}",
+                            type=utype,
+                            name=uname or gname or utype,
+                            unit_id=int(unit_id) if unit_id is not None else 0,
+                            deploy_coords=deploy_c,
+                            recovery_coords=recovery_c,
+                        )
+                        # Store raw DCS coords for proximity matching in _home_base
+                        c_obj._x = xy[0]  # type: ignore[attr-defined]
+                        c_obj._y = xy[1]  # type: ignore[attr-defined]
+                        carriers.append(c_obj)
+                        car_seq += 1
+
+        # ── Flights ─────────────────────────────────────────────
+        plane_block = lua_get_block(country, 'plane')
+        if not plane_block:
+            continue
+        grp = lua_get_block(plane_block, 'group')
+        if not grp:
+            continue
+
+        for _gi, gb in lua_iter_array(grp):
+            raw_name = lua_str(gb, 'name') or f"FLT-{flt_seq}"
+            gname    = _strip_dcs_suffix(raw_name)
+            task_raw = lua_str(gb, 'task') or 'Nothing'
+            task     = TASK_LABELS.get(task_raw, task_raw.upper())
+            freq_raw = lua_num(gb, 'frequency') or 0.0
+            freq_mhz = freq_raw / 1e6 if freq_raw > 1e6 else freq_raw
+            is_tanker = (task == 'TANKER')
+
+            ub_blk = lua_get_block(gb, 'units')
+            if not ub_blk:
+                continue
+
+            flight_units: list[FlightUnit] = []
+            aircraft_type = ""
+
+            for _ui, ub in lua_iter_array(ub_blk):
+                utype   = lua_str(ub, 'type') or '?'
+                skill   = lua_str(ub, 'skill') or ''
+                onboard = lua_str(ub, 'onboard_num') or ''
+                cs_blk  = lua_get_block(ub, 'callsign')
+                cs      = _parse_callsign(cs_blk)
+                if not aircraft_type:
+                    aircraft_type = utype
+                payload_blk = lua_get_block(ub, 'payload')
+                pylons_blk  = lua_get_block(payload_blk, 'pylons') if payload_blk else None
+                weapons_raw: list[str] = []
+                if pylons_blk:
+                    for _pi, pb in lua_iter_array(pylons_blk):
+                        clsid = lua_str(pb, 'CLSID')
+                        if clsid:
+                            weapons_raw.append(resolve_clsid(clsid))
+                flight_units.append(FlightUnit(
+                    type=utype, callsign=cs, onboard_num=onboard,
+                    skill=skill, loadout=condense_loadout(weapons_raw),
+                ))
+
+            if not flight_units:
+                continue
+
+            # Parse waypoints from route
+            route  = lua_get_block(gb, 'route')
+            wpts   = _parse_waypoints(route, theatre) if route else []
+
+            flights.append(Flight(
+                id=f"FLT-{flt_seq}",
+                name=gname, task=task,
+                aircraft_type=aircraft_type,
+                freq_mhz=round(freq_mhz, 3),
+                units=flight_units,
+                waypoints=wpts,
+                is_tanker=is_tanker,
+            ))
+            flt_seq += 1
+
+    return flights, carriers
 
 
 def parse_weather(mission_text: str, day: int) -> tuple[str, str]:
@@ -571,6 +953,35 @@ def build_targets(groups: list[Group]) -> dict:
     return targets
 
 
+def _rect_boundary(cx: float, cy: float,
+                   width_m: float, height_m: float,
+                   angle_deg: float, theatre: str) -> list[str]:
+    """
+    Return 4 corner DMS strings for a DCS rect drawing.
+
+    DCS rect axes:
+      width  → local x-axis (east in unrotated map space)
+      height → local y-axis (north in unrotated map space)
+      angle  → CCW rotation in degrees
+
+    DCS world axes:  x = north (metres),  y = east (metres)
+    After rotation, local-x maps to DCS y (east), local-y maps to DCS x (north).
+    """
+    a = math.radians(-angle_deg)
+    cos_a, sin_a = math.cos(a), math.sin(a)
+    hw, hh = width_m / 2, height_m / 2
+
+    # Corners in local (unrotated) space: (local_x, local_y)
+    corners = [(hw, hh), (-hw, hh), (-hw, -hh), (hw, -hh)]
+    result = []
+    for lx, ly in corners:
+        rx = lx * cos_a - ly * sin_a   # rotated local-x → DCS east
+        ry = lx * sin_a + ly * cos_a   # rotated local-y → DCS north
+        lat, lon = dcs_to_latlon(cx + ry, cy + rx, theatre)
+        result.append(dms(lat, lon))
+    return result
+
+
 def build_acms(drawings: list[Drawing], theatre: str) -> list[dict]:
     acms: list[dict] = []
     n = 1
@@ -596,14 +1007,17 @@ def build_acms(drawings: list[Drawing], theatre: str) -> list[dict]:
         elif d.polygon_mode == 'rect':
             if d.width_m is None or d.height_m is None:
                 continue
+            # Compute 4 corners from center + width/height + CCW rotation.
+            # DCS convention: width = local x-axis (east), height = local y-axis (north).
+            # Rotation is CCW in degrees.  DCS coord axes: x=north, y=east.
+            boundary = _rect_boundary(
+                d.origin_x, d.origin_y,
+                d.width_m, d.height_m,
+                d.angle_deg or 0.0,
+                theatre,
+            )
             acm["type"]     = "ORBIT"
-            acm["geometry"] = {
-                "center":    dms(olat, olon),
-                "width_nm":  round(d.width_m  / 1852.0, 1),
-                "height_nm": round(d.height_m / 1852.0, 1),
-            }
-            if d.angle_deg is not None:
-                acm["geometry"]["angle_deg"] = round(d.angle_deg, 1)
+            acm["geometry"] = {"boundary": boundary}
 
         elif d.polygon_mode == 'free':
             boundary = []
@@ -621,8 +1035,508 @@ def build_acms(drawings: list[Drawing], theatre: str) -> list[dict]:
     return acms
 
 
+# Loadout encoding ──────────────────────────────────────────────────────────
+
+_WEAPON_CAT: dict[str, tuple[str, str | None]] = {
+    # ── Air-to-Air ───────────────────────────────────────────────────────────
+    "AIM-120C": ("fox3", None), "AIM-120C-7": ("fox3", None),
+    "AIM-120B": ("fox3", None), "AIM-120":    ("fox3", None),
+    "AIM-7M":   ("fox1", None), "AIM-7F":     ("fox1", None),
+    "AIM-9M":   ("fox2", None), "AIM-9X":     ("fox2", None),
+    "AIM-9X-2": ("fox2", None), "AIM-9L":     ("fox2", None),
+    # ── AGM SEAD ─────────────────────────────────────────────────────────────
+    "AGM-88C HARM": ("agm", "88"), "AGM-88B HARM": ("agm", "88"),
+    "AGM-88 HARM":  ("agm", "88"),
+    # ── AGM Maverick ─────────────────────────────────────────────────────────
+    "AGM-65D": ("agm", "65"), "AGM-65E": ("agm", "65"), "AGM-65F": ("agm", "65"),
+    "AGM-65G": ("agm", "65"), "AGM-65H": ("agm", "65"), "AGM-65K": ("agm", "65"),
+    "AGM-65L": ("agm", "65"), "AGM-65R": ("agm", "65"),
+    # ── AGM Stand-off ────────────────────────────────────────────────────────
+    "AGM-154A JSOW": ("agm", "154"), "AGM-154C JSOW": ("agm", "154"),
+    "AGM-158 JASSM": ("agm", "158"),
+    # ── GBU Paveway ──────────────────────────────────────────────────────────
+    "GBU-10": ("agm", "10"), "GBU-12": ("agm", "12"),
+    "GBU-16": ("agm", "16"), "GBU-24": ("agm", "24"),
+    "GBU-27": ("agm", "27"), "GBU-28": ("agm", "28"),
+    # ── GBU JDAM ─────────────────────────────────────────────────────────────
+    "GBU-31": ("agm", "31"), "GBU-32": ("agm", "32"),
+    "GBU-38": ("agm", "38"), "GBU-39": ("agm", "39"),
+    "GBU-54": ("agm", "54"),
+    # ── Unguided ─────────────────────────────────────────────────────────────
+    "Mk-82": ("agm", "82"), "Mk-83": ("agm", "83"), "Mk-84": ("agm", "84"),
+    # ── CBU ──────────────────────────────────────────────────────────────────
+    "CBU-87": ("agm", "87"), "CBU-97": ("agm", "97"),
+    "CBU-103": ("agm", "103"), "CBU-105": ("agm", "105"),
+}
+
+# Tasks that have a gun
+_GUN_TASKS = {"CAP", "CAS", "SEAD", "STRIKE", "ESCORT", "INTERCEPT", "FAC(A)"}
+
+
+def encode_loadout(condensed: list[str], task: str) -> str:
+    """Convert condensed weapon list to the compact AAA+NXccc loadout code."""
+    fox3 = fox1 = fox2 = 0
+    agm_groups: dict[str, int] = {}
+
+    for entry in condensed:
+        m = re.match(r'^(\d+)[×x]\s+(.+)$', entry)
+        count, name = (int(m.group(1)), m.group(2)) if m else (1, entry)
+        info = _WEAPON_CAT.get(name)
+        if not info:
+            continue
+        cat, code = info
+        if   cat == "fox3": fox3 += count
+        elif cat == "fox1": fox1 += count
+        elif cat == "fox2": fox2 += count
+        elif cat == "agm" and code:
+            agm_groups[code] = agm_groups.get(code, 0) + count
+
+    aa  = f"{min(fox3,9)}{min(fox1,9)}{min(fox2,9)}"
+    gun = "+" if (task in _GUN_TASKS and (fox3 or fox2 or agm_groups)) else ""
+    agm = "".join(f"{n}X{c}" for c, n in agm_groups.items())
+    return aa + gun + agm
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Syria airfield ID → ICAO / name lookup
+# ─────────────────────────────────────────────────────────────────────────────
+AIRDROME_IDS: dict[int, dict] = {
+    2:  {"icao": "OSAP", "name": "Aleppo International"},
+    4:  {"icao": "OS78", "name": "Bassel Al-Assad International"},
+    8:  {"icao": "OSDZ", "name": "Deir ez-Zor"},
+    11: {"icao": "OSDI", "name": "Damascus International"},
+    12: {"icao": "OSGH", "name": "Abu ad-Duhur"},
+    13: {"icao": "OSLK", "name": "Khalkhalah"},
+    14: {"icao": "OLBA", "name": "Beirut-Rafic Hariri International"},
+    15: {"icao": "OLLB", "name": "Rayak"},
+    16: {"icao": "LTAG", "name": "Incirlik AB"},
+    17: {"icao": "LTAS", "name": "Adana Sakirpasa"},
+    20: {"icao": "OSPR", "name": "Palmyra"},
+    21: {"icao": "OSRK", "name": "Raqqa"},
+    22: {"icao": "OSTR", "name": "Tabqa"},
+    24: {"icao": "OSHMH","name": "Hama"},
+    25: {"icao": "OSHM", "name": "Marj Ruhayyil"},
+    27: {"icao": "OSHR", "name": "Jirah"},
+    29: {"icao": "OSKL", "name": "Kuweires"},
+    34: {"icao": "OSHL", "name": "Hatay"},
+    35: {"icao": "LTAF", "name": "Adiyaman"},
+    36: {"icao": "LTAT", "name": "Gaziantep"},
+    40: {"icao": "OSQM", "name": "Qamishli"},
+    # Persian Gulf
+    100: {"icao": "OMAM", "name": "Al Dhafra AB"},
+    104: {"icao": "OMDM", "name": "Al Minhad AB"},
+    105: {"icao": "OMDB", "name": "Dubai International"},
+    109: {"icao": "OMFJ", "name": "Fujairah International"},
+    113: {"icao": "OIKB", "name": "Bandar Abbas International"},
+    # Caucasus
+    200: {"icao": "UG24", "name": "Batumi"},
+    201: {"icao": "UGKO", "name": "Kutaisi"},
+    203: {"icao": "URSS", "name": "Sochi"},
+}
+
+CVN_NAMES: dict[str, str] = {
+    "CVN_71": "USS THEODORE ROOSEVELT",
+    "CVN_72": "USS ABRAHAM LINCOLN",
+    "CVN_73": "USS GEORGE WASHINGTON",
+    "CVN_74": "USS JOHN C. STENNIS",
+    "CVN_75": "USS HARRY S. TRUMAN",
+    "CVN_76": "USS RONALD REAGAN",
+    "CVN_77": "USS GEORGE H.W. BUSH",
+    "LHA_Tarawa": "USS TARAWA",
+    "Kuznetsov":  "ADMIRAL KUZNETSOV",
+}
+
+_NM_TO_M = 1852.0
+_FT_TO_M = 0.3048
+
+
+def _nm_between(x1: float, y1: float, x2: float, y2: float) -> float:
+    """Approximate distance in NM between two DCS world-coords points."""
+    dx, dy = x2 - x1, y2 - y1
+    return math.sqrt(dx*dx + dy*dy) / _NM_TO_M
+
+
+def build_airfields_registry(flights: list[Flight], carriers: list[Carrier],
+                             theatre: str) -> dict[str, dict]:
+    """
+    Collect unique airfields from flight takeoff waypoints.
+    Returns a mapping of ICAO → {name, coords}.
+    Takeoffs from carriers are excluded (handled by the carriers block).
+    """
+    carrier_unit_ids = {c.unit_id for c in carriers}
+    seen: dict[str, dict] = {}     # icao → entry
+
+    for f in flights:
+        for wp in f.waypoints:
+            if wp.typ not in ('TakeOffParking', 'TakeOff', 'TakeOffParkingHot',
+                               'TakeOffGround'):
+                continue
+            # Carrier takeoff — skip
+            if wp.link_unit_id and wp.link_unit_id in carrier_unit_ids:
+                continue
+            if wp.airdrome_id is None:
+                continue
+            info = AIRDROME_IDS.get(wp.airdrome_id)
+            if not info:
+                # Unknown ID — generate a placeholder
+                icao = f"AF{wp.airdrome_id}"
+                info = {"icao": icao, "name": f"Airfield {wp.airdrome_id}"}
+            icao = info["icao"]
+            if icao not in seen:
+                seen[icao] = {
+                    "name":   info["name"],
+                    "coords": dms(wp.lat, wp.lon),
+                }
+    return seen
+
+
+def _shared_waypoint_key(wp: Waypoint, all_flights: list[Flight],
+                         targets: dict) -> str | None:
+    """
+    If this waypoint is within 100ft (~30m) of another flight's waypoint
+    (and has no name or the same name), return a shared name_ref.
+    If it's within 500m of a target, return that target id.
+    Always None for the takeoff and last-landing waypoints.
+    """
+    # 100ft in metres
+    MERGE_M = 100 * _FT_TO_M      # ~30m
+    TARGET_MERGE_M = 500           # 500m tolerance for aim-point proximity
+
+    # Check proximity to targets
+    for tgt_id, tgt in targets.items():
+        aim_pts = tgt.get("aim_points", [])
+        for ap in aim_pts:
+            pass  # aim points already resolved to registry; skip — handled separately
+
+    return None
+
+
+def _classify_waypoints(flight: Flight,
+                        all_flights: list[Flight],
+                        targets: dict,
+                        carriers: list[Carrier],
+                        ref_pts: dict) -> list[dict]:
+    """
+    Convert a flight's Waypoint list to the steer_points schema list.
+
+    Rules:
+    - Index 0  (TakeOff): skip — captured as deploy_location_icao
+    - Last wp  (landing/recovery): skip — captured as aar_location_icao
+    - Name starts with "MARSHALL ": → marshal point in ref_pts (name_ref)
+    - Within 30m of another flight's non-takeoff waypoint with same/no name:
+        → same logical point; use shared name
+    - Within 500m of a SAM aim-point: label as aim-point steer
+    - Otherwise: plain steer point with coords
+    """
+    MERGE_M   = 100 * _FT_TO_M   # 100 ft in metres
+    TARGET_M  = 500               # 500 m
+
+    wpts = flight.waypoints
+    if len(wpts) <= 2:
+        return []
+
+    # Inner waypoints: skip first (takeoff) and last (recovery/landing)
+    inner = wpts[1:-1]
+
+    # Build index of all OTHER flights' inner waypoints for proximity matching
+    others: list[Waypoint] = []
+    for other in all_flights:
+        if other.id == flight.id:
+            continue
+        if len(other.waypoints) > 2:
+            others.extend(other.waypoints[1:-1])
+
+    # Build flat DMS → aim_point_id index across all targets.
+    # Key is the DMS string; value is the specific aim_point id (e.g. "SAM-14-RD1").
+    aim_by_dms: dict[str, str] = {}
+    for tgt in targets.values():
+        for ap in tgt.get("aim_points", []):
+            ap_dms = ap.get("coords", "")
+            ap_id  = ap.get("id", "")
+            if ap_dms and ap_id:
+                aim_by_dms[ap_dms] = ap_id
+
+    result = []
+    for wp in inner:
+        wp_dms = dms(wp.lat, wp.lon)
+
+        # Marshal point: name starts with "MARSHALL "
+        if wp.name and wp.name.upper().startswith("MARSHALL "):
+            marshal_name = wp.name.strip()
+            if marshal_name not in ref_pts:
+                ref_pts[marshal_name] = {
+                    "name":   marshal_name,
+                    "type":   "marshal",
+                    "coords": wp_dms,
+                }
+            result.append({"name_ref": marshal_name, "name": marshal_name})
+            continue
+
+        # Proximity check against other flights' waypoints (shared logical point)
+        shared_name = None
+        for ow in others:
+            dist = math.sqrt((wp.x - ow.x)**2 + (wp.y - ow.y)**2)
+            if dist <= MERGE_M:
+                wp_n = (wp.name or "").strip()
+                ow_n = (ow.name or "").strip()
+                if wp_n == ow_n or not wp_n or not ow_n:
+                    shared_name = wp_n or ow_n or None
+                    break
+
+        # Aim-point match — use the specific aim_point id (e.g. "SAM-14-RD1")
+        aim_point_id = aim_by_dms.get(wp_dms)
+
+        entry: dict = {"coords": wp_dms}
+        if wp.name:
+            entry["name"] = wp.name
+        if aim_point_id:
+            entry["aim_point_id"] = aim_point_id   # specific aim point id per spec
+        if shared_name is not None:
+            entry["shared"] = True
+
+        result.append(entry)
+
+    return result
+
+
+def _carrier_for_pos(x: float, y: float, carriers: list[Carrier]) -> 'Carrier | None':
+    """Return the nearest carrier if within 100ft (~30.5m), else None."""
+    PROX_M = 100 * _FT_TO_M   # 100 ft
+    for c in carriers:
+        # Parse DMS coords back to approximate metres for comparison.
+        # Simpler: store raw DCS x,y on Carrier instead. For now we use a
+        # generous threshold since carrier coords are in DMS and we have x,y here.
+        # We store raw x,y in Carrier._x/_y via the route waypoints.
+        if hasattr(c, '_x') and hasattr(c, '_y'):
+            dist = math.sqrt((x - c._x)**2 + (y - c._y)**2)
+            if dist <= PROX_M:
+                return c
+    return None
+
+
+def _home_base(flight: Flight, airfields: dict[str, dict],
+               carriers: list[Carrier]) -> tuple[str | None, str | None]:
+    """
+    Return (deploy_id, recovery_id) from first and last waypoints.
+    Carrier detection uses two methods:
+      1. linkUnit id matching the carrier unit id (DCS native)
+      2. Proximity: takeoff within 100ft of carrier deploy position
+    Recovery defaults to the same carrier/airfield as deploy.
+    """
+    carrier_unit_ids = {c.unit_id: c.id for c in carriers}
+    # Build carrier proximity lookup by raw DCS x,y (stored as _x, _y)
+    carrier_by_id = {c.id: c for c in carriers}
+
+    def _resolve_carrier_from_wp(wp: Waypoint) -> str | None:
+        # Method 1: explicit linkUnit
+        if wp.link_unit_id and wp.link_unit_id in carrier_unit_ids:
+            return carrier_unit_ids[wp.link_unit_id]
+        # Method 2: proximity to carrier position (100ft)
+        PROX_M = 100 * _FT_TO_M
+        for c in carriers:
+            if hasattr(c, '_x'):
+                dist = math.sqrt((wp.x - c._x)**2 + (wp.y - c._y)**2)
+                if dist <= PROX_M:
+                    return c.id
+        return None
+
+    deploy = None
+    if flight.waypoints:
+        first = flight.waypoints[0]
+        carrier_id = _resolve_carrier_from_wp(first)
+        if carrier_id:
+            deploy = carrier_id
+        elif first.airdrome_id is not None:
+            info = AIRDROME_IDS.get(first.airdrome_id)
+            deploy = info["icao"] if info else f"AF{first.airdrome_id}"
+
+    recovery = None
+    if flight.waypoints:
+        last = flight.waypoints[-1]
+        n = (last.name or "").upper()
+        carrier_id = _resolve_carrier_from_wp(last)
+        if carrier_id:
+            recovery = carrier_id
+        elif "CVN" in n or "RECOVERY" in n or "CARRIER" in n:
+            # Named recovery waypoint — match carrier id or name in label
+            for c in carriers:
+                if c.id in n or CVN_NAMES.get(c.type, "")[:6].upper() in n:
+                    recovery = c.id
+                    break
+            if not recovery:
+                recovery = carriers[0].id if carriers else None
+        elif last.airdrome_id is not None:
+            info = AIRDROME_IDS.get(last.airdrome_id)
+            recovery = info["icao"] if info else f"AF{last.airdrome_id}"
+
+    # If deploying from a carrier and no explicit recovery found, recover there too
+    if deploy and deploy.startswith("CVN-") and not recovery:
+        recovery = deploy
+
+    # Final fallback: return to deploy base
+    if not recovery and deploy:
+        recovery = deploy
+
+    return deploy, recovery
+
+
+def _build_mission_targets(steer_pts: list[dict], targets: dict,
+                           task: str) -> list[dict] | None:
+    """
+    Derive the mission targets: list from steer_points that have aim_point_id.
+
+    Groups aim points by parent target (SAM-14-RD1 → SAM-14), then emits one
+    targets entry per unique target_id with its specific aim_point list.
+
+    For CAP/orbit missions this produces tos/toffs timing fields;
+    for SEAD/STRIKE/BAI it produces tot_net/tot_nlt fields (both left null —
+    timing is filled in by the mission planner).
+
+    Returns None for tankers and missions with no aim-point hits.
+    """
+    if not steer_pts:
+        return None
+
+    # Collect aim_point_ids grouped by parent target, preserving route order
+    seen_tgt: dict[str, list[str]] = {}   # target_id → [ap_id, ...]
+    for sp in steer_pts:
+        ap_id = sp.get('aim_point_id')
+        if not ap_id:
+            continue
+        tgt_id = ap_id.rsplit('-', 1)[0]
+        if tgt_id not in seen_tgt:
+            seen_tgt[tgt_id] = []
+        if ap_id not in seen_tgt[tgt_id]:
+            seen_tgt[tgt_id].append(ap_id)
+
+    if not seen_tgt:
+        return None
+
+    is_orbit = task in ('CAP', 'CAS', 'ESCORT', 'TANKER', 'FAC(A)')
+    result = []
+    for tgt_id, ap_ids in seen_tgt.items():
+        tgt_info = targets.get(tgt_id, {})
+        # Strip the "(SA-type)" suffix from the group name for a clean location label
+        raw_name = tgt_info.get('name') or tgt_id
+        location = re.sub(r'\s*\([^)]+\)\s*$', '', raw_name).strip() or tgt_id
+        entry: dict = {
+            "location":  location,
+            "target_id": tgt_id,
+        }
+        if is_orbit:
+            entry["tos"]   = None
+            entry["toffs"] = None
+        else:
+            entry["tot_net"] = None
+            entry["tot_nlt"] = None
+        # Only list aim_points explicitly if we hit a subset (not all aim points)
+        all_ap_ids = [ap['id'] for ap in tgt_info.get('aim_points', [])]
+        if ap_ids and ap_ids != all_ap_ids:
+            entry["aim_points"] = [{"aim_point_id": a} for a in ap_ids]
+        result.append(entry)
+
+    return result or None
+
+
+def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
+                   targets: dict, carriers: list[Carrier],
+                   airfields: dict[str, dict], ref_pts: dict) -> list[dict]:
+    """
+    Produce the ato.missions list. Steer points are extracted and classified.
+    Tankers receive a separate mission number from tanker_msn_start.
+    """
+    missions = []
+    strike_i = tanker_i = 0
+
+    for f in flights:
+        if f.is_tanker:
+            msn_num = f"MSN{tanker_msn_start + tanker_i}"
+            tanker_i += 1
+        else:
+            msn_num = f"MSN{msn_start + strike_i}"
+            strike_i += 1
+
+        callsign = f.units[0].callsign if f.units else f.name
+        ac_base  = f.aircraft_type.split('_')[0]
+        ac_type  = re.sub(r'[^A-Z0-9]', '', ac_base.upper())
+        count    = len(f.units)
+        loadout_str = encode_loadout(
+            f.units[0].loadout if f.units else [], f.task)
+
+        deploy, recovery = _home_base(f, airfields, carriers)
+
+        # Build steer points — also mutates ref_pts to add any marshal points
+        steer_pts = _classify_waypoints(f, flights, targets, carriers, ref_pts)
+
+        # Build targets list from aim_point hits in the route
+        msn_targets = None if f.is_tanker else             _build_mission_targets(steer_pts, targets, f.task)
+
+        msn: dict = {
+            "mission_number":       msn_num,
+            "callsign":             callsign,
+            "mission_type":         f.task,
+            "unit":                 None,
+            "home_base_icao":       deploy,
+            "deploy_location_icao": deploy,
+            "aar_location_icao":    recovery,
+            "takeoff_time":         None,
+            "recovery_time":        None,
+            "aircraft": {
+                "count":   count,
+                "type":    ac_type,
+                "loadout": loadout_str,
+            },
+            "targets":      msn_targets,
+            "control":      {"agency_id": None},
+            "refuel":       None,
+            "steer_points": steer_pts or None,
+        }
+
+        missions.append(msn)
+    return missions
+
+
+def build_carriers_registry(carriers: list[Carrier]) -> dict:
+    result = {}
+    for c in carriers:
+        result[c.id] = {
+            "name":            CVN_NAMES.get(c.type, c.type),
+            "callsign":        c.name,
+            "deploy_coords":   c.deploy_coords,
+            "recovery_coords": c.recovery_coords,
+        }
+    return result
+
+
+def build_carriers_ato(carriers: list[Carrier]) -> list[dict]:
+    return [{"id": c.id} for c in carriers]
+
+
 def build_doc(*, mission_name, mission_date, theatre,
-              year, month, targets, ref_pts, acms, metar, wx_notes) -> dict:
+              year, month, targets, ref_pts, acms, metar, wx_notes,
+              flights, carriers) -> dict:
+
+    import hashlib
+    # Strike package MSN start — deterministic from filename
+    msn_start = 1000 + int(hashlib.md5(mission_name.encode()).hexdigest()[:4], 16) % 8000
+    # Supply/tanker package gets a separate block of numbers (+500)
+    tanker_msn_start = msn_start + 500
+
+    # Bullseye key references registry.reference_points
+    bullseye_key = list(ref_pts.keys())[0] if ref_pts else None
+
+    # Build airfields from flight takeoff waypoints (deduplicated)
+    airfields = build_airfields_registry(flights, carriers, theatre)
+
+    # Build missions — this also mutates ref_pts to add marshal points found in routes
+    missions = build_missions(
+        flights, msn_start, tanker_msn_start,
+        targets, carriers, airfields, ref_pts) or None
+    msn_numbers = [m["mission_number"] for m in missions] if missions else []
+
+    # ATO airfields list — one entry per unique airfield referenced
+    ato_airfields = [{"icao": icao, "role": "deploy"} for icao in airfields] or None
+
     return {
         "schema_version": "1.0",
 
@@ -635,11 +1549,11 @@ def build_doc(*, mission_name, mission_date, theatre,
         "registry": {
             "callsigns":        None,
             "frequencies":      None,
-            "airfields":        None,
-            "carriers":         None,
+            "airfields":        airfields or None,
+            "carriers":         build_carriers_registry(carriers) or None,
             "tankers":          None,
-            "targets":          targets  or None,
-            "reference_points": ref_pts  or None,
+            "targets":          targets   or None,
+            "reference_points": ref_pts   or None,
             "control_agencies": None,
         },
 
@@ -648,14 +1562,14 @@ def build_doc(*, mission_name, mission_date, theatre,
             "irl_time_zulu":      None,
             "ingame_start_time":  None,
             "local_offset_hours": None,
-            "ae_flags":           None,
+            "ae_flags":           ["IRL", "INGAME"],
             "global_control": {
                 "agency_id": None,
-                "bullseye":  ref_pts.get("BULLSEYE", {}).get("coords"),
+                "bullseye":  bullseye_key,
             },
-            "airfields": None,
-            "carriers":  None,
-            "missions":  None,
+            "airfields": ato_airfields,
+            "carriers":  build_carriers_ato(carriers) or None,
+            "missions":  missions,
         },
 
         "aco": {
@@ -681,14 +1595,18 @@ def build_doc(*, mission_name, mission_date, theatre,
             "valid_from": "0000Z",
             "valid_to":   "2359Z",
             "metars":     [metar],
-            "mission_wx": [{"mission_ref": "ALL", "notes": wx_notes}],
+            "mission_wx": [{"mission_ref": msn, "notes": "No significant weather impact."}
+                           for msn in msn_numbers] or None,
         },
 
         "_meta": {
-            "source":    Path(mission_name).name,
-            "theatre":   theatre,
-            "targets":   len(targets),
-            "acm_zones": len(acms),
+            "source":      Path(mission_name).name,
+            "theatre":     theatre,
+            "targets":     len(targets),
+            "acm_zones":   len(acms),
+            "missions":    len([f for f in flights if not f.is_tanker]),
+            "tankers":     len([f for f in flights if f.is_tanker]),
+            "airfields":   len(airfields),
         },
     }
 
@@ -737,6 +1655,16 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
             ref_pts["BULLSEYE"] = {"name": "BULLSEYE", "type": "bullseye", "coords": be}
             print(f"[+] Bullseye: {be}")
 
+    # Flights + carriers (own coalition)
+    print(f"[+] Parsing {coalition} flights and carriers…")
+    flights, carriers = parse_flights_and_carriers(own_block or '', theatre)
+    print(f"    {len(flights)} flights  |  {len(carriers)} carriers")
+    for f in flights:
+        print(f"  {f.id}: {f.name!r}  task={f.task}  ac={f.aircraft_type}  "
+              f"x{len(f.units)}  freq={f.freq_mhz}")
+    for c in carriers:
+        print(f"  {c.id}: {c.type}  {c.name}  {c.deploy_coords}")
+
     # ACO drawings
     print("[+] Parsing drawings…")
     drawings = parse_drawings(mission_text)
@@ -757,6 +1685,8 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
         acms=acms,
         metar=metar,
         wx_notes=wx_notes,
+        flights=flights,
+        carriers=carriers,
     )
 
 
