@@ -194,10 +194,30 @@ function createGridLabelOverlay(ctx) {
 function createSidebar(opts) {
   const sidebar = el('div', 'map-sidebar');
 
+  // ── Map mode selector ─────────────────────────────────────
+  sidebar.appendChild(el('div', 'map-sidebar-title', 'MAP MODE'));
+
+  const MAP_MODES = [
+    { id: 'chart',     label: '⊞ CHART'     },
+    { id: 'tactical',  label: '⊞ TACTICAL'  },
+    { id: 'elevation', label: '⊞ ELEVATION' },
+    { id: 'satellite', label: '⊞ SATELLITE' },
+  ];
+  const currentMode = STATE.mapUI?.mapMode || 'chart';
+  MAP_MODES.forEach(({ id, label }) => {
+    const btn = el('button', 'map-msn-btn map-mode-btn' + (currentMode === id ? ' map-msn-active' : ''), label);
+    btn.addEventListener('click', () => {
+      STATE.mapUI.mapMode = id;
+      renderMAP(STATE.pkg.ato);
+    });
+    sidebar.appendChild(btn);
+  });
+
+  sidebar.appendChild(el('div', 'map-sidebar-sep'));
   sidebar.appendChild(el('div', 'map-sidebar-title', 'ROUTES'));
 
   // null = all visible, '__none__' = all hidden, key = solo highlight
-  let highlighted = (typeof STATE !== 'undefined' && STATE.mapUI) ? STATE.mapUI.highlighted : null;
+  let highlighted = STATE.mapUI?.highlighted ?? null;
 
   function applyVisibility() {
     Object.entries(opts.msnGroups).forEach(([key, g]) => {
@@ -218,7 +238,7 @@ function createSidebar(opts) {
     sidebar.querySelector('.map-all-btn')?.classList.toggle('map-msn-active',   highlighted === null);
     sidebar.querySelector('.map-none-btn')?.classList.toggle('map-msn-active',  highlighted === '__none__');
     // Persist to centralized state
-    if (typeof STATE !== 'undefined' && STATE.mapUI) STATE.mapUI.highlighted = highlighted;
+    STATE.mapUI.highlighted = highlighted;
   }
 
   opts.routes.forEach(r => {
@@ -256,14 +276,14 @@ function createSidebar(opts) {
     sidebar.appendChild(el('div', 'map-sidebar-title', 'OVERLAYS'));
 
     if (hasEngZones) {
-      let engVisible = (typeof STATE !== 'undefined' && STATE.mapUI) ? STATE.mapUI.engVisible !== false : true;
+      let engVisible = STATE.mapUI?.engVisible !== false;
       const engBtn = el('button', 'map-msn-btn' + (engVisible ? ' map-msn-active' : ''), '◯ ENG ZONES');
       engBtn.addEventListener('click', () => {
         engVisible = !engVisible;
         opts.engZoneG.setAttribute('display', engVisible ? '' : 'none');
         if (opts.threatG) opts.threatG.setAttribute('display', engVisible ? '' : 'none');
         engBtn.classList.toggle('map-msn-active', engVisible);
-        if (typeof STATE !== 'undefined' && STATE.mapUI) STATE.mapUI.engVisible = engVisible;
+        STATE.mapUI.engVisible = engVisible;
       });
       // Apply initial visibility from saved state
       if (!engVisible) {
@@ -274,13 +294,13 @@ function createSidebar(opts) {
     }
 
     if (hasAirspaces) {
-      let airspaceVisible = (typeof STATE !== 'undefined' && STATE.mapUI) ? STATE.mapUI.airVisible !== false : true;
+      let airspaceVisible = STATE.mapUI?.airVisible !== false;
       const airspaceBtn = el('button', 'map-msn-btn' + (airspaceVisible ? ' map-msn-active' : ''), '◯ AIRSPACES');
       airspaceBtn.addEventListener('click', () => {
         airspaceVisible = !airspaceVisible;
         opts.airspaceG.setAttribute('display', airspaceVisible ? '' : 'none');
         airspaceBtn.classList.toggle('map-msn-active', airspaceVisible);
-        if (typeof STATE !== 'undefined' && STATE.mapUI) STATE.mapUI.airVisible = airspaceVisible;
+        STATE.mapUI.airVisible = airspaceVisible;
       });
       // Apply initial visibility from saved state
       if (!airspaceVisible) {
