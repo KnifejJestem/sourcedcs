@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import re
+import warnings
+from pathlib import Path
+
+# Load the comprehensive CLSID→name mapping from the data directory.
+# Path: <repo_root>/data/weaponsdata.json (two levels up from tools/miztoyaml/)
+_DATA_FILE = Path(__file__).parent.parent.parent / "data" / "weaponsdata.json"
+try:
+    with _DATA_FILE.open(encoding="utf-8") as _fh:
+        _WEAPONSDATA: dict[str, str] = json.load(_fh)
+except (OSError, json.JSONDecodeError) as _e:
+    warnings.warn(f"weaponsdata.json could not be loaded ({_e}); CLSID resolution will be limited.", stacklevel=1)
+    _WEAPONSDATA = {}
 
 
 # Known DCS weapon / store CLSIDs.  Unknown CLSIDs are returned as-is (stripped
@@ -109,6 +122,8 @@ def resolve_clsid(clsid: str) -> str:
     """Return a human-readable weapon name for a DCS CLSID string."""
     if clsid in CLSID_NAMES:
         return CLSID_NAMES[clsid]
+    if clsid in _WEAPONSDATA:
+        return _WEAPONSDATA[clsid]
     # Strip braces for unknown CLSIDs so output stays readable
     return clsid.strip("{}")
 
