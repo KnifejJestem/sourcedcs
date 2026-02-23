@@ -18,81 +18,6 @@ except (OSError, json.JSONDecodeError) as _e:
     _WEAPONSDATA = {}
 
 
-# Known DCS weapon / store CLSIDs.  Unknown CLSIDs are returned as-is (stripped
-# of braces) so they still appear in the output rather than silently disappearing.
-CLSID_NAMES: dict[str, str] = {
-    # ── Air-to-Air ───────────────────────────────────────────────────────────
-    # AIM-120 AMRAAM
-    "{40EF17B7-F508-45de-8566-6FFECC0C1AB8}": "AIM-120C",
-    "{A111396E-D3E8-4b9c-8AC9-2432489304D5}": "AIM-120B",
-    "{F376DBEE-4CAE-41BA-ADD9-B2910AC95DEC}": "AIM-120C",
-    "{B06DD79A-F55E-4740-8ECF-9ED1FF8F5CEB}": "AIM-120C-7",
-    # AIM-9 Sidewinder
-    "{E6A6262A-CA08-4B3D-B030-E1A993B98452}": "AIM-9M",
-    "{E6A6262A-CA08-4B3D-B030-E1A993B98453}": "AIM-9X",
-    "{5CE2FF2A-645A-4197-B48D-8720AC69394F}": "AIM-9X",
-    "{6CEB49FC-DED8-4DED-B053-E1F033FF72D3}": "AIM-9X-2",
-    # AIM-7 Sparrow
-    "{8D399B27-BEFD-4020-A398-CA5579BCDBD1}": "AIM-7M",
-    "{AB8B8299-F1CC-4359-89B5-2172E0CF4A5A}": "AIM-7F",
-    # ── AGM — SEAD ───────────────────────────────────────────────────────────
-    "{7A44FF09-57A9-4223-9480-249400A97B4B}": "AGM-88C HARM",
-    "{0267FF4B-340A-4674-B4B3-FE7B84D6B24E}": "AGM-88B HARM",
-    "{E8D4B10D-A846-42C5-A046-E3F74ED36B80}": "AGM-88 HARM",
-    "{HAM_HARM}":                              "AGM-88 HARM",
-    # ── AGM — Maverick ───────────────────────────────────────────────────────
-    "{AGM_65D}": "AGM-65D", "{AGM_65E}": "AGM-65E", "{AGM_65F}": "AGM-65F",
-    "{AGM_65G}": "AGM-65G", "{AGM_65H}": "AGM-65H", "{AGM_65K}": "AGM-65K",
-    "{AGM_65L}": "AGM-65L", "{AGM_65R}": "AGM-65R",
-    # ── AGM — Cruise / Stand-off ─────────────────────────────────────────────
-    "{AGM_154A}": "AGM-154A JSOW", "{AGM_154C}": "AGM-154C JSOW",
-    "{AGM_158}":  "AGM-158 JASSM",
-    # ── GBU — Paveway laser-guided ───────────────────────────────────────────
-    "{GBU-10}":  "GBU-10",   "{GBU_10}":  "GBU-10",
-    "{GBU-12}":  "GBU-12",   "{GBU_12}":  "GBU-12",
-    "{GBU-16}":  "GBU-16",   "{GBU_16}":  "GBU-16",
-    "{GBU-24}":  "GBU-24",   "{GBU_24}":  "GBU-24",
-    "{GBU-27}":  "GBU-27",
-    "{GBU-28}":  "GBU-28",
-    # ── GBU — JDAM GPS-guided ────────────────────────────────────────────────
-    "{GBU-31}":       "GBU-31",  "{GBU_31}":       "GBU-31",
-    "{GBU-31_V3B}":   "GBU-31",  "{GBU_31_V3B}":   "GBU-31",
-    "{GBU-32_V2B}":   "GBU-32",  "{GBU_32_V2B}":   "GBU-32",
-    "{GBU-38}":       "GBU-38",  "{GBU_38}":       "GBU-38",
-    "{GBU-38_V1B}":   "GBU-38",  "{GBU_38_V1B}":   "GBU-38",
-    "{GBU-54_V1B}":   "GBU-54",  "{GBU_54_V1B}":   "GBU-54",
-    # ── GBU — Small Diameter Bomb ────────────────────────────────────────────
-    "{GBU-39}":                        "GBU-39",
-    "{GBU-39_B_WITH_FINS_UNIT_ASSEMBLY}": "GBU-39",
-    # ── Unguided bombs ───────────────────────────────────────────────────────
-    "{Mk_82}": "Mk-82",  "{Mk-82}": "Mk-82",  "{MK_82}": "Mk-82",
-    "{Mk_82Y}": "Mk-82",
-    "{Mk_83}": "Mk-83",  "{Mk-83}": "Mk-83",  "{MK_83}": "Mk-83",
-    "{Mk_84}": "Mk-84",  "{Mk-84}": "Mk-84",  "{MK_84}": "Mk-84",
-    # ── CBU cluster ──────────────────────────────────────────────────────────
-    "{CBU_87}": "CBU-87",  "{CBU-87}": "CBU-87",
-    "{CBU_97}": "CBU-97",  "{CBU-97}": "CBU-97",
-    "{CBU_103}": "CBU-103", "{CBU-103}": "CBU-103",
-    "{CBU_105}": "CBU-105", "{CBU-105}": "CBU-105",
-    # ── Fuel tanks ───────────────────────────────────────────────────────────
-    "{FPU_8A_FUEL_TANK}": "300gal Tank",
-    "{Sullivan_TANK}":    "Fuel Tank",
-    "{A_A_refuel_pod}":   "AAR Pod",
-    # ── Pods / ECM ───────────────────────────────────────────────────────────
-    "{AN_ASQ_213}":         "HTS Pod",
-    "{AN_AAQ_28_LITENING}": "Litening Pod",
-    "{AN_ASQ_228}":         "ATFLIR Pod",
-    "ALQ_184_Long":         "ALQ-184 ECM",
-    "ALQ_184":              "ALQ-184 ECM",
-    "{AN_ALQ_131}":         "ALQ-131 ECM",
-    # ── LAU racks (FA-18) ────────────────────────────────────────────────────
-    "LAU-115_2*LAU-127_AIM-120C": "2× AIM-120C",
-    "LAU-115C_with_AIM-7F":       "AIM-7F",
-    "LAU-115_LAU-127_AIM-9M":     "AIM-9M",
-    "LAU-115_LAU-127_AIM-9X":     "AIM-9X",
-    "LAU-115_2*LAU-127_AIM-9X":   "2× AIM-9X",
-}
-
 # DCS ship types that are fixed-wing carriers
 CARRIER_TYPES: frozenset[str] = frozenset({
     "CVN_71", "CVN_72", "CVN_73", "CVN_74", "CVN_75",
@@ -120,8 +45,6 @@ TASK_LABELS: dict[str, str] = {
 
 def resolve_clsid(clsid: str) -> str:
     """Return a human-readable weapon name for a DCS CLSID string."""
-    if clsid in CLSID_NAMES:
-        return CLSID_NAMES[clsid]
     if clsid in _WEAPONSDATA:
         return _WEAPONSDATA[clsid]
     # Strip braces for unknown CLSIDs so output stays readable
