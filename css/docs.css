@@ -85,8 +85,10 @@
 .acm-badge.ROZ    { border-color: var(--red);   color: var(--red); }
 .acm-badge.ORBIT  { border-color: var(--blue);  color: var(--blue); }
 .acm-badge.MEZ    { border-color: var(--sead);  color: var(--sead); }
+.acm-badge.NFZ    { border-color: #9b1c1c;      color: #9b1c1c; }
 :root.movie .acm-badge.ROZ   { border-color: #ff4444; color: #ff4444; }
 :root.movie .acm-badge.ORBIT { border-color: #4fc3f7; color: #4fc3f7; }
+:root.movie .acm-badge.NFZ   { border-color: #ff4444; color: #ff4444; }
 
 /* ═══════════════════════════════════════════════════════════
    COMMS-SPECIFIC

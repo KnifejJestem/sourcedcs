@@ -130,7 +130,7 @@ function _editAcm(acms, index) {
     var fName = editorField(body, 'Name', acm.name, { required: true });
     var fType = editorField(body, 'Type', acm.type, {
       type: 'select',
-      options: ['ROZ', 'ORBIT', 'MEZ', 'KILLBOX', 'FACA', 'ANCHOR', 'OTHER'],
+      options: ['ROZ', 'ORBIT', 'MEZ', 'KILLBOX', 'FACA', 'ANCHOR', 'NFZ', 'OTHER'],
     });
     if (acm.type) fType.value = acm.type;
 
