@@ -395,8 +395,6 @@ def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
         msn_targets = None if f.is_tanker else \
             _build_mission_targets(steer_pts, targets, f.task)
 
-        first_unit_weapons = f.units[0].loadout or None if f.units else None
-
         msn: dict = {
             "mission_number":       msn_num,
             "callsign":             callsign,
@@ -411,7 +409,6 @@ def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
                 "count":   count,
                 "type":    ac_type,
                 "loadout": loadout_str,
-                "weapons": first_unit_weapons,
             },
             "targets":         msn_targets,
             "control":         {"agency_id": None},

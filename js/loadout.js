@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 // loadout.js — Loadout code parser and visual renderer
 //
-// FORMAT:  AAA+NXccc[NXccc...]
+// FORMAT:  AAA+NXccc[L] NXccc[L] ...   (weapon groups separated by NX)
 //
 //   AAA  = 3-digit air-to-air code (each digit = count)
 //          digit 1 → Fox 3 (active radar, e.g. AIM-120)
@@ -10,20 +10,26 @@
 //
 //   +    = gun ammo present (omitted if no gun)
 //
-//   NXccc = weapon group:  N  = quantity (single digit)
-//                          X  = literal separator
-//                          ccc= weapon code (1–3 digits)
+//   NXccc[L] = one weapon group:
+//              N   = quantity (single digit)
+//              X   = literal separator
+//              ccc = base weapon code (1–3 digits)
+//              L   = variant letter, present only for weapon families that
+//                    share a base number (AGM-65/88/154).  Absent for
+//                    single-variant families (GBU-38 → '38', AGM-158 → '158').
 //
 // EXAMPLES:
-//   301          → 3×Fox3, 0×Fox1, 1×Fox2, no gun
-//   501+         → 5×Fox3, 0×Fox1, 1×Fox2, gun
-//   301+3X381X114 → 3×Fox3, 0×Fox1, 1×Fox2, gun,
-//                    3×GBU-38, 1×AGM-114
+//   301            → 3×Fox3, 0×Fox1, 1×Fox2, no gun
+//   501+           → 5×Fox3, 0×Fox1, 1×Fox2, gun
+//   301+3X381X114  → 3×Fox3, 0×Fox1, 1×Fox2, gun, 3×GBU-38, 1×AGM-114
+//   002+2X88C      → 0×Fox3, 0×Fox1, 2×Fox2, gun, 2×AGM-88C HARM
+//   301+3X65D2X65K → 3×Fox3, 0×Fox1, 1×Fox2, gun, 3×AGM-65D, 2×AGM-65K
 //
 // PARSING RULE for weapon groups (post-+ section):
 //   Split on boundaries where a digit is followed by 'X'.
-//   "3X381X114" → ["3X38", "1X114"]
-//   The digit before X is always quantity; remainder is code.
+//   "3X65D2X65K" → ["3X65D", "2X65K"]
+//   The digit before X is always quantity; remainder is the code (numeric,
+//   or numeric + variant letter for multi-variant families).
 // ═══════════════════════════════════════════════════════════
 
 'use strict';
@@ -37,16 +43,28 @@ const WEAPON_DB = {
   // Handled separately via the 3-digit air-to-air prefix
 
   // ── Air-to-Ground Missiles (AGM) ────────────────────────
-  '62':  { name: 'AGM-62',  full: 'AGM-62 Walleye',                 cat: 'agm', color: '#c084fc' },
-  '65':  { name: 'AGM-65',  full: 'AGM-65 Maverick',                cat: 'agm', color: '#c084fc' },
-  '88':  { name: 'AGM-88',  full: 'AGM-88 HARM (Anti-Radiation)',    cat: 'agm', color: '#ff8c00' },
-  '114': { name: 'AGM-114', full: 'AGM-114 Hellfire',                cat: 'agm', color: '#c084fc' },
-  '122': { name: 'AGM-122', full: 'AGM-122 Sidearm (Anti-Radiation)',cat: 'agm', color: '#ff8c00' },
-  '130': { name: 'AGM-130', full: 'AGM-130 (Powered Bomb)',          cat: 'agm', color: '#c084fc' },
-  '141': { name: 'ADM-141', full: 'ADM-141 TALD (Decoy)',            cat: 'agm', color: '#7a7875' },
-  '154': { name: 'AGM-154', full: 'AGM-154 JSOW',                   cat: 'agm', color: '#c084fc' },
-  '158': { name: 'AGM-158', full: 'AGM-158 JASSM',                  cat: 'agm', color: '#c084fc' },
-  '179': { name: 'AGM-179', full: 'AGM-179 JAGM (Joint Air-Ground)', cat: 'agm', color: '#c084fc' },
+  '62':   { name: 'AGM-62',   full: 'AGM-62 Walleye',                    cat: 'agm', color: '#c084fc' },
+  '65':   { name: 'AGM-65',   full: 'AGM-65 Maverick',                   cat: 'agm', color: '#c084fc' },
+  '65D':  { name: 'AGM-65D',  full: 'AGM-65D Maverick (IIR)',             cat: 'agm', color: '#c084fc' },
+  '65E':  { name: 'AGM-65E',  full: 'AGM-65E Maverick (Laser/Lg Whd)',    cat: 'agm', color: '#c084fc' },
+  '65F':  { name: 'AGM-65F',  full: 'AGM-65F Maverick (IIR Naval)',       cat: 'agm', color: '#c084fc' },
+  '65G':  { name: 'AGM-65G',  full: 'AGM-65G Maverick (IIR/Lg Whd)',      cat: 'agm', color: '#c084fc' },
+  '65H':  { name: 'AGM-65H',  full: 'AGM-65H Maverick (CCD)',             cat: 'agm', color: '#c084fc' },
+  '65K':  { name: 'AGM-65K',  full: 'AGM-65K Maverick (CCD Imp)',         cat: 'agm', color: '#c084fc' },
+  '65L':  { name: 'AGM-65L',  full: 'AGM-65L Maverick (CCD Laser)',       cat: 'agm', color: '#c084fc' },
+  '65R':  { name: 'AGM-65R',  full: 'AGM-65R Maverick (Imaging IR)',      cat: 'agm', color: '#c084fc' },
+  '88':   { name: 'AGM-88',   full: 'AGM-88 HARM (Anti-Radiation)',       cat: 'agm', color: '#ff8c00' },
+  '88B':  { name: 'AGM-88B',  full: 'AGM-88B HARM (Anti-Radiation)',      cat: 'agm', color: '#ff8c00' },
+  '88C':  { name: 'AGM-88C',  full: 'AGM-88C HARM (Anti-Radiation)',      cat: 'agm', color: '#ff8c00' },
+  '114':  { name: 'AGM-114',  full: 'AGM-114 Hellfire',                   cat: 'agm', color: '#c084fc' },
+  '122':  { name: 'AGM-122',  full: 'AGM-122 Sidearm (Anti-Radiation)',   cat: 'agm', color: '#ff8c00' },
+  '130':  { name: 'AGM-130',  full: 'AGM-130 (Powered Bomb)',             cat: 'agm', color: '#c084fc' },
+  '141':  { name: 'ADM-141',  full: 'ADM-141 TALD (Decoy)',               cat: 'agm', color: '#7a7875' },
+  '154':  { name: 'AGM-154',  full: 'AGM-154 JSOW',                      cat: 'agm', color: '#c084fc' },
+  '154A': { name: 'AGM-154A', full: 'AGM-154A JSOW (Unitary)',            cat: 'agm', color: '#c084fc' },
+  '154C': { name: 'AGM-154C', full: 'AGM-154C JSOW (Penetrator)',         cat: 'agm', color: '#c084fc' },
+  '158':  { name: 'AGM-158',  full: 'AGM-158 JASSM',                     cat: 'agm', color: '#c084fc' },
+  '179':  { name: 'AGM-179',  full: 'AGM-179 JAGM (Joint Air-Ground)',    cat: 'agm', color: '#c084fc' },
 
   // ── Guided Bombs (GBU) ───────────────────────────────────
   '10':  { name: 'GBU-10',  full: 'GBU-10 Paveway II (2000lb LGB)', cat: 'gbu', color: '#4fc3f7' },
