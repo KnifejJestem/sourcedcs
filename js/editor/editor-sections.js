@@ -418,7 +418,7 @@ function _editSpinsSection(sections, index) {
       var entries = f.entries.value.trim() ? jsyaml.load(f.entries.value) : [];
       sec.entries = Array.isArray(entries) ? entries : [];
     } catch (e) {
-      alert('Entries YAML error: ' + e.message);
+      showToast('ENTRIES YAML ERROR — ' + e.message, 'error');
       return;
     }
 
@@ -430,7 +430,7 @@ function _editSpinsSection(sections, index) {
         delete sec.table;
       }
     } catch (e) {
-      alert('Table YAML error: ' + e.message);
+      showToast('TABLE YAML ERROR — ' + e.message, 'error');
       return;
     }
 

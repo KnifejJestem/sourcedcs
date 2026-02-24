@@ -282,3 +282,72 @@ header {
 :root.movie .session-indicator.role-presenter { border-color: var(--cap);  color: var(--cap); }
 :root.movie .session-indicator.role-presentee { border-color: var(--blue); color: var(--blue); }
 
+/* ── Button hover transitions ────────────────────────────── */
+.load-btn       { transition: background .15s, color .15s, border-color .15s; }
+.theme-btn      { transition: background .15s, color .15s; }
+.edit-mode-btn  { transition: background .15s, color .15s, border-color .15s; }
+.dialog-btn     { transition: background .15s, color .15s; }
+.dialog-role-btn{ transition: background .15s, color .15s; }
+
+/* ── Tab content fade-in ─────────────────────────────────── */
+@keyframes tab-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.view.active { animation: tab-fadein .18s ease; }
+
+/* ── Window-wide drag overlay ────────────────────────────── */
+.drag-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  z-index: 9990;
+  background: rgba(244,243,240,.92);
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+:root.movie .drag-overlay { background: rgba(5,10,8,.92); }
+.drag-overlay.active { display: flex; }
+.drag-overlay-inner {
+  border: 2px dashed var(--border-strong);
+  padding: 64px 120px;
+  text-align: center;
+  pointer-events: none;
+}
+:root.movie .drag-overlay-inner { border-color: var(--cap); }
+.drag-overlay-icon {
+  font-size: 40px;
+  color: var(--text-3);
+  margin-bottom: 16px;
+}
+:root.movie .drag-overlay-icon { color: var(--cap); }
+.drag-overlay-label {
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: var(--text-2);
+}
+:root.movie .drag-overlay-label { color: var(--cap); }
+
+/* ── Toast notification ──────────────────────────────────── */
+.toast {
+  position: fixed;
+  top: -56px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--text-inv);
+  padding: 9px 20px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+  z-index: 9999;
+  pointer-events: none;
+  transition: top .25s ease;
+  box-shadow: var(--shadow-md);
+}
+.toast.show { top: 12px; }
+.toast.toast-error { background: var(--red); color: #fff; }
+:root.movie .toast { background: var(--cap); color: #000; }
+:root.movie .toast.toast-error { background: var(--red); color: #fff; }
+

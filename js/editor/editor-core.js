@@ -320,7 +320,7 @@ function editorCleanPkg(pkg) {
 
 // ── Export as YAML ───────────────────────────────────────────
 function exportPackageYaml() {
-  if (!STATE.pkg) { alert('No package loaded'); return; }
+  if (!STATE.pkg) { showToast('NO PACKAGE LOADED', 'error'); return; }
 
   var fileName = prompt('Enter file name:', 'package.yaml');
   if (!fileName) return; // cancelled
