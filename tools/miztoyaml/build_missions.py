@@ -196,7 +196,7 @@ def _classify_waypoints(flight: Flight,
                 if wp.alt_ft is not None:
                     entry["altitude"] = f"FL{round(wp.alt_ft / 100)}"
                 ref_pts[marshal_name] = entry
-            result.append({"name_ref": marshal_name, "name": marshal_name})
+            result.append({"name_ref": marshal_name, "name": marshal_name, "coords": wp_dms})
             continue
 
         # Orbit deduplication: skip if a very close orbit already exists

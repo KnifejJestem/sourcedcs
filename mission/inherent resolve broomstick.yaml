@@ -727,6 +727,7 @@ ato:
       altitude_ft: 10000
     - name_ref: MARSHALL NORTH
       name: MARSHALL NORTH
+      coords: N37°22'35" E37°45'05"
     - coords: N35°46'49" E38°27'30"
       name: SAM SA-2-1 TR
       altitude_ft: 1142
@@ -838,6 +839,7 @@ ato:
       altitude_ft: 25000
     - name_ref: MARSHALL WEST
       name: MARSHALL WEST
+      coords: N35°19'19" E37°20'44"
     - coords: N35°21'04" E38°05'00"
       name: ANCHOR
       altitude_ft: 25000
