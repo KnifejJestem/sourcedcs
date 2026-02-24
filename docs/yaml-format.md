@@ -398,7 +398,7 @@ be listed first in each mission entry.
 |-------|------|-------------|
 | `mission_number` | string | ATO mission number (e.g. `MSN3266`) — **primary key**, listed first.  Used as the cross-reference ID throughout the file |
 | `callsign` | string | Flight callsign |
-| `mission_type` | string | `CAP` / `BAI` / `CAS` / `SEAD` / `STRIKE` / `TANKER` (drives color coding) |
+| `mission_type` | string | `CAP` / `BAI` / `CAS` / `SEAD` / `STRIKE` / `REFUELING` (drives color coding) |
 | `unit` | string | Operating unit |
 | `home_base_icao` | string | Home base ICAO (display only) |
 | `deploy_location_icao` | string | Start of route on map — accepts an airfield ICAO, a carrier registry ID (e.g. `CVN-71`), a carrier callsign, a marshal point name, or a raw DMS coordinate string |
