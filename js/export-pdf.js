@@ -290,46 +290,76 @@ function _buildMapSection(msnKey, mission) {
 </div>`;
   }
 
-  const svgClone = svg.cloneNode(true);
-
-  // Remove popups and interactive overlays
-  svgClone.querySelectorAll('.map-popup, .map-tile-attr').forEach(n => n.remove());
-
-  // Remove cursor and pointer-events styles so it renders cleanly
-  svgClone.removeAttribute('style');
-
-  // Ensure a visible background — insert a white rect before the first child
-  // so the map has a fallback background in tile modes (where the canvas isn't captured).
-  const existingBg = svgClone.querySelector('rect:first-child');
-  if (!existingBg || existingBg.getAttribute('clip-path')) {
-    const ns  = 'http://www.w3.org/2000/svg';
-    const bg  = document.createElementNS(ns, 'rect');
-    const vb  = (svgClone.getAttribute('viewBox') || '0 0 1400 780').split(' ');
-    bg.setAttribute('x', vb[0] || '0');
-    bg.setAttribute('y', vb[1] || '0');
-    bg.setAttribute('width',  vb[2] || '1400');
-    bg.setAttribute('height', vb[3] || '780');
-    bg.setAttribute('fill', '#c8dce8');
-    svgClone.insertBefore(bg, svgClone.firstChild);
-  }
-
-  // Filter mission routes: dim groups that don't belong to the selected mission
-  if (msnKey) {
-    svgClone.querySelectorAll('[data-msn]').forEach(g => {
-      if (g.getAttribute('data-msn') !== String(msnKey)) {
-        g.setAttribute('opacity', '0.07');
-      }
-    });
-  }
-
-  const svgStr = new XMLSerializer().serializeToString(svgClone);
-
-  const label = mission
+  const baseLabel = mission
     ? `MAP — ${mission.callsign}${mission.mission_number ? ' · ' + mission.mission_number : ''} ROUTE`
     : 'MAP — ALL ROUTES';
 
+  // Helper: clone SVG, clean it up, apply mission route dimming, and serialise.
+  // showEngZones controls whether the engagement-radius circles are visible.
+  function _cloneSvg(showEngZones) {
+    const clone = svg.cloneNode(true);
+
+    // Remove popups and interactive overlays
+    clone.querySelectorAll('.map-popup, .map-tile-attr').forEach(n => n.remove());
+
+    // Remove cursor / pointer-events styles so it renders cleanly in print
+    clone.removeAttribute('style');
+
+    // Ensure a visible background — insert a sea-blue rect before the first child
+    // so the map has a fallback background in tile modes (where the canvas isn't captured).
+    const existingBg = clone.querySelector('rect:first-child');
+    if (!existingBg || existingBg.getAttribute('clip-path')) {
+      const ns = 'http://www.w3.org/2000/svg';
+      const bg = document.createElementNS(ns, 'rect');
+      const vb = (clone.getAttribute('viewBox') || '0 0 1400 780').split(' ');
+      bg.setAttribute('x',      vb[0] || '0');
+      bg.setAttribute('y',      vb[1] || '0');
+      bg.setAttribute('width',  vb[2] || '1400');
+      bg.setAttribute('height', vb[3] || '780');
+      bg.setAttribute('fill', '#c8dce8');
+      clone.insertBefore(bg, clone.firstChild);
+    }
+
+    // Filter mission routes: dim groups that don't belong to the selected mission
+    if (msnKey) {
+      clone.querySelectorAll('[data-msn]').forEach(g => {
+        if (g.getAttribute('data-msn') !== String(msnKey)) {
+          g.setAttribute('opacity', '0.07');
+        }
+      });
+    }
+
+    // Show or hide engagement zone circles
+    const engGroup = clone.querySelector('[data-role="eng-zones"]');
+    if (engGroup) {
+      engGroup.setAttribute('display', showEngZones ? '' : 'none');
+    }
+
+    return new XMLSerializer().serializeToString(clone);
+  }
+
+  // Check whether the current map actually contains engagement zones with children
+  const hasEngZones = !!(svg.querySelector('[data-role="eng-zones"]')?.childElementCount);
+
+  if (hasEngZones) {
+    // Produce two maps: engagement radii ON, then engagement radii OFF
+    const svgOn  = _cloneSvg(true);
+    const svgOff = _cloneSvg(false);
+
+    return `<div class="pdf-section pdf-map">
+<h2 class="pdf-section-title">${_escHtml(baseLabel)} — ENGAGEMENT RADII ON</h2>
+${svgOn}
+</div>
+<div class="pdf-section pdf-map">
+<h2 class="pdf-section-title">${_escHtml(baseLabel)} — ENGAGEMENT RADII OFF</h2>
+${svgOff}
+</div>`;
+  }
+
+  // No engagement zones — single map
+  const svgStr = _cloneSvg(true);
   return `<div class="pdf-section pdf-map">
-<h2 class="pdf-section-title">${_escHtml(label)}</h2>
+<h2 class="pdf-section-title">${_escHtml(baseLabel)}</h2>
 ${svgStr}
 </div>`;
 }
