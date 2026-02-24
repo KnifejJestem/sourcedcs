@@ -242,6 +242,7 @@ function collectData(ato, aco) {
             ...p, kind: 'steer-ref',
             label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
             sub: nameRef, color, msnType: m.mission_type, mission: m,
+            altitude_ft: altFt,
           });
         }
         // Orbit/anchor track: render a racetrack on the map.

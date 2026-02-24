@@ -173,11 +173,14 @@ def _classify_waypoints(flight: Flight,
         if wp.name and wp.name.upper().startswith("MARSHALL "):
             marshal_name = wp.name.strip()
             if marshal_name not in ref_pts:
-                ref_pts[marshal_name] = {
+                entry: dict = {
                     "name":   marshal_name,
                     "type":   "marshal",
                     "coords": wp_dms,
                 }
+                if wp.alt_ft is not None:
+                    entry["altitude"] = f"FL{round(wp.alt_ft / 100)}"
+                ref_pts[marshal_name] = entry
             result.append({"name_ref": marshal_name, "name": marshal_name})
             continue
 
