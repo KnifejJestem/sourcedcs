@@ -88,7 +88,7 @@ function _buildIdentificationSection(body, m, f) {
   f.callsign       = editorField(body, 'Callsign',       m.callsign,       { placeholder: 'e.g. FALCON5', required: true });
   f.mission_type   = editorField(body, 'Mission Type',    m.mission_type,   {
     type: 'select',
-    options: ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'OTHER'],
+    options: ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'REFUELING', 'OTHER'],
     required: true,
   });
   if (m.mission_type) f.mission_type.value = m.mission_type;

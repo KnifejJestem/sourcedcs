@@ -114,7 +114,8 @@ def build_flight_comms(flights: list[Flight], dtcs: dict[str, dict]) -> list[dic
 
 def build_doc(*, mission_name, mission_date, theatre,
               year, month, targets, ref_pts, acms, metar, wx_notes,
-              flights, carriers, dtcs=None, spins_sections=None) -> dict:
+              flights, carriers, dtcs=None, spins_sections=None,
+              ingame_start_local=None) -> dict:
 
     import hashlib
     msn_start = 1000 + int(hashlib.md5(mission_name.encode()).hexdigest()[:4], 16) % 8000
@@ -166,6 +167,7 @@ def build_doc(*, mission_name, mission_date, theatre,
             "irl_date":           mission_date,
             "irl_time_zulu":      None,
             "ingame_start_time":  None,
+            "ingame_start_local": ingame_start_local,
             "local_offset_hours": None,
             "ae_flags":           ["IRL", "INGAME"],
             "global_control": {
