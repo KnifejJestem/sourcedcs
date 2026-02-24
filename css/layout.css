@@ -53,6 +53,29 @@ header {
 
 .header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 
+/* ── Toggle group with label ─────────────────────────────── */
+.hdr-toggle-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.hdr-toggle-label {
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* ── Divider between settings and actions ────────────────── */
+.hdr-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-strong);
+  margin: 0 2px;
+}
+
 .theme-toggle {
   display: flex;
   border: 1px solid var(--border-strong);
@@ -81,6 +104,14 @@ header {
 .load-btn:hover { background: var(--text); color: var(--text-inv); }
 :root.movie .load-btn:hover { background: var(--cap); color: #000; }
 
+/* Primary action button variant */
+.load-btn-primary {
+  border-color: var(--text);
+  color: var(--text);
+  font-weight: 600;
+}
+:root.movie .load-btn-primary { border-color: var(--cap); color: var(--cap); }
+
 /* ── Body ────────────────────────────────────────────────── */
 .body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
@@ -93,7 +124,7 @@ header {
 }
 .drop-zone {
   border: 1px dashed var(--border-strong);
-  padding: 64px 96px;
+  padding: 56px 96px;
   text-align: center;
   cursor: pointer;
   background: var(--bg2);
@@ -107,20 +138,9 @@ header {
   border-color: var(--cap);
   background: rgba(57,255,122,.03);
 }
-.drop-icon { font-size: 26px; color: var(--text-3); margin-bottom: 14px; }
-.drop-label { font-size: 11px; letter-spacing: 3px; color: var(--text-2); margin-bottom: 6px; }
-.drop-sub { font-size: 10px; color: var(--text-3); margin-bottom: 18px; line-height: 1.6; }
-.demo-btn {
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  color: var(--text-3);
-  font-size: 9px;
-  letter-spacing: 2px;
-  padding: 6px 14px;
-  transition: border-color .15s, color .15s;
-}
-.demo-btn:hover { border-color: var(--text); color: var(--text); }
-:root.movie .demo-btn:hover { border-color: var(--cap); color: var(--cap); }
+.drop-icon { font-size: 32px; color: var(--text-3); margin-bottom: 16px; }
+.drop-label { font-size: 11px; letter-spacing: 3px; color: var(--text-2); margin-bottom: 8px; }
+.drop-sub { font-size: 10px; color: var(--text-3); line-height: 1.6; }
 
 /* ── Main content ────────────────────────────────────────── */
 .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -136,7 +156,7 @@ header {
   border: none;
   background: transparent;
   padding: 0 20px;
-  height: 34px;
+  height: 36px;
   font-size: 9px;
   letter-spacing: 2px;
   color: var(--text-3);
@@ -146,6 +166,7 @@ header {
 .tab-btn:hover { color: var(--text-2); }
 .tab-btn.active { color: var(--text); border-bottom-color: var(--text); }
 :root.movie .tab-btn.active { color: var(--cap); border-bottom-color: var(--cap); }
+.tab-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
 /* ── Views ───────────────────────────────────────────────── */
 .view { display: none; flex: 1; flex-direction: column; overflow: hidden; contain: layout paint; }
@@ -247,8 +268,6 @@ header {
 :root.movie .dialog-btn:hover { background: var(--cap); color: #000; }
 .dialog-btn-join { font-weight: 600; }
 
-.drop-hint { font-size: 10px; color: var(--text-3); }
-
 /* ── Session status indicator ────────────────────────────── */
 .session-indicator {
   font-size: 8px;
@@ -262,4 +281,73 @@ header {
 .session-indicator.role-presentee { border-color: var(--blue);  color: var(--blue); }
 :root.movie .session-indicator.role-presenter { border-color: var(--cap);  color: var(--cap); }
 :root.movie .session-indicator.role-presentee { border-color: var(--blue); color: var(--blue); }
+
+/* ── Button hover transitions ────────────────────────────── */
+.load-btn       { transition: background .15s, color .15s, border-color .15s; }
+.theme-btn      { transition: background .15s, color .15s; }
+.edit-mode-btn  { transition: background .15s, color .15s, border-color .15s; }
+.dialog-btn     { transition: background .15s, color .15s; }
+.dialog-role-btn{ transition: background .15s, color .15s; }
+
+/* ── Tab content fade-in ─────────────────────────────────── */
+@keyframes tab-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.view.active { animation: tab-fadein .18s ease; }
+
+/* ── Window-wide drag overlay ────────────────────────────── */
+.drag-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  z-index: 9990;
+  background: rgba(244,243,240,.92);
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+:root.movie .drag-overlay { background: rgba(5,10,8,.92); }
+.drag-overlay.active { display: flex; }
+.drag-overlay-inner {
+  border: 2px dashed var(--border-strong);
+  padding: 64px 120px;
+  text-align: center;
+  pointer-events: none;
+}
+:root.movie .drag-overlay-inner { border-color: var(--cap); }
+.drag-overlay-icon {
+  font-size: 40px;
+  color: var(--text-3);
+  margin-bottom: 16px;
+}
+:root.movie .drag-overlay-icon { color: var(--cap); }
+.drag-overlay-label {
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: var(--text-2);
+}
+:root.movie .drag-overlay-label { color: var(--cap); }
+
+/* ── Toast notification ──────────────────────────────────── */
+.toast {
+  position: fixed;
+  top: -56px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--text-inv);
+  padding: 9px 20px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+  z-index: 9999;
+  pointer-events: none;
+  transition: top .25s ease;
+  box-shadow: var(--shadow-md);
+}
+.toast.show { top: 12px; }
+.toast.toast-error { background: var(--red); color: #fff; }
+:root.movie .toast { background: var(--cap); color: #000; }
+:root.movie .toast.toast-error { background: var(--red); color: #fff; }
 

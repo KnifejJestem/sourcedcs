@@ -16,7 +16,7 @@ const PDF_MAX_PRESET_CHANNELS = 20;
 // ── Export dialog ─────────────────────────────────────────────
 
 function openExportDialog() {
-  if (!STATE.pkg) { alert('No package loaded'); return; }
+  if (!STATE.pkg) { showToast('NO PACKAGE LOADED', 'error'); return; }
   const overlay = document.getElementById('exportDialog');
   if (!overlay) return;
   _populateExportMissionSelect();
@@ -103,7 +103,7 @@ function exportPackagePDF(msnIdx, sections) {
   if (sections.weather)  parts.push(_buildWeatherSection());
 
   if (!parts.length) {
-    alert('Select at least one section to export.');
+    showToast('SELECT AT LEAST ONE SECTION TO EXPORT', 'error');
     return;
   }
 
@@ -115,7 +115,7 @@ function exportPackagePDF(msnIdx, sections) {
 function _openPrintWindow(title, bodyHtml) {
   const win = window.open('', '_blank', 'width=960,height=700');
   if (!win) {
-    alert('Pop-up blocked. Please allow pop-ups for this site to use PDF export.');
+    showToast('POP-UP BLOCKED — allow pop-ups for PDF export', 'error');
     return;
   }
 

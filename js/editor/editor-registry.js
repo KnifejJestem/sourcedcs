@@ -297,9 +297,9 @@ function _saveRegistryItem(catKey) {
     if (!Array.isArray(reg[catKey])) reg[catKey] = [];
     if (body._isNew) {
       var name = (item.name || '').trim();
-      if (!name) { alert('Name is required'); return; }
+      if (!name) { showToast('NAME IS REQUIRED', 'error'); return; }
       if (reg[catKey].some(function (i) { return i.name === name; })) {
-        alert('Name already exists'); return;
+        showToast('NAME ALREADY EXISTS', 'error'); return;
       }
       reg[catKey].push(item);
     } else {
@@ -312,8 +312,8 @@ function _saveRegistryItem(catKey) {
     var id;
     if (body._isNew) {
       id = (body._idInput.value || '').trim();
-      if (!id) { alert('ID is required'); return; }
-      if (reg[catKey][id]) { alert('ID already exists'); return; }
+      if (!id) { showToast('ID IS REQUIRED', 'error'); return; }
+      if (reg[catKey][id]) { showToast('ID ALREADY EXISTS', 'error'); return; }
     } else {
       id = body._editId;
     }
