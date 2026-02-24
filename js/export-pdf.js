@@ -327,9 +327,11 @@ function _buildMapSection(msnKey, mission) {
     ? `MAP — ${mission.callsign}${mission.mission_number ? ' · ' + mission.mission_number : ''} ROUTE`
     : 'MAP — ALL ROUTES';
 
-  // Helper: clone SVG, clean it up, apply mission route dimming, and serialise.
-  // showEngZones controls whether the engagement-radius circles are visible.
-  function _cloneSvg(showEngZones) {
+  // Helper: clone SVG, clean it up, control layer visibility, and serialise.
+  //   showThreats  — whether to show threat marker symbols
+  //   showLabels   — whether to show all text labels (markers, cities, route waypoints)
+  // Engagement zone circles are ALWAYS hidden in the PDF export.
+  function _cloneSvg(showThreats, showLabels) {
     const clone = svg.cloneNode(true);
 
     // Remove popups and interactive overlays
@@ -362,38 +364,34 @@ function _buildMapSection(msnKey, mission) {
       });
     }
 
-    // Show or hide engagement zone circles
+    // Always hide engagement zone circles in the PDF
     const engGroup = clone.querySelector('[data-role="eng-zones"]');
-    if (engGroup) {
-      engGroup.setAttribute('display', showEngZones ? '' : 'none');
+    if (engGroup) engGroup.setAttribute('display', 'none');
+
+    // Show or hide threat marker symbols
+    const threatGroup = clone.querySelector('[data-role="threat-markers"]');
+    if (threatGroup) threatGroup.setAttribute('display', showThreats ? '' : 'none');
+
+    // Show or hide all text labels (marker names, city names, route waypoint labels)
+    if (!showLabels) {
+      clone.querySelectorAll('text').forEach(t => t.setAttribute('display', 'none'));
     }
 
     return new XMLSerializer().serializeToString(clone);
   }
 
-  // Check whether the current map actually contains engagement zones with children
-  const hasEngZones = !!(svg.querySelector('[data-role="eng-zones"]')?.childElementCount);
+  // Map 1 — NAV: labels visible, no threat elements (clean navigation chart)
+  const svgNav = _cloneSvg(false, true);
+  // Map 2 — TACTICAL: threat markers visible, all labels hidden (decluttered threat picture)
+  const svgTactical = _cloneSvg(true, false);
 
-  if (hasEngZones) {
-    // Produce two maps: engagement radii ON, then engagement radii OFF
-    const svgOn  = _cloneSvg(true);
-    const svgOff = _cloneSvg(false);
-
-    return `<div class="pdf-section pdf-map">
-<h2 class="pdf-section-title">${_escHtml(baseLabel)} — ENGAGEMENT RADII ON</h2>
-${svgOn}
+  return `<div class="pdf-section pdf-map">
+<h2 class="pdf-section-title">${_escHtml(baseLabel)} — NAV</h2>
+${svgNav}
 </div>
 <div class="pdf-section pdf-map">
-<h2 class="pdf-section-title">${_escHtml(baseLabel)} — ENGAGEMENT RADII OFF</h2>
-${svgOff}
-</div>`;
-  }
-
-  // No engagement zones — single map
-  const svgStr = _cloneSvg(true);
-  return `<div class="pdf-section pdf-map">
-<h2 class="pdf-section-title">${_escHtml(baseLabel)}</h2>
-${svgStr}
+<h2 class="pdf-section-title">${_escHtml(baseLabel)} — TACTICAL (THREATS)</h2>
+${svgTactical}
 </div>`;
 }
 

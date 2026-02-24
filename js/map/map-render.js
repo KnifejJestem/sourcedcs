@@ -420,6 +420,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
     C, threatCol,
     airspaceColors: airResult.colors,
     defaultAirspaceCol: airResult.defaultCol,
+    svg,
   });
   container.appendChild(sidebar);
 
