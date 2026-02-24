@@ -55,6 +55,8 @@ def build_targets(groups: list[Group]) -> dict:
                 "coords":     dms(g.lat, g.lon),
                 "aim_points": build_aim_points(g, key),
             }
+            if g.alt_ft is not None:
+                targets[key]["elevation"] = f"{g.alt_ft}ft"
             print(f"  TGT  {key}: {g.name}")
             continue
 
@@ -72,6 +74,8 @@ def build_targets(groups: list[Group]) -> dict:
             "max_alt_ft":          sys.max_alt_ft,
             "aim_points":          aim_pts,
         }
+        if g.alt_ft is not None:
+            targets[key]["elevation"] = f"{g.alt_ft}ft"
         print(f"  {key}: {g.name} → {sys.name}  "
               f"[{len(aim_pts)} aim pts]  {dms(g.lat, g.lon)}")
 

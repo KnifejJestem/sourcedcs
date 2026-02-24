@@ -34,13 +34,15 @@ function fmtMsnEntry(entry) {
 
 function buildSteerTargetRows(p) {
   const rows = [['NAME', p.sub], ['MISSION', p.label]];
-  if (p.msnType) rows.push(['TYPE', p.msnType]);
+  if (p.msnType)          rows.push(['TYPE',     p.msnType]);
+  if (p.altitude_ft != null) rows.push(['ALTITUDE', `${Math.round(p.altitude_ft).toLocaleString()} FT`]);
   return rows;
 }
 
 function buildThreatRows(p) {
   const rows = [['NAME', p.label]];
   if (p.threatType)      rows.push(['TYPE',      p.threatType]);
+  if (p.elevation)       rows.push(['ELEVATION', p.elevation]);
   if (p.engagementRange) rows.push(['ENG RANGE', `${p.engagementRange} NM`]);
   if (p.maxAlt)          rows.push(['MAX ALT',   `${p.maxAlt.toLocaleString()} FT`]);
   return rows;

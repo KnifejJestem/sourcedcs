@@ -162,10 +162,13 @@ ato:
     steer_points:
     - coords: N24°30'00" E055°30'00"
       name: SP1
+      altitude_ft: 20000
     - coords: N25°30'00" E056°00'00"
       name: SP2
+      altitude_ft: 20000
     - coords: N26°00'00" E056°10'00"
       name: SP3
+      altitude_ft: 20000
   - mission_number: MSN3267
     callsign: DRAGON6
     mission_type: BAI
@@ -203,10 +206,13 @@ ato:
     steer_points:
     - coords: N24°30'00" E055°00'00"
       name: SP1
+      altitude_ft: 18000
     - coords: N25°00'00" E055°30'00"
       name: SP2
+      altitude_ft: 18000
     - coords: N26°00'00" E056°00'00"
       name: IP
+      altitude_ft: 16000
   - mission_number: MSN3268
     callsign: BUZZARD4
     mission_type: BAI

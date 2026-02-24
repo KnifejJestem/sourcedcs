@@ -173,11 +173,14 @@ def _classify_waypoints(flight: Flight,
         if wp.name and wp.name.upper().startswith("MARSHALL "):
             marshal_name = wp.name.strip()
             if marshal_name not in ref_pts:
-                ref_pts[marshal_name] = {
+                entry: dict = {
                     "name":   marshal_name,
                     "type":   "marshal",
                     "coords": wp_dms,
                 }
+                if wp.alt_ft is not None:
+                    entry["altitude"] = f"FL{round(wp.alt_ft / 100)}"
+                ref_pts[marshal_name] = entry
             result.append({"name_ref": marshal_name, "name": marshal_name})
             continue
 
@@ -208,6 +211,8 @@ def _classify_waypoints(flight: Flight,
         entry: dict = {"coords": wp_dms}
         if wp.name:
             entry["name"] = wp.name
+        if wp.alt_ft is not None:
+            entry["altitude_ft"] = wp.alt_ft
         if aim_point_id:
             entry["aim_point_id"] = aim_point_id
         if shared_name is not None:
@@ -328,6 +333,12 @@ def _build_mission_targets(steer_pts: list[dict], targets: dict,
         return None
 
     is_orbit = task in ('CAP', 'CAS', 'ESCORT', 'TANKER', 'FAC(A)')
+    # Build a map from aim_point_id → altitude_ft for fast lookup
+    sp_alt_by_apid: dict[str, float] = {
+        sp['aim_point_id']: sp['altitude_ft']
+        for sp in steer_pts
+        if sp.get('aim_point_id') and sp.get('altitude_ft') is not None
+    }
     result = []
     for tgt_id, ap_ids in seen_tgt.items():
         tgt_info = targets.get(tgt_id, {})
@@ -337,6 +348,13 @@ def _build_mission_targets(steer_pts: list[dict], targets: dict,
             "location":  location,
             "target_id": tgt_id,
         }
+        # Derive attack altitude from the steer point that flies over this target
+        attack_alt_ft = next(
+            (sp_alt_by_apid[apid] for apid in ap_ids if apid in sp_alt_by_apid),
+            None,
+        )
+        if attack_alt_ft is not None:
+            entry["altitude"] = f"{round(attack_alt_ft)}FT"
         if is_orbit:
             entry["tos"]   = None
             entry["toffs"] = None
