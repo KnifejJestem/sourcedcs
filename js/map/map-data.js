@@ -73,6 +73,20 @@ function collectData(ato, aco) {
     return parseCoord(str);
   };
 
+  // ── Phase 1b: Build takeoffs-by-ICAO map ──────────────────
+  // Maps each deploy ICAO → list of {callsign, msnNum, time} for the popup.
+  const takeoffsByIcao = {};
+  missions.forEach(m => {
+    const icao = (m.deploy_location_icao || '').trim().toUpperCase();
+    if (!icao) return;
+    if (!takeoffsByIcao[icao]) takeoffsByIcao[icao] = [];
+    takeoffsByIcao[icao].push({
+      callsign: m.callsign || '?',
+      msnNum: m.mission_number || '',
+      time: m.takeoff_time || null,
+    });
+  });
+
   // ── Phase 2: Static map markers ───────────────────────────
 
   // Bullseye
@@ -85,12 +99,19 @@ function collectData(ato, aco) {
   // Airfields
   (ato.airfields || []).forEach(af => {
     const p = parseCoord(af.coords);
-    if (p) points.push({
-      ...p, kind: 'airfield',
-      label: af.icao || af.name || '?',
-      sub: [af.role, af.elevation_ft != null ? af.elevation_ft + 'ft' : null].filter(Boolean).join(' · '),
-      name: af.name,
-    });
+    if (p) {
+      const icao = (af.icao || '').trim().toUpperCase();
+      points.push({
+        ...p, kind: 'airfield',
+        label: af.icao || af.name || '?',
+        sub: [af.role, af.elevation_ft != null ? af.elevation_ft + 'ft' : null].filter(Boolean).join(' · '),
+        name: af.name,
+        role: af.role || null,
+        elevation_ft: af.elevation_ft ?? null,
+        runways: af.runways ?? null,
+        takeoffs: takeoffsByIcao[icao] || [],
+      });
+    }
   });
 
   // Carriers

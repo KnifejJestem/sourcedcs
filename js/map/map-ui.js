@@ -41,8 +41,19 @@ function buildThreatRows(p) {
 
 function buildAirfieldRows(p) {
   const rows = [['ICAO', p.label]];
-  if (p.sub)  rows.push(['INFO', p.sub]);
-  if (p.name) rows.push(['NAME', p.name]);
+  if (p.name)                rows.push(['NAME',      p.name]);
+  if (p.role)                rows.push(['ROLE',      p.role.toUpperCase()]);
+  if (p.elevation_ft != null) rows.push(['ELEVATION', `${p.elevation_ft} FT`]);
+  if (p.runways?.length) {
+    const rwys = Array.isArray(p.runways) ? p.runways.join(' / ') : String(p.runways);
+    rows.push(['RUNWAYS', rwys]);
+  }
+  if (p.takeoffs?.length) {
+    p.takeoffs.forEach(t => {
+      const takeoffLabel = [t.callsign, t.msnNum].filter(Boolean).join(' · ');
+      rows.push(['TAKEOFF', `${takeoffLabel}  ${t.time ? fmtTime(t.time) : '—'}`]);
+    });
+  }
   return rows;
 }
 
