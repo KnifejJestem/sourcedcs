@@ -180,7 +180,7 @@ def build_doc(*, mission_name, mission_date, theatre,
         },
 
         "ato": {
-            "irl_date":           mission_date,
+            "irl_date":           None,
             "irl_time_zulu":      None,
             "ingame_start_time":  None,
             "ingame_start_local": ingame_start_local,

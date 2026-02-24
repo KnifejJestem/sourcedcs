@@ -38,17 +38,21 @@ propagates `operation`, `ato_date`, and `classification` to every tab
 (ACO, SPINS, COMMS, Weather), so individual sections no longer need their own
 `operation` / `ato_day` / `classification` fields.
 
+`ato_date` is the **in-game mission date** (taken from `["date"]` in the DCS
+`.miz` file when using the miztoyaml converter).  `ato.irl_date` is a separate
+field for the real-world date when the briefing takes place.
+
 ```yaml
 header:
   operation: CLEAR SKY
-  ato_date: '2026-01-11'
+  ato_date: '2026-01-11'   # in-game date — propagated to all tabs as ATO DAY
   classification: UNCLAS
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `operation` | string | Operation name (displayed on every tab header) |
-| `ato_date` | string | ATO date in `YYYY-MM-DD` format |
+| `ato_date` | string | **In-game** ATO date in `YYYY-MM-DD` format; auto-populated from the `.miz` `["date"]` block |
 | `classification` | string | Classification marking (e.g. `UNCLAS`, `SECRET`) |
 
 ---
@@ -304,7 +308,7 @@ All event times are four-digit **Zulu** strings in `HHMMz` format:
   `not_earlier_than: '2040Z'`
 - No local times are stored in the data.  The renderer uses
   `ato.local_offset_hours` to convert Zulu to local for display.
-- Dates use `YYYY-MM-DD` format (see `header.ato_date`, `ato.irl_date`).
+- Dates use `YYYY-MM-DD` format.  `header.ato_date` is the **in-game** mission date; `ato.irl_date` is the real-world date of the briefing (may differ).
 
 ---
 

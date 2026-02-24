@@ -31,12 +31,17 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
 
     print(f"[+] Theatre={theatre}  coalition={coalition}  targets_from={opposing}")
 
-    # Date
-    dm = re.search(
-        r'\["date"\].*?\["Year"\] = (\d+).*?\["Day"\] = (\d+).*?\["Month"\] = (\d+)',
-        mission_text, re.DOTALL)
-    year, day, month = (int(dm.group(1)), int(dm.group(2)), int(dm.group(3))) \
-                       if dm else (2024, 1, 1)
+    # Date — extract Year/Day/Month independently (field order varies by miz version)
+    year, day, month = 2024, 1, 1
+    dm = re.search(r'\["date"\].*?\{([^}]*)\}', mission_text, re.DOTALL)
+    if dm:
+        date_block = dm.group(1)
+        year_m  = re.search(r'\["Year"\]\s*=\s*(\d+)',  date_block)
+        day_m   = re.search(r'\["Day"\]\s*=\s*(\d+)',   date_block)
+        month_m = re.search(r'\["Month"\]\s*=\s*(\d+)', date_block)
+        if year_m:  year  = int(year_m.group(1))
+        if day_m:   day   = int(day_m.group(1))
+        if month_m: month = int(month_m.group(1))
     mission_date = f"{year}-{month:02d}-{day:02d}"
 
     # Top-level mission start_time (seconds from midnight local time, 0–86399)

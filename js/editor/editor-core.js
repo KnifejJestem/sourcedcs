@@ -261,38 +261,38 @@ function _syncHeaders(syncFrom) {
 
   var SECTIONS = ['ato', 'aco', 'spins', 'comms', 'weather'];
   var operation = null;
-  var atoDay    = null;
   var propagateToSections = false;
 
   if (syncFrom && pkg[syncFrom]) {
-    // Use the just-saved section as the single source of truth
+    // Use the just-saved section as the single source of truth for operation
     var src = pkg[syncFrom];
     operation = src.operation || null;
-    atoDay    = src.ato_day   || null;
     propagateToSections = true;
   } else {
-    // Fallback: first non-null across all sections (e.g. mission/registry edits)
+    // Fallback: first non-null operation across all sections
     SECTIONS.forEach(function (key) {
       var sec = pkg[key];
       if (!sec) return;
       if (!operation && sec.operation) operation = sec.operation;
-      if (!atoDay    && sec.ato_day)   atoDay    = sec.ato_day;
     });
   }
+
+  // ato_date is canonical in header — set directly by the Times editor.
+  // No further action needed here; loadPackage_obj propagates it to sections
+  // in-memory for display after each re-render.
 
   // Always update the top-level header
   if (!pkg.header) pkg.header = {};
   if (operation) pkg.header.operation = operation;
-  if (atoDay)    pkg.header.ato_date  = atoDay;
 
-  // When saving a section editor, push the new values to every other
-  // section so the header bar and all views show the updated text.
+  // When saving a section editor, push operation to every other section
+  // so the header bar shows the updated text.  ato_day is NOT propagated
+  // to sections — header.ato_date is the single canonical source.
   if (propagateToSections) {
     SECTIONS.forEach(function (key) {
       var sec = pkg[key];
       if (!sec) return;
       if (operation) sec.operation = operation;
-      if (atoDay)    sec.ato_day   = atoDay;
     });
   }
 }
@@ -306,6 +306,7 @@ function editorCleanPkg(pkg) {
   var clean = {};
   Object.keys(pkg).forEach(function (k) {
     if (k.charAt(0) === '_') return;  // skip internal fields
+    if (k === 'ato_day') return;      // ato_day lives only in header.ato_date
     clean[k] = editorCleanPkg(pkg[k]);
   });
 
