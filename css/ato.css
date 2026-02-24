@@ -316,6 +316,8 @@
   flex-shrink: 0;
   border-top: 2px solid var(--border-strong);
   background: var(--bg2);
+  max-height: 40vh;
+  overflow-y: auto;
 }
 .detail-panel.open { display: block; }
 .detail-inner {
