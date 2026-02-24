@@ -121,12 +121,20 @@ def parse_spins_md(text: str) -> list[dict]:
         line = raw.strip()
 
         # Section heading
-        if line.startswith('## '):
+        if line.startswith('## ') and not line.startswith('### '):
             if in_table:
                 flush_table()
             if current is not None:
                 sections.append(current)
             current = {'title': line[3:].strip(), 'entries': []}
+            continue
+
+        # Sub-heading (### inside a ## section) → {heading} entry
+        if line.startswith('### '):
+            if in_table:
+                flush_table()
+            if current is not None:
+                current.setdefault('entries', []).append({'heading': line[4:].strip()})
             continue
 
         if current is None:

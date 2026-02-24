@@ -17,6 +17,29 @@ from .parse import parse_bullseye, parse_drawings, parse_groups
 from .parse_flights import parse_flights_and_carriers, parse_weather
 
 
+def _parse_weather_txt(text: str) -> tuple[list[str], list[str]]:
+    """
+    Parse a weather.txt file for additional METAR and TAF strings.
+
+    Lines starting with 'METAR' or 'SPECI' are collected as METARs.
+    Lines starting with 'TAF' are collected as TAFs (multi-line TAFs should
+    be joined into a single line).
+    Other non-empty lines are ignored.
+    """
+    metars: list[str] = []
+    tafs: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        upper = stripped.upper()
+        if upper.startswith('METAR ') or upper.startswith('SPECI '):
+            metars.append(stripped)
+        elif upper.startswith('TAF '):
+            tafs.append(stripped)
+    return metars, tafs
+
+
 def extract(miz_path: str, coalition: str = "blue") -> dict:
     opposing = "red" if coalition == "blue" else "blue"
 
@@ -105,6 +128,19 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
     metar, wx_notes = parse_weather(mission_text, day)
     print(f"[+] {metar}")
 
+    # Additional weather from weather.txt — look in same directory as .miz file
+    extra_metars: list[str] = []
+    extra_tafs: list[str] = []
+    wx_txt_path = Path(miz_path).parent / 'weather.txt'
+    if wx_txt_path.exists():
+        wx_text = wx_txt_path.read_text(encoding='utf-8', errors='replace')
+        _metars, _tafs = _parse_weather_txt(wx_text)
+        extra_metars = _metars
+        extra_tafs = _tafs
+        print(f"[+] Loaded weather.txt: {len(extra_metars)} METARs, {len(extra_tafs)} TAFs")
+    else:
+        print(f"[i] No weather.txt found at '{wx_txt_path}' — using DCS weather only")
+
     # SPINS — look for spins.md in the same directory as the .miz file
     spins_sections = None
     spins_path = Path(miz_path).parent / 'spins.md'
@@ -130,6 +166,8 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
         dtcs=dtcs,
         spins_sections=spins_sections,
         ingame_start_local=ingame_start_local,
+        extra_metars=extra_metars,
+        extra_tafs=extra_tafs,
     )
 
 

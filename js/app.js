@@ -226,18 +226,32 @@ function localToZuluTime(v) {
          String(zuluMins % 60).padStart(2, '0');
 }
 
-const KNOWN_TYPES = ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'REFUELING'];
+const KNOWN_TYPES = [
+  'CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'REFUELING',
+  'OCA', 'DCA', 'DEAD', 'AI', 'ESCORT', 'FAC(A)',
+  'RECCE', 'ANTISHIP', 'INTERCEPT', 'FERRY', 'TRANSPORT',
+];
 function typeKey(t) {
   return KNOWN_TYPES.includes((t || '').toUpperCase()) ? t.toUpperCase() : 'OTHER';
 }
 
 const TYPE_COLORS_PRO = {
   CAP: '#1a5c2e', BAI: '#7c3500', CAS: '#003d6b',
-  SEAD: '#4a1a6b', STRIKE: '#6b0f1a', REFUELING: '#005a5a', OTHER: '#3d3400',
+  SEAD: '#4a1a6b', STRIKE: '#6b0f1a', REFUELING: '#005a5a',
+  OCA: '#2e5c1a', DCA: '#1a5c4a', DEAD: '#5c1a4a',
+  AI: '#6b3d00', ESCORT: '#1a3d6b', 'FAC(A)': '#3d1a6b',
+  RECCE: '#4a4a00', ANTISHIP: '#003d4a', INTERCEPT: '#4a1a1a',
+  FERRY: '#3d3d3d', TRANSPORT: '#2e2e4a',
+  OTHER: '#3d3400',
 };
 const TYPE_COLORS_MFD = {
   CAP: '#39ff7a', BAI: '#ff8c00', CAS: '#4fc3f7',
-  SEAD: '#c084fc', STRIKE: '#ff4444', REFUELING: '#00e5e5', OTHER: '#ffb020',
+  SEAD: '#c084fc', STRIKE: '#ff4444', REFUELING: '#00e5e5',
+  OCA: '#7aff39', DCA: '#39ffaa', DEAD: '#ff39aa',
+  AI: '#ffaa39', ESCORT: '#3975ff', 'FAC(A)': '#aa39ff',
+  RECCE: '#e5e500', ANTISHIP: '#00aaaa', INTERCEPT: '#ff7575',
+  FERRY: '#aaaaaa', TRANSPORT: '#7575aa',
+  OTHER: '#ffb020',
 };
 function typeColor(t) {
   return (STATE.theme === 'movie' ? TYPE_COLORS_MFD : TYPE_COLORS_PRO)[typeKey(t)];

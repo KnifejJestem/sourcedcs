@@ -216,7 +216,7 @@ function renderMissionCards(missions) {
     if (m.refuel) {
       body.appendChild(buildCardRow(
         'TANKER',
-        m.refuel.tanker_callsign + ' ' + m.refuel.altitude,
+        (m.refuel.tanker_callsign || '—') + ' ' + (m.refuel.altitude || ''),
         'tanker'
       ));
     }

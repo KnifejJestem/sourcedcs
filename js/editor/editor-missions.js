@@ -88,15 +88,20 @@ function _buildIdentificationSection(body, m, f) {
   f.callsign       = editorField(body, 'Callsign',       m.callsign,       { placeholder: 'e.g. FALCON5', required: true });
   f.mission_type   = editorField(body, 'Mission Type',    m.mission_type,   {
     type: 'select',
-    options: ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'REFUELING', 'OTHER'],
+    options: ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'REFUELING',
+              'OCA', 'DCA', 'DEAD', 'AI', 'ESCORT', 'FAC(A)',
+              'RECCE', 'ANTISHIP', 'INTERCEPT', 'FERRY', 'TRANSPORT', 'OTHER'],
     required: true,
   });
   if (m.mission_type) f.mission_type.value = m.mission_type;
   f.unit             = editorField(body, 'Unit',              m.unit, { placeholder: 'e.g. 510vFS' });
   var afOpts = _registryOptions('airfields', function (id, af) { return id + (af.name ? ' — ' + af.name : ''); });
+  // Combine airfields and carriers for deploy/recovery location
+  var cvOpts = _registryOptions('carriers', function (id, cv) { return id + (cv.name ? ' — ' + cv.name : ''); });
+  var locationOpts = afOpts.concat(cvOpts.slice(1)); // skip the '— none —' from carriers
   f.home_base_icao   = editorField(body, 'Home Base', m.home_base_icao, { type: 'select', options: afOpts });
-  f.deploy_location  = editorField(body, 'Deploy Location', m.deploy_location_icao, { type: 'select', options: afOpts });
-  f.aar_location     = editorField(body, 'Recovery Location', m.aar_location_icao, { type: 'select', options: afOpts });
+  f.deploy_location  = editorField(body, 'Deploy Location', m.deploy_location_icao, { type: 'select', options: locationOpts });
+  f.aar_location     = editorField(body, 'Recovery Location', m.aar_location_icao, { type: 'select', options: locationOpts });
 }
 
 function _buildAircraftSection(body, m, f) {
@@ -138,8 +143,40 @@ function _buildControlSection(body, m, f) {
   var ctrl = m.control || {};
   var ctrlOpts = _registryOptions('control_agencies', function (id, ag) { return id + (ag.callsign ? ' — ' + ag.callsign : ''); });
   f.ctrl_agency_id = editorField(body, 'Control Agency', ctrl.agency_id, { type: 'select', options: ctrlOpts });
-  f.ctrl_primary   = editorField(body, 'Primary Freq (MHz)', ctrl.primary_freq_mhz, { placeholder: '260.0' });
-  f.ctrl_secondary = editorField(body, 'Secondary Freq (MHz)', ctrl.secondary_freq_mhz, { placeholder: '134.0' });
+
+  // Resolve freq from registry when agency is selected
+  var agencyReg = (STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.control_agencies) || {};
+  var resolvedPrimary   = ctrl.agency_id && agencyReg[ctrl.agency_id] ? agencyReg[ctrl.agency_id].primary_freq_mhz   : null;
+  var resolvedSecondary = ctrl.agency_id && agencyReg[ctrl.agency_id] ? agencyReg[ctrl.agency_id].secondary_freq_mhz : null;
+
+  f.ctrl_primary   = editorField(body, 'Primary Freq (MHz)',   resolvedPrimary || ctrl.primary_freq_mhz || '', {
+    placeholder: '260.0',
+    disabled: !!resolvedPrimary,
+    hint: resolvedPrimary ? 'Read from registry' : undefined,
+  });
+  f.ctrl_secondary = editorField(body, 'Secondary Freq (MHz)', resolvedSecondary || ctrl.secondary_freq_mhz || '', {
+    placeholder: '134.0',
+    disabled: !!resolvedSecondary,
+    hint: resolvedSecondary ? 'Read from registry' : undefined,
+  });
+
+  // Update freq fields when agency selection changes
+  f.ctrl_agency_id.addEventListener('change', function () {
+    var agId = this.value;
+    var ag   = agId ? agencyReg[agId] : null;
+    if (ag && ag.primary_freq_mhz) {
+      f.ctrl_primary.value    = ag.primary_freq_mhz;
+      f.ctrl_primary.disabled = true;
+    } else {
+      f.ctrl_primary.disabled = false;
+    }
+    if (ag && ag.secondary_freq_mhz) {
+      f.ctrl_secondary.value    = ag.secondary_freq_mhz;
+      f.ctrl_secondary.disabled = true;
+    } else {
+      f.ctrl_secondary.disabled = false;
+    }
+  });
 }
 
 function _buildRefuelSection(body, m, f) {
@@ -206,8 +243,8 @@ function _collectMissionDraft() {
   if (f.ctrl_agency_id && (f.ctrl_agency_id.value || f.ctrl_primary.value)) {
     m.control = m.control || {};
     m.control.agency_id          = f.ctrl_agency_id.value || undefined;
-    m.control.primary_freq_mhz   = f.ctrl_primary.value || undefined;
-    m.control.secondary_freq_mhz = f.ctrl_secondary.value || undefined;
+    m.control.primary_freq_mhz   = f.ctrl_primary.disabled   ? undefined : (f.ctrl_primary.value || undefined);
+    m.control.secondary_freq_mhz = f.ctrl_secondary.disabled ? undefined : (f.ctrl_secondary.value || undefined);
   }
 
   if (f.ref_tanker_id && f.ref_tanker_id.value) {
@@ -265,8 +302,9 @@ function _saveMissionFromForm(onSave) {
   if (f.ctrl_agency_id.value || f.ctrl_primary.value) {
     m.control = m.control || {};
     m.control.agency_id          = f.ctrl_agency_id.value || undefined;
-    m.control.primary_freq_mhz   = f.ctrl_primary.value || undefined;
-    m.control.secondary_freq_mhz = f.ctrl_secondary.value || undefined;
+    // Only save freq if it was manually entered (not resolved from registry)
+    m.control.primary_freq_mhz   = f.ctrl_primary.disabled   ? undefined : (f.ctrl_primary.value || undefined);
+    m.control.secondary_freq_mhz = f.ctrl_secondary.disabled ? undefined : (f.ctrl_secondary.value || undefined);
   }
 
   // Refuel

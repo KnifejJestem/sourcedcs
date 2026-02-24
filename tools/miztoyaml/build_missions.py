@@ -127,31 +127,46 @@ def _classify_waypoints(flight: Flight,
     """
     MERGE_M   = 100 * _FT_TO_M   # 100 ft proximity for shared waypoints
 
+    TAKEOFF_TYPES = ('TakeOffParking', 'TakeOff', 'TakeOffParkingHot',
+                     'TakeOffGround')
+    LANDING_TYPES = ('Land',)
+
     wpts = flight.waypoints
     # Need at least 2 waypoints (takeoff + one working waypoint)
     if len(wpts) < 2:
         return []
 
-    # Inner waypoints: skip first (takeoff) and normally skip last (recovery).
-    # Exception: if the last waypoint has an Orbit task (tanker track, CAP anchor
-    # sitting at the very end of the route), include it.
-    if len(wpts) == 2:
-        # Only orbit at index 1 is worth including; skip plain recovery waypoints
-        inner = [wpts[1]] if wpts[1].is_orbit else []
-    else:
-        inner = wpts[1:-1]
-        if wpts[-1].is_orbit:
-            inner = inner + [wpts[-1]]
+    # Filter waypoints: skip takeoff and landing types by their DCS type,
+    # but always include orbit waypoints regardless of position.
+    inner = []
+    for i, wp in enumerate(wpts):
+        if wp.typ in TAKEOFF_TYPES:
+            continue
+        if wp.typ in LANDING_TYPES and not wp.is_orbit:
+            continue
+        # Skip the last waypoint if it looks like a recovery (same position as
+        # takeoff or has an airdrome_id/link_unit_id) and is NOT an orbit
+        if i == len(wpts) - 1 and not wp.is_orbit:
+            if wp.airdrome_id is not None or wp.link_unit_id is not None:
+                continue
+            # Also skip if very close to the first waypoint (return-to-base)
+            if wpts[0].x is not None and wpts[0].y is not None:
+                dist = math.sqrt((wp.x - wpts[0].x)**2 + (wp.y - wpts[0].y)**2)
+                if dist <= MERGE_M:
+                    continue
+        inner.append(wp)
 
     # Build index of all OTHER flights' inner waypoints for proximity matching
     others: list[Waypoint] = []
     for other in all_flights:
         if other.id == flight.id:
             continue
-        if len(other.waypoints) > 2:
-            others.extend(other.waypoints[1:-1])
-        elif len(other.waypoints) == 2 and other.waypoints[1].is_orbit:
-            others.append(other.waypoints[1])
+        for wp in other.waypoints:
+            if wp.typ in TAKEOFF_TYPES:
+                continue
+            if wp.typ in LANDING_TYPES and not wp.is_orbit:
+                continue
+            others.append(wp)
 
     # Build flat DMS → aim_point_id index across all targets.
     aim_by_dms: dict[str, str] = {}
