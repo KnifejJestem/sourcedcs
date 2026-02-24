@@ -16,21 +16,31 @@
     <div class="header-title">ATO BRIEF</div>
     <div class="header-meta" id="header-meta"></div>
     <div class="header-right">
-      <div class="theme-toggle">
-        <button class="theme-btn active" data-time="Z"  onclick="setTimeMode('Z')">Z</button>
-        <button class="theme-btn"        data-time="L"  onclick="setTimeMode('L')">L</button>
+      <div class="hdr-toggle-group">
+        <span class="hdr-toggle-label">TIME</span>
+        <div class="theme-toggle">
+          <button class="theme-btn active" data-time="Z"  onclick="setTimeMode('Z')">Z</button>
+          <button class="theme-btn"        data-time="L"  onclick="setTimeMode('L')">L</button>
+        </div>
       </div>
-      <div class="theme-toggle">
-        <button class="theme-btn active" data-coord="dm"   onclick="setCoordMode('dm')">DM</button>
-        <button class="theme-btn"        data-coord="dms"  onclick="setCoordMode('dms')">DMS</button>
-        <button class="theme-btn"        data-coord="mgrs" onclick="setCoordMode('mgrs')">MGRS</button>
+      <div class="hdr-toggle-group">
+        <span class="hdr-toggle-label">COORDS</span>
+        <div class="theme-toggle">
+          <button class="theme-btn active" data-coord="dm"   onclick="setCoordMode('dm')">DM</button>
+          <button class="theme-btn"        data-coord="dms"  onclick="setCoordMode('dms')">DMS</button>
+          <button class="theme-btn"        data-coord="mgrs" onclick="setCoordMode('mgrs')">MGRS</button>
+        </div>
       </div>
-      <div class="theme-toggle">
-        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
-        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      <div class="hdr-toggle-group">
+        <span class="hdr-toggle-label">DISPLAY</span>
+        <div class="theme-toggle">
+          <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+          <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+        </div>
       </div>
+      <div class="hdr-divider"></div>
       <button class="edit-mode-btn" id="editModeBtn" onclick="toggleEditMode()">EDIT</button>
-      <button class="load-btn" id="loadPackageBtn" onclick="document.getElementById('fileInput').click()">LOAD PACKAGE</button>
+      <button class="load-btn load-btn-primary" id="loadPackageBtn" onclick="document.getElementById('fileInput').click()">LOAD PACKAGE</button>
       <input type="file" id="fileInput" accept=".yaml,.yml" style="display:none">
       <button class="load-btn" id="exportYamlBtn" style="display:none" onclick="openExportDialog()">EXPORT</button>
       <button class="load-btn" id="leaveRoomBtn" style="display:none" onclick="leaveSession()">LEAVE ROOM</button>
@@ -44,11 +54,7 @@
       <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
         <div class="drop-icon">⊕</div>
         <div class="drop-label">LOAD ATO PACKAGE</div>
-        <div class="drop-sub">
-          Drop a <strong>package.yaml</strong> here, or click to browse.<br>
-          Top-level keys: <code>ato</code>, <code>aco</code>, <code>spins</code>, <code>comms</code>, <code>weather</code>
-        </div>
-        <div class="drop-hint">Try: <code>demo-package.yaml</code></div>
+        <div class="drop-sub">Drop a <strong>.yaml</strong> package here, or click to browse</div>
       </div>
     </div>
 
@@ -206,6 +212,17 @@
     </div>
   </div>
 </div>
+
+<!-- Drag-anywhere overlay -->
+<div class="drag-overlay" id="dragOverlay">
+  <div class="drag-overlay-inner">
+    <div class="drag-overlay-icon">⊕</div>
+    <div class="drag-overlay-label">DROP TO LOAD</div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
 
 <script src="/vendor/js-yaml.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>

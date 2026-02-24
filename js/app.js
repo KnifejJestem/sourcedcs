@@ -318,7 +318,7 @@ function loadPackage(yamlText) {
   try {
     data = jsyaml.load(yamlText);
   } catch (e) {
-    alert('YAML parse error: ' + e.message);
+    showToast('YAML ERROR — ' + e.message, 'error');
     return;
   }
   loadPackage_obj(data);
@@ -339,7 +339,7 @@ function loadPackage_obj(data) {
   if (data.registry)       pkg.registry       = data.registry;
 
   if (!pkg.ato && !pkg.aco && !pkg.spins && !pkg.comms && !pkg.weather) {
-    alert('Unrecognised file — expected top-level keys: ato, aco, spins, comms, and/or weather');
+    showToast('UNRECOGNISED FILE — expected keys: ato, aco, spins, comms, weather', 'error');
     return;
   }
 
@@ -666,6 +666,18 @@ function unloadPackage() {
   });
 }
 
+// ── Toast notification ────────────────────────────────────────
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  if (!t) { console.warn(msg); return; }
+  t.textContent = msg;
+  t.className = 'toast' + (type ? ' toast-' + type : '');
+  void t.offsetWidth; // restart transition
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
 // ── File input wiring ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const fileInput = document.getElementById('fileInput');
@@ -679,16 +691,39 @@ document.addEventListener('DOMContentLoaded', () => {
     r.readAsText(f);
   });
 
-  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
-  dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('over'));
-  dropZone.addEventListener('drop', e => {
+  // ── Window-wide drag-and-drop ─────────────────────────────
+  const dragOverlay = document.getElementById('dragOverlay');
+  let _dragDepth = 0;
+
+  window.addEventListener('dragenter', e => {
+    if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+    _dragDepth++;
+    dragOverlay.classList.add('active');
+  });
+  window.addEventListener('dragleave', () => {
+    _dragDepth = Math.max(0, _dragDepth - 1);
+    if (_dragDepth === 0) dragOverlay.classList.remove('active');
+  });
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => {
     e.preventDefault();
-    dropZone.classList.remove('over');
-    const f = e.dataTransfer.files[0];
+    _dragDepth = 0;
+    dragOverlay.classList.remove('active');
+    const f = e.dataTransfer?.files[0];
     if (!f) return;
     const r = new FileReader();
     r.onload = ev => loadPackage(ev.target.result);
     r.readAsText(f);
+  });
+
+  // ── Keyboard shortcuts: 1–6 switch tabs ──────────────────
+  const TAB_KEYS = { '1': 'ato', '2': 'aco', '3': 'spins', '4': 'comms', '5': 'map', '6': 'weather' };
+  document.addEventListener('keydown', e => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+    const tab = TAB_KEYS[e.key];
+    if (!tab || !STATE.pkg) return;
+    const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+    if (btn && !btn.disabled) showTab(tab);
   });
 
   // Re-render ATO timeline on window resize so tick spacing adapts
