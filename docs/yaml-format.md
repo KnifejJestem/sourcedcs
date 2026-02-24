@@ -510,6 +510,12 @@ En-route waypoints plotted as hollow circles connected by dashed lines.
 Each steer point can be specified with inline coordinates or by referencing a named marker
 (airfield ICAO, carrier callsign, or marshal point name) via `name_ref`.
 
+When `name_ref` is used the referenced location already has its own marker on the map
+(airfield, carrier, or marshal point symbol), so **no label is drawn** at that position.
+A small unlabelled hollow circle is still rendered at the waypoint so the route's exact
+passage through that location is clearly visible.  This prevents a duplicate named marker
+but keeps a visual indicator on the flight path.
+
 ```yaml
 steer_points:
   - coords: N24°30'00" E056°00'00"
@@ -535,7 +541,7 @@ steer_points:
 | Field | Type | Description |
 |-------|------|-------------|
 | `coords` | coord string | Waypoint position (used when `name_ref` is not set) |
-| `name_ref` | string | Name of an airfield (ICAO), carrier callsign or ID, or marshal point to use as the waypoint position |
+| `name_ref` | string | Name of an airfield (ICAO), carrier callsign or ID, or marshal point to use as the waypoint position.  A small unlabelled circle is drawn at the referenced location so the flight path's passage through it is visible; the named location's own marker provides the label |
 | `name` | string | Waypoint label shown on map |
 | `aim_point_id` | string | Optional — informational link to a registry aim point id.  Set by `miztoyaml.py` when a flight waypoint lies on an aim point; ignored by the viewer |
 | `orbit` | object | Optional — present when the waypoint has a DCS Orbit task (CAP station, tanker track).  The map renders a racetrack pattern using these parameters. |
