@@ -235,19 +235,6 @@ See [`docs/yaml-format.md`](docs/yaml-format.md) for the full schema reference.
 
 # TODO
 
-map types + higher accuracy ?
 airfeild and lfight Information ma
 isr data
 + documetns
-
-pdf Export
-kneeboard Export
-yaml Export
-
-miz -> yaml converter
-
-issues:
-miz yaml converter:
-    not reading alittude of targets
-    dense points
-    comms 
