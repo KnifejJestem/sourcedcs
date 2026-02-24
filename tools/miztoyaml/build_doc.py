@@ -64,7 +64,7 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
         entry: dict = {"callsign": f.name}
         if alt_ft    is not None:
             entry["altitude_ft"] = alt_ft
-            entry["altitude"]    = f"FL{round(alt_ft / 100)}"
+            entry["altitude"]    = f"FL{round(alt_ft / 100):03d}"
         if speed_kts is not None: entry["speed_kts"]   = speed_kts
         result.append(entry)
     return result or None

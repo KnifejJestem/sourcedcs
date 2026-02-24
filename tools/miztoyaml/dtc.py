@@ -121,7 +121,7 @@ def parse_spins_md(text: str) -> list[dict]:
         line = raw.strip()
 
         # Section heading
-        if line.startswith('## ') and not line.startswith('### '):
+        if line.startswith('## '):
             if in_table:
                 flush_table()
             if current is not None:

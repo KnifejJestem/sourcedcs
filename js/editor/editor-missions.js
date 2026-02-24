@@ -98,7 +98,7 @@ function _buildIdentificationSection(body, m, f) {
   var afOpts = _registryOptions('airfields', function (id, af) { return id + (af.name ? ' — ' + af.name : ''); });
   // Combine airfields and carriers for deploy/recovery location
   var cvOpts = _registryOptions('carriers', function (id, cv) { return id + (cv.name ? ' — ' + cv.name : ''); });
-  var locationOpts = afOpts.concat(cvOpts.slice(1)); // skip the '— none —' from carriers
+  var locationOpts = afOpts.concat(cvOpts.filter(function (o) { return o.value !== ''; }));
   f.home_base_icao   = editorField(body, 'Home Base', m.home_base_icao, { type: 'select', options: afOpts });
   f.deploy_location  = editorField(body, 'Deploy Location', m.deploy_location_icao, { type: 'select', options: locationOpts });
   f.aar_location     = editorField(body, 'Recovery Location', m.aar_location_icao, { type: 'select', options: locationOpts });
