@@ -9,6 +9,8 @@ from .models import Drawing, Group, Unit
 from .projection import dcs_to_latlon, dms
 from .sam import unit_role
 
+_M_TO_FT = 3.28084    # metres → feet
+
 
 def parse_units(units_block: str, theatre: str) -> list[Unit]:
     result = []
@@ -80,8 +82,19 @@ def parse_groups(coalition_block: str, theatre: str) -> list[Group]:
                 lat, lon    = dcs_to_latlon(xy[0], xy[1], theatre)
                 units_block = lua_get_block(gb, 'units')
                 units       = parse_units(units_block, theatre) if units_block else []
+                # Extract altitude from the first route waypoint (in meters → feet)
+                alt_ft: float | None = None
+                route_blk = lua_get_block(gb, 'route')
+                if route_blk:
+                    pts_blk = lua_get_block(route_blk, 'points')
+                    if pts_blk:
+                        for _pi, pb in lua_iter_array(pts_blk):
+                            alt_m = lua_num(pb, 'alt')
+                            if alt_m is not None:
+                                alt_ft = round(alt_m * _M_TO_FT)
+                                break
                 groups.append(Group(name=name, x=xy[0], y=xy[1],
-                                    lat=lat, lon=lon, units=units))
+                                    lat=lat, lon=lon, units=units, alt_ft=alt_ft))
     return groups
 
 

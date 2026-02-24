@@ -188,6 +188,7 @@ function collectData(ato, aco) {
       threatType: tgt.type,
       engagementRange: tgt.engagement_range_nm,
       maxAlt: tgt.max_alt_ft,
+      elevation: tgt.elevation ?? null,
     });
   });
 
@@ -219,6 +220,7 @@ function collectData(ato, aco) {
       const raw     = typeof sp === 'string' ? sp : sp.coords;
       const label   = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i + 1}`;
       const apId    = typeof sp === 'object' ? sp.aim_point_id : null;
+      const altFt   = (typeof sp === 'object' && sp.altitude_ft != null) ? sp.altitude_ft : null;
       const p       = nameRef ? resolve(nameRef) : parseCoord(raw);
       if (p) {
         // Aim-point steer points use a thicker target-approach line on the route
@@ -233,6 +235,7 @@ function collectData(ato, aco) {
             ...p, kind: apId ? 'target' : 'steer',
             label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
             sub: label, color, msnType: m.mission_type, mission: m,
+            altitude_ft: altFt,
           });
         } else {
           points.push({

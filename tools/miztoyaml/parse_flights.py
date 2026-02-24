@@ -47,6 +47,8 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
         name       = lua_str(pb, 'name')
         airdrome   = lua_num(pb, 'airdromeId')
         link_unit  = lua_num(pb, 'linkUnit')
+        alt_m      = lua_num(pb, 'alt')
+        wp_alt_ft  = round(alt_m * _M_TO_FT) if alt_m is not None else None
         # Detect orbit task (tanker track anchor) and extract its parameters
         task_blk   = lua_get_block(pb, 'task')
         is_orbit   = bool(task_blk and 'Orbit' in task_blk)
@@ -80,6 +82,7 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
             airdrome_id=int(airdrome) if airdrome is not None else None,
             link_unit_id=int(link_unit) if link_unit is not None else None,
             is_orbit=is_orbit,
+            alt_ft=wp_alt_ft,
             orbit_alt_ft=orbit_alt_ft,
             orbit_speed_kts=orbit_speed_kts,
             orbit_width_nm=orbit_width_nm,
