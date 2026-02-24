@@ -118,6 +118,22 @@ def build_doc(*, mission_name, mission_date, theatre,
               ingame_start_local=None) -> dict:
 
     import hashlib
+
+    # ── Theatre → local UTC offset (hours) ──────────────────────────────────
+    # DCS uses fixed offsets regardless of daylight saving time.
+    _THEATRE_OFFSET: dict[str, int] = {
+        "Syria":          3,   # Damascus / Incirlik: UTC+3
+        "PersianGulf":    4,   # UAE / Gulf Standard Time: UTC+4
+        "Caucasus":       4,   # Tbilisi / Georgia: UTC+4
+        "Nevada":        -8,   # Las Vegas (Pacific Standard Time): UTC-8
+        "Normandy":       1,   # Western Europe (UTC+1, no DST applied)
+        "MarianaIslands": 10,  # Chamorro Standard Time: UTC+10
+        "Falklands":     -3,   # Argentina / Falklands: UTC-3
+        "SinaiMap":       2,   # Egypt Standard Time: UTC+2
+    }
+    local_offset_hours = _THEATRE_OFFSET.get(theatre)
+    if local_offset_hours is None and theatre:
+        print(f"[!] Unknown theatre '{theatre}' — local_offset_hours will be None")
     msn_start = 1000 + int(hashlib.md5(mission_name.encode()).hexdigest()[:4], 16) % 8000
     tanker_msn_start = msn_start + 500
 
@@ -168,7 +184,7 @@ def build_doc(*, mission_name, mission_date, theatre,
             "irl_time_zulu":      None,
             "ingame_start_time":  None,
             "ingame_start_local": ingame_start_local,
-            "local_offset_hours": None,
+            "local_offset_hours": local_offset_hours,
             "ae_flags":           ["IRL", "INGAME"],
             "global_control": {
                 "agency_id": awacs_agency_id,

@@ -398,7 +398,7 @@ def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
         msn: dict = {
             "mission_number":       msn_num,
             "callsign":             callsign,
-            "mission_type":         f.task,
+            "mission_type":         "REFUELING" if f.is_tanker else f.task,
             "unit":                 None,
             "home_base_icao":       deploy,
             "deploy_location_icao": deploy,
