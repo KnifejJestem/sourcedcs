@@ -327,32 +327,88 @@ function _buildMapSection(msnKey, mission) {
     ? `MAP — ${mission.callsign}${mission.mission_number ? ' · ' + mission.mission_number : ''} ROUTE`
     : 'MAP — ALL ROUTES';
 
-  // Helper: clone SVG, clean it up, control layer visibility, and serialise.
-  //   showThreats  — whether to show threat marker symbols
-  //   showLabels   — whether to show all text labels (markers, cities, route waypoints)
-  // Engagement zone circles are ALWAYS hidden in the PDF export.
-  function _cloneSvg(showThreats, showLabels) {
+  // Retrieve the projection context and geo data stored by drawMap().
+  // Use a dummy constantSizeMarkers array so any new elements drawn for the PDF
+  // don't corrupt the live map's marker list.
+  const rawCtx  = STATE.mapUI?._ctx;
+  const geoData = STATE.mapUI?._geoData;
+  const pdfCtx  = rawCtx ? Object.assign({}, rawCtx, { constantSizeMarkers: [] }) : null;
+
+  // ── Shared clone helper ───────────────────────────────────
+  // Clones the SVG, strips interactive elements, handles mission dimming,
+  // always hides engagement-zone circles, and applies the per-variant rules.
+  //
+  // mapMode:     'chart' | 'satellite' — controls background layer treatment
+  // showTargets: whether to show target-node diamond markers
+  // showLabels:  whether to show all text labels
+  function _cloneSvg(mapMode, showTargets, showLabels) {
     const clone = svg.cloneNode(true);
 
     // Remove popups and interactive overlays
     clone.querySelectorAll('.map-popup, .map-tile-attr').forEach(n => n.remove());
-
-    // Remove cursor / pointer-events styles so it renders cleanly in print
     clone.removeAttribute('style');
 
-    // Ensure a visible background — insert a sea-blue rect before the first child
-    // so the map has a fallback background in tile modes (where the canvas isn't captured).
-    const existingBg = clone.querySelector('rect:first-child');
-    if (!existingBg || existingBg.getAttribute('clip-path')) {
-      const ns = 'http://www.w3.org/2000/svg';
-      const bg = document.createElementNS(ns, 'rect');
-      const vb = (clone.getAttribute('viewBox') || '0 0 1400 780').split(' ');
-      bg.setAttribute('x',      vb[0] || '0');
-      bg.setAttribute('y',      vb[1] || '0');
-      bg.setAttribute('width',  vb[2] || '1400');
-      bg.setAttribute('height', vb[3] || '780');
-      bg.setAttribute('fill', '#c8dce8');
-      clone.insertBefore(bg, clone.firstChild);
+    // ── Chart background ──────────────────────────────────
+    if (mapMode === 'chart') {
+      // Ensure the sea-blue background rect is present (absent in satellite mode).
+      const existingBg = clone.querySelector('rect:first-child');
+      if (!existingBg || existingBg.getAttribute('clip-path')) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const bg = document.createElementNS(ns, 'rect');
+        const vb = (clone.getAttribute('viewBox') || '0 0 1400 780').split(' ');
+        bg.setAttribute('x',      vb[0] || '0');
+        bg.setAttribute('y',      vb[1] || '0');
+        bg.setAttribute('width',  vb[2] || '1400');
+        bg.setAttribute('height', vb[3] || '780');
+        // Match C.sea from the chart color palette in map-render.js
+        bg.setAttribute('fill', '#7aaec8');
+        clone.insertBefore(bg, clone.firstChild);
+      }
+
+      // If the live map was in satellite/tile mode the SVG won't have land or
+      // cities — add them now using the stored ctx + geoData.
+      const contentG = clone.getElementById('map-content');
+      if (contentG && pdfCtx && geoData) {
+        const hasLand   = !!contentG.querySelector('[data-role="land"]');
+        const hasCities = !!contentG.querySelector('[data-role="cities"]');
+        // Reference node: insert before eng-zones (or before first child)
+        const refNode = contentG.querySelector('[data-role="eng-zones"]') || contentG.firstChild;
+        if (!hasCities) {
+          contentG.insertBefore(drawCities(pdfCtx, geoData), refNode);
+        }
+        if (!hasLand) {
+          const cityNode = contentG.querySelector('[data-role="cities"]') || refNode;
+          contentG.insertBefore(drawLand(pdfCtx, geoData), cityNode);
+        }
+      }
+    } else {
+      // ── Satellite background ────────────────────────────
+      // Remove chart-only SVG layers (land polygons, city dots/labels) so the
+      // tile images show through cleanly.
+      clone.querySelectorAll('[data-role="land"], [data-role="cities"]').forEach(n => n.remove());
+
+      // Insert satellite tile <image> elements into the content group.
+      if (pdfCtx) {
+        const contentG = clone.getElementById('map-content');
+        if (contentG) {
+          const tileG = drawTileBackground(pdfCtx, 'satellite', pdfCtx.vLon);
+          contentG.insertBefore(tileG, contentG.firstChild);
+        }
+      }
+
+      // Ensure a sea-blue fallback rect is present (shown where tiles haven't loaded yet).
+      const existingBg = clone.querySelector('rect:first-child');
+      if (!existingBg || existingBg.getAttribute('clip-path')) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const bg = document.createElementNS(ns, 'rect');
+        const vb = (clone.getAttribute('viewBox') || '0 0 1400 780').split(' ');
+        bg.setAttribute('x',      vb[0] || '0');
+        bg.setAttribute('y',      vb[1] || '0');
+        bg.setAttribute('width',  vb[2] || '1400');
+        bg.setAttribute('height', vb[3] || '780');
+        bg.setAttribute('fill', '#1a2530');
+        clone.insertBefore(bg, clone.firstChild);
+      }
     }
 
     // Filter mission routes: dim groups that don't belong to the selected mission
@@ -368,11 +424,17 @@ function _buildMapSection(msnKey, mission) {
     const engGroup = clone.querySelector('[data-role="eng-zones"]');
     if (engGroup) engGroup.setAttribute('display', 'none');
 
-    // Show or hide threat marker symbols
+    // Threat ×-dot markers are always hidden in the PDF (replaced by target-node
+    // diamonds in satellite mode — both are hidden in chart mode).
     const threatGroup = clone.querySelector('[data-role="threat-markers"]');
-    if (threatGroup) threatGroup.setAttribute('display', showThreats ? '' : 'none');
+    if (threatGroup) threatGroup.setAttribute('display', 'none');
 
-    // Show or hide all text labels (marker names, city names, route waypoint labels)
+    // Show or hide target-node (aim-point diamond) markers
+    clone.querySelectorAll('[data-role="target-node"]').forEach(g => {
+      g.setAttribute('display', showTargets ? '' : 'none');
+    });
+
+    // Show or hide all text labels
     if (!showLabels) {
       clone.querySelectorAll('text').forEach(t => t.setAttribute('display', 'none'));
     }
@@ -380,18 +442,18 @@ function _buildMapSection(msnKey, mission) {
     return new XMLSerializer().serializeToString(clone);
   }
 
-  // Map 1 — NAV: labels visible, no threat elements (clean navigation chart)
-  const svgNav = _cloneSvg(false, true);
-  // Map 2 — TACTICAL: threat markers visible, all labels hidden (decluttered threat picture)
-  const svgTactical = _cloneSvg(true, false);
+  // Map 1 — CHART: chart background, no target markers, labels on
+  const svgChart = _cloneSvg('chart', false, true);
+  // Map 2 — SATELLITE: satellite tile background, target markers visible, labels off
+  const svgSat   = _cloneSvg('satellite', true, false);
 
   return `<div class="pdf-section pdf-map">
-<h2 class="pdf-section-title">${_escHtml(baseLabel)} — NAV</h2>
-${svgNav}
+<h2 class="pdf-section-title">${_escHtml(baseLabel)} — CHART (NAV)</h2>
+${svgChart}
 </div>
 <div class="pdf-section pdf-map">
-<h2 class="pdf-section-title">${_escHtml(baseLabel)} — TACTICAL (THREATS)</h2>
-${svgTactical}
+<h2 class="pdf-section-title">${_escHtml(baseLabel)} — SATELLITE (THREATS)</h2>
+${svgSat}
 </div>`;
 }
 
