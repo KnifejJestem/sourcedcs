@@ -74,6 +74,7 @@ function submitExportDialog() {
     comms:    document.getElementById('exportChkComms')?.checked    !== false,
     timeline: document.getElementById('exportChkTimeline')?.checked !== false,
     spins:    document.getElementById('exportChkSpins')?.checked    !== false,
+    weather:  document.getElementById('exportChkWeather')?.checked  !== false,
   };
 
   closeExportDialog();
@@ -99,6 +100,7 @@ function exportPackagePDF(msnIdx, sections) {
   if (sections.comms)    parts.push(_buildCommsSection(mission));
   if (sections.timeline) parts.push(_buildTimelineSection());
   if (sections.spins)    parts.push(_buildSpinsSection());
+  if (sections.weather)  parts.push(_buildWeatherSection());
 
   if (!parts.length) {
     alert('Select at least one section to export.');
@@ -256,6 +258,37 @@ function _openPrintWindow(title, bodyHtml) {
   .pdf-spins-bullet { font-size: 10px; margin: 2px 0 2px 12px; }
   .pdf-spins-heading { font-weight: 700; font-size: 10px; margin: 6px 0 2px; border-left: 3px solid #ccc; padding-left: 6px; }
   .pdf-spins-obj { font-size: 10px; margin: 2px 0; color: #333; }
+  /* Weather */
+  .pdf-wx-block { border: 1px solid #ccc; margin-bottom: 10px; }
+  .pdf-wx-hdr {
+    display: flex; align-items: center; gap: 12px;
+    background: #f5f5f5; padding: 4px 10px;
+    border-bottom: 1px solid #ccc; font-size: 11px;
+  }
+  .pdf-wx-station { font-weight: 700; font-size: 13px; letter-spacing: 2px; }
+  .pdf-wx-time { font-size: 9px; color: #888; }
+  .pdf-wx-cat {
+    margin-left: auto; padding: 2px 7px;
+    font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #fff;
+  }
+  .pdf-wx-cat-vfr  { background: #1a5c2e; }
+  .pdf-wx-cat-mvfr { background: #1a3a6b; }
+  .pdf-wx-cat-ifr  { background: #9b1c1c; }
+  .pdf-wx-cat-lifr { background: #4a1a6b; }
+  .pdf-wx-raw { font-size: 8px; color: #888; padding: 3px 10px;
+                border-bottom: 1px solid #eee; word-break: break-all; }
+  .pdf-wx-row { display: flex; gap: 8px; padding: 3px 10px;
+                border-bottom: 1px solid #f0f0f0; font-size: 10px; }
+  .pdf-wx-row:last-child { border-bottom: none; }
+  .pdf-wx-lbl { min-width: 130px; color: #888; flex-shrink: 0; font-size: 9px; }
+  .pdf-wx-chg-hdr { background: #f8f8f8; padding: 3px 10px;
+                     border-top: 1px dashed #ccc; border-bottom: 1px solid #eee;
+                     font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #555; }
+  .pdf-wx-msn-row { display: flex; gap: 12px; padding: 4px 10px;
+                     border-bottom: 1px solid #f0f0f0; font-size: 10px; }
+  .pdf-wx-msn-ref { font-weight: 700; min-width: 90px; color: #333; }
+  .pdf-wx-subsec { font-size: 9px; letter-spacing: 1.5px; color: #888;
+                   padding: 8px 0 3px; border-bottom: 1px solid #ddd; margin-bottom: 6px; }
   @media print {
     body { padding: 0; }
     .pdf-section { page-break-inside: avoid; }
@@ -500,4 +533,146 @@ function _buildSpinsSection() {
 
   html += '</div>';
   return html;
+}
+
+// ── Weather section ───────────────────────────────────────────
+
+function _buildWeatherSection() {
+  const wx = STATE.pkg?.weather;
+  if (!wx) {
+    return `<div class="pdf-section">
+<h2 class="pdf-section-title">WEATHER</h2>
+<p>No weather data in this package.</p>
+</div>`;
+  }
+
+  let html = '<div class="pdf-section">\n<h2 class="pdf-section-title">WEATHER</h2>\n';
+
+  // Header fields
+  const hdrPairs = [
+    ['ISSUED',      wx.issued],
+    ['VALID FROM',  wx.valid_from],
+    ['VALID TO',    wx.valid_to],
+    ['OPERATION',   wx.operation],
+  ].filter(([, v]) => v);
+  if (hdrPairs.length) {
+    html += '<div style="display:flex;gap:20px;margin-bottom:10px;font-size:10px;">\n';
+    hdrPairs.forEach(([k, v]) => {
+      html += `<div><span style="color:#888;font-size:8px;letter-spacing:1px;">${_escHtml(k)}</span>` +
+              `<br><strong>${_escHtml(String(v))}</strong></div>\n`;
+    });
+    html += '</div>\n';
+  }
+
+  // METARs
+  const metars = wx.metars || [];
+  if (metars.length > 0) {
+    html += '<div class="pdf-wx-subsec">CURRENT CONDITIONS — METAR</div>\n';
+    metars.forEach(raw => { html += _buildMetarBlock(String(raw)); });
+  }
+
+  // TAFs
+  const tafs = wx.tafs || [];
+  if (tafs.length > 0) {
+    html += '<div class="pdf-wx-subsec">FORECAST — TAF</div>\n';
+    tafs.forEach(raw => { html += _buildTafBlock(String(raw)); });
+  }
+
+  // Mission weather notes
+  const msnWx = wx.mission_wx || [];
+  if (msnWx.length > 0) {
+    html += '<div class="pdf-wx-subsec">MISSION WEATHER NOTES</div>\n';
+    html += '<div class="pdf-wx-block">\n';
+    msnWx.forEach(mw => {
+      html += `<div class="pdf-wx-msn-row">` +
+              `<span class="pdf-wx-msn-ref">${_escHtml(String(mw.mission_ref || '—'))}</span>` +
+              `<span>${_escHtml(String(mw.notes || ''))}</span></div>\n`;
+    });
+    html += '</div>\n';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// Build HTML for a single decoded METAR block.
+// Reuses parseMetar / flightCategory / fmtWind / fmtVisibility / fmtCloud /
+// decodePhenomenon from view-weather.js (loaded in the same page scope).
+// Build HTML for a single decoded TAF block reuses parseTAF / fmtChangeType
+// from the same file.
+function _buildMetarBlock(raw) {
+  const m = parseMetar(raw);
+  const cat = flightCategory(m.clouds, m.visibility_m, m.cavok);
+  const catCls = { VFR: 'vfr', MVFR: 'mvfr', IFR: 'ifr', LIFR: 'lifr' }[cat.cat] || 'vfr';
+  let h = '<div class="pdf-wx-block">\n';
+  h += `<div class="pdf-wx-hdr">` +
+       `<span class="pdf-wx-station">${_escHtml(m.station || '—')}</span>` +
+       (m.time ? `<span class="pdf-wx-time">Day ${_escHtml(m.day || '??')} ${_escHtml(m.time)}</span>` : '') +
+       `<span class="pdf-wx-cat pdf-wx-cat-${catCls}">${_escHtml(cat.cat)}</span>` +
+       `</div>\n`;
+  h += `<div class="pdf-wx-raw">${_escHtml(m.raw)}</div>\n`;
+  h += _wxCondRows(m);
+  if (m.temperature_c != null || m.dewpoint_c != null) {
+    const t = m.temperature_c != null ? m.temperature_c + '°C' : '—';
+    const d = m.dewpoint_c    != null ? m.dewpoint_c    + '°C' : '—';
+    h += _wxRow('Temp / Dew', t + '  /  ' + d);
+  }
+  if (m.qnh_hpa != null) {
+    const inhg = m.qnh_inhg != null
+      ? m.qnh_inhg.toFixed(2)
+      : (m.qnh_hpa / 33.8639).toFixed(2);
+    h += _wxRow('QNH', m.qnh_hpa + ' hPa  (' + inhg + ' inHg)');
+  }
+  if (m.nosig) h += _wxRow('Trend', 'NOSIG — No Significant Change');
+  if (m.remarks) h += _wxRow('Remarks', m.remarks);
+  h += '</div>\n';
+  return h;
+}
+
+// Build HTML for a single decoded TAF block.
+function _buildTafBlock(raw) {
+  const t = parseTAF(raw);
+  let h = '<div class="pdf-wx-block">\n';
+  h += `<div class="pdf-wx-hdr">` +
+       `<span class="pdf-wx-station">${_escHtml(t.station || '—')}</span>` +
+       (t.issued_time ? `<span class="pdf-wx-time">Issued Day ${_escHtml(t.issued_day || '??')} ${_escHtml(t.issued_time)}</span>` : '') +
+       (t.valid_from  ? `<span class="pdf-wx-time">Valid: ${_escHtml(t.valid_from)} – ${_escHtml(t.valid_to || '—')}</span>` : '') +
+       `</div>\n`;
+  h += `<div class="pdf-wx-raw">${_escHtml(t.raw)}</div>\n`;
+  if (t.nil) { h += `<div class="pdf-wx-row"><span>NIL — No forecast issued</span></div>\n`; }
+  else {
+    h += `<div class="pdf-wx-chg-hdr">PREVAILING CONDITIONS</div>\n`;
+    h += _wxCondRows(t.conditions);
+    (t.changes || []).forEach(chg => {
+      const period = [chg.from, chg.to].filter(Boolean).join(' – ');
+      const label  = fmtChangeType(chg) + (period ? ' · ' + period : '');
+      h += `<div class="pdf-wx-chg-hdr">${_escHtml(label)}</div>\n`;
+      h += _wxCondRows(chg);
+    });
+  }
+  h += '</div>\n';
+  return h;
+}
+
+// Shared: render wind / visibility / phenomena / clouds rows.
+function _wxCondRows(g) {
+  let h = '';
+  if (g.wind) h += _wxRow('Wind', fmtWind(g.wind));
+  if (g.cavok) {
+    h += _wxRow('Visibility', 'CAVOK  (≥10 km, no significant cloud, no weather)');
+  } else {
+    if (g.visibility_m != null || g.visibility_sm != null)
+      h += _wxRow('Visibility', fmtVisibility(g.visibility_m, g.visibility_sm));
+    if (g.phenomena && g.phenomena.length)
+      h += _wxRow('Present WX', g.phenomena.map(decodePhenomenon).join('  ·  '));
+    (g.clouds || []).forEach((c, ci) =>
+      h += _wxRow(ci === 0 ? 'Sky Condition' : '', fmtCloud(c)));
+  }
+  return h;
+}
+
+function _wxRow(label, value) {
+  return `<div class="pdf-wx-row">` +
+         `<span class="pdf-wx-lbl">${_escHtml(label)}</span>` +
+         `<span>${_escHtml(String(value ?? ''))}</span></div>\n`;
 }
