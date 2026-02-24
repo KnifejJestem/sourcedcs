@@ -352,6 +352,19 @@ function loadPackage_obj(data) {
   if (data.header)         pkg.header         = data.header;
   if (data.registry)       pkg.registry       = data.registry;
 
+  // ── Normalize array-format tanker registry to dict keyed by callsign ──
+  // The miztoyaml tool emits tankers as a list; _registryOptions() and
+  // the editor dropdown expect an object keyed by id so that selected
+  // values match the tankerMap lookup in the resolution step below.
+  if (pkg.registry?.tankers && Array.isArray(pkg.registry.tankers)) {
+    const dict = {};
+    pkg.registry.tankers.forEach(t => {
+      const key = t.id || t.callsign;
+      if (key) dict[key] = t;
+    });
+    pkg.registry.tankers = dict;
+  }
+
   if (!pkg.ato && !pkg.aco && !pkg.spins && !pkg.comms && !pkg.weather) {
     showToast('UNRECOGNISED FILE — expected keys: ato, aco, spins, comms, weather', 'error');
     return;
