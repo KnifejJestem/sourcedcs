@@ -12,14 +12,15 @@
 
 // Human-readable heading for each point kind.
 const KIND_LABELS = {
-  steer:    'WAYPOINT',
-  target:   'AIM POINT',
-  threat:   'THREAT',
-  bullseye: 'BULLSEYE',
-  airfield: 'AIRFIELD',
-  carrier:  'CARRIER',
-  airspace: 'AIRSPACE',
-  marshal:  'MARSHAL POINT',
+  steer:        'WAYPOINT',
+  'steer-ref':  'WAYPOINT',
+  target:       'AIM POINT',
+  threat:       'THREAT',
+  bullseye:     'BULLSEYE',
+  airfield:     'AIRFIELD',
+  carrier:      'CARRIER',
+  airspace:     'AIRSPACE',
+  marshal:      'MARSHAL POINT',
 };
 
 // ── Per-kind row builders ─────────────────────────────────
@@ -104,7 +105,7 @@ function buildAirspaceRows(p) {
 
 // Dispatch: returns the [[key, value], …] rows appropriate for any point kind.
 function buildPopupRows(p) {
-  if (p.kind === 'steer' || p.kind === 'target') return buildSteerTargetRows(p);
+  if (p.kind === 'steer' || p.kind === 'steer-ref' || p.kind === 'target') return buildSteerTargetRows(p);
   if (p.kind === 'threat')   return buildThreatRows(p);
   if (p.kind === 'bullseye') return [['NAME', p.label]];
   if (p.kind === 'airfield') return buildAirfieldRows(p);

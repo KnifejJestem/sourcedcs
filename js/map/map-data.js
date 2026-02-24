@@ -209,6 +209,11 @@ function collectData(ato, aco) {
     //    (thicker dashed line) and shown as diamond target markers instead of
     //    hollow steer circles.  If a steer point has an 'orbit' block, also
     //    push an anchor airspace so the racetrack pattern is drawn on the map.
+    //    When name_ref is used the referenced location (airfield, carrier, marshal
+    //    point) already has its own named marker on the map.  A 'steer-ref' point
+    //    is pushed so a small unlabelled hollow circle appears at the waypoint,
+    //    making the route's exact passage through that location visible without
+    //    duplicating the named-location label.
     (m.steer_points || []).forEach((sp, i) => {
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
       const raw     = typeof sp === 'string' ? sp : sp.coords;
@@ -218,11 +223,24 @@ function collectData(ato, aco) {
       if (p) {
         // Aim-point steer points use a thicker target-approach line on the route
         route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
-        points.push({
-          ...p, kind: apId ? 'target' : 'steer',
-          label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-          sub: label, color, msnType: m.mission_type, mission: m,
-        });
+        // When name_ref is set the named location (marshal point, airfield, carrier)
+        // already appears as its own marker.  Push a 'steer-ref' point so a small
+        // unlabelled hollow circle is drawn at the waypoint position, making it clear
+        // the route passes exactly through that location without duplicating the
+        // named-location label.
+        if (!nameRef) {
+          points.push({
+            ...p, kind: apId ? 'target' : 'steer',
+            label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
+            sub: label, color, msnType: m.mission_type, mission: m,
+          });
+        } else {
+          points.push({
+            ...p, kind: 'steer-ref',
+            label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
+            sub: nameRef, color, msnType: m.mission_type, mission: m,
+          });
+        }
         // Orbit/anchor track: render a racetrack on the map.
         // Skip if a near-identical orbit has already been pushed (proximity dedup).
         if (typeof sp === 'object' && sp.orbit) {
