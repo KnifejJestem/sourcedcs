@@ -269,6 +269,30 @@ ato:
     steer_points:
     - coords: N26°10'00" E056°05'00"
       name: SP1
+  - mission_number: CVW8-101
+    callsign: TOMCAT1
+    mission_type: CAP
+    unit: VF-32
+    home_base_icao: CVN-71
+    deploy_location_icao: CVN-71
+    aar_location_icao: CVN-71
+    takeoff_time: '2010Z'
+    recovery_time: '2310Z'
+    aircraft:
+      count: 2
+      type: F-14B
+      loadout: 501+
+    targets:
+    - location: GULF OF OMAN
+      tos: '2100Z'
+      toffs: '2230Z'
+    control:
+      agency_id: SCREWTOP
+    steer_points:
+    - coords: N25°00'00" E059°30'00"
+      name: CAP1
+    - coords: N25°30'00" E060°00'00"
+      name: CAP2
 
 aco:
   id: ACO-26-01

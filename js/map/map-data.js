@@ -73,18 +73,30 @@ function collectData(ato, aco) {
     return parseCoord(str);
   };
 
-  // ── Phase 1b: Build takeoffs-by-ICAO map ──────────────────
-  // Maps each deploy ICAO → list of {callsign, msnNum, time} for the popup.
-  const takeoffsByIcao = {};
+  // ── Phase 1b: Build takeoffs/recoveries-by-location key maps ─
+  // Maps a deploy/recovery key (ICAO, carrier callsign, or carrier id) →
+  // list of mission summaries used by the airfield and carrier popups.
+  const takeoffsByKey = {};
+  const recoveriesByKey = {};
   missions.forEach(m => {
-    const icao = (m.deploy_location_icao || '').trim().toUpperCase();
-    if (!icao) return;
-    if (!takeoffsByIcao[icao]) takeoffsByIcao[icao] = [];
-    takeoffsByIcao[icao].push({
-      callsign: m.callsign || '?',
-      msnNum: m.mission_number || '',
-      time: m.takeoff_time || null,
-    });
+    const depKey = (m.deploy_location_icao || '').trim().toUpperCase();
+    if (depKey) {
+      if (!takeoffsByKey[depKey]) takeoffsByKey[depKey] = [];
+      takeoffsByKey[depKey].push({
+        callsign: m.callsign || '?',
+        msnNum: m.mission_number || '',
+        time: m.takeoff_time || null,
+      });
+    }
+    const recKey = (m.aar_location_icao || '').trim().toUpperCase();
+    if (recKey) {
+      if (!recoveriesByKey[recKey]) recoveriesByKey[recKey] = [];
+      recoveriesByKey[recKey].push({
+        callsign: m.callsign || '?',
+        msnNum: m.mission_number || '',
+        time: m.recovery_time || null,
+      });
+    }
   });
 
   // ── Phase 2: Static map markers ───────────────────────────
@@ -109,20 +121,49 @@ function collectData(ato, aco) {
         role: af.role || null,
         elevation_ft: af.elevation_ft ?? null,
         runways: af.runways ?? null,
-        takeoffs: takeoffsByIcao[icao] || [],
+        takeoffs: takeoffsByKey[icao] || [],
       });
     }
   });
 
+  // ── Helper: merge entries from multiple location keys, deduplicating ──
+  // Returns a flat list of entries from `map` for all given `keys`,
+  // with duplicates (same callsign + msnNum) filtered out.
+  function mergeByKeys(map, keys) {
+    const seen = new Set();
+    return keys.flatMap(k => map[k] || []).filter(entry => {
+      const dedupeKey = `${entry.callsign}|${entry.msnNum}`;
+      if (seen.has(dedupeKey)) return false;
+      seen.add(dedupeKey);
+      return true;
+    });
+  }
+
   // Carriers
   (ato.carriers || []).forEach(cv => {
+    // Collect all keys this carrier is known by (callsign + id, both uppercased)
+    const cvKeys = [cv.callsign, cv.id]
+      .filter(Boolean).map(k => k.trim().toUpperCase());
+
     if (cv.deploy_coords) {
       const p = parseCoord(cv.deploy_coords);
-      if (p) points.push({ ...p, kind: 'carrier', label: cv.name || cv.callsign || 'CVN', sub: 'DEPLOY EST', callsign: cv.callsign });
+      if (p) points.push({
+        ...p, kind: 'carrier',
+        label: cv.name || cv.callsign || 'CVN',
+        sub: 'DEPLOY EST',
+        callsign: cv.callsign,
+        takeoffs: mergeByKeys(takeoffsByKey, cvKeys),
+      });
     }
     if (cv.recovery_coords) {
       const p = parseCoord(cv.recovery_coords);
-      if (p) points.push({ ...p, kind: 'carrier', label: cv.name || cv.callsign || 'CVN', sub: 'RECOVERY EST', callsign: cv.callsign });
+      if (p) points.push({
+        ...p, kind: 'carrier',
+        label: cv.name || cv.callsign || 'CVN',
+        sub: 'RECOVERY EST',
+        callsign: cv.callsign,
+        recoveries: mergeByKeys(recoveriesByKey, cvKeys),
+      });
     }
   });
 

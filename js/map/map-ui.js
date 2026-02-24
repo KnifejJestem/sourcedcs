@@ -25,6 +25,12 @@ const KIND_LABELS = {
 // ── Per-kind row builders ─────────────────────────────────
 // Each function returns [[key, value], …] for its specific point kind.
 
+// Format a mission entry {callsign, msnNum, time} as a single display string.
+function fmtMsnEntry(entry) {
+  const label = [entry.callsign, entry.msnNum].filter(Boolean).join(' · ');
+  return `${label}  ${entry.time ? fmtTime(entry.time) : '—'}`;
+}
+
 function buildSteerTargetRows(p) {
   const rows = [['NAME', p.sub], ['MISSION', p.label]];
   if (p.msnType) rows.push(['TYPE', p.msnType]);
@@ -49,18 +55,21 @@ function buildAirfieldRows(p) {
     rows.push(['RUNWAYS', rwys]);
   }
   if (p.takeoffs?.length) {
-    p.takeoffs.forEach(t => {
-      const takeoffLabel = [t.callsign, t.msnNum].filter(Boolean).join(' · ');
-      rows.push(['TAKEOFF', `${takeoffLabel}  ${t.time ? fmtTime(t.time) : '—'}`]);
-    });
+    p.takeoffs.forEach(t => rows.push(['TAKEOFF', fmtMsnEntry(t)]));
   }
   return rows;
 }
 
 function buildCarrierRows(p) {
   const rows = [['NAME', p.label]];
-  if (p.sub)      rows.push(['STATUS',   p.sub]);
   if (p.callsign) rows.push(['CALLSIGN', p.callsign]);
+  if (p.sub)      rows.push(['STATUS',   p.sub]);
+  if (p.takeoffs?.length) {
+    p.takeoffs.forEach(t => rows.push(['TAKEOFF', fmtMsnEntry(t)]));
+  }
+  if (p.recoveries?.length) {
+    p.recoveries.forEach(r => rows.push(['RECOVERY', fmtMsnEntry(r)]));
+  }
   return rows;
 }
 
