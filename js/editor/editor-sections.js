@@ -20,8 +20,13 @@ function _normalizeZulu(val) {
 
 function openTimesEditor() {
   var ato = editorEnsureSection('ato');
+  if (!STATE.pkg.header) STATE.pkg.header = {};
+  var hdr = STATE.pkg.header;
 
   openEditorDialog('EDIT TIMES', function (body) {
+    editorSectionTitle(body, 'PACKAGE HEADER');
+    var fAtoDate = editorField(body, 'ATO Date (Ingame)', hdr.ato_date, { placeholder: '2026-01-11', hint: 'In-game mission date (YYYY-MM-DD)' });
+
     editorSectionTitle(body, 'IRL START');
     var fDate = editorField(body, 'IRL Date', ato.irl_date, { placeholder: '2026-01-11', required: true });
     var fTime = editorField(body, 'IRL Time (Zulu)', ato.irl_time_zulu, { placeholder: '1900', required: true, hint: 'Enter in Zulu — Z is added automatically' });
@@ -29,12 +34,14 @@ function openTimesEditor() {
     editorSectionTitle(body, 'INGAME START');
     var fIngame = editorField(body, 'Ingame Start Time (Zulu)', ato.ingame_start_time || ato.ingame_start_local, { placeholder: '2000', required: true, hint: 'Enter in Zulu — Z is added automatically' });
 
-    body._timesFields = { date: fDate, time: fTime, ingame: fIngame };
+    body._timesFields = { atoDate: fAtoDate, date: fDate, time: fTime, ingame: fIngame };
   }, function () {
     var body = document.getElementById('editorBody');
     var f = body._timesFields;
     var ato = editorEnsureSection('ato');
+    if (!STATE.pkg.header) STATE.pkg.header = {};
 
+    STATE.pkg.header.ato_date = f.atoDate.value || undefined;
     ato.irl_date          = f.date.value || undefined;
     ato.irl_time_zulu     = _normalizeZulu(f.time.value);
     ato.ingame_start_time = _normalizeZulu(f.ingame.value);
@@ -53,12 +60,11 @@ function openACOEditor() {
   openEditorDialog('EDIT ACO', function (body) {
     editorSectionTitle(body, 'HEADER');
     var fOp   = editorField(body, 'Operation',      aco.operation);
-    var fDay  = editorField(body, 'ATO Day',         aco.ato_day);
     var fId   = editorField(body, 'ACO ID',          aco.id);
     var fTz   = editorField(body, 'Timezone',        aco.timezone);
     var fDist = editorField(body, 'Distributing Agency', aco.distributing_agency);
 
-    body._acoHeader = { op: fOp, day: fDay, id: fId, tz: fTz, dist: fDist };
+    body._acoHeader = { op: fOp, id: fId, tz: fTz, dist: fDist };
 
     // ACMs list
     var acms = (aco.acms || []).map(function (a) { return Object.assign({}, a); });
@@ -84,7 +90,6 @@ function openACOEditor() {
     var aco = editorEnsureSection('aco');
 
     aco.operation           = h.op.value || undefined;
-    aco.ato_day             = h.day.value || undefined;
     aco.id                  = h.id.value || undefined;
     aco.timezone            = h.tz.value || undefined;
     aco.distributing_agency = h.dist.value || undefined;
@@ -320,11 +325,10 @@ function openSpinsEditor() {
     // Header fields
     editorSectionTitle(body, 'HEADER');
     var fOp  = editorField(body, 'Operation',      sp.operation);
-    var fDay = editorField(body, 'ATO Day',         sp.ato_day);
     var fVer = editorField(body, 'Version',         sp.version);
     var fCls = editorField(body, 'Classification',  sp.classification);
 
-    body._spinsHeader = { op: fOp, day: fDay, ver: fVer, cls: fCls };
+    body._spinsHeader = { op: fOp, ver: fVer, cls: fCls };
 
     // Sections list
     var sections = sp.sections || [];
@@ -347,7 +351,6 @@ function openSpinsEditor() {
     var h = body._spinsHeader;
     var sp = editorEnsureSection('spins');
     sp.operation      = h.op.value || undefined;
-    sp.ato_day        = h.day.value || undefined;
     sp.version        = h.ver.value || undefined;
     sp.classification = h.cls.value || undefined;
     sp.sections       = body._spinsSections;
@@ -448,11 +451,10 @@ function openCommsEditor() {
   openEditorDialog('EDIT COMMS', function (body) {
     editorSectionTitle(body, 'HEADER');
     var fOp   = editorField(body, 'Operation',      cm.operation);
-    var fDay  = editorField(body, 'ATO Day',         cm.ato_day);
     var fLead = editorField(body, 'Wing Lead',       cm.wing_lead);
     var fCls  = editorField(body, 'Classification',  cm.classification);
 
-    body._commsHeader = { op: fOp, day: fDay, lead: fLead, cls: fCls };
+    body._commsHeader = { op: fOp, lead: fLead, cls: fCls };
 
     // Per-flight comms (new format)
     if (Array.isArray(cm.flights) && cm.flights.length > 0) {
@@ -475,7 +477,6 @@ function openCommsEditor() {
     var h = body._commsHeader;
     var cm = editorEnsureSection('comms');
     cm.operation      = h.op.value || undefined;
-    cm.ato_day        = h.day.value || undefined;
     cm.wing_lead      = h.lead.value || undefined;
     cm.classification = h.cls.value || undefined;
 

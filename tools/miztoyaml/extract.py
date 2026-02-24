@@ -31,13 +31,28 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
 
     print(f"[+] Theatre={theatre}  coalition={coalition}  targets_from={opposing}")
 
-    # Date
-    dm = re.search(
-        r'\["date"\].*?\["Year"\] = (\d+).*?\["Day"\] = (\d+).*?\["Month"\] = (\d+)',
-        mission_text, re.DOTALL)
-    year, day, month = (int(dm.group(1)), int(dm.group(2)), int(dm.group(3))) \
-                       if dm else (2024, 1, 1)
+    # Date — extract Year/Day/Month independently (field order varies by miz version)
+    year, day, month = 2024, 1, 1
+    dm = re.search(r'\["date"\].*?\{([^}]*)\}', mission_text, re.DOTALL)
+    if dm:
+        date_block = dm.group(1)
+        year_m  = re.search(r'\["Year"\]\s*=\s*(\d+)',  date_block)
+        day_m   = re.search(r'\["Day"\]\s*=\s*(\d+)',   date_block)
+        month_m = re.search(r'\["Month"\]\s*=\s*(\d+)', date_block)
+        if year_m:  year  = int(year_m.group(1))
+        if day_m:   day   = int(day_m.group(1))
+        if month_m: month = int(month_m.group(1))
     mission_date = f"{year}-{month:02d}-{day:02d}"
+
+    # Top-level mission start_time (seconds from midnight local time, 0–86399)
+    sm = re.search(r'^\t\["start_time"\]\s*=\s*(\d+)', mission_text, re.MULTILINE)
+    ingame_start_local = None
+    if sm:
+        total_seconds = int(sm.group(1)) % 86400  # clamp to 0–86399
+        hh = total_seconds // 3600
+        mm = (total_seconds % 3600) // 60
+        ingame_start_local = f"{hh:02d}{mm:02d}"
+        print(f"[+] Mission start_time={sm.group(1)}s → {ingame_start_local}L")
 
     # Coalition blocks
     coal_block = lua_get_block(mission_text, 'coalition')
@@ -114,6 +129,7 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
         carriers=carriers,
         dtcs=dtcs,
         spins_sections=spins_sections,
+        ingame_start_local=ingame_start_local,
     )
 
 
