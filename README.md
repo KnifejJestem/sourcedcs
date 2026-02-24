@@ -47,7 +47,10 @@ index.html                          Single-page shell
 │       ├── editor-missions.js      Mission add/edit/delete with registry dropdowns
 │       └── editor-sections.js      Times, ACO, SPINS, COMMS, Weather section editors
 ├── server.js                       Express + Socket.io server, session management
-└── data/                           Sample YAML packages
+└── data/                           Data files
+    ├── weaponsdata.json            CLSID → weapon name lookup table
+    ├── spins.md                    Sample SPINS markdown (## and ### headings)
+    └── weather.txt                 Additional METAR/TAF strings for weather tab
 ```
 
 ---

@@ -62,7 +62,9 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
                 speed_kts = wp.orbit_speed_kts
                 break
         entry: dict = {"callsign": f.name}
-        if alt_ft    is not None: entry["altitude_ft"] = alt_ft
+        if alt_ft    is not None:
+            entry["altitude_ft"] = alt_ft
+            entry["altitude"]    = f"FL{round(alt_ft / 100):03d}"
         if speed_kts is not None: entry["speed_kts"]   = speed_kts
         result.append(entry)
     return result or None
@@ -115,7 +117,8 @@ def build_flight_comms(flights: list[Flight], dtcs: dict[str, dict]) -> list[dic
 def build_doc(*, mission_name, mission_date, theatre,
               year, month, targets, ref_pts, acms, metar, wx_notes,
               flights, carriers, dtcs=None, spins_sections=None,
-              ingame_start_local=None) -> dict:
+              ingame_start_local=None,
+              extra_metars=None, extra_tafs=None) -> dict:
 
     import hashlib
 
@@ -216,7 +219,8 @@ def build_doc(*, mission_name, mission_date, theatre,
             "issued":     mission_date,
             "valid_from": "0000Z",
             "valid_to":   "2359Z",
-            "metars":     [metar],
+            "metars":     [metar] + (extra_metars or []),
+            "tafs":       extra_tafs or None,
             "mission_wx": [{"mission_ref": msn, "notes": "No significant weather impact."}
                            for msn in msn_numbers] or None,
         },

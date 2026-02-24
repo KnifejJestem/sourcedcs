@@ -398,7 +398,7 @@ be listed first in each mission entry.
 |-------|------|-------------|
 | `mission_number` | string | ATO mission number (e.g. `MSN3266`) — **primary key**, listed first.  Used as the cross-reference ID throughout the file |
 | `callsign` | string | Flight callsign |
-| `mission_type` | string | `CAP` / `BAI` / `CAS` / `SEAD` / `STRIKE` / `REFUELING` (drives color coding) |
+| `mission_type` | string | `CAP` / `BAI` / `CAS` / `SEAD` / `STRIKE` / `REFUELING` / `OCA` / `DCA` / `DEAD` / `AI` / `ESCORT` / `FAC(A)` / `RECCE` / `ANTISHIP` / `INTERCEPT` / `FERRY` / `TRANSPORT` (drives color coding; unknown types display as `OTHER`) |
 | `unit` | string | Operating unit |
 | `home_base_icao` | string | Home base ICAO (display only) |
 | `deploy_location_icao` | string | Start of route on map — accepts an airfield ICAO, a carrier registry ID (e.g. `CVN-71`), a carrier callsign, a marshal point name, or a raw DMS coordinate string |
@@ -1058,6 +1058,24 @@ Plain-English notes linked to missions by mission number.
 | `notes` | string | Free-text weather note |
 | `style` | string | Optional color tint: `amber` / `red` / `green` / `blue` |
 
+### Additional weather from `weather.txt`
+
+When extracting a package from a `.miz` file with `miztoyaml.py`, the tool
+looks for a `weather.txt` file in the same directory as the `.miz` file.  If
+found, any lines starting with `METAR` or `SPECI` are added to `weather.metars`
+and any lines starting with `TAF` are added to `weather.tafs`, alongside the
+automatically generated METAR from the DCS mission weather settings.
+
+This allows you to provide real-world or customised METAR/TAF strings that
+supplement the DCS-generated weather data.
+
+Example `weather.txt`:
+```
+METAR OMAM 011850Z 31012G18KT 9999 FEW040 SCT080 28/08 Q1013 NOSIG
+TAF OMAM 011700Z 0120/0206 30010KT 9999 FEW040 BECMG 0122/0124 27008KT
+METAR LTAG 011900Z 22008KT 9999 SCT030 22/12 Q1015 NOSIG
+```
+
 ---
 
 ## Authoring SPINS in Markdown
@@ -1071,12 +1089,18 @@ found, the Markdown content is parsed and placed in `spins.sections`.
 ```markdown
 ## C1 — COMMAND & CONTROL
 
+### C1.1 — Tactical Control
+
 NOTE: All C2 passes through package commander.
 
 PRIMARY AWACS: MAGIC / 265.1 MHz
 SECONDARY: DARKSTAR / 265.0 MHz
 - Bullet point text
 - Another bullet
+
+### C1.2 — Airspace Control
+
+SCT, via LTAG MTMA and CVN-75
 
 ## C3 — IFF / SIF
 
@@ -1090,6 +1114,7 @@ NOTE: Squawk assigned code. Mode 4 mandatory.
 | Markdown element | Produces |
 |-----------------|----------|
 | `## Section Title` | New section with `title: Section Title` |
+| `### Sub-heading` | `{heading: Sub-heading}` entry within the current section |
 | `NOTE: text` | `note:` field at the top of the current section |
 | `KEY: value` (UPPERCASE key) | `{label: KEY, value: value}` entry |
 | `- bullet text` | `{bullet: bullet text}` entry |
@@ -1098,3 +1123,8 @@ NOTE: Squawk assigned code. Mode 4 mandatory.
 
 Sections without any `entries` (only a `table`) are fully supported.
 The NOTE line must come before any key-value, bullet, or table rows.
+
+`###` sub-headings create `{heading}` entries within the current `##` section.
+Entries after a `###` heading are grouped inside that heading block in the
+rendered output, allowing for nested mission-specific sections (e.g.
+`### C5.6011 — SHADOW (SEAD)`).
