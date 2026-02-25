@@ -40,9 +40,11 @@ var REGISTRY_CATEGORIES = {
     label: 'TANKERS',
     idLabel: 'ID',
     fields: [
-      { key: 'callsign', label: 'Callsign',  placeholder: 'e.g. ARCO4' },
-      { key: 'ar_track',  label: 'AR Track',  placeholder: 'e.g. AR394' },
-      { key: 'altitude',  label: 'Altitude',  placeholder: 'e.g. FL240' },
+      { key: 'callsign',     label: 'Callsign',     placeholder: 'e.g. ARCO4' },
+      { key: 'ar_track',     label: 'AR Track',     placeholder: 'e.g. AR394' },
+      { key: 'altitude',     label: 'Altitude',     placeholder: 'e.g. FL240' },
+      { key: 'tacan',        label: 'TACAN',        placeholder: 'e.g. 39X' },
+      { key: 'tacan_role',   label: 'TACAN Role',   placeholder: 'e.g. REFUELING' },
     ],
   },
   targets: {
@@ -104,7 +106,13 @@ function openRegistryEditor() {
         var idField = cat.idField || 'name';
         var ids    = items.map(function (i) { return String(i[idField]); });
         editorListBlock(body, cat.label, ids, function (container, id) {
-          editorItemRow(container, id,
+          var item = items[ids.indexOf(id)];
+          var label = id;
+          if (catKey === 'frequencies' && item) {
+            var parts = [item.callsign, item.role].filter(Boolean);
+            if (parts.length) label += ' — ' + parts.join(' · ');
+          }
+          editorItemRow(container, label,
             function () { editRegistryItem(catKey, id); },
             function () { deleteRegistryItem(catKey, id); }
           );

@@ -192,6 +192,15 @@ def build_doc(*, mission_name, mission_date, theatre,
     local_offset_hours = _THEATRE_OFFSET.get(theatre)
     if local_offset_hours is None and theatre:
         print(f"[!] Unknown theatre '{theatre}' — local_offset_hours will be None")
+
+    # Compute Zulu start time from local start time and theatre offset
+    ingame_start_zulu = None
+    if ingame_start_local and local_offset_hours is not None:
+        local_mins = int(ingame_start_local[:2]) * 60 + int(ingame_start_local[2:])
+        zulu_mins  = (local_mins - local_offset_hours * 60) % 1440
+        ingame_start_zulu = f"{zulu_mins // 60:02d}{zulu_mins % 60:02d}"
+        print(f"[+] ingame_start_local={ingame_start_local}L → ingame_start_time={ingame_start_zulu}Z")
+
     msn_start = 1000 + int(hashlib.md5(mission_name.encode()).hexdigest()[:4], 16) % 8000
     tanker_msn_start = msn_start + 500
 
@@ -242,7 +251,7 @@ def build_doc(*, mission_name, mission_date, theatre,
         "ato": {
             "irl_date":           None,
             "irl_time_zulu":      None,
-            "ingame_start_time":  None,
+            "ingame_start_time":  ingame_start_zulu,
             "ingame_start_local": ingame_start_local,
             "local_offset_hours": local_offset_hours,
             "ae_flags":           ["IRL", "INGAME"],
