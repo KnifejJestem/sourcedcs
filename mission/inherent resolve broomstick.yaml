@@ -669,6 +669,142 @@ registry:
       callsign: DARKSTAR
       platform: E-3A
       primary_freq_mhz: '251.0'
+  frequencies:
+  - freq_mhz: 120.075
+    callsign: null
+    role: null
+  - freq_mhz: 121.0
+    callsign: null
+    role: null
+  - freq_mhz: 122.0
+    callsign: null
+    role: null
+  - freq_mhz: 122.1
+    callsign: null
+    role: null
+  - freq_mhz: 123.3
+    callsign: null
+    role: null
+  - freq_mhz: 124.0
+    callsign: null
+    role: null
+  - freq_mhz: 125.0
+    callsign: null
+    role: null
+  - freq_mhz: 126.0
+    callsign: null
+    role: null
+  - freq_mhz: 127.0
+    callsign: null
+    role: null
+  - freq_mhz: 128.0
+    callsign: null
+    role: null
+  - freq_mhz: 129.0
+    callsign: null
+    role: null
+  - freq_mhz: 130.0
+    callsign: null
+    role: null
+  - freq_mhz: 131.0
+    callsign: null
+    role: null
+  - freq_mhz: 132.0
+    callsign: null
+    role: null
+  - freq_mhz: 133.0
+    callsign: null
+    role: null
+  - freq_mhz: 133.3
+    callsign: null
+    role: null
+  - freq_mhz: 134.0
+    callsign: null
+    role: null
+  - freq_mhz: 135.0
+    callsign: null
+    role: null
+  - freq_mhz: 136.0
+    callsign: null
+    role: null
+  - freq_mhz: 137.0
+    callsign: null
+    role: null
+  - freq_mhz: 138.0
+    callsign: null
+    role: null
+  - freq_mhz: 139.0
+    callsign: null
+    role: null
+  - freq_mhz: 140.0
+    callsign: null
+    role: null
+  - freq_mhz: 141.0
+    callsign: null
+    role: null
+  - freq_mhz: 250.0
+    callsign: null
+    role: null
+  - freq_mhz: 254.0
+    callsign: null
+    role: null
+  - freq_mhz: 256.0
+    callsign: null
+    role: null
+  - freq_mhz: 264.0
+    callsign: null
+    role: null
+  - freq_mhz: 265.0
+    callsign: null
+    role: null
+  - freq_mhz: 265.1
+    callsign: null
+    role: null
+  - freq_mhz: 266.025
+    callsign: null
+    role: null
+  - freq_mhz: 270.0
+    callsign: null
+    role: null
+  - freq_mhz: 282.5
+    callsign: null
+    role: null
+  - freq_mhz: 305.0
+    callsign: null
+    role: null
+  - freq_mhz: 310.25
+    callsign: null
+    role: null
+  - freq_mhz: 322.075
+    callsign: null
+    role: null
+  - freq_mhz: 327.45
+    callsign: null
+    role: null
+  - freq_mhz: 330.975
+    callsign: null
+    role: null
+  - freq_mhz: 334.15
+    callsign: null
+    role: null
+  - freq_mhz: 340.775
+    callsign: null
+    role: null
+  - freq_mhz: 341.7
+    callsign: null
+    role: null
+  - freq_mhz: 343.025
+    callsign: null
+    role: null
+  - freq_mhz: 344.775
+    callsign: null
+    role: null
+  - freq_mhz: 360.1
+    callsign: null
+    role: null
+  - freq_mhz: 377.475
+    callsign: null
+    role: null
 ato:
   irl_date: null
   irl_time_zulu: null
@@ -1084,260 +1220,117 @@ comms:
     callsign: SHADOW1
     dtc_cartridge: Broomstick_F16
     uhf_presets:
-      1:
-        callsign: null
-        freq_mhz: 305.0
-        role: null
-      2:
-        callsign: null
-        freq_mhz: 264.0
-        role: null
-      3:
-        callsign: null
-        freq_mhz: 265.0
-        role: null
-      4:
-        callsign: null
-        freq_mhz: 256.0
-        role: null
-      5:
-        callsign: null
-        freq_mhz: 254.0
-        role: null
-      6:
-        callsign: null
-        freq_mhz: 250.0
-        role: null
-      7:
-        callsign: null
-        freq_mhz: 270.0
-        role: null
-      8:
-        callsign: null
-        freq_mhz: 282.5
-        role: null
-      9:
-        callsign: null
-        freq_mhz: 360.1
-        role: null
-      10:
-        callsign: null
-        freq_mhz: 340.775
-        role: null
-      11:
-        callsign: null
-        freq_mhz: 265.1
-        role: null
-      12:
-        callsign: null
-        freq_mhz: 334.15
-        role: null
-      13:
-        callsign: null
-        freq_mhz: 266.025
-        role: null
-      14:
-        callsign: null
-        freq_mhz: 341.7
-        role: null
-      15:
-        callsign: null
-        freq_mhz: 343.025
-        role: null
-      16:
-        callsign: null
-        freq_mhz: 330.975
-        role: null
-      17:
-        callsign: null
-        freq_mhz: 327.45
-        role: null
-      18:
-        callsign: null
-        freq_mhz: 310.25
-        role: null
-      19:
-        callsign: null
-        freq_mhz: 322.075
-        role: null
-      20:
-        callsign: null
-        freq_mhz: 377.475
-        role: null
+      1: 305.0
+      2: 264.0
+      3: 265.0
+      4: 256.0
+      5: 254.0
+      6: 250.0
+      7: 270.0
+      8: 282.5
+      9: 360.1
+      10: 340.775
+      11: 265.1
+      12: 334.15
+      13: 266.025
+      14: 341.7
+      15: 343.025
+      16: 330.975
+      17: 327.45
+      18: 310.25
+      19: 322.075
+      20: 377.475
     vhf_presets:
-      1:
-        callsign: null
-        freq_mhz: 124.0
-        role: null
-      2:
-        callsign: null
-        freq_mhz: 135.0
-        role: null
-      3:
-        callsign: null
-        freq_mhz: 136.0
-        role: null
-      4:
-        callsign: null
-        freq_mhz: 127.0
-        role: null
-      5:
-        callsign: null
-        freq_mhz: 133.3
-        role: null
-      6:
-        callsign: null
-        freq_mhz: 120.075
-        role: null
-      7:
-        callsign: null
-        freq_mhz: 141.0
-        role: null
-      8:
-        callsign: null
-        freq_mhz: 128.0
-        role: null
-      9:
-        callsign: null
-        freq_mhz: 126.0
-        role: null
-      10:
-        callsign: null
-        freq_mhz: 133.0
-        role: null
-      11:
-        callsign: null
-        freq_mhz: 130.0
-        role: null
-      12:
-        callsign: null
-        freq_mhz: 139.0
-        role: null
-      13:
-        callsign: null
-        freq_mhz: 140.0
-        role: null
-      14:
-        callsign: null
-        freq_mhz: 131.0
-        role: null
-      15:
-        callsign: null
-        freq_mhz: 134.0
-        role: null
-      16:
-        callsign: null
-        freq_mhz: 132.0
-        role: null
-      17:
-        callsign: null
-        freq_mhz: 138.0
-        role: null
-      18:
-        callsign: null
-        freq_mhz: 122.0
-        role: null
-      19:
-        callsign: null
-        freq_mhz: 124.0
-        role: null
-      20:
-        callsign: null
-        freq_mhz: 137.0
-        role: null
+      1: 124.0
+      2: 135.0
+      3: 136.0
+      4: 127.0
+      5: 133.3
+      6: 120.075
+      7: 141.0
+      8: 128.0
+      9: 126.0
+      10: 133.0
+      11: 130.0
+      12: 139.0
+      13: 140.0
+      14: 131.0
+      15: 134.0
+      16: 132.0
+      17: 138.0
+      18: 122.0
+      19: 124.0
+      20: 137.0
   - group: HAT-1
     callsign: HAT-1
     dtc_cartridge: Broomstick_F18
     uhf_presets:
-      1:
-        callsign: null
-        freq_mhz: 305.0
-        role: null
-      2:
-        callsign: null
-        freq_mhz: 264.0
-        role: null
-      3:
-        callsign: null
-        freq_mhz: 265.0
-        role: null
-      4:
-        callsign: null
-        freq_mhz: 256.0
-        role: null
-      5:
-        callsign: null
-        freq_mhz: 254.0
-        role: null
-      6:
-        callsign: null
-        freq_mhz: 250.0
-        role: null
-      7:
-        callsign: null
-        freq_mhz: 270.0
-        role: null
-      8:
-        callsign: null
-        freq_mhz: 282.5
-        role: null
-      9:
-        callsign: null
-        freq_mhz: 360.1
-        role: null
-      10:
-        callsign: null
-        freq_mhz: 340.775
-        role: null
-      11:
-        callsign: null
-        freq_mhz: 265.1
-        role: null
-      12:
-        callsign: null
-        freq_mhz: 334.15
-        role: null
-      13:
-        callsign: null
-        freq_mhz: 266.025
-        role: null
-      14:
-        callsign: null
-        freq_mhz: 341.7
-        role: null
-      15:
-        callsign: null
-        freq_mhz: 343.025
-        role: null
-      16:
-        callsign: null
-        freq_mhz: 330.975
-        role: null
-      17:
-        callsign: null
-        freq_mhz: 327.45
-        role: null
-      18:
-        callsign: null
-        freq_mhz: 310.25
-        role: null
-      19:
-        callsign: null
-        freq_mhz: 322.075
-        role: null
-      20:
-        callsign: null
-        freq_mhz: 377.475
-        role: null
+      1: 305.0
+      2: 264.0
+      3: 265.0
+      4: 256.0
+      5: 254.0
+      6: 250.0
+      7: 270.0
+      8: 282.5
+      9: 360.1
+      10: 340.775
+      11: 265.1
+      12: 334.15
+      13: 266.025
+      14: 341.7
+      15: 343.025
+      16: 330.975
+      17: 327.45
+      18: 310.25
+      19: 322.075
+      20: 377.475
     vhf_presets:
-      5:
-        callsign: null
-        freq_mhz: 133.3
-        role: null
-      6:
-        callsign: null
-        freq_mhz: 120.075
-        role: null
+      5: 133.3
+      6: 120.075
+  - group: BOLO1
+    callsign: BOLO1
+    dtc_cartridge: null
+    uhf_presets:
+      1: 305.0
+      2: 264.0
+      3: 265.0
+      4: 256.0
+      5: 254.0
+      6: 250.0
+      7: 270.0
+      8: 282.5
+      9: 360.1
+      10: 344.775
+      11: 265.1
+      12: 334.15
+      13: 266.025
+      14: 341.7
+      15: 343.025
+      16: 330.975
+      17: 327.45
+      18: 310.25
+      19: 322.075
+      20: 377.475
+    vhf_presets:
+      1: 133.0
+      3: 122.1
+      4: 123.3
+      5: 133.3
+      6: 120.075
+      7: 130.0
+      9: 139.0
+      10: 140.0
+      11: 134.0
+      12: 132.0
+      13: 131.0
+      14: 129.0
+      15: 138.0
+      16: 121.0
+      17: 126.0
+      18: 125.0
+      19: 128.0
+      20: 122.0
 weather:
   issued: '2014-09-29'
   valid_from: 0000Z

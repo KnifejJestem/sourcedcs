@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from .lua import lua_bool, lua_get_block, lua_iter_array, lua_num, lua_str, lua_xy
+from .lua import lua_bool, lua_get_block, lua_iter_array, lua_num, lua_num_map, lua_str, lua_xy
 from .models import Carrier, Flight, FlightUnit, Waypoint
 from .parse import _group_outer_name, _strip_dcs_suffix
 from .projection import dcs_to_latlon, dms
@@ -195,6 +195,7 @@ def parse_flights_and_carriers(
 
             flight_units: list[FlightUnit] = []
             aircraft_type = ""
+            first_unit_radio: dict[int, dict[int, float]] | None = None
 
             for _ui, ub in lua_iter_array(ub_blk):
                 utype   = lua_str(ub, 'type') or '?'
@@ -223,10 +224,26 @@ def parse_flights_and_carriers(
                             if n:
                                 unit_dtc = n
                                 break
+                # Extract Radio channel presets for non-DTC units (first unit only)
+                unit_radio: dict[int, dict[int, float]] | None = None
+                if not unit_dtc and first_unit_radio is None:
+                    radio_blk = lua_get_block(ub, 'Radio')
+                    if radio_blk:
+                        unit_radio = {}
+                        for radio_idx, rb in lua_iter_array(radio_blk):
+                            ch_blk = lua_get_block(rb, 'channels')
+                            if ch_blk:
+                                ch_map = lua_num_map(ch_blk)
+                                if ch_map:
+                                    unit_radio[radio_idx] = ch_map
+                        if not unit_radio:
+                            unit_radio = None
+                    first_unit_radio = unit_radio  # capture once (may be None)
                 flight_units.append(FlightUnit(
                     type=utype, callsign=cs, onboard_num=onboard,
                     skill=skill, loadout=condense_loadout(weapons_raw),
                     dtc_cartridge=unit_dtc,
+                    radio_channels=unit_radio,
                 ))
 
             if not flight_units:

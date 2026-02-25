@@ -76,6 +76,16 @@ function renderCOMMS(cm) {
   div.appendChild(grid);
 }
 
+/**
+ * Look up frequency metadata (callsign, role) from registry.frequencies.
+ * registry.frequencies is a list of {freq_mhz, callsign, role} objects.
+ */
+function _freqMeta(freq_mhz) {
+  const freqs = STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.frequencies;
+  if (!Array.isArray(freqs)) return null;
+  return freqs.find(function (f) { return f.freq_mhz === freq_mhz; }) || null;
+}
+
 function radioBlock(container, title, presets) {
   if (!presets) presets = {};
 
@@ -84,12 +94,32 @@ function radioBlock(container, title, presets) {
 
   const { table: tbl, tbody } = docTable(['CH', 'CALLSIGN', 'MHz', 'ROLE']);
 
-  // Presets can be keyed by integer or string — normalise and sort numerically.
+  // Presets can be:
+  //  - new format: {ch: freq_mhz}  (number value → look up metadata in registry.frequencies)
+  //  - old format: {ch: {callsign, freq_mhz, role}}  (inline object — backward compat)
   // Auto-fill spare rows for channels 1–20 not defined in YAML.
   const TOTAL_CHANNELS = 20;
   for (let ch = 1; ch <= TOTAL_CHANNELS; ch++) {
     const key = Object.keys(presets).find(k => parseInt(k) === ch);
-    const p   = key ? presets[key] : { callsign: 'SPARE', freq_mhz: null, role: null };
+    let p;
+    if (key !== undefined) {
+      const val = presets[key];
+      if (val !== null && typeof val === 'object') {
+        // Old format: inline {callsign, freq_mhz, role}
+        p = val;
+      } else {
+        // New format: just freq_mhz value (number or string) → resolve from registry
+        const freq = parseFloat(val);
+        const meta = isNaN(freq) ? null : _freqMeta(freq);
+        p = {
+          callsign: meta ? meta.callsign : null,
+          freq_mhz: isNaN(freq) ? null : freq,
+          role:     meta ? meta.role : null,
+        };
+      }
+    } else {
+      p = { callsign: 'SPARE', freq_mhz: null, role: null };
+    }
     const tr      = tbody.insertRow();
     const isEmpty = !p.freq_mhz;
     if (isEmpty) tr.className = 'freq-empty';

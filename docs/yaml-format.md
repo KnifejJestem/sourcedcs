@@ -62,8 +62,9 @@ header:
 The `registry` block defines entities once so they can be referenced by key
 throughout the rest of the file.  It contains: `callsigns`,
 `airfields`, `carriers`, `tankers`, `targets` (with nested aim points),
-`reference_points` (bullseye, marshal points, named positions), and
-`control_agencies` (AWACS, CRC).
+`reference_points` (bullseye, marshal points, named positions),
+`control_agencies` (AWACS, CRC), and `frequencies` (net/callsign metadata
+for each frequency used in the COMMS channel assignments).
 
 ### `callsigns:` (map)
 
@@ -268,6 +269,41 @@ registry:
 | `platform` | string | Platform / aircraft type (optional — mainly for AWACS) |
 | `primary_freq_mhz` | string | Primary frequency in MHz |
 | `secondary_freq_mhz` | string | Secondary frequency in MHz (optional) |
+
+### `frequencies:` (list)
+
+A deduplicated list of every frequency used in the COMMS channel assignments.
+Each entry holds the canonical frequency value plus optional net/callsign
+metadata.  Because a frequency can only belong to one net and one purpose,
+the metadata is defined once here rather than repeated inside every flight's
+channel preset table.
+
+The `miz-to-yaml` tool automatically populates this list from DTC files and
+non-DTC Radio channel presets.  `callsign` and `role` are `null` by default;
+fill them in manually (or via the Registry editor) to annotate each net.
+
+```yaml
+registry:
+  frequencies:
+  - freq_mhz: 243.0
+    callsign: GUARD
+    role: Emergency
+  - freq_mhz: 260.0
+    callsign: PACKAGE
+    role: Package primary
+  - freq_mhz: 360.1
+    callsign: INTRAFLIGHT
+    role: Intraflight
+  - freq_mhz: 133.3
+    callsign: null
+    role: null
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `freq_mhz` | number | Frequency in MHz — the unique identifier for this entry |
+| `callsign` | string or null | Net / station callsign |
+| `role` | string or null | Free-text role description |
 
 ---
 
@@ -762,8 +798,10 @@ The COMMS section no longer needs its own `operation`, `ato_day`, or
 `classification` fields — these are propagated from `header`.
 
 Comms are **per-flight**: each flight in the package has its own preset table
-derived from its assigned DTC (Data Transfer Cartridge).  This reflects the
-real-world configuration where different aircraft types carry different cartridges.
+derived from its assigned DTC (Data Transfer Cartridge) or from the Radio
+channel presets set in the DCS mission editor (for aircraft without a DTC).
+This reflects the real-world configuration where different aircraft types
+carry different cartridges.
 
 ### Top-level fields
 
@@ -771,68 +809,82 @@ real-world configuration where different aircraft types carry different cartridg
 |-------|------|-------------|
 | `wing_lead` | string | Wing lead callsign (display only) |
 
-### `flights:` (list) — per-flight preset tables
+### `flights:` (list) — per-flight channel assignment tables
 
-Each entry corresponds to one flight group and its assigned DTC cartridge.
+Each entry corresponds to one flight group.  Both DTC-equipped flights and
+non-DTC flights that have Radio channel presets are included.
+
+Channel assignments (`uhf_presets` / `vhf_presets`) map channel number to
+the frequency in MHz.  The net callsign and role for that frequency are
+looked up from `registry.frequencies` at render time.
 
 ```yaml
 comms:
   wing_lead: FALCON5
   flights:
     - group: SHADOW-1
-      callsign: Viper11
-      dtc_cartridge: Broomstick_F16
+      callsign: SHADOW-1
+      dtc_cartridge: Broomstick_F16   # DTC-equipped flight
       uhf_presets:
-        1:  { callsign: GUARD,       freq_mhz: 243.0,   role: Emergency }
-        2:  { callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary }
-        9:  { callsign: INTRAFLIGHT, freq_mhz: 360.1,   role: Intraflight }
+        1: 243.0    # freq_mhz — metadata resolved from registry.frequencies
+        2: 260.0
+        9: 360.1
       vhf_presets:
-        1:  { callsign: GUARD,       freq_mhz: 121.5,   role: Emergency }
-        6:  { callsign: FALCON5,     freq_mhz: 133.3,   role: Package lead }
-    - group: HAT1
-      callsign: Enfield11
-      dtc_cartridge: Broomstick_F18
+        1: 121.5
+        6: 133.3
+    - group: BOLO1
+      callsign: BOLO1
+      dtc_cartridge: null             # non-DTC flight — Radio presets from mission
       uhf_presets:
-        1:  { callsign: null, freq_mhz: 305.0, role: null }
+        1: 305.0
+        2: 264.0
+        9: 360.1
       vhf_presets:
-        5:  { callsign: null, freq_mhz: 133.3, role: null }
+        1: 133.0
+        5: 133.3
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `group` | string | Flight group name (from ATO) |
 | `callsign` | string | Flight lead callsign |
-| `dtc_cartridge` | string | Name of the DTC file providing these presets |
-| `uhf_presets` | map | Channel number → preset data (see below) |
-| `vhf_presets` | map | Channel number → preset data (see below) |
+| `dtc_cartridge` | string or null | Name of the DTC file providing these presets; `null` for non-DTC flights |
+| `uhf_presets` | map | Channel number → freq_mhz (see below) |
+| `vhf_presets` | map | Channel number → freq_mhz (see below) |
 
-### Preset channel format
+### Channel assignment format
 
-Both `uhf_presets` and `vhf_presets` use a mapping from channel number to preset
-data.  Only list channels that have assigned frequencies — the viewer
-automatically fills channels 1–20 with SPARE entries for unassigned channels.
+Both `uhf_presets` and `vhf_presets` use a mapping from channel number
+(integer) to the frequency value in MHz (number).  Only list channels with
+assigned frequencies — the viewer automatically fills channels 1–20 with
+SPARE entries for unassigned channels.
 
-Channel keys are integers.  Channels are sorted numerically.
+The net callsign and role for each frequency are resolved from
+`registry.frequencies` by matching `freq_mhz`.  To annotate a frequency,
+edit the `registry.frequencies` entry with the matching `freq_mhz` value.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `callsign` | string or null | Net / station callsign |
-| `freq_mhz` | number or null | Frequency in MHz.  `null` marks an empty / SPARE slot |
-| `role` | string or null | Free-text role description |
+```yaml
+uhf_presets:
+  1: 243.0    # freq_mhz — look up callsign/role in registry.frequencies
+  2: 260.0
+  9: 360.1
+```
 
 ### Legacy flat format (backward compatible)
 
 If no `flights` list is present, the viewer falls back to a single shared
-preset table using the top-level `uhf_presets` / `vhf_presets` keys:
+preset table using the top-level `uhf_presets` / `vhf_presets` keys.
+Inline preset objects `{ callsign, freq_mhz, role }` are also still
+supported for backward compatibility.
 
 ```yaml
 comms:
   wing_lead: FALCON5
   uhf_presets:
-    1:  { callsign: GUARD,       freq_mhz: 243.000, role: Emergency }
-    2:  { callsign: PACKAGE,     freq_mhz: 260.000, role: Package primary }
+    1: 243.0
+    2: 260.0
   vhf_presets:
-    1:  { callsign: GUARD,       freq_mhz: 121.5,   role: Emergency }
+    1: 121.5
 ```
 
 ---
