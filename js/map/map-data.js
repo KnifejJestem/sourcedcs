@@ -221,7 +221,7 @@ function collectData(ato, aco) {
       const label   = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i + 1}`;
       const apId    = typeof sp === 'object' ? sp.aim_point_id : null;
       const altFt   = (typeof sp === 'object' && sp.altitude_ft != null) ? sp.altitude_ft : null;
-      const p       = nameRef ? resolve(nameRef) : parseCoord(raw);
+      const p       = (nameRef ? resolve(nameRef) : null) || parseCoord(raw);
       if (p) {
         // Aim-point steer points use a thicker target-approach line on the route
         route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
@@ -236,6 +236,7 @@ function collectData(ato, aco) {
             label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
             sub: label, color, msnType: m.mission_type, mission: m,
             altitude_ft: altFt,
+            ...(apId ? { fromSteerPoint: true } : {}),
           });
         } else {
           points.push({

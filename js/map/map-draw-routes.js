@@ -72,7 +72,12 @@ function drawRoutes(ctx, routes, points, showPopup) {
           mg.setAttribute('data-role', 'target-node');
           mg.appendChild(makeSvgEl('polygon', { points: TARGET_DIAMOND, fill: p.color + 'cc', stroke: p.color, 'stroke-width': ROUTE_STROKE_W }));
           mg.appendChild(makeSvgEl('circle',  { r: TARGET_DOT_R, fill: '#fff', opacity: 0.9 }));
-          mapLabel(mg, p.sub, p.label, p.color, TARGET_LABEL_OFFSET);
+          // fromSteerPoint: this diamond comes from a steer_point with aim_point_id —
+          // the threat/SAM marker at the same location already carries a label, so we
+          // skip the duplicate label here to keep the map readable.
+          if (!p.fromSteerPoint) {
+            mapLabel(mg, p.sub, p.label, p.color, TARGET_LABEL_OFFSET);
+          }
         }
 
         mg.style.cursor = 'pointer';
