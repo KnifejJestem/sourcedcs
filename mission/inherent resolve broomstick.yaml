@@ -17,6 +17,9 @@ registry:
     HAT-1:
       type: FA18C
       role: CAP flight lead
+    BOLO1:
+      type: F15ESE
+      role: STRIKE flight lead
   airfields:
     LTAG:
       name: Incirlik AB
@@ -751,11 +754,13 @@ ato:
     - coords: N36°52'46" E38°00'53"
       name: EGRESS
       altitude_ft: 25000
+      shared: true
     - coords: N37°09'58" E35°41'54"
       altitude_ft: 5000
     - coords: N37°00'37" E35°26'22"
       name: RECOVERY LTAG
       altitude_ft: 230
+      shared: true
     dtc_cartridge: Broomstick_F16
   - mission_number: MSN4390
     callsign: TEXACO
@@ -856,6 +861,46 @@ ato:
     - coords: N34°52'11" E35°52'21"
       altitude_ft: 25000
     dtc_cartridge: Broomstick_F18
+  - mission_number: MSN3892
+    callsign: BOLO1
+    mission_type: STRIKE
+    unit: null
+    home_base_icao: LTAG
+    deploy_location_icao: LTAG
+    aar_location_icao: LTAG
+    takeoff_time: null
+    recovery_time: null
+    aircraft:
+      count: 1
+      type: F15ESE
+      loadout: 400+
+    targets: null
+    control:
+      agency_id: null
+    refuel: null
+    steer_points:
+    - coords: N36°51'50" E35°11'59"
+      altitude_ft: 10000
+    - coords: N37°22'35" E37°45'05"
+      altitude_ft: 25000
+      shared: true
+    - coords: N35°45'15" E38°34'55"
+      name: RWY ATCK
+      altitude_ft: 1099
+    - coords: N35°45'19" E38°33'04"
+      name: RWY ATCK
+      altitude_ft: 1099
+    - coords: N36°52'46" E38°00'53"
+      name: EGRESS
+      altitude_ft: 25000
+      shared: true
+    - coords: N37°09'58" E35°41'54"
+      altitude_ft: 5000
+    - coords: N37°00'37" E35°26'23"
+      name: RECOVERY LTAG
+      altitude_ft: 230
+      shared: true
+    dtc_cartridge: null
 aco:
   id: ACO-2014-09
   timezone: UTC
@@ -1309,12 +1354,14 @@ weather:
     notes: No significant weather impact.
   - mission_ref: MSN3891
     notes: No significant weather impact.
+  - mission_ref: MSN3892
+    notes: No significant weather impact.
 _meta:
   source: inherent resolve broomstick
   theatre: Syria
   targets: 22
   acm_zones: 5
-  missions: 2
+  missions: 3
   tankers: 2
   awacs: 1
   airfields: 1
