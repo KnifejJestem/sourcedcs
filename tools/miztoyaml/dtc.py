@@ -67,21 +67,22 @@ def load_dtc_files(z: zipfile.ZipFile) -> dict[str, dict]:
 
 def build_comms_from_dtc(dtc_channels: dict[str, dict[int, float]]) -> tuple[dict | None, dict | None]:
     """
-    Classify DTC COMM channels into UHF (≥225 MHz) and VHF (<225 MHz) preset dicts.
-    Returns (uhf_presets, vhf_presets) where each is {channel_num: {freq_mhz: X}} or None.
+    Classify DTC COMM channels into UHF (≥225 MHz) and VHF (<225 MHz) channel dicts.
+    Returns (uhf_channels, vhf_channels) where each is {channel_num: freq_mhz} or None.
     Channels from COMM1 take priority; COMM2 fills in any gaps.
+    Frequency metadata (callsign, role) lives in registry.frequencies.
     """
-    uhf: dict[int, dict] = {}
-    vhf: dict[int, dict] = {}
+    uhf: dict[int, float] = {}
+    vhf: dict[int, float] = {}
     for radio in ('COMM1', 'COMM2'):
         presets = dtc_channels.get(radio, {})
         for ch_num, freq in presets.items():
             if freq >= 225.0:
                 if ch_num not in uhf:
-                    uhf[ch_num] = {'callsign': None, 'freq_mhz': freq, 'role': None}
+                    uhf[ch_num] = freq
             else:
                 if ch_num not in vhf:
-                    vhf[ch_num] = {'callsign': None, 'freq_mhz': freq, 'role': None}
+                    vhf[ch_num] = freq
     return (dict(sorted(uhf.items())) or None,
             dict(sorted(vhf.items())) or None)
 

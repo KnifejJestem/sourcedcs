@@ -93,25 +93,80 @@ def build_control_agencies(flights: list[Flight]) -> dict | None:
 def build_flight_comms(flights: list[Flight], dtcs: dict[str, dict]) -> list[dict] | None:
     """
     Build per-flight comms list.  Each entry has the flight group name,
-    callsign (= group name), DTC cartridge name, and UHF/VHF preset dicts.
-    Flights without a DTC (no DTC assigned or cartridge not found) are skipped.
+    callsign (= group name), DTC cartridge name, and UHF/VHF channel dicts.
+
+    Channel dicts map channel number → freq_mhz (float).  Frequency metadata
+    (callsign, role) lives in registry.frequencies and is resolved by the renderer.
+
+    DTC flights use DTC data.  Non-DTC flights with Radio channel presets use
+    Radio[1] (UHF) and Radio[2] (VHF) from the first unit (channels 1–20 only).
     """
     entries = []
     for f in flights:
-        if not f.dtc_cartridge:
-            continue
-        if f.dtc_cartridge not in dtcs:
-            print(f"[!] Flight '{f.name}': DTC '{f.dtc_cartridge}' not found in archive — skipping comms")
-            continue
-        uhf, vhf = build_comms_from_dtc(dtcs[f.dtc_cartridge])
-        entries.append({
-            "group":         f.name,
-            "callsign":      f.name,
-            "dtc_cartridge": f.dtc_cartridge,
-            "uhf_presets":   uhf,
-            "vhf_presets":   vhf,
-        })
+        if f.dtc_cartridge:
+            if f.dtc_cartridge not in dtcs:
+                print(f"[!] Flight '{f.name}': DTC '{f.dtc_cartridge}' not found in archive — skipping comms")
+                continue
+            uhf, vhf = build_comms_from_dtc(dtcs[f.dtc_cartridge])
+            entries.append({
+                "group":         f.name,
+                "callsign":      f.name,
+                "dtc_cartridge": f.dtc_cartridge,
+                "uhf_presets":   uhf,
+                "vhf_presets":   vhf,
+            })
+        else:
+            # Non-DTC flight: use Radio channel presets from the first unit
+            first_unit = f.units[0] if f.units else None
+            if not first_unit or not first_unit.radio_channels:
+                continue
+            radio = first_unit.radio_channels
+            # Radio[1] = UHF (≥225 MHz), Radio[2] = VHF (<225 MHz)
+            # Only channels 1–20 are included.
+            uhf: dict[int, float] = {}
+            vhf: dict[int, float] = {}
+            for radio_idx in sorted(radio.keys()):
+                ch_map = radio[radio_idx]
+                for ch_num in sorted(ch_map.keys()):
+                    if ch_num < 1 or ch_num > 20:
+                        continue
+                    freq = ch_map[ch_num]
+                    if freq >= 225.0:
+                        if ch_num not in uhf:
+                            uhf[ch_num] = freq
+                    else:
+                        if ch_num not in vhf:
+                            vhf[ch_num] = freq
+            if not uhf and not vhf:
+                continue
+            entries.append({
+                "group":         f.name,
+                "callsign":      f.name,
+                "dtc_cartridge": None,
+                "uhf_presets":   dict(sorted(uhf.items())) or None,
+                "vhf_presets":   dict(sorted(vhf.items())) or None,
+            })
     return entries or None
+
+
+def build_frequencies_registry(flight_comms: list[dict]) -> list[dict] | None:
+    """
+    Collect all unique frequencies referenced in the flight comms channel assignments
+    and return a deduplicated list of frequency stubs for registry.frequencies.
+    Each entry has freq_mhz (the canonical value), callsign (null), and role (null).
+    Users annotate callsign/role manually in the YAML or via the editor.
+    """
+    seen: set[float] = set()
+    result: list[dict] = []
+    for entry in flight_comms:
+        for band in ('uhf_presets', 'vhf_presets'):
+            presets = entry.get(band) or {}
+            for freq in presets.values():
+                if isinstance(freq, (int, float)) and freq not in seen:
+                    seen.add(freq)
+                    result.append({'freq_mhz': float(freq), 'callsign': None, 'role': None})
+    result.sort(key=lambda x: x['freq_mhz'])
+    return result or None
 
 
 def build_doc(*, mission_name, mission_date, theatre,
@@ -158,6 +213,7 @@ def build_doc(*, mission_name, mission_date, theatre,
     ato_airfields = [{"icao": icao, "role": "deploy"} for icao in airfields] or None
 
     flight_comms = build_flight_comms(flights, dtcs or {})
+    frequencies = build_frequencies_registry(flight_comms or [])
 
     control_agencies = build_control_agencies(flights)
     # If there is exactly one AWACS, set it as the default global_control agency
@@ -180,6 +236,7 @@ def build_doc(*, mission_name, mission_date, theatre,
             "targets":          targets   or None,
             "reference_points": list(ref_pts.values()) or None,
             "control_agencies": control_agencies,
+            "frequencies":      frequencies,
         },
 
         "ato": {

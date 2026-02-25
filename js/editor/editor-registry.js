@@ -78,6 +78,16 @@ var REGISTRY_CATEGORIES = {
       { key: 'secondary_freq_mhz', label: 'Secondary Freq (MHz)', placeholder: '134.0' },
     ],
   },
+  frequencies: {
+    label: 'FREQUENCIES',
+    isList: true,
+    idField: 'freq_mhz',
+    fields: [
+      { key: 'freq_mhz',  label: 'Freq (MHz)', type: 'number', placeholder: '305.0' },
+      { key: 'callsign',  label: 'Callsign',   placeholder: 'e.g. GUARD' },
+      { key: 'role',      label: 'Role',       placeholder: 'e.g. Emergency' },
+    ],
+  },
 };
 
 // ── Open the registry list dialog ────────────────────────────
@@ -90,8 +100,9 @@ function openRegistryEditor() {
       var raw   = reg[catKey];
 
       if (cat.isList) {
-        var items = Array.isArray(raw) ? raw : [];
-        var ids   = items.map(function (i) { return i.name; });
+        var items  = Array.isArray(raw) ? raw : [];
+        var idField = cat.idField || 'name';
+        var ids    = items.map(function (i) { return String(i[idField]); });
         editorListBlock(body, cat.label, ids, function (container, id) {
           editorItemRow(container, id,
             function () { editRegistryItem(catKey, id); },
@@ -120,11 +131,12 @@ function openRegistryEditor() {
 function editRegistryItem(catKey, id) {
   var cat = REGISTRY_CATEGORIES[catKey];
   var reg = editorEnsureRegistry();
+  var idField = cat.idField || 'name';
 
   var item;
   if (cat.isList) {
     if (!Array.isArray(reg[catKey])) reg[catKey] = [];
-    item = reg[catKey].find(function (i) { return i.name === id; }) || {};
+    item = reg[catKey].find(function (i) { return String(i[idField]) === String(id); }) || {};
   } else {
     if (!reg[catKey]) reg[catKey] = {};
     item = reg[catKey][id] || {};
@@ -143,12 +155,13 @@ function editRegistryItem(catKey, id) {
     }
 
     cat.fields.forEach(function (f) {
-      fields[f.key] = editorField(body, f.label, item[f.key] || '', {
+      var isIdField = cat.isList && f.key === idField;
+      fields[f.key] = editorField(body, f.label, item[f.key] != null ? item[f.key] : '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
         coordPick:   f.coordPick || false,
-        disabled:    cat.isList && f.key === 'name' ? true : false,
-        hint:        cat.isList && f.key === 'name' ? 'Name cannot be changed here' : undefined,
+        disabled:    isIdField,
+        hint:        isIdField ? (f.label + ' cannot be changed here') : undefined,
       });
     });
 
@@ -208,10 +221,11 @@ function deleteRegistryItem(catKey, id) {
 
   var reg = editorEnsureRegistry();
   var cat = REGISTRY_CATEGORIES[catKey];
+  var idField = cat.idField || 'name';
 
   if (cat.isList) {
     if (Array.isArray(reg[catKey])) {
-      reg[catKey] = reg[catKey].filter(function (i) { return i.name !== id; });
+      reg[catKey] = reg[catKey].filter(function (i) { return String(i[idField]) !== String(id); });
     }
   } else {
     if (reg[catKey]) delete reg[catKey][id];
@@ -274,13 +288,19 @@ function _saveRegistryItem(catKey) {
   var fields = body._editorFields;
   var reg    = editorEnsureRegistry();
   var cat    = REGISTRY_CATEGORIES[catKey];
+  var idField = cat.idField || 'name';
 
   // Build item from form fields
   var item = body._editItem ? Object.assign({}, body._editItem) : {};
+  var preserveNull = catKey === 'frequencies';  // keep explicit nulls for freq metadata
   Object.keys(fields).forEach(function (k) {
     var val = fields[k].value;
     if (val === '' || val == null) {
-      delete item[k];
+      if (preserveNull) {
+        item[k] = null;
+      } else {
+        delete item[k];
+      }
     } else if (fields[k].type === 'number') {
       item[k] = parseFloat(val);
     } else {
@@ -296,14 +316,14 @@ function _saveRegistryItem(catKey) {
   if (cat.isList) {
     if (!Array.isArray(reg[catKey])) reg[catKey] = [];
     if (body._isNew) {
-      var name = (item.name || '').trim();
-      if (!name) { showToast('NAME IS REQUIRED', 'error'); return; }
-      if (reg[catKey].some(function (i) { return i.name === name; })) {
-        showToast('NAME ALREADY EXISTS', 'error'); return;
+      var idVal = item[idField];
+      if (idVal == null || idVal === '') { showToast((idField.toUpperCase()) + ' IS REQUIRED', 'error'); return; }
+      if (reg[catKey].some(function (i) { return String(i[idField]) === String(idVal); })) {
+        showToast((idField.toUpperCase()) + ' ALREADY EXISTS', 'error'); return;
       }
       reg[catKey].push(item);
     } else {
-      var idx = reg[catKey].findIndex(function (i) { return i.name === body._editId; });
+      var idx = reg[catKey].findIndex(function (i) { return String(i[idField]) === String(body._editId); });
       if (idx >= 0) reg[catKey][idx] = item;
       else reg[catKey].push(item);
     }

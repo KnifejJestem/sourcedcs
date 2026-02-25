@@ -60,6 +60,17 @@ def lua_bool(text: str, key: str) -> bool:
     return m.group(1) == 'true' if m else False
 
 
+def lua_num_map(text: str) -> dict[int, float]:
+    """Return {index: number} for all top-level [N] = number entries (non-block values)."""
+    result: dict[int, float] = {}
+    for m in re.finditer(r'\[(\d+)\]\s*=\s*([0-9eE.+\-]+)\s*,', text):
+        try:
+            result[int(m.group(1))] = float(m.group(2))
+        except ValueError:
+            pass
+    return result
+
+
 def lua_xy(text: str) -> tuple[float, float] | None:
     x, y = lua_num(text, 'x'), lua_num(text, 'y')
     return (x, y) if (x is not None and y is not None) else None

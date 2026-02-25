@@ -518,6 +518,9 @@ function _editCommsFlight(flights, index) {
     editorField(body, 'Callsign',      flt.callsign,      READONLY);
     editorField(body, 'DTC Cartridge', flt.dtc_cartridge, READONLY);
 
+    var hint = el('div', 'ef-hint', 'Channel assignments — enter freq (MHz). Callsign & role are set in Registry → Frequencies.');
+    body.appendChild(hint);
+
     editorSectionTitle(body, 'UHF PRESETS');
     body._fltUhfFields = _buildPresetFields(body, flt.uhf_presets || {});
     editorSectionTitle(body, 'VHF PRESETS');
@@ -536,43 +539,43 @@ function _editCommsFlight(flights, index) {
 }
 
 function _buildPresetFields(parent, presets) {
+  // Normalize presets: both old format {ch: {callsign, freq_mhz, role}} and
+  // new format {ch: freq_mhz} are supported.
   var fields = [];
   for (var ch = 1; ch <= 20; ch++) {
-    var p = presets[ch] || {};
+    var val = presets[ch];
+    var freqVal = '';
+    if (val !== undefined && val !== null) {
+      if (typeof val === 'object' && val.freq_mhz != null) {
+        freqVal = String(val.freq_mhz);  // old format
+      } else {
+        freqVal = String(val);            // new format (just freq_mhz)
+      }
+    }
+
     var row = el('div', 'ef-preset-row');
     row.appendChild(el('span', 'ef-preset-ch', 'CH ' + String(ch).padStart(2, '0')));
 
-    var fCs = el('input', 'ef-input ef-input-sm');
-    fCs.placeholder = 'Callsign';
-    fCs.value = p.callsign || '';
-
     var fFreq = el('input', 'ef-input ef-input-sm');
     fFreq.placeholder = 'MHz';
-    fFreq.value = p.freq_mhz != null ? String(p.freq_mhz) : '';
+    fFreq.value = freqVal;
 
-    var fRole = el('input', 'ef-input ef-input-sm');
-    fRole.placeholder = 'Role';
-    fRole.value = p.role || '';
-
-    row.appendChild(fCs);
     row.appendChild(fFreq);
-    row.appendChild(fRole);
     parent.appendChild(row);
 
-    fields.push({ ch: ch, cs: fCs, freq: fFreq, role: fRole });
+    fields.push({ ch: ch, freq: fFreq });
   }
   return fields;
 }
 
 function _collectPresets(fields) {
+  // Save in new format: channel → freq_mhz (number).
+  // Callsign and role are stored in registry.frequencies.
   var presets = {};
   fields.forEach(function (f) {
-    if (f.cs.value || f.freq.value) {
-      var p = {};
-      if (f.cs.value)   p.callsign = f.cs.value;
-      if (f.freq.value) p.freq_mhz = parseFloat(f.freq.value) || f.freq.value;
-      if (f.role.value) p.role = f.role.value;
-      presets[f.ch] = p;
+    if (f.freq.value) {
+      var freq = parseFloat(f.freq.value);
+      if (!isNaN(freq)) presets[f.ch] = freq;
     }
   });
   return presets;

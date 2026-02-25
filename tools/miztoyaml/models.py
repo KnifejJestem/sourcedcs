@@ -34,6 +34,7 @@ class FlightUnit:
     skill: str          # Client / Excellent / High / etc.
     loadout: list[str]  # condensed weapon list
     dtc_cartridge: str | None = None  # DTC cartridge name e.g. "Broomstick_F16"
+    radio_channels: dict[int, dict[int, float]] | None = None  # {radio_idx: {ch_num: freq_mhz}} for non-DTC units
 
 
 @dataclass
