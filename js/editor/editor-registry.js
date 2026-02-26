@@ -70,7 +70,7 @@ var REGISTRY_CATEGORIES = {
     isList: true,
     fields: [
       { key: 'name',     label: 'Name',     placeholder: 'e.g. COYOTE' },
-      { key: 'type',     label: 'Type',     placeholder: 'bullseye / marshal' },
+      { key: 'type',     label: 'Type',     type: 'select', options: [{ value: '', label: '— select type —' }, 'bullseye', 'marshal'] },
       { key: 'coords',   label: 'Coordinates', placeholder: "N26°51'19\" E056°21'37\"", coordPick: true },
       { key: 'altitude', label: 'Altitude', placeholder: 'FL250' },
     ],
@@ -173,6 +173,7 @@ function editRegistryItem(catKey, id) {
       fields[f.key] = editorField(body, f.label, item[f.key] != null ? item[f.key] : '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
+        options:     f.options,
         coordPick:   f.coordPick || false,
         disabled:    isIdField,
         hint:        isIdField ? (f.label + ' cannot be changed here') : undefined,
@@ -217,6 +218,7 @@ function addRegistryItem(catKey) {
       fields[f.key] = editorField(body, f.label, '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
+        options:     f.options,
         coordPick:   f.coordPick || false,
       });
     });

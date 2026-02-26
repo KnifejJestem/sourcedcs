@@ -2,6 +2,10 @@
    ATO VIEW
 ═══════════════════════════════════════════════════════════ */
 
+/* #view-ato needs a positioning context so .detail-panel can
+   be positioned absolutely over the tankers-row */
+#view-ato { position: relative; }
+
 /* Intel strip */
 .intel-row {
   flex-shrink: 0;
@@ -293,7 +297,6 @@
 }
 .tl-swatch-tos {
   background: var(--text-3);
-  opacity: .5;
 }
 .tl-swatch-aar {
   background: repeating-linear-gradient(
@@ -349,7 +352,6 @@
 }
 .tl-bar:hover { filter: brightness(1.1); }
 .tl-bar.tos {
-  opacity: .5;
 }
 .tl-bar.tot {
   filter: brightness(1.15);
@@ -415,7 +417,11 @@
 /* Detail panel */
 .detail-panel {
   display: none;
-  flex-shrink: 0;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
   border-top: 2px solid var(--border-strong);
   background: var(--bg2);
   max-height: 40vh;
