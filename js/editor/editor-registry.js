@@ -45,6 +45,7 @@ var REGISTRY_CATEGORIES = {
       { key: 'altitude',           label: 'Altitude',           placeholder: 'e.g. FL240' },
       { key: 'tacan',              label: 'TACAN',              placeholder: 'e.g. 39X' },
       { key: 'tacan_role',         label: 'TACAN Role',         placeholder: 'e.g. REFUELING' },
+      { key: 'freq_mhz',           label: 'Freq (MHz)',         type: 'number', placeholder: '251.0' },
       { key: 'speed_kts',          label: 'Speed (kts)',        type: 'number', placeholder: '300' },
       { key: 'orbit_anchor_coords', label: 'Orbit Anchor',     placeholder: "N24°30'00\" E055°30'00\"", coordPick: true },
       { key: 'orbit_heading_deg',  label: 'Orbit Heading (°)', type: 'number', placeholder: '270' },

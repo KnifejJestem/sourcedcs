@@ -133,6 +133,11 @@
   flex-shrink: 0;
   height: auto;
 }
+.tanker-edit-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 1px 5px;
+}
 /* Show the tankers row in edit mode even when empty */
 :root.edit-mode #tankers-row {
   display: flex !important;

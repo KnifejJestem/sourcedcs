@@ -125,9 +125,11 @@ function renderTankers(tankers) {
   if (!row) return;
   row.innerHTML = '';
 
-  var list = Array.isArray(tankers) ? tankers : Object.values(tankers || {});
+  var entries = Array.isArray(tankers)
+    ? tankers.map(function (t) { return [t.id || t.callsign || '', t]; })
+    : Object.entries(tankers || {});
 
-  if (!list.length) {
+  if (!entries.length) {
     // Hide the strip but keep the add button accessible via edit mode
     row.style.display = 'none';
     // The "+ TANKER" button is injected below and shown by edit-mode CSS
@@ -138,10 +140,12 @@ function renderTankers(tankers) {
   }
   row.style.display = 'flex';
 
-  list.forEach(function (t) {
+  entries.forEach(function (entry) {
+    var regKey = entry[0];
+    var t = entry[1];
     var card = el('div', 'tanker-card');
 
-    // Header: callsign + TACAN badge
+    // Header: callsign + TACAN badge + edit button (edit mode only)
     var head = el('div', 'tanker-card-head');
     head.appendChild(el('span', 'tanker-callsign', t.callsign || '—'));
     if (t.tacan) {
@@ -149,9 +153,16 @@ function renderTankers(tankers) {
       if (t.tacan_role) { tacanBadge.title = t.tacan_role; }
       head.appendChild(tacanBadge);
     }
+    var editBtn = el('button', 'editor-btn tanker-edit-btn', '✎');
+    editBtn.title = 'Edit tanker';
+    editBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      editRegistryItem('tankers', regKey);
+    });
+    head.appendChild(editBtn);
     card.appendChild(head);
 
-    // Body: AR track, altitude, speed
+    // Body: AR track, altitude, speed, frequency
     var body = el('div', 'tanker-card-body');
 
     if (t.ar_track) {
@@ -163,14 +174,8 @@ function renderTankers(tankers) {
     if (t.speed_kts) {
       body.appendChild(_tankerRow('SPD', t.speed_kts + 'kt'));
     }
-
-    // Orbit info
-    if (t.orbit_anchor_coords) {
-      var anchorParsed = parseCoord(t.orbit_anchor_coords);
-      var anchorStr = anchorParsed
-        ? fmtCoord(anchorParsed.lat, anchorParsed.lon)
-        : t.orbit_anchor_coords;
-      body.appendChild(_tankerRow('ANCHOR', anchorStr));
+    if (t.freq_mhz != null) {
+      body.appendChild(_tankerRow('FREQ', parseFloat(t.freq_mhz).toFixed(1) + ' MHz'));
     }
     if (t.orbit_heading_deg != null) {
       var hdgStr = String(t.orbit_heading_deg).padStart(3, '0') + '°';

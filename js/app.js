@@ -446,6 +446,7 @@ function loadPackage_obj(data) {
           if (reg.altitude   != null) t.altitude   = reg.altitude;
           if (reg.altitude_ft!= null) t.altitude_ft= reg.altitude_ft;
           if (reg.speed_kts  != null) t.speed_kts  = reg.speed_kts;
+          if (reg.freq_mhz   != null) t.freq_mhz   = reg.freq_mhz;
         }
       });
     }
