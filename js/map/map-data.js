@@ -328,7 +328,7 @@ function collectData(ato, aco) {
       headingDeg: t.orbit_heading_deg || 0,
       legLengthNm: t.orbit_leg_nm || 10,
       widthNm: t.orbit_width_nm || 5,
-      direction: 'cw',
+      direction: (typeof t.orbit_direction === 'string' ? t.orbit_direction : 'cw').toLowerCase(),
       speedKts: t.speed_kts,
     });
   });

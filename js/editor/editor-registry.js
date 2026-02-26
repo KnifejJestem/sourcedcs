@@ -51,6 +51,7 @@ var REGISTRY_CATEGORIES = {
       { key: 'orbit_heading_deg',  label: 'Orbit Heading (°)', type: 'number', placeholder: '270' },
       { key: 'orbit_leg_nm',       label: 'Orbit Leg (NM)',    type: 'number', placeholder: '20' },
       { key: 'orbit_width_nm',     label: 'Orbit Width (NM)',  type: 'number', placeholder: '5' },
+      { key: 'orbit_direction',    label: 'Orbit Direction',   type: 'select', options: [{ value: 'cw', label: 'Clockwise (CW)' }, { value: 'ccw', label: 'Counterclockwise (CCW)' }] },
     ],
   },
   targets: {
