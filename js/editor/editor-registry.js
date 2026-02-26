@@ -317,7 +317,7 @@ function _saveRegistryItem(catKey) {
       } else {
         delete item[k];
       }
-    } else if (fields[k].type === 'number') {
+    } else if (fields[k].type === 'number' || fields[k].getAttribute('data-numtype') === 'number') {
       item[k] = parseFloat(val);
     } else {
       item[k] = val;
