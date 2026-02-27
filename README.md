@@ -240,11 +240,10 @@ See [`docs/yaml-format.md`](docs/yaml-format.md) for the full schema reference.
 
 ## TODO
 
-- Map: additional tile types and higher accuracy geo data
-- ISR data section
-- PDF export
-- Kneeboard export
-- MIZ → YAML converter improvements:
-    - Read target altitude
-    - Dense waypoint filtering
-    - COMMS extraction
+- BUGS:
+decluttering! (everting on the legend should be hidable seperately)
+Website Icon
+something that Shows you who is in the room with you
+higher zoom
+ability to add and edit steerpoint Orbits
+Marshal time

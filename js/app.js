@@ -451,6 +451,7 @@ function loadPackage_obj(data) {
           if (reg.orbit_heading_deg     != null) t.orbit_heading_deg     = reg.orbit_heading_deg;
           if (reg.orbit_leg_nm          != null) t.orbit_leg_nm          = reg.orbit_leg_nm;
           if (reg.orbit_width_nm        != null) t.orbit_width_nm        = reg.orbit_width_nm;
+          if (reg.orbit_direction       != null) t.orbit_direction       = reg.orbit_direction;
         }
       });
     }
