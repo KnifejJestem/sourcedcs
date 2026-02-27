@@ -235,7 +235,7 @@ CSS is split into modular files imported via `css/app.css`:
 
 ## YAML Format
 
-See [`docs/yaml-format.md`](docs/yaml-format.md) for the full schema reference.
+See [`docs/yaml-format.md`](docs/atobrief/yaml-format.md) for the full schema reference.
 
 
 ## TODO
