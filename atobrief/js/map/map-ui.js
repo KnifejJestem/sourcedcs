@@ -439,6 +439,73 @@ function createSidebar(opts) {
     });
   });
 
+  // ── Smart Declutter ─────────────────────────────────────────
+  // Auto-adjusts visibility based on zoom level to reduce visual clutter.
+  // Low zoom:  hide labels + city dots, dim minor markers
+  // Mid zoom:  show route labels, hide city names
+  // High zoom: show everything
+  sidebar.appendChild(el('div', 'map-sidebar-sep'));
+  sidebar.appendChild(el('div', 'map-sidebar-title', 'DECLUTTER'));
+
+  let smartDeclutter = STATE.mapUI?.smartDeclutter === true;
+  const smartBtn = el('button', 'map-msn-btn' + (smartDeclutter ? ' map-msn-active' : ''), '◉ SMART DECLUTTER');
+  smartBtn.title = 'Auto-hide labels and minor markers at low zoom levels';
+
+  // Zoom thresholds — below these zoom levels, elements are hidden/dimmed
+  const ZOOM_SHOW_ROUTE_LABELS = 1.5;  // steer point labels appear above this
+  const ZOOM_SHOW_CITY_LABELS  = 1.2;  // city labels appear above this
+  const ZOOM_SHOW_AIRSPACES    = 1.0;  // airspace fills appear above this
+
+  // Track previous declutter state to avoid redundant DOM operations
+  let prevDeclutterLevel = -1;
+
+  function applySmartDeclutter(sc) {
+    if (!smartDeclutter) {
+      if (prevDeclutterLevel !== -1) {
+        // Restore everything when turning off smart declutter
+        if (opts.svg) {
+          opts.svg.querySelectorAll('[data-city-label]').forEach(t => t.setAttribute('display', ''));
+          opts.svg.querySelectorAll('[data-route-label] text').forEach(t => t.setAttribute('display', ''));
+        }
+        prevDeclutterLevel = -1;
+      }
+      return;
+    }
+
+    // Determine current declutter level: 0 = max clutter reduction, 1 = medium, 2 = full detail
+    let level = 2; // show everything
+    if (sc < ZOOM_SHOW_CITY_LABELS)  level = 0; // hide city labels + route labels
+    else if (sc < ZOOM_SHOW_ROUTE_LABELS) level = 1; // hide route labels only
+
+    if (level === prevDeclutterLevel) return; // no change
+    prevDeclutterLevel = level;
+
+    if (opts.svg) {
+      // City labels: hidden at low zoom
+      opts.svg.querySelectorAll('[data-city-label]').forEach(t => {
+        t.setAttribute('display', level >= 1 ? '' : 'none');
+      });
+      // Route/steer-point text labels: hidden at low and medium zoom
+      // (circles/shapes remain visible — only the text is hidden)
+      opts.svg.querySelectorAll('[data-route-label] text').forEach(t => {
+        t.setAttribute('display', level >= 2 ? '' : 'none');
+      });
+    }
+  }
+
+  smartBtn.addEventListener('click', () => {
+    smartDeclutter = !smartDeclutter;
+    STATE.mapUI.smartDeclutter = smartDeclutter;
+    smartBtn.classList.toggle('map-msn-active', smartDeclutter);
+    prevDeclutterLevel = -1; // force re-evaluation
+    // Will be applied on next applyTransform call; trigger it immediately
+    if (sidebar._onDeclutter) sidebar._onDeclutter();
+  });
+  sidebar.appendChild(smartBtn);
+
+  // Expose the declutter function so drawMap can call it on every zoom change
+  sidebar._applySmartDeclutter = applySmartDeclutter;
+
   const measureBtn = el('button', 'map-msn-btn map-measure-btn', '⊕ MEASURE');
   sidebar.appendChild(measureBtn);
 

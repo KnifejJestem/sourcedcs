@@ -319,6 +319,11 @@
   height: 10px;
   background: var(--green, #39ff7a);
 }
+.tl-swatch-msh {
+  width: 3px;
+  height: 10px;
+  background: #7ec8e3;
+}
 .tl-swatch-rec {
   width: 3px;
   height: 10px;
@@ -412,6 +417,14 @@
 .tl-marker.recovery::after {
   content: 'REC';
   color: var(--blue, #4fc3f7);
+}
+.tl-marker.marshal {
+  background: #7ec8e3;
+  border-left: 1px solid #7ec8e3;
+}
+.tl-marker.marshal::after {
+  content: 'MSH';
+  color: #7ec8e3;
 }
 
 /* Detail panel */

@@ -252,13 +252,46 @@ function drawMap(container, points, routes, geoData, airspaces) {
     content.appendChild(drawGrid(effectiveCtx));
   }
 
+  // ── Drag-vs-click detection ──────────────────────────────
+  // Track mousedown position so we can suppress marker popups when
+  // the user is dragging (panning) rather than clicking a marker.
+  var _pickStart = null;
+  var PICK_DRAG_THRESHOLD = 5; // pixels
+  svg.addEventListener('mousedown', (e) => {
+    if (e.button === 0) _pickStart = { x: e.clientX, y: e.clientY };
+    else _pickStart = null;
+  });
+
+  // Returns true if the most recent mouse gesture was a drag (moved > threshold).
+  function _wasDrag() {
+    if (!_pickStart) return false;
+    // _pickStart is consumed by the SVG click handler; for marker clicks
+    // (which stopPropagation) we peek here.  We check the distance from
+    // mousedown to the current event — markers fire 'click' which has
+    // the same clientX/Y as mouseup, so we can compare.
+    return false; // overridden below when we capture mouseup
+  }
+  var _lastMouseUp = null;
+  window.addEventListener('mouseup', (e) => {
+    _lastMouseUp = { x: e.clientX, y: e.clientY };
+  }, true);
+
   // ── Popup (needed by subsequent draw calls) ──────────────
   const { showPopup: _showPopup, refreshPopup } = createPopup(mapViewport);
   _refreshPopup = refreshPopup;
 
-  // Wrap showPopup so that coord-pick mode intercepts marker clicks:
-  // instead of opening the popup, use the clicked point's lat/lon.
+  // Wrap showPopup so that coord-pick mode intercepts marker clicks
+  // and drags are suppressed (no popup when the user was panning).
   function showPopup(p) {
+    // Suppress popup if the mouse moved significantly (user was dragging/panning)
+    if (_pickStart && _lastMouseUp) {
+      var dx = _lastMouseUp.x - _pickStart.x;
+      var dy = _lastMouseUp.y - _pickStart.y;
+      if (dx * dx + dy * dy > PICK_DRAG_THRESHOLD * PICK_DRAG_THRESHOLD) {
+        return; // ignore — this was a drag, not a click
+      }
+    }
+
     if (typeof EDITOR !== 'undefined' && typeof EDITOR._coordPickCb === 'function' &&
         p.lat != null && p.lon != null) {
       EDITOR._coordPickCb(p.lat, p.lon);
@@ -389,15 +422,6 @@ function drawMap(container, points, routes, geoData, airspaces) {
   mapViewport.appendChild(svg);
   container.appendChild(mapViewport);
 
-  // Track mousedown position so we can distinguish a clean click from a drag.
-  // Only fire coord pick if the mouse didn't move significantly.
-  var _pickStart = null;
-  var PICK_DRAG_THRESHOLD = 5; // pixels
-  svg.addEventListener('mousedown', (e) => {
-    if (e.button === 0) _pickStart = { x: e.clientX, y: e.clientY };
-    else _pickStart = null;
-  });
-
   // Close popup when clicking the map background, or handle coord pick
   svg.addEventListener('click', (e) => {
     // Coordinate picker mode — capture click position as lat/lon
@@ -471,6 +495,8 @@ function drawMap(container, points, routes, geoData, airspaces) {
     });
     gridLabels.redraw(state.tx, state.ty, state.sc);
     redrawMeasure();
+    // Smart declutter — adjust visibility based on zoom level
+    if (sidebar._applySmartDeclutter) sidebar._applySmartDeclutter(state.sc);
     // Persist to centralized state
     STATE.mapUI.tx = state.tx;
     STATE.mapUI.ty = state.ty;
@@ -492,6 +518,9 @@ function drawMap(container, points, routes, geoData, airspaces) {
     clamp();
     applyTransform();
   });
+
+  // Wire smart declutter toggle to trigger immediate re-render
+  sidebar._onDeclutter = () => applyTransform();
 
   // ── Measure mode helpers ──────────────────────────────────
   function setMeasureMode(mode) {

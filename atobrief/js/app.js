@@ -25,6 +25,7 @@ const STATE = {
     measureMode:  'off',    // 'off' | 'waitA' | 'waitB' | 'fixed'
     mapMode:      'chart',  // 'chart' | 'tactical' | 'elevation' | 'satellite'
     hiddenLegend: {},       // per-legend-item visibility (key → true if hidden)
+    smartDeclutter: false,  // zoom-level-based auto-declutter
   },
 };
 

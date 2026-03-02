@@ -352,15 +352,18 @@ function drawCities(ctx, geoData) {
       cx: 0, cy: 0, r,
       fill:    major ? ctx.C.cityMajor : ctx.C.cityDot,
       opacity: CITY_DOT_OPACITY,
+      'data-city-dot': '',
     }));
-    g.appendChild(svgText(city.n, {
+    const cityText = svgText(city.n, {
       x: 3, y: -2,
       'font-size':   major ? CITY_FONT_MAJOR : CITY_FONT_MINOR,
       'font-family': MONO_FONT,
       'font-weight': major ? 600 : 400,
       fill:    major ? ctx.C.cityMajor : ctx.C.cityLbl,
       opacity: CITY_LABEL_OPACITY,
-    }));
+    });
+    cityText.setAttribute('data-city-label', '');
+    g.appendChild(cityText);
 
     ctx.constantSizeMarkers.push(g);
     cityG.appendChild(g);
