@@ -55,7 +55,7 @@ const MAP_HEIGHT = 780;  // SVG viewBox height (px)
 
 // ── Zoom limits ────────────────────────────────────────────────
 const MIN_ZOOM = 1.0; // can't zoom out past the initial full-canvas fit
-const MAX_ZOOM = 20;  // maximum magnification
+const MAX_ZOOM = 80;  // maximum magnification
 
 // ── Bounding-box padding ───────────────────────────────────────
 // Extra breathing room added around the data bbox so features aren't clipped.
@@ -282,7 +282,8 @@ function drawMap(container, points, routes, geoData, airspaces) {
   Object.values(msnGroups).forEach(g => content.appendChild(g));
 
   // ── Markers ──────────────────────────────────────────────
-  content.appendChild(drawSharedMarkers(ctx, points, showPopup));
+  const sharedMarkersG = drawSharedMarkers(ctx, points, showPopup);
+  content.appendChild(sharedMarkersG);
   const threatG = drawThreatMarkers(ctx, points, threatCol, showPopup);
   content.appendChild(threatG);
 
@@ -421,7 +422,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
   // ── Sidebar ──────────────────────────────────────────────
   const sidebar = createSidebar({
     routes, msnGroups, points, airspaces,
-    engZoneG, airspaceG, threatG,
+    engZoneG, airspaceG, threatG, sharedMarkersG,
     C, threatCol,
     airspaceColors: airResult.colors,
     defaultAirspaceCol: airResult.defaultCol,

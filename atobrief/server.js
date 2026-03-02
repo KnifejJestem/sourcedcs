@@ -58,6 +58,7 @@ app.use('/vendor', express.static(path.join(__dirname, 'node_modules', 'js-yaml'
 //     currentTab:   string,
 //     theme:        string,
 //     display:      { timeMode, coordMode },
+//     members:      Map<socketId, { role }>,  // connected users
 //   }
 const sessions = new Map();
 
@@ -70,9 +71,21 @@ function getOrCreateSession(sessionId) {
       currentTab:      'ato',
       theme:           'pro',
       display:         { timeMode: 'Z', coordMode: 'dm' },
+      members:         new Map(),
     });
   }
   return sessions.get(sessionId);
+}
+
+// Build a presence summary for broadcast
+function buildPresence(session) {
+  let presenterCount = 0;
+  let presenteeCount = 0;
+  session.members.forEach(({ role }) => {
+    if (role === 'presenter') presenterCount++;
+    else presenteeCount++;
+  });
+  return { presenter: presenterCount, presentee: presenteeCount, total: presenterCount + presenteeCount };
 }
 
 // ── WebSocket handling ───────────────────────────────────────
@@ -118,6 +131,9 @@ io.on('connection', (socket) => {
       session.presenterId = socket.id;
     }
 
+    // Track this member in the session
+    session.members.set(socket.id, { role: currentRole });
+
     // Send the current session state to the joining client
     socket.emit('session-state', {
       role:        currentRole,
@@ -126,6 +142,9 @@ io.on('connection', (socket) => {
       theme:       session.theme,
       display:     session.display,
     });
+
+    // Broadcast updated presence to all room members
+    io.to(sessionId).emit('room-presence', buildPresence(session));
   });
 
   // ── Presenter: package loaded ──────────────────────────────
@@ -180,11 +199,19 @@ io.on('connection', (socket) => {
 
   // ── Disconnect ────────────────────────────────────────────
   socket.on('disconnect', () => {
-    if (currentSessionId && currentRole === 'presenter') {
+    if (currentSessionId) {
       const session = sessions.get(currentSessionId);
-      if (session && session.presenterId === socket.id) {
-        session.presenterId = null;
-        io.to(currentSessionId).emit('presenter-disconnected');
+      if (session) {
+        // Remove from member list
+        session.members.delete(socket.id);
+
+        if (currentRole === 'presenter' && session.presenterId === socket.id) {
+          session.presenterId = null;
+          io.to(currentSessionId).emit('presenter-disconnected');
+        }
+
+        // Broadcast updated presence to remaining members
+        io.to(currentSessionId).emit('room-presence', buildPresence(session));
       }
     }
   });

@@ -116,6 +116,8 @@ function buildPopupRows(p) {
   if (p.kind === 'marshal') {
     const rows = [['NAME', p.label]];
     if (p.altitude) rows.push(['ALTITUDE', p.altitude]);
+    if (p.time_on_station) rows.push(['ON STATION', fmtTime(p.time_on_station)]);
+    if (p.time_off_station) rows.push(['OFF STATION', fmtTime(p.time_off_station)]);
     return rows;
   }
   return [];
@@ -353,40 +355,91 @@ function createSidebar(opts) {
 
   sidebar.appendChild(el('div', 'map-sidebar-sep'));
 
-  // Legend — mission types, fixed marker types, airspace types
+  // Legend — individually toggleable marker/zone types
   sidebar.appendChild(el('div', 'map-sidebar-title', 'LEGEND'));
 
-  // Helper: append a color swatch + label row to the legend
-  function addLegendRow(color, label) {
-    const row = el('div', 'map-legend-item');
+  // Initialise hiddenLegend from saved state
+  if (!STATE.mapUI.hiddenLegend) STATE.mapUI.hiddenLegend = {};
+
+  // Helper: create a toggleable legend row that shows/hides SVG groups
+  function addLegendToggle(color, label, toggleKey, toggleFn) {
+    const hidden = !!STATE.mapUI.hiddenLegend[toggleKey];
+    const btn = el('button', 'map-msn-btn map-legend-toggle' + (hidden ? ' map-msn-dimmed' : ''));
     const dot = el('span', 'map-legend-dot');
     dot.style.background = color;
-    row.appendChild(dot);
-    row.appendChild(el('span', 'map-legend-lbl', label));
-    sidebar.appendChild(row);
+    btn.appendChild(dot);
+    btn.appendChild(el('span', 'map-legend-lbl', label));
+    btn.addEventListener('click', () => {
+      const nowHidden = !STATE.mapUI.hiddenLegend[toggleKey];
+      STATE.mapUI.hiddenLegend[toggleKey] = nowHidden;
+      btn.classList.toggle('map-msn-dimmed', nowHidden);
+      toggleFn(!nowHidden);
+    });
+    // Apply initial state
+    if (hidden) toggleFn(false);
+    sidebar.appendChild(btn);
   }
+
+  // Get the kind-groups from sharedMarkersG (set by drawSharedMarkers)
+  const kindGroups = opts.sharedMarkersG?._kindGroups || {};
 
   // Mission type rows (only types that appear in the data)
   const seenMsnTypes = [...new Set(opts.points.filter(p => p.msnType).map(p => p.msnType))];
-  seenMsnTypes.forEach(t => addLegendRow(typeColor(t), t));
+  seenMsnTypes.forEach(t => {
+    addLegendToggle(typeColor(t), t, 'msntype_' + t, visible => {
+      // Show/hide route groups of this mission type
+      opts.routes.filter(r => {
+        const matchPt = opts.points.find(p => p.mission?.callsign === r.callsign && p.mission?.mission_number === r.msnNum);
+        return matchPt && matchPt.msnType === t;
+      }).forEach(r => {
+        const g = opts.msnGroups[r.msnKey];
+        if (g) g.setAttribute('display', visible ? '' : 'none');
+      });
+    });
+  });
 
   // Fixed marker types (shown only when present in the data)
   const markerTypes = [
-    { check: opts.points.some(p => p.kind === 'bullseye'), color: '#ffb020',      label: 'BULLSEYE'      },
-    { check: opts.points.some(p => p.kind === 'airfield'), color: opts.C.af,      label: 'AIRFIELD'      },
-    { check: opts.points.some(p => p.kind === 'carrier'),  color: opts.C.cv,      label: 'CARRIER (EST)' },
-    { check: opts.points.some(p => p.kind === 'threat'),   color: opts.threatCol, label: 'THREAT'        },
-    { check: hasEngZones,                                   color: opts.threatCol, label: 'ENG ZONE'      },
-    { check: opts.points.some(p => p.kind === 'marshal'),  color: '#7ec8e3',      label: 'MARSHAL PT'    },
+    { check: opts.points.some(p => p.kind === 'bullseye'), color: '#ffb020',      label: 'BULLSEYE',      kind: 'bullseye' },
+    { check: opts.points.some(p => p.kind === 'airfield'), color: opts.C.af,      label: 'AIRFIELD',      kind: 'airfield' },
+    { check: opts.points.some(p => p.kind === 'carrier'),  color: opts.C.cv,      label: 'CARRIER (EST)', kind: 'carrier'  },
+    { check: opts.points.some(p => p.kind === 'threat'),   color: opts.threatCol, label: 'THREAT',        kind: 'threat'   },
+    { check: hasEngZones,                                   color: opts.threatCol, label: 'ENG ZONE',      kind: 'engzone'  },
+    { check: opts.points.some(p => p.kind === 'marshal'),  color: '#7ec8e3',      label: 'MARSHAL PT',    kind: 'marshal'  },
   ];
-  markerTypes.forEach(({ check, color, label }) => {
-    if (check) addLegendRow(color, label);
+  markerTypes.forEach(({ check, color, label, kind }) => {
+    if (!check) return;
+    addLegendToggle(color, label, 'marker_' + kind, visible => {
+      if (kind === 'threat') {
+        if (opts.threatG) opts.threatG.setAttribute('display', visible ? '' : 'none');
+      } else if (kind === 'engzone') {
+        opts.engZoneG.setAttribute('display', visible ? '' : 'none');
+      } else {
+        const kg = kindGroups[kind];
+        if (kg) kg.setAttribute('display', visible ? '' : 'none');
+      }
+    });
   });
 
   // Airspace type rows (one per unique type seen in the data)
   const seenAirspaceTypes = [...new Set(opts.airspaces.map(a => (a.type || 'OTHER').toUpperCase()))];
   seenAirspaceTypes.forEach(t => {
-    addLegendRow(opts.airspaceColors[t] || opts.defaultAirspaceCol, t);
+    addLegendToggle(opts.airspaceColors[t] || opts.defaultAirspaceCol, t, 'airspace_' + t, visible => {
+      // Find and toggle children of the airspace group matching this type
+      const aG = opts.airspaceG;
+      if (!aG) return;
+      // Iterate all airspace shapes' children — they are drawn per-airspace, so we
+      // toggle children whose label text contains the type name.
+      // Simpler approach: re-toggle individual airspace shapes by index.
+      opts.airspaces.forEach((a, i) => {
+        if ((a.type || 'OTHER').toUpperCase() !== t) return;
+        // Each airspace creates 2–3 SVG children (fill + stroke + label group)
+        // We tag them during draw to enable per-type toggling.
+        aG.querySelectorAll(`[data-airspace-type="${t}"]`).forEach(el => {
+          el.setAttribute('display', visible ? '' : 'none');
+        });
+      });
+    });
   });
 
   const measureBtn = el('button', 'map-msn-btn map-measure-btn', '⊕ MEASURE');

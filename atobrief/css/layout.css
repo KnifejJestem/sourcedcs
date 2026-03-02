@@ -282,6 +282,18 @@ header {
 :root.movie .session-indicator.role-presenter { border-color: var(--cap);  color: var(--cap); }
 :root.movie .session-indicator.role-presentee { border-color: var(--blue); color: var(--blue); }
 
+/* ── Room presence indicator ─────────────────────────────── */
+.presence-indicator {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  cursor: default;
+}
+:root.movie .presence-indicator { border-color: var(--border); color: var(--text-3); }
+
 /* ── Button hover transitions ────────────────────────────── */
 .load-btn       { transition: background .15s, color .15s, border-color .15s; }
 .theme-btn      { transition: background .15s, color .15s; }

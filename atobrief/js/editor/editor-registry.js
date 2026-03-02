@@ -74,6 +74,8 @@ var REGISTRY_CATEGORIES = {
       { key: 'type',     label: 'Type',     type: 'select', options: [{ value: '', label: '— select type —' }, 'bullseye', 'marshal'] },
       { key: 'coords',   label: 'Coordinates', placeholder: "N26°51'19\" E056°21'37\"", coordPick: true },
       { key: 'altitude', label: 'Altitude', placeholder: 'FL250' },
+      { key: 'time_on_station',  label: 'Time On Station',  placeholder: '2030' },
+      { key: 'time_off_station', label: 'Time Off Station', placeholder: '2230' },
     ],
   },
   control_agencies: {

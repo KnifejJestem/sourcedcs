@@ -108,6 +108,22 @@ function _renderSteerPointsList(container, steerPts) {
     });
     row.appendChild(pickBtn);
 
+    // Orbit toggle button
+    var orbitBtn = el('button', 'ef-btn ef-btn-sm' + (sp.orbit ? ' ef-btn-orbit-active' : ''), '⟳');
+    orbitBtn.title = 'Add/edit orbit pattern';
+    orbitBtn.type = 'button';
+    (function (point, idx) {
+      orbitBtn.addEventListener('click', function () {
+        if (!point.orbit) {
+          point.orbit = { heading_deg: 0, leg_nm: 10, width_nm: 5, cw: true };
+        } else {
+          delete point.orbit;
+        }
+        _renderSteerPointsList(container, steerPts);
+      });
+    })(sp, i);
+    row.appendChild(orbitBtn);
+
     var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '\u2715');
     (function (idx) {
       delBtn.addEventListener('click', function () {
@@ -118,5 +134,77 @@ function _renderSteerPointsList(container, steerPts) {
     row.appendChild(delBtn);
 
     container.appendChild(row);
+
+    // Orbit fields (shown when orbit is active)
+    if (sp.orbit) {
+      var orbitRow = el('div', 'ef-orbit-row');
+
+      var hdgInput = el('input', 'ef-input ef-input-sm');
+      hdgInput.placeholder = 'Hdg °';
+      hdgInput.type = 'text';
+      hdgInput.inputMode = 'decimal';
+      hdgInput.value = sp.orbit.heading_deg != null ? sp.orbit.heading_deg : '';
+      hdgInput.title = 'Orbit heading (degrees)';
+      (function (orb) {
+        hdgInput.addEventListener('input', function () {
+          orb.heading_deg = this.value !== '' ? parseFloat(this.value) : 0;
+        });
+      })(sp.orbit);
+      orbitRow.appendChild(_labelWrap('HDG°', hdgInput));
+
+      var legInput = el('input', 'ef-input ef-input-sm');
+      legInput.placeholder = 'Leg NM';
+      legInput.type = 'text';
+      legInput.inputMode = 'decimal';
+      legInput.value = sp.orbit.leg_nm != null ? sp.orbit.leg_nm : '';
+      legInput.title = 'Orbit leg length (NM)';
+      (function (orb) {
+        legInput.addEventListener('input', function () {
+          orb.leg_nm = this.value !== '' ? parseFloat(this.value) : 10;
+        });
+      })(sp.orbit);
+      orbitRow.appendChild(_labelWrap('LEG NM', legInput));
+
+      var widthInput = el('input', 'ef-input ef-input-sm');
+      widthInput.placeholder = 'Width NM';
+      widthInput.type = 'text';
+      widthInput.inputMode = 'decimal';
+      widthInput.value = sp.orbit.width_nm != null ? sp.orbit.width_nm : '';
+      widthInput.title = 'Orbit width (NM)';
+      (function (orb) {
+        widthInput.addEventListener('input', function () {
+          orb.width_nm = this.value !== '' ? parseFloat(this.value) : 5;
+        });
+      })(sp.orbit);
+      orbitRow.appendChild(_labelWrap('WIDTH', widthInput));
+
+      var dirSelect = document.createElement('select');
+      dirSelect.className = 'ef-input ef-input-sm';
+      dirSelect.title = 'Orbit direction';
+      var cwOpt = document.createElement('option');
+      cwOpt.value = 'true'; cwOpt.textContent = 'CW';
+      var ccwOpt = document.createElement('option');
+      ccwOpt.value = 'false'; ccwOpt.textContent = 'CCW';
+      dirSelect.appendChild(cwOpt);
+      dirSelect.appendChild(ccwOpt);
+      dirSelect.value = sp.orbit.cw === false ? 'false' : 'true';
+      (function (orb) {
+        dirSelect.addEventListener('change', function () {
+          orb.cw = this.value === 'true';
+        });
+      })(sp.orbit);
+      orbitRow.appendChild(_labelWrap('DIR', dirSelect));
+
+      container.appendChild(orbitRow);
+    }
   });
+}
+
+// Helper to wrap an input with a tiny label above it
+function _labelWrap(labelText, inputEl) {
+  var wrap = el('div', 'ef-orbit-field');
+  var lbl = el('span', 'ef-orbit-label', labelText);
+  wrap.appendChild(lbl);
+  wrap.appendChild(inputEl);
+  return wrap;
 }

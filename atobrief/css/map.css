@@ -298,6 +298,25 @@
   transition: width 0.25s ease;
 }
 
+/* ── Legend toggle buttons ────────────────────────────────── */
+.map-legend-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+.map-legend-toggle.map-msn-dimmed {
+  opacity: 0.3;
+}
+.map-legend-toggle .map-legend-dot {
+  flex-shrink: 0;
+}
+.map-legend-toggle .map-legend-lbl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Remove old map-wrap / map-legend styles that conflict */
 .map-legend { display: none; }
 

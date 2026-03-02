@@ -167,6 +167,11 @@ function joinSession(sessionId, role, password) {
     console.warn('[SESSION] Presenter disconnected');
   });
 
+  // ── Room presence updates ─────────────────────────────────
+  SESSION.socket.on('room-presence', (presence) => {
+    updatePresenceIndicator(presence);
+  });
+
   SESSION.socket.on('disconnect', () => {
     SESSION.connected = false;
   });
@@ -188,6 +193,10 @@ function leaveSession() {
   // Remove the session indicator badge
   const existing = document.querySelector('.session-indicator');
   if (existing) existing.remove();
+
+  // Remove the presence indicator
+  const presenceEl = document.querySelector('.presence-indicator');
+  if (presenceEl) presenceEl.remove();
 
   // Restore full UI and unload the room package
   _restoreDefaultUI();
@@ -269,5 +278,30 @@ function showSessionIndicator(sessionId, role) {
   indicator.textContent = role.toUpperCase() + ' \u2022 ' + sessionId;
   const headerRight = document.querySelector('.header-right');
   if (headerRight) headerRight.prepend(indicator);
+}
+
+function updatePresenceIndicator(presence) {
+  // Remove existing presence badge
+  const existing = document.querySelector('.presence-indicator');
+  if (existing) existing.remove();
+
+  if (!presence || !presence.total) return;
+
+  const badge = document.createElement('div');
+  badge.className = 'presence-indicator';
+  badge.title = presence.presenter + ' presenter(s), ' + presence.presentee + ' presentee(s)';
+  badge.textContent = '\uD83D\uDC65 ' + presence.total;
+  const headerRight = document.querySelector('.header-right');
+  if (headerRight) {
+    // Insert after session indicator if it exists, otherwise prepend
+    const sessionInd = headerRight.querySelector('.session-indicator');
+    if (sessionInd && sessionInd.nextSibling) {
+      headerRight.insertBefore(badge, sessionInd.nextSibling);
+    } else if (sessionInd) {
+      headerRight.appendChild(badge);
+    } else {
+      headerRight.prepend(badge);
+    }
+  }
 }
 

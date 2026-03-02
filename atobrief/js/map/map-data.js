@@ -172,7 +172,13 @@ function collectData(ato, aco) {
     if (!mp.coords) return;
     const p = parseCoord(mp.coords);
     if (!p) return;
-    points.push({ ...p, kind: 'marshal', label: mp.name || 'MARSHAL', altitude: mp.altitude || null });
+    points.push({
+      ...p, kind: 'marshal',
+      label: mp.name || 'MARSHAL',
+      altitude: mp.altitude || null,
+      time_on_station: mp.time_on_station || null,
+      time_off_station: mp.time_off_station || null,
+    });
   });
 
   // Threats (SAM / EWR / etc.)

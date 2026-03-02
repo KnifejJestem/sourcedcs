@@ -356,3 +356,33 @@
 .ef-table-form {
   margin-top: 6px;
 }
+
+/* ── Orbit editor row ────────────────────────────────────────── */
+.ef-orbit-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  background: var(--bg3);
+  border: 1px dashed var(--border);
+}
+
+.ef-orbit-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.ef-orbit-label {
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+  margin-bottom: 2px;
+}
+
+.ef-btn-orbit-active {
+  border-color: var(--amber);
+  color: var(--amber);
+}

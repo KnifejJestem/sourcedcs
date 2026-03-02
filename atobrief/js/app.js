@@ -24,6 +24,7 @@ const STATE = {
     airVisible:   true,     // airspace overlay visibility
     measureMode:  'off',    // 'off' | 'waitA' | 'waitB' | 'fixed'
     mapMode:      'chart',  // 'chart' | 'tactical' | 'elevation' | 'satellite'
+    hiddenLegend: {},       // per-legend-item visibility (key → true if hidden)
   },
 };
 
@@ -487,7 +488,13 @@ function loadPackage_obj(data) {
     pkg.ato.marshal_points = [];
     refList.forEach(rp => {
       if (rp.type === 'marshal') {
-        pkg.ato.marshal_points.push({ name: rp.name, coords: rp.coords, altitude: rp.altitude });
+        pkg.ato.marshal_points.push({
+          name: rp.name,
+          coords: rp.coords,
+          altitude: rp.altitude,
+          time_on_station: rp.time_on_station || null,
+          time_off_station: rp.time_off_station || null,
+        });
       }
     });
   }

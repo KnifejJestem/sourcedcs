@@ -216,9 +216,14 @@ function drawAirspaces(ctx, airspaces, showPopup) {
 
   airspaces.forEach(a => {
     const col = airspaceColors[(a.type || '').toUpperCase()] || defaultAirspaceCol;
-    if (a.shape === 'circle')                    drawCircleAirspace (ctx, a, col, airspaceG, showPopup);
-    else if (a.shape === 'polygon' && a.boundary) drawPolygonAirspace(ctx, a, col, airspaceG, showPopup);
-    else if (a.shape === 'anchor'  && a.anchorPt) drawAnchorAirspace (ctx, a, col, airspaceG, showPopup);
+    const typeTag = (a.type || 'OTHER').toUpperCase();
+    // Wrap each airspace in a group tagged with its type for per-type toggling
+    const typeG = svgEl('g');
+    typeG.setAttribute('data-airspace-type', typeTag);
+    if (a.shape === 'circle')                    drawCircleAirspace (ctx, a, col, typeG, showPopup);
+    else if (a.shape === 'polygon' && a.boundary) drawPolygonAirspace(ctx, a, col, typeG, showPopup);
+    else if (a.shape === 'anchor'  && a.anchorPt) drawAnchorAirspace (ctx, a, col, typeG, showPopup);
+    airspaceG.appendChild(typeG);
   });
 
   return { group: airspaceG, colors: airspaceColors, defaultCol: defaultAirspaceCol };

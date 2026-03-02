@@ -41,8 +41,20 @@ const MARKER_RING_STROKE   = 1.2;
 
 // ── Shared markers (always visible: bullseye, airfields, carriers) ──
 // Returns the shared markers <g> element.
+// Markers are grouped by kind so individual types can be toggled.
 function drawSharedMarkers(ctx, points, showPopup) {
   const sharedG = svgEl('g');
+
+  // Create per-kind sub-groups so the sidebar can toggle each type independently
+  const kindGroups = {};
+  function getKindGroup(kind) {
+    if (!kindGroups[kind]) {
+      kindGroups[kind] = svgEl('g');
+      kindGroups[kind].setAttribute('data-marker-kind', kind);
+      sharedG.appendChild(kindGroups[kind]);
+    }
+    return kindGroups[kind];
+  }
 
   points.filter(p => ['bullseye', 'airfield', 'carrier', 'marshal'].includes(p.kind)).forEach(p => {
     const mx = ctx.bx(p.lon).toFixed(1);
@@ -96,9 +108,10 @@ function drawSharedMarkers(ctx, points, showPopup) {
     g.style.cursor = 'pointer';
     g.addEventListener('click', e => { e.stopPropagation(); showPopup(p); });
     ctx.constantSizeMarkers.push(g);
-    sharedG.appendChild(g);
+    getKindGroup(p.kind).appendChild(g);
   });
 
+  sharedG._kindGroups = kindGroups;
   return sharedG;
 }
 

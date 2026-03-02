@@ -189,7 +189,9 @@ function _buildRefuelSection(body, m, f) {
 function _buildSteerPointsSection(body, m) {
   editorSectionTitle(body, 'STEER POINTS');
   var steerPts = (m.steer_points || []).map(function (sp) {
-    return { name: sp.name || '', coords: sp.coords || '' };
+    var point = { name: sp.name || '', coords: sp.coords || '' };
+    if (sp.orbit) point.orbit = Object.assign({}, sp.orbit);
+    return point;
   });
   body._steerPoints = steerPts;
 
