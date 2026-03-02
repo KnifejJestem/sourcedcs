@@ -221,6 +221,25 @@ function collectData(ato, aco) {
     //    is pushed so a small unlabelled hollow circle appears at the waypoint,
     //    making the route's exact passage through that location visible without
     //    duplicating the named-location label.
+    //    Pre-scan: collect all aim-point coord keys in this mission so that steer
+    //    points which share a coordinate with an aim point (even without an explicit
+    //    aim_point_id link) are also rendered as unlabelled 'steer-ref' markers —
+    //    the aim-point diamond+label takes priority.
+    //    Also collect named-location (airfield, carrier, marshal point) coord keys:
+    //    if a steer point shares a coordinate with one of these reference points
+    //    (without using name_ref), the named-location marker takes priority.
+    const aimPtCoordKeys = new Set();
+    (m.targets || []).forEach(target => {
+      (target.aim_points || []).forEach(ap => {
+        const raw = typeof ap === 'string' ? ap : ap.coords;
+        const pt  = parseCoord(raw);
+        if (pt) aimPtCoordKeys.add(`${pt.lat},${pt.lon}`);
+      });
+    });
+    const namedLocCoordKeys = new Set(
+      Object.values(namedLocs).map(pt => `${pt.lat},${pt.lon}`)
+    );
+
     (m.steer_points || []).forEach((sp, i) => {
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
       const raw     = typeof sp === 'string' ? sp : sp.coords;
@@ -231,24 +250,26 @@ function collectData(ato, aco) {
       if (p) {
         // Aim-point steer points use a thicker target-approach line on the route
         route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
-        // When name_ref is set the named location (marshal point, airfield, carrier)
-        // already appears as its own marker.  Push a 'steer-ref' point so a small
-        // unlabelled hollow circle is drawn at the waypoint position, making it clear
-        // the route passes exactly through that location without duplicating the
-        // named-location label.
-        if (!nameRef) {
-          points.push({
-            ...p, kind: apId ? 'target' : 'steer',
-            label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-            sub: label, color, msnType: m.mission_type, mission: m,
-            altitude_ft: altFt,
-            ...(apId ? { fromSteerPoint: true } : {}),
-          });
-        } else {
+        // Suppress the steer-point label whenever a higher-priority marker already
+        // labels this location: name_ref → named-location marker, aim_point_id or
+        // coordinate-coincident aim point → aim-point diamond+label, or a
+        // coordinate-coincident named location (airfield/carrier/marshal).
+        // In all these cases push only a small unlabelled 'steer-ref' circle so the
+        // route passage remains visible without overlaying the other label.
+        const colocatedWithAimPt   = aimPtCoordKeys.has(`${p.lat},${p.lon}`);
+        const colocatedWithNamedLoc = namedLocCoordKeys.has(`${p.lat},${p.lon}`);
+        if (nameRef || apId || colocatedWithAimPt || colocatedWithNamedLoc) {
           points.push({
             ...p, kind: 'steer-ref',
             label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-            sub: nameRef, color, msnType: m.mission_type, mission: m,
+            sub: nameRef || label, color, msnType: m.mission_type, mission: m,
+            altitude_ft: altFt,
+          });
+        } else {
+          points.push({
+            ...p, kind: 'steer',
+            label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
+            sub: label, color, msnType: m.mission_type, mission: m,
             altitude_ft: altFt,
           });
         }
@@ -282,20 +303,11 @@ function collectData(ato, aco) {
     });
 
     // 3. Target aim-point markers.
-    //    Aim points already referenced by a steer_point (via aim_point_id) are
-    //    drawn as target diamonds in step 2 above and are skipped here to avoid
-    //    duplicate overlapping markers.
     //    IMPORTANT: we do NOT push any route.pts nodes here — adding target nodes
     //    after all steer_points would cause the route line to detour to the targets
     //    again after the egress waypoints, before the recovery.
-    const coveredAimIds = new Set(
-      (m.steer_points || [])
-        .filter(sp => typeof sp === 'object' && sp.aim_point_id)
-        .map(sp => sp.aim_point_id)
-    );
     (m.targets || []).forEach(target => {
       (target.aim_points || []).forEach((ap, i) => {
-        if (ap._aim_point_id && coveredAimIds.has(ap._aim_point_id)) return;
         const raw  = typeof ap === 'string' ? ap : ap.coords;
         const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i + 1}`;
         const p    = parseCoord(raw);

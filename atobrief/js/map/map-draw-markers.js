@@ -121,6 +121,13 @@ function drawThreatMarkers(ctx, points, threatCol, showPopup) {
   const threatG = svgEl('g');
   threatG.setAttribute('data-role', 'threat-markers');
 
+  // Suppress the threat label when an aim-point diamond is at the same location —
+  // the aim-point marker already labels that coordinate, so showing both would
+  // clutter the center of the engagement zone circle.
+  const aimPtCoordKeys = new Set(
+    points.filter(p => p.kind === 'target').map(p => `${p.lat},${p.lon}`)
+  );
+
   points.filter(p => p.kind === 'threat').forEach(p => {
     const mx = ctx.bx(p.lon).toFixed(1);
     const my = ctx.by(p.lat).toFixed(1);
@@ -133,7 +140,9 @@ function drawThreatMarkers(ctx, points, threatCol, showPopup) {
     [[-tc, -tc, tc, tc], [tc, -tc, -tc, tc]].forEach(([x1, y1, x2, y2]) =>
       g.appendChild(makeSvgEl('line', { x1, y1, x2, y2, stroke: threatCol, 'stroke-width': THREAT_CROSS_STROKE, 'stroke-linecap': 'round' })));
     g.appendChild(makeSvgEl('circle', { r: THREAT_DOT_R, fill: 'none', stroke: threatCol, 'stroke-width': MARKER_RING_STROKE }));
-    mapLabel(g, p.label, p.sub, threatCol, THREAT_LABEL_OFFSET);
+    if (!aimPtCoordKeys.has(`${p.lat},${p.lon}`)) {
+      mapLabel(g, p.label, p.sub, threatCol, THREAT_LABEL_OFFSET);
+    }
 
     g.addEventListener('click', e => { e.stopPropagation(); showPopup(p); });
     ctx.constantSizeMarkers.push(g);
