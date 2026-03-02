@@ -452,8 +452,8 @@ function createSidebar(opts) {
   smartBtn.title = 'Auto-hide labels and minor markers at low zoom levels';
 
   // Zoom thresholds — below these zoom levels, elements are hidden/dimmed
-  const ZOOM_SHOW_ROUTE_LABELS = 1.5;  // steer point labels appear above this
-  const ZOOM_SHOW_CITY_LABELS  = 1.2;  // city labels appear above this
+  const ZOOM_SHOW_ROUTE_LABELS = 5;  // steer point labels appear above this
+  const ZOOM_SHOW_CITY_LABELS  = 3;  // city labels appear above this
 
   // Track previous declutter state to avoid redundant DOM operations
   let prevDeclutterLevel = -1;
