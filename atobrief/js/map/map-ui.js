@@ -428,14 +428,11 @@ function createSidebar(opts) {
       // Find and toggle children of the airspace group matching this type
       const aG = opts.airspaceG;
       if (!aG) return;
-      // Iterate all airspace shapes' children — they are drawn per-airspace, so we
-      // toggle children whose label text contains the type name.
-      // Simpler approach: re-toggle individual airspace shapes by index.
+      // Use CSS.escape to safely handle special characters in type names
+      const safeType = CSS.escape(t);
       opts.airspaces.forEach((a, i) => {
         if ((a.type || 'OTHER').toUpperCase() !== t) return;
-        // Each airspace creates 2–3 SVG children (fill + stroke + label group)
-        // We tag them during draw to enable per-type toggling.
-        aG.querySelectorAll(`[data-airspace-type="${t}"]`).forEach(el => {
+        aG.querySelectorAll(`[data-airspace-type="${safeType}"]`).forEach(el => {
           el.setAttribute('display', visible ? '' : 'none');
         });
       });

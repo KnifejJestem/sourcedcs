@@ -289,7 +289,7 @@ function updatePresenceIndicator(presence) {
 
   const badge = document.createElement('div');
   badge.className = 'presence-indicator';
-  badge.title = presence.presenter + ' presenter(s), ' + presence.presentee + ' presentee(s)';
+  badge.title = presence.presenter + (presence.presenter === 1 ? ' presenter, ' : ' presenters, ') + presence.presentee + (presence.presentee === 1 ? ' presentee' : ' presentees');
   badge.textContent = '\uD83D\uDC65 ' + presence.total;
   const headerRight = document.querySelector('.header-right');
   if (headerRight) {
