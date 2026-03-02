@@ -221,6 +221,19 @@ function collectData(ato, aco) {
     //    is pushed so a small unlabelled hollow circle appears at the waypoint,
     //    making the route's exact passage through that location visible without
     //    duplicating the named-location label.
+    //    Pre-scan: collect all aim-point coord keys in this mission so that steer
+    //    points which share a coordinate with an aim point (even without an explicit
+    //    aim_point_id link) are also rendered as unlabelled 'steer-ref' markers —
+    //    the aim-point diamond+label takes priority.
+    const aimPtCoordKeys = new Set();
+    (m.targets || []).forEach(target => {
+      (target.aim_points || []).forEach(ap => {
+        const raw = typeof ap === 'string' ? ap : ap.coords;
+        const pt  = parseCoord(raw);
+        if (pt) aimPtCoordKeys.add(`${pt.lat},${pt.lon}`);
+      });
+    });
+
     (m.steer_points || []).forEach((sp, i) => {
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
       const raw     = typeof sp === 'string' ? sp : sp.coords;
@@ -231,12 +244,13 @@ function collectData(ato, aco) {
       if (p) {
         // Aim-point steer points use a thicker target-approach line on the route
         route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
-        // When name_ref is set the named location (marshal point, airfield, carrier)
-        // already appears as its own marker.  When aim_point_id is set the aim point
-        // will be drawn with its own label from step 3.  In both cases push a
-        // 'steer-ref' so only a small unlabelled hollow circle appears at the waypoint,
-        // making the route passage visible without overlaying the named-location label.
-        if (nameRef || apId) {
+        // Suppress the steer-point label whenever a higher-priority marker already
+        // labels this location: name_ref → named-location marker, aim_point_id or
+        // coordinate-coincident aim point → aim-point diamond+label.
+        // In all these cases push only a small unlabelled 'steer-ref' circle so the
+        // route passage remains visible without overlaying the other label.
+        const colocatedWithAimPt = aimPtCoordKeys.has(`${p.lat},${p.lon}`);
+        if (nameRef || apId || colocatedWithAimPt) {
           points.push({
             ...p, kind: 'steer-ref',
             label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
