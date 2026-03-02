@@ -195,6 +195,7 @@ Global application state. All views read from `STATE.pkg` and `STATE.display`.
 | `mapUI.airVisible` | boolean | Airspace overlay visibility |
 | `mapUI.measureMode` | string | Measurement tool state: `'off'` / `'waitA'` / `'waitB'` / `'fixed'` |
 | `mapUI.mapMode` | string | Background tile style: `'chart'` / `'tactical'` / `'elevation'` / `'satellite'` |
+| `mapUI.hiddenLegend` | Object | Per-legend-item visibility: key → `true` when hidden |
 
 ### `EDITOR` (editor-core.js)
 
@@ -240,10 +241,12 @@ See [`docs/yaml-format.md`](docs/atobrief/yaml-format.md) for the full schema re
 
 ## TODO
 
-- BUGS:
-decluttering! (everting on the legend should be hidable seperately)
-Website Icon
-something that Shows you who is in the room with you
-higher zoom
-ability to add and edit steerpoint Orbits
-Marshal time
+### Bugs
+- [x] **Decluttering** — each legend item is individually hideable via toggle buttons in the sidebar (click any legend entry to show/hide that marker type, airspace type, or mission-type routes)
+
+### Features
+- [x] **Website Icon** — SVG favicon added to `index.html`
+- [x] **Room Presence** — server tracks connected members per room and broadcasts presence counts; client displays a 👥 badge in the header showing total connected users
+- [x] **Higher Zoom** — increased maximum map zoom from 20× to 80×
+- [x] **Steerpoint Orbits** — orbit patterns (heading, leg length, width, direction) can be added/edited on any steer point via the ⟳ toggle in the mission editor; rendered as racetrack patterns on the map
+- [x] **Marshal Time** — time-on-station and time-off-station fields added to reference points (marshal type) in the registry editor, carried through to the map popup

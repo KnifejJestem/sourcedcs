@@ -114,6 +114,7 @@ function _buildTimingSection(body, m, f) {
   editorSectionTitle(body, 'TIMING');
   f.takeoff_time  = editorField(body, 'Takeoff Time',  m.takeoff_time,  { placeholder: '2000' });
   f.recovery_time = editorField(body, 'Recovery Time', m.recovery_time, { placeholder: '2300' });
+  f.marshal_time  = editorField(body, 'Marshal Time',  m.marshal_time,  { placeholder: '1945' });
   f.vul_start     = editorField(body, 'VUL Start',     m.vul_start,     { placeholder: '2040' });
   f.vul_end       = editorField(body, 'VUL End',       m.vul_end,       { placeholder: '2115' });
 }
@@ -189,7 +190,9 @@ function _buildRefuelSection(body, m, f) {
 function _buildSteerPointsSection(body, m) {
   editorSectionTitle(body, 'STEER POINTS');
   var steerPts = (m.steer_points || []).map(function (sp) {
-    return { name: sp.name || '', coords: sp.coords || '' };
+    var point = { name: sp.name || '', coords: sp.coords || '' };
+    if (sp.orbit) point.orbit = Object.assign({}, sp.orbit);
+    return point;
   });
   body._steerPoints = steerPts;
 
@@ -235,6 +238,7 @@ function _collectMissionDraft() {
 
   m.takeoff_time  = f.takeoff_time.value || undefined;
   m.recovery_time = f.recovery_time.value || undefined;
+  m.marshal_time  = f.marshal_time.value || undefined;
   m.vul_start     = f.vul_start.value || undefined;
   m.vul_end       = f.vul_end.value || undefined;
 
@@ -287,6 +291,7 @@ function _saveMissionFromForm(onSave) {
   // Timing
   m.takeoff_time  = f.takeoff_time.value || undefined;
   m.recovery_time = f.recovery_time.value || undefined;
+  m.marshal_time  = f.marshal_time.value || undefined;
   m.vul_start     = f.vul_start.value || undefined;
   m.vul_end       = f.vul_end.value || undefined;
 

@@ -299,6 +299,9 @@ function renderMissionCards(missions) {
     if (m.takeoff_time) {
       body.appendChild(buildCardRow('T/O', fmtTime(m.takeoff_time), 'time'));
     }
+    if (m.marshal_time) {
+      body.appendChild(buildCardRow('MARSHAL', fmtTime(m.marshal_time), 'time'));
+    }
     if (m.control && m.control.primary_freq_mhz) {
       body.appendChild(buildCardRow('PFREQ', m.control.primary_freq_mhz + ' MHz', 'freq'));
     }
@@ -340,6 +343,7 @@ function collectMissionTimes(m) {
     toMins(m.refuel ? m.refuel.not_earlier_than : null),
     toMins(m.refuel ? m.refuel.not_later_than   : null),
     toMins(m.takeoff_time),
+    toMins(m.marshal_time),
     toMins(m.recovery_time),
     toMins(m.vul_start),
     toMins(m.vul_end),
@@ -639,6 +643,7 @@ function buildMissionRow(m, missionIdx, range) {
   addMissionBars(track, m, missionIdx, range);
   addRefuelBar(track, m, range);
   addTimeMarker(track, m.takeoff_time,  'takeoff',  'T/O', range);
+  addTimeMarker(track, m.marshal_time,  'marshal',  'MSH', range);
   addTimeMarker(track, m.recovery_time, 'recovery', 'REC', range);
   row.appendChild(track);
 
@@ -816,6 +821,7 @@ function selectMission(idx) {
       m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '—');
 
     if (m.takeoff_time)  { detailField(col, 'TAKEOFF',  fmtTime(m.takeoff_time), 'time'); }
+    if (m.marshal_time)  { detailField(col, 'MARSHAL',  fmtTime(m.marshal_time), 'time'); }
     if (m.recovery_time) { detailField(col, 'RECOVERY', fmtTime(m.recovery_time), 'time'); }
 
     if (m.vul_start || m.vul_end) {
