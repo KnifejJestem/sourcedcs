@@ -262,15 +262,6 @@ function drawMap(container, points, routes, geoData, airspaces) {
     else _pickStart = null;
   });
 
-  // Returns true if the most recent mouse gesture was a drag (moved > threshold).
-  function _wasDrag() {
-    if (!_pickStart) return false;
-    // _pickStart is consumed by the SVG click handler; for marker clicks
-    // (which stopPropagation) we peek here.  We check the distance from
-    // mousedown to the current event — markers fire 'click' which has
-    // the same clientX/Y as mouseup, so we can compare.
-    return false; // overridden below when we capture mouseup
-  }
   var _lastMouseUp = null;
   window.addEventListener('mouseup', (e) => {
     _lastMouseUp = { x: e.clientX, y: e.clientY };
