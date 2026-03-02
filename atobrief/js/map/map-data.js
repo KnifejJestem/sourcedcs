@@ -225,6 +225,9 @@ function collectData(ato, aco) {
     //    points which share a coordinate with an aim point (even without an explicit
     //    aim_point_id link) are also rendered as unlabelled 'steer-ref' markers —
     //    the aim-point diamond+label takes priority.
+    //    Also collect named-location (airfield, carrier, marshal point) coord keys:
+    //    if a steer point shares a coordinate with one of these reference points
+    //    (without using name_ref), the named-location marker takes priority.
     const aimPtCoordKeys = new Set();
     (m.targets || []).forEach(target => {
       (target.aim_points || []).forEach(ap => {
@@ -233,6 +236,9 @@ function collectData(ato, aco) {
         if (pt) aimPtCoordKeys.add(`${pt.lat},${pt.lon}`);
       });
     });
+    const namedLocCoordKeys = new Set(
+      Object.values(namedLocs).map(pt => `${pt.lat},${pt.lon}`)
+    );
 
     (m.steer_points || []).forEach((sp, i) => {
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
@@ -246,11 +252,13 @@ function collectData(ato, aco) {
         route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
         // Suppress the steer-point label whenever a higher-priority marker already
         // labels this location: name_ref → named-location marker, aim_point_id or
-        // coordinate-coincident aim point → aim-point diamond+label.
+        // coordinate-coincident aim point → aim-point diamond+label, or a
+        // coordinate-coincident named location (airfield/carrier/marshal).
         // In all these cases push only a small unlabelled 'steer-ref' circle so the
         // route passage remains visible without overlaying the other label.
-        const colocatedWithAimPt = aimPtCoordKeys.has(`${p.lat},${p.lon}`);
-        if (nameRef || apId || colocatedWithAimPt) {
+        const colocatedWithAimPt   = aimPtCoordKeys.has(`${p.lat},${p.lon}`);
+        const colocatedWithNamedLoc = namedLocCoordKeys.has(`${p.lat},${p.lon}`);
+        if (nameRef || apId || colocatedWithAimPt || colocatedWithNamedLoc) {
           points.push({
             ...p, kind: 'steer-ref',
             label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
