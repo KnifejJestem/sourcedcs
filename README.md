@@ -240,10 +240,12 @@ See [`docs/yaml-format.md`](docs/atobrief/yaml-format.md) for the full schema re
 
 ## TODO
 
-- BUGS:
-decluttering! (everting on the legend should be hidable seperately)
-Website Icon
-something that Shows you who is in the room with you
-higher zoom
-ability to add and edit steerpoint Orbits
-Marshal time
+### Bugs
+- [ ] **Decluttering** — each legend item should be individually hideable (currently only group-level toggles for routes, engagement zones, airspaces, and labels exist)
+
+### Features
+- [ ] **Website Icon** — add a favicon to `index.html`
+- [ ] **Room Presence** — show who is currently connected to the same session room (presenter and presentees)
+- [ ] **Higher Zoom** — increase the maximum map zoom level beyond the current cap
+- [ ] **Steerpoint Orbits** — add the ability to create and edit orbit patterns on steerpoints (currently only supported on tanker anchors)
+- [ ] **Marshal Time** — add time-on-station or time-of-arrival fields to marshal points
