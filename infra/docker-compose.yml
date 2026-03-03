@@ -1,0 +1,106 @@
+services:
+
+  # ─────────────────────────────────────────
+  # NGINX - Reverse Proxy
+  # ─────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot-webroot:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    depends_on:
+      - mediawiki
+      - casdoor
+    networks:
+      - web
+
+  # ─────────────────────────────────────────
+  # CERTBOT - Auto SSL
+  # ─────────────────────────────────────────
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - web
+
+  # ─────────────────────────────────────────
+  # MARIADB - Shared Database
+  # ─────────────────────────────────────────
+  mariadb:
+    image: mariadb:11
+    container_name: mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # MEDIAWIKI
+  # ─────────────────────────────────────────
+  mediawiki:
+    image: mediawiki:1.42
+    container_name: mediawiki
+    restart: unless-stopped
+    volumes:
+      - mediawiki-images:/var/www/html/images
+      # Uncomment after first setup:
+      # - ./mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - internal
+      - web
+
+  # ─────────────────────────────────────────
+  # CASDOOR - Auth (SSO)
+  # ─────────────────────────────────────────
+  casdoor:
+    image: casbin/casdoor:latest
+    container_name: casdoor
+    restart: unless-stopped
+    environment:
+      httpport: 8000
+      driverName: mysql
+      dataSourceName: "${CASDOOR_DB_USER}:${CASDOOR_DB_PASSWORD}@tcp(mariadb:3306)/casdoor"
+      runmode: prod
+    volumes:
+      - ./casdoor/app.conf:/conf/app.conf:ro
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - internal
+      - web
+
+networks:
+  web:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true   # mariadb never exposed to internet
+
+volumes:
+  mariadb-data:
+  mediawiki-images:
+  certbot-webroot:
+  certbot-certs:

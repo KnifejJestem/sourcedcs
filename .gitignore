@@ -26,6 +26,8 @@ share/python-wheels/
 *.egg
 *.yaml
 *.miz
+.env
+mediawiki/LocalSettings.php
 
 MANIFEST
 
@@ -131,7 +133,6 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 .venv
 env/
 venv/
@@ -184,6 +185,5 @@ cython_debug/
 .cursorindexingignore
 /.idea
 node_modules/
-dist/
 vendor/
 /.claude

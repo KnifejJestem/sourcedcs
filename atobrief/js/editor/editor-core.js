@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 // editor-core.js — Editor framework: state, dialog, form helpers, export
 //
-// Provides the shared infrastructure for all section editors.
+// Provides the shared infra for all section editors.
 // Keeps editor logic isolated from the read-only view layer.
 //
 // Public API:
