@@ -84,9 +84,11 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      WIKI_DB_PASSWORD: ${WIKI_DB_PASSWORD}
+      CASDOOR_DB_PASSWORD: ${CASDOOR_DB_PASSWORD}
     volumes:
       - mariadb-data:/var/lib/mysql
-      - ./mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./mariadb/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     networks:
       - internal
     healthcheck:
