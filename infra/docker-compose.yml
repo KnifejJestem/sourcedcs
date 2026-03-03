@@ -129,7 +129,7 @@ services:
       CASDOOR_DB_USER: ${CASDOOR_DB_USER}
       CASDOOR_DB_PASSWORD: ${CASDOOR_DB_PASSWORD}
       AUTH_DOMAIN: ${AUTH_DOMAIN}
-    entrypoint: [ "/bin/sh", "/entrypoint.sh" ]
+    entrypoint: [ "/bin/sh", "/casdoor_entrypoint.sh" ]
     depends_on:
       mariadb:
         condition: service_healthy
