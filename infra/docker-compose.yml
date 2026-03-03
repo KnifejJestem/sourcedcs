@@ -101,13 +101,12 @@ services:
   # MEDIAWIKI
   # ─────────────────────────────────────────
   mediawiki:
-    image: mediawiki:1.42
+    build: ./mediawiki
     container_name: mediawiki
     restart: unless-stopped
     volumes:
       - mediawiki-images:/var/www/html/images
-      # Uncomment after first setup:
-      # - ./mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro
+      - ./mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro
     depends_on:
       mariadb:
         condition: service_healthy
