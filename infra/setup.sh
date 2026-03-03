@@ -47,12 +47,16 @@ echo ""
 read -p "Enter your email for Let's Encrypt: " LE_EMAIL
 read -p "Enter your main domain (e.g. yourdomain.com): " DOMAIN
 
-docker compose run --rm certbot certonly \
+echo "==> Issuing SSL certificates..."
+docker compose run --rm --entrypoint certbot certbot certonly \
   --webroot -w /var/www/certbot \
   --email "$LE_EMAIL" \
   --agree-tos --no-eff-email \
   -d "wiki.$DOMAIN" \
   -d "auth.$DOMAIN"
+
+echo "==> Reloading nginx with SSL..."
+docker compose exec nginx nginx -s reload
 
 echo "==> Starting certbot auto-renew..."
 docker compose up -d certbot
