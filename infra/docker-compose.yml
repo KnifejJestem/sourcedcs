@@ -83,8 +83,8 @@ services:
       driverName: mysql
       dataSourceName: "${CASDOOR_DB_USER}:${CASDOOR_DB_PASSWORD}@tcp(mariadb:3306)/casdoor"
       runmode: prod
-    volumes:
-      - ./casdoor/app.conf:/conf/app.conf:ro
+      origin: "https://${AUTH_DOMAIN}"
+      staticBaseUrl: "https://cdn.casbin.org"
     depends_on:
       mariadb:
         condition: service_healthy
