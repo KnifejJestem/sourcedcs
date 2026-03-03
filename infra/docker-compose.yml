@@ -149,3 +149,4 @@ volumes:
   mediawiki-images:
   certbot-webroot:
   certbot-certs:
+  casdoor-conf:
