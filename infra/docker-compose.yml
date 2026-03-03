@@ -122,13 +122,14 @@ services:
     image: casbin/casdoor:latest
     container_name: casdoor
     restart: unless-stopped
+    volumes:
+      - casdoor-conf:/conf
+      - ./casdoor_entrypoint.sh:/casdoor_entrypoint.sh:ro
     environment:
-      httpport: 8000
-      driverName: mysql
-      dataSourceName: "${CASDOOR_DB_USER}:${CASDOOR_DB_PASSWORD}@tcp(mariadb:3306)/casdoor"
-      runmode: prod
-      origin: "https://${AUTH_DOMAIN}"
-      staticBaseUrl: "https://cdn.casbin.org"
+      CASDOOR_DB_USER: ${CASDOOR_DB_USER}
+      CASDOOR_DB_PASSWORD: ${CASDOOR_DB_PASSWORD}
+      AUTH_DOMAIN: ${AUTH_DOMAIN}
+    entrypoint: [ "/bin/sh", "/entrypoint.sh" ]
     depends_on:
       mariadb:
         condition: service_healthy
