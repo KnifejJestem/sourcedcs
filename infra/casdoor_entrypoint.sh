@@ -15,4 +15,4 @@ staticBaseUrl = https://cdn.casbin.org
 EOF
 fi
 
-./casdoor
+/server
