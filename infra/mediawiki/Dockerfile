@@ -15,3 +15,7 @@ RUN curl -L https://github.com/wikimedia/mediawiki-extensions-OpenIDConnect/arch
     mv /var/www/html/extensions/mediawiki-extensions-OpenIDConnect-REL1_42 /var/www/html/extensions/OpenIDConnect && \
     cd /var/www/html/extensions/OpenIDConnect && \
     COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev
+
+# Install Citizen skin
+RUN curl -L https://github.com/StarCitizenTools/mediawiki-skins-Citizen/archive/refs/heads/main.tar.gz | tar xz -C /var/www/html/skins && \
+    mv /var/www/html/skins/mediawiki-skins-Citizen-main /var/www/html/skins/Citizen
