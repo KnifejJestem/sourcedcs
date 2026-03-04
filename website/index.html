@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOURCEDCS</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%274%27 fill=%27%231a2a1a%27/%3E%3Ctext x=%2716%27 y=%2722%27 text-anchor=%27middle%27 font-family=%27monospace%27 font-size=%2710%27 font-weight=%27bold%27 fill=%27%2339ff7a%27%3ESRC%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <div class="header-title">SOURCEDCS</div>
+  <div class="header-spacer"></div>
+  <div class="header-right">
+    <div class="hdr-toggle-group">
+      <span class="hdr-toggle-label">DISPLAY</span>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ── Welcome ───────────────────────────────────────────── -->
+<section class="welcome-section">
+  <div class="welcome-icon">✈</div>
+  <h1 class="welcome-title">SOURCEDCS</h1>
+  <p class="welcome-subtitle">DCS World Tactical Tools</p>
+  <div class="welcome-divider"></div>
+  <p class="welcome-desc">
+    A collection of open-source web tools built for DCS World mission planners,
+    briefers, and GCI operators. Load your ATO package, brief your flight,
+    and run your GCI server — all from the browser.
+  </p>
+</section>
+
+<!-- ── Linktree ──────────────────────────────────────────── -->
+<section class="linktree-section">
+  <div class="section-label">TOOLS &amp; LINKS</div>
+  <div class="link-list">
+
+    <a class="link-card" href="/atobrief/" target="_blank" rel="noopener">
+      <div class="link-card-icon">⊕</div>
+      <div class="link-card-body">
+        <div class="link-card-title">ATO BRIEF</div>
+        <div class="link-card-desc">Tactical briefing app — load &amp; present ATO/ACO/SPINS/COMMS packages with live room sync</div>
+      </div>
+      <span class="link-card-tag">WEB APP</span>
+      <div class="link-card-arrow">→</div>
+    </a>
+
+    <a class="link-card" href="/asacs_link/" target="_blank" rel="noopener">
+      <div class="link-card-icon">◉</div>
+      <div class="link-card-body">
+        <div class="link-card-title">ASACS LINK</div>
+        <div class="link-card-desc">DCS GCI server — real-time unit datalink with coalition filtering for WebSocket clients</div>
+      </div>
+      <span class="link-card-tag">SERVER</span>
+      <div class="link-card-arrow">→</div>
+    </a>
+
+    <a class="link-card" href="/tools/miztoyaml/" target="_blank" rel="noopener">
+      <div class="link-card-icon">⟐</div>
+      <div class="link-card-body">
+        <div class="link-card-title">MIZ TO YAML</div>
+        <div class="link-card-desc">Convert DCS .miz mission files into ATO BRIEF–compatible YAML packages</div>
+      </div>
+      <span class="link-card-tag">TOOL</span>
+      <div class="link-card-arrow">→</div>
+    </a>
+
+    <a class="link-card" href="https://github.com/NikNam3/sourcedcs" target="_blank" rel="noopener">
+      <div class="link-card-icon">⌥</div>
+      <div class="link-card-body">
+        <div class="link-card-title">GITHUB</div>
+        <div class="link-card-desc">Source code, issues, and documentation — NikNam3 / sourcedcs</div>
+      </div>
+      <span class="link-card-tag">REPO</span>
+      <div class="link-card-arrow">→</div>
+    </a>
+
+    <a class="link-card" href="https://github.com/NikNam3/sourcedcs/blob/main/docs/atobrief/yaml-format.md" target="_blank" rel="noopener">
+      <div class="link-card-icon">≡</div>
+      <div class="link-card-body">
+        <div class="link-card-title">YAML FORMAT REFERENCE</div>
+        <div class="link-card-desc">Full schema reference for ATO BRIEF package files (.yaml)</div>
+      </div>
+      <span class="link-card-tag">DOCS</span>
+      <div class="link-card-arrow">→</div>
+    </a>
+
+  </div>
+</section>
+
+<footer>
+  <span class="footer-text">SOURCEDCS</span>
+  <span class="footer-sep">·</span>
+  <a class="footer-link" href="https://github.com/NikNam3/sourcedcs" target="_blank" rel="noopener">GitHub</a>
+  <span class="footer-sep">·</span>
+  <span class="footer-text">MIT License</span>
+</footer>
+
+<script>
+  function setTheme(t) {
+    document.documentElement.classList.toggle('movie', t === 'movie');
+    document.querySelectorAll('.theme-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.theme === t);
+    });
+    try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
+  }
+
+  (function() {
+    try {
+      var saved = localStorage.getItem('sdcs-theme');
+      if (saved === 'movie') setTheme('movie');
+    } catch(e) {}
+  })();
+</script>
+
+</body>
+</html>
