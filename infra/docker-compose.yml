@@ -16,6 +16,7 @@ services:
     environment:
       - WIKI_DOMAIN=${WIKI_DOMAIN}
       - AUTH_DOMAIN=${AUTH_DOMAIN}
+      - DOMAIN=${DOMAIN}
     command: >
       /bin/sh -c "
       echo 'resolver 127.0.0.11 valid=30s;
