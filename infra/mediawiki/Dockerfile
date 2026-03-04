@@ -10,8 +10,9 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 RUN curl -L https://github.com/wikimedia/mediawiki-extensions-PluggableAuth/archive/refs/heads/REL1_43.tar.gz | tar xz -C /var/www/html/extensions && \
     mv /var/www/html/extensions/mediawiki-extensions-PluggableAuth-REL1_43 /var/www/html/extensions/PluggableAuth && \
     cd /var/www/html/extensions/PluggableAuth && \
-    COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev \
-    
+    COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev
+
+# Install OpenIDConnect
 RUN curl -L https://github.com/wikimedia/mediawiki-extensions-OpenIDConnect/archive/refs/heads/REL1_43.tar.gz | tar xz -C /var/www/html/extensions && \
     mv /var/www/html/extensions/mediawiki-extensions-OpenIDConnect-REL1_43 /var/www/html/extensions/OpenIDConnect && \
     cd /var/www/html/extensions/OpenIDConnect && \
