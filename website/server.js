@@ -29,14 +29,14 @@ function sanitizeStr(value, maxLen) {
 
 
 
-let events = loadJSON(EVENTS_FILE);
+let events = loadJSON(EVENTS_FILE, []);
 let applications = loadJSON(APPS_FILE, []);
 let nextEventId = events.reduce((m, e) => Math.max(m, e.id || 0), 0) + 1;
 
 
 
-let roster = loadJSON(ROSTER_FILE);
-let squadrons = loadJSON(SQUADRONS_FILE);
+let roster = loadJSON(ROSTER_FILE, []);
+let squadrons = loadJSON(SQUADRONS_FILE, []);
 let nextRosterId = roster.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
 
 /* ─── Rate limiting ─────────────────────────────────────── */
