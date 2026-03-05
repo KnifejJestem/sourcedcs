@@ -167,6 +167,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=7000
+      - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
+      - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
     networks:
       - web
 
