@@ -446,17 +446,18 @@ function deleteEvent(id) {
   var hamburger = document.getElementById('hamburgerBtn');
   var nav       = document.getElementById('mainNav');
   if (!hamburger || !nav) return;
+  function closeNav() {
+    nav.classList.remove('nav-open');
+    hamburger.classList.remove('open');
+    hamburger.setAttribute('aria-expanded', 'false');
+  }
   hamburger.addEventListener('click', function() {
     var open = nav.classList.toggle('nav-open');
     hamburger.classList.toggle('open', open);
     hamburger.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
   nav.querySelectorAll('.nav-link').forEach(function(link) {
-    link.addEventListener('click', function() {
-      nav.classList.remove('nav-open');
-      hamburger.classList.remove('open');
-      hamburger.setAttribute('aria-expanded', 'false');
-    });
+    link.addEventListener('click', closeNav);
   });
 })();
 </script>
