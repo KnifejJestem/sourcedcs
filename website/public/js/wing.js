@@ -12,11 +12,12 @@ function setTheme(t) {
   var user = null;
   try { user = JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) {}
   if (!token) return;
-  var name = (user && user.name) ? user.name.toUpperCase() : 'PILOT';
+  var name = (user && user.name) ? user.name.toUpperCase() : 'USER';
   var btn = document.getElementById('loginBtn');
   if (btn) {
-    btn.textContent = name;
+    btn.textContent = name + ' \u23FB';
     btn.title = 'Click to log out';
+    btn.classList.add('login-btn--logout');
     btn.onclick = function() { try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {} location.reload(); };
   }
 })();

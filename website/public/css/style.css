@@ -463,6 +463,10 @@ footer {
 .login-btn:hover { background: var(--text-2); }
 :root.movie .login-btn { background: var(--accent); color: #000; }
 :root.movie .login-btn:hover { background: #2de06a; }
+.login-btn--logout { background: var(--red); color: #fff; }
+.login-btn--logout:hover { background: #7a1515; }
+:root.movie .login-btn--logout { background: var(--red); color: #fff; }
+:root.movie .login-btn--logout:hover { background: #cc2222; }
 
 /* ═══════════════════════════════════════════════════════════
    HERO SECTION
