@@ -185,6 +185,8 @@ cython_debug/
 .cursorindexingignore
 /.idea
 node_modules/
+website/node_modules/
+website/data/applications.json
 vendor/
 /.claude
 infra/.env.example

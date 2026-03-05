@@ -69,7 +69,7 @@ services:
         ssl_certificate_key /etc/letsencrypt/live/'$$DOMAIN'/privkey.pem;
         location / {
           set \$$upstream main-website;
-          proxy_pass http://\$$upstream:80;
+          proxy_pass http://\$$upstream:3000;
           proxy_set_header Host $$host;
           proxy_set_header X-Real-IP $$remote_addr;
           proxy_set_header X-Forwarded-Proto https; }
@@ -156,14 +156,17 @@ services:
       - web
 
   # ─────────────────────────────────────────
-  # Main - Website
+  # Main - Website (Node.js / Express)
   # ─────────────────────────────────────────
   main-website:
-    image: nginx:alpine
+    build:
+      context: ../website
+      dockerfile: Dockerfile
     container_name: main-website
     restart: unless-stopped
-    volumes:
-      - ../website:/usr/share/nginx/html:ro
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
     networks:
       - web
 
