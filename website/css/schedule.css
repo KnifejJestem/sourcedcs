@@ -1,0 +1,294 @@
+/* ═══════════════════════════════════════════════════════════
+   SCHEDULE PAGE STYLES
+   Imports all tokens from css/style.css (loaded first)
+═══════════════════════════════════════════════════════════ */
+
+/* Active nav link */
+.active-nav {
+  color: var(--text) !important;
+  border-color: var(--border-strong) !important;
+}
+:root.movie .active-nav { color: var(--accent) !important; }
+
+/* ── Schedule hero ──────────────────────────────────────── */
+.sched-hero {
+  border-bottom: 1px solid var(--border);
+  padding: 56px 24px 48px;
+  background: var(--bg2);
+}
+.sched-hero-inner {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.sched-title {
+  font-family: 'Orbitron', monospace;
+  font-weight: 900;
+  font-size: clamp(20px, 4vw, 36px);
+  letter-spacing: 4px;
+  color: var(--text);
+  margin: 12px 0 10px;
+}
+:root.movie .sched-title { color: var(--accent); text-shadow: 0 0 20px rgba(57,255,122,.3); }
+.sched-sub {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+}
+
+/* ── Legend bar ─────────────────────────────────────────── */
+.sched-legend-bar {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  padding: 10px 24px;
+  overflow-x: auto;
+}
+.sched-legend-bar .sched-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sched-legend-label {
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-right: 2px;
+  white-space: nowrap;
+}
+
+/* Op type / status badges */
+.op-badge {
+  display: inline-block;
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  padding: 2px 8px;
+  border: 1px solid;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.type-campaign  { color: var(--blue);  border-color: var(--blue);  }
+.type-training  { color: var(--amber); border-color: var(--amber); }
+.type-cap       { color: var(--green); border-color: var(--green); }
+.type-strike    { color: var(--red);   border-color: var(--red);   }
+.type-cas       { color: var(--amber); border-color: var(--amber); }
+.type-map       { color: var(--text-3); border-color: var(--border-strong); }
+:root.movie .type-campaign { color: var(--blue);  border-color: var(--blue);  }
+:root.movie .type-training { color: var(--amber); border-color: var(--amber); }
+:root.movie .type-cap      { color: var(--accent); border-color: var(--accent); }
+:root.movie .type-strike   { color: var(--red);   border-color: var(--red);   }
+:root.movie .type-cas      { color: var(--amber); border-color: var(--amber); }
+
+.status-planned   { color: var(--text-2);  border-color: var(--border-strong); }
+.status-active    { color: var(--green);   border-color: var(--green);   }
+.status-done      { color: var(--text-3);  border-color: var(--border);  }
+.status-cancelled { color: var(--red);     border-color: var(--red);     }
+:root.movie .status-active  { color: var(--accent); border-color: var(--accent); }
+
+/* ── Main layout ────────────────────────────────────────── */
+.sched-main {
+  padding: 40px 24px 80px;
+  min-height: 50vh;
+}
+.sched-container {
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Filter buttons ─────────────────────────────────────── */
+.sched-filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 2px;
+  padding: 6px 16px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-3);
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.filter-btn:hover { color: var(--text); border-color: var(--text); }
+.filter-btn.active { background: var(--text); color: var(--text-inv); border-color: var(--text); }
+:root.movie .filter-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+:root.movie .filter-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── Ops grid ───────────────────────────────────────────── */
+.ops-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Op card ────────────────────────────────────────────── */
+.op-card {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: border-color .15s, box-shadow .15s;
+}
+.op-card:hover {
+  border-color: var(--text);
+  box-shadow: var(--shadow-md);
+}
+:root.movie .op-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 14px rgba(57,255,122,.08);
+}
+.op-past { opacity: .55; }
+
+/* Date column */
+.op-date-col {
+  min-width: 72px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border-strong);
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.op-day-name {
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+}
+.op-day-num {
+  font-family: 'Orbitron', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+:root.movie .op-day-num { color: var(--accent); }
+.op-month {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+}
+.op-time {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  text-align: center;
+}
+
+/* Body */
+.op-body {
+  flex: 1;
+  min-width: 0;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.op-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.op-name {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+:root.movie .op-name { color: var(--accent); }
+.op-desc {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.op-meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.op-meta-item {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+}
+.op-slots {
+  color: var(--text);
+  font-weight: 600;
+}
+:root.movie .op-slots { color: var(--accent); }
+
+/* Fill bar */
+.op-fill-bar {
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  overflow: hidden;
+  max-width: 200px;
+}
+.op-fill-inner {
+  height: 100%;
+  background: var(--green);
+  border-radius: 1px;
+  transition: width .4s ease;
+}
+:root.movie .op-fill-inner { background: var(--accent); }
+
+/* Empty state */
+.sched-empty {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 48px;
+  border: 1px dashed var(--border-strong);
+}
+
+/* Note at bottom */
+.sched-note {
+  margin-top: 28px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  font-size: 10px;
+  line-height: 1.7;
+  color: var(--text-2);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.sched-note-icon {
+  font-size: 16px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  line-height: 1.6;
+}
+.sched-note a {
+  color: var(--text);
+  border-bottom: 1px solid var(--border-strong);
+}
+:root.movie .sched-note a { color: var(--accent); }
+
+@media (max-width: 480px) {
+  .op-card { flex-direction: column; }
+  .op-date-col {
+    flex-direction: row;
+    border-right: none;
+    border-bottom: 1px solid var(--border-strong);
+    gap: 12px;
+    padding: 10px 16px;
+  }
+  .op-time { border-top: none; border-left: 1px solid var(--border); padding: 0 0 0 10px; margin-top: 0; width: auto; }
+}

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authenticating… — SOURCE DCS</title>
+  <link rel="icon" href="sourcelogobg.png">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+      gap: 20px;
+    }
+    .cb-logo { width: 64px; height: 64px; border-radius: 8px; }
+    .cb-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 18px;
+      letter-spacing: 4px;
+      color: var(--text);
+    }
+    :root.movie .cb-title { color: var(--accent); }
+    .cb-status {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      color: var(--text-3);
+    }
+    .cb-error {
+      font-size: 11px;
+      color: var(--red);
+      max-width: 400px;
+      line-height: 1.6;
+    }
+    .cb-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--text);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    :root.movie .cb-spinner { border-top-color: var(--accent); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<img class="cb-logo" src="sourcelogobg.png" alt="SOURCE">
+<div class="cb-title">SOURCEDCS</div>
+<div class="cb-spinner" id="spinner"></div>
+<div class="cb-status" id="cbStatus">AUTHENTICATING...</div>
+<div class="cb-error" id="cbError" style="display:none"></div>
+
+<script>
+/* ── Theme ──────────────────────────────────────────────── */
+(function() {
+  try { if (localStorage.getItem('sdcs-theme') === 'movie') document.documentElement.classList.add('movie'); } catch(e) {}
+})();
+
+/* ── OAuth Implicit Flow callback handler ──────────────── */
+(function() {
+  var status = document.getElementById('cbStatus');
+  var errEl  = document.getElementById('cbError');
+  var spin   = document.getElementById('spinner');
+
+  function fail(msg) {
+    spin.style.display  = 'none';
+    status.textContent  = 'AUTHENTICATION FAILED';
+    errEl.style.display = '';
+    errEl.textContent   = msg || 'An unknown error occurred. Please try again.';
+  }
+
+  /* Casdoor may return params as query string (?access_token=...) or as
+     URL hash fragment (#access_token=...). Handle both. */
+  var raw    = window.location.hash.slice(1) || window.location.search.slice(1);
+  var params = {};
+  raw.split('&').forEach(function(pair) {
+    var parts = pair.split('=');
+    if (parts.length === 2) params[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
+  });
+
+  /* Validate state to prevent CSRF */
+  var savedState = null;
+  try { savedState = sessionStorage.getItem('sdcs-oauth-state'); } catch(e) {}
+  if (savedState && params.state && params.state !== savedState) {
+    fail('State mismatch — possible CSRF attack. Please log in again.');
+    return;
+  }
+  try { sessionStorage.removeItem('sdcs-oauth-state'); } catch(e) {}
+
+  if (params.error) {
+    fail('Casdoor error: ' + (params.error_description || params.error));
+    return;
+  }
+
+  var token = params.access_token;
+  if (!token) {
+    fail('No access token received. The login may have been cancelled or the client is misconfigured.');
+    return;
+  }
+
+  /* Store token */
+  try { localStorage.setItem('sdcs-token', token); } catch(e) {}
+
+  /* Decode JWT payload (base64url) to get basic user info — no verification needed
+     for display purposes; actual verification happens server-side. */
+  try {
+    var parts = token.split('.');
+    if (parts.length !== 3) throw new Error('Not a valid JWT');
+    var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    var user    = {
+      name:  payload.name || payload.preferred_username || payload.sub || '',
+      email: payload.email || ''
+    };
+    localStorage.setItem('sdcs-user', JSON.stringify(user));
+  } catch(e) {
+    /* Non-fatal — user info just won't show in header */
+  }
+
+  status.textContent = 'LOGGED IN — REDIRECTING...';
+  window.location.replace('/');
+})();
+</script>
+</body>
+</html>

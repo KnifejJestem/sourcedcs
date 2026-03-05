@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operations Schedule — SOURCE DCS</title>
+  <meta name="description" content="Upcoming SOURCE DCS operations, training sorties, and flight events.">
+  <link rel="icon" href="sourcelogobg.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/schedule.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<!-- HEADER -->
+<header>
+  <a class="header-logo-link" href="/">
+    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    <div class="header-title">SOURCEDCS</div>
+  </a>
+  <nav class="header-nav" aria-label="Main navigation">
+    <a class="nav-link" href="/#about">ABOUT</a>
+    <a class="nav-link" href="/#roster">ROSTER</a>
+    <a class="nav-link active-nav" href="schedule.html">SCHEDULE</a>
+    <a class="nav-link" href="/#recruit">JOIN</a>
+  </nav>
+  <div class="header-spacer"></div>
+  <div class="header-right">
+    <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
+    <div class="hdr-toggle-group">
+      <span class="hdr-toggle-label">DISPLAY</span>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- PAGE TITLE -->
+<section class="sched-hero">
+  <div class="sched-hero-inner">
+    <div class="section-label">OPERATIONS CALENDAR</div>
+    <h1 class="sched-title">UPCOMING OPERATIONS</h1>
+    <p class="sched-sub">All times UTC · Schedule maintained by squadron staff · Subject to change</p>
+  </div>
+</section>
+
+<!-- LEGEND -->
+<div class="sched-legend-bar">
+  <div class="sched-container">
+    <span class="sched-legend-label">TYPE:</span>
+    <span class="op-badge type-campaign">CAMPAIGN</span>
+    <span class="op-badge type-training">TRAINING</span>
+    <span class="op-badge type-cap">CAP</span>
+    <span class="op-badge type-strike">STRIKE</span>
+    <span class="op-badge type-cas">CAS</span>
+    <span class="sched-legend-label" style="margin-left:16px;">STATUS:</span>
+    <span class="op-badge status-planned">PLANNED</span>
+    <span class="op-badge status-active">ACTIVE</span>
+    <span class="op-badge status-done">COMPLETE</span>
+    <span class="op-badge status-cancelled">CANCELLED</span>
+  </div>
+</div>
+
+<!-- OPERATIONS LIST -->
+<main class="sched-main">
+  <div class="sched-container">
+
+    <!-- Filter controls -->
+    <div class="sched-filters">
+      <button class="filter-btn active" data-filter="all"      onclick="filterOps(this, 'all')">ALL</button>
+      <button class="filter-btn"        data-filter="upcoming" onclick="filterOps(this, 'upcoming')">UPCOMING</button>
+      <button class="filter-btn"        data-filter="campaign" onclick="filterOps(this, 'campaign')">CAMPAIGN</button>
+      <button class="filter-btn"        data-filter="training" onclick="filterOps(this, 'training')">TRAINING</button>
+    </div>
+
+    <!-- Operations grid populated by JS -->
+    <div class="ops-grid" id="opsGrid"></div>
+
+    <div class="sched-empty" id="opsEmpty" style="display:none">
+      No operations match the current filter.
+    </div>
+
+    <div class="sched-note">
+      <span class="sched-note-icon">≡</span>
+      Operations are announced in the
+      <a href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">#operations Discord channel</a>.
+      All squadron members will be notified 24 h before each event.
+    </div>
+
+  </div>
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand-area">
+      <img class="footer-logo" src="sourcelogobg.png" alt="SOURCE">
+      <span class="footer-brand">SOURCEDCS</span>
+    </div>
+    <div class="footer-links-row">
+      <a class="footer-link" href="/">Home</a>
+      <span class="footer-sep">·</span>
+      <a class="footer-link" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">Discord</a>
+      <span class="footer-sep">·</span>
+      <a class="footer-link" href="https://wiki.sourcedcs.page" target="_blank" rel="noopener">Wiki</a>
+      <span class="footer-sep">·</span>
+      <a class="footer-link" href="https://github.com/NikNam3/sourcedcs" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <div class="footer-copy">
+      <span class="footer-text">© 2025 SOURCEDCS</span>
+      <span class="footer-sep">·</span>
+      <span class="footer-text">MIT License</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ── Theme ──────────────────────────────────────────────── */
+function setTheme(t) {
+  document.documentElement.classList.toggle('movie', t === 'movie');
+  document.querySelectorAll('.theme-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.theme === t);
+  });
+  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
+}
+(function() {
+  try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {}
+})();
+
+/* ── Auth (shared) ──────────────────────────────────────── */
+var CASDOOR_CLIENT_ID = 'sourcedcs-web';
+var CASDOOR_ENDPOINT  = 'https://auth.sourcedcs.page';
+function loginWithCasdoor() {
+  var redirectUri = encodeURIComponent(window.location.origin + '/auth-callback.html');
+  var state = Math.random().toString(36).slice(2);
+  try { sessionStorage.setItem('sdcs-oauth-state', state); } catch(e) {}
+  window.location.href = CASDOOR_ENDPOINT
+    + '/login/oauth/authorize?client_id=' + CASDOOR_CLIENT_ID
+    + '&redirect_uri=' + redirectUri
+    + '&response_type=token&scope=openid+profile&state=' + state;
+}
+(function() {
+  var token = null;
+  var user  = null;
+  try { token = localStorage.getItem('sdcs-token'); user = JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) {}
+  if (token) {
+    var name = (user && user.name) ? user.name.toUpperCase() : 'PILOT';
+    var btn = document.getElementById('loginBtn');
+    if (btn) { btn.textContent = name; btn.onclick = function() { try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {} location.reload(); }; }
+  }
+})();
+
+/* ── Operations data ────────────────────────────────────── */
+/* Edit this array to add, remove, or modify operations.
+   date: ISO 8601 string (UTC)
+   type: campaign | training | cap | strike | cas
+   status: planned | active | complete | cancelled
+   map: Caucasus | Persian Gulf | Syria | Sinai | South Atlantic | etc.
+*/
+var OPS = [
+  {
+    id: 1,
+    name: 'OPERATION IRON SHIELD',
+    type: 'campaign',
+    status: 'planned',
+    date: '2025-04-05T18:00:00Z',
+    map: 'Syria',
+    airframes: ['F/A-18C', 'F-16C'],
+    description: 'Defensive counter-air campaign over northern Syria. Package includes CAP, SEAD, and tanker support. Full ATO briefing required.',
+    slots: 8,
+    filledSlots: 3
+  },
+  {
+    id: 2,
+    name: 'TRAINING SORTIE — BFM FUNDAMENTALS',
+    type: 'training',
+    status: 'planned',
+    date: '2025-03-29T17:00:00Z',
+    map: 'Persian Gulf',
+    airframes: ['Any'],
+    description: 'Basic fighter manoeuvres training session. All skill levels welcome. Instructor: NIKNAM.',
+    slots: 6,
+    filledSlots: 2
+  },
+  {
+    id: 3,
+    name: 'OPERATION DESERT HAMMER',
+    type: 'strike',
+    status: 'planned',
+    date: '2025-04-12T19:00:00Z',
+    map: 'Persian Gulf',
+    airframes: ['F/A-18C'],
+    description: 'Precision strike against hardened targets. SEAD support provided. SPINS package mandatory.',
+    slots: 4,
+    filledSlots: 1
+  },
+  {
+    id: 4,
+    name: 'CAUCASUS CAP EXERCISE',
+    type: 'cap',
+    status: 'planned',
+    date: '2025-04-19T16:00:00Z',
+    map: 'Caucasus',
+    airframes: ['F-16C', 'F/A-18C'],
+    description: 'Combat Air Patrol exercise with GCI integration. ASACS LINK will be used for live datalink.',
+    slots: 4,
+    filledSlots: 0
+  },
+  {
+    id: 5,
+    name: 'TRAINING SORTIE — ATO BRIEF WALKTHROUGH',
+    type: 'training',
+    status: 'complete',
+    date: '2025-03-15T17:00:00Z',
+    map: 'Caucasus',
+    airframes: ['Any'],
+    description: 'Introduction to the ATO Brief tool and SOURCE mission planning procedures.',
+    slots: 8,
+    filledSlots: 8
+  }
+];
+
+/* ── Render ─────────────────────────────────────────────── */
+var currentFilter = 'all';
+var MONTH_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+var DAY_SHORT   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+
+function typeLabel(t) {
+  return { campaign:'CAMPAIGN', training:'TRAINING', cap:'CAP', strike:'STRIKE', cas:'CAS' }[t] || t.toUpperCase();
+}
+function statusLabel(s) {
+  return { planned:'PLANNED', active:'ACTIVE', complete:'COMPLETE', cancelled:'CANCELLED' }[s] || s.toUpperCase();
+}
+function typeClass(t)   { return 'type-'   + t; }
+function statusClass(s) { return 'status-' + (s === 'complete' ? 'done' : s); }
+
+function renderOps(filter) {
+  var now  = new Date();
+  var list = OPS.filter(function(op) {
+    var d = new Date(op.date);
+    if (filter === 'upcoming') return d >= now && op.status !== 'cancelled' && op.status !== 'complete';
+    if (filter === 'campaign') return op.type === 'campaign';
+    if (filter === 'training') return op.type === 'training';
+    return true;
+  });
+
+  list.sort(function(a, b) {
+    var da = new Date(a.date), db = new Date(b.date);
+    var nowMs = now.getTime();
+    var ua = da >= now ? da.getTime() - nowMs : nowMs - da.getTime() + 1e15;
+    var ub = db >= now ? db.getTime() - nowMs : nowMs - db.getTime() + 1e15;
+    return ua - ub;
+  });
+
+  var grid = document.getElementById('opsGrid');
+  var empty = document.getElementById('opsEmpty');
+
+  if (!list.length) {
+    grid.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = list.map(function(op) {
+    var d = new Date(op.date);
+    var isPast = d < now;
+    var fillPct = op.slots ? Math.round(op.filledSlots / op.slots * 100) : 0;
+
+    return '<div class="op-card' + (isPast ? ' op-past' : '') + '">'
+      + '<div class="op-date-col">'
+        + '<div class="op-day-name">'  + DAY_SHORT[d.getUTCDay()]      + '</div>'
+        + '<div class="op-day-num">'   + String(d.getUTCDate()).padStart(2,'0') + '</div>'
+        + '<div class="op-month">'     + MONTH_SHORT[d.getUTCMonth()]  + '</div>'
+        + '<div class="op-time">'      + String(d.getUTCHours()).padStart(2,'0') + ':' + String(d.getUTCMinutes()).padStart(2,'0') + 'Z</div>'
+      + '</div>'
+      + '<div class="op-body">'
+        + '<div class="op-badges">'
+          + '<span class="op-badge ' + typeClass(op.type)   + '">' + typeLabel(op.type)   + '</span>'
+          + '<span class="op-badge ' + statusClass(op.status) + '">' + statusLabel(op.status) + '</span>'
+          + '<span class="op-badge type-map">' + op.map + '</span>'
+        + '</div>'
+        + '<div class="op-name">' + op.name + '</div>'
+        + '<div class="op-desc">' + op.description + '</div>'
+        + '<div class="op-meta">'
+          + '<span class="op-meta-item">AIRFRAMES: ' + op.airframes.join(' · ') + '</span>'
+          + (op.slots ? '<span class="op-meta-item">SLOTS: <span class="op-slots">' + op.filledSlots + '/' + op.slots + '</span></span>' : '')
+        + '</div>'
+        + (op.slots ? '<div class="op-fill-bar"><div class="op-fill-inner" style="width:' + fillPct + '%"></div></div>' : '')
+      + '</div>'
+    + '</div>';
+  }).join('');
+}
+
+function filterOps(btn, filter) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  renderOps(filter);
+}
+
+renderOps('all');
+</script>
+
+</body>
+</html>

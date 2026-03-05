@@ -3,18 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SOURCEDCS</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%274%27 fill=%27%231a2a1a%27/%3E%3Ctext x=%2716%27 y=%2722%27 text-anchor=%27middle%27 font-family=%27monospace%27 font-size=%2710%27 font-weight=%27bold%27 fill=%27%2339ff7a%27%3ESRC%3C/text%3E%3C/svg%3E">
+  <title>SOURCE DCS — Virtual Aviation Squadron</title>
+  <meta name="description" content="SOURCE is an open-source virtual aviation squadron for DCS World. Tactical operations, professional briefing tools, and a dedicated community of sim pilots.">
+  <link rel="icon" href="sourcelogobg.png">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <div class="scanline"></div>
 
+<!-- ══════════════════════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════════════════════ -->
 <header>
-  <div class="header-title">SOURCEDCS</div>
+  <a class="header-logo-link" href="/">
+    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    <div class="header-title">SOURCEDCS</div>
+  </a>
+  <nav class="header-nav" aria-label="Main navigation">
+    <a class="nav-link" href="#about">ABOUT</a>
+    <a class="nav-link" href="#roster">ROSTER</a>
+    <a class="nav-link" href="schedule.html">SCHEDULE</a>
+    <a class="nav-link" href="#recruit">JOIN</a>
+  </nav>
   <div class="header-spacer"></div>
   <div class="header-right">
+    <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
     <div class="hdr-toggle-group">
       <span class="hdr-toggle-label">DISPLAY</span>
       <div class="theme-toggle">
@@ -25,100 +39,524 @@
   </div>
 </header>
 
-<!-- ── Welcome ───────────────────────────────────────────── -->
-<section class="welcome-section">
-  <div class="welcome-icon">✈</div>
-  <h1 class="welcome-title">SOURCEDCS</h1>
-  <p class="welcome-subtitle">DCS World Tactical Tools</p>
+<!-- ══════════════════════════════════════════════════════════
+     HERO
+══════════════════════════════════════════════════════════ -->
+<section class="hero-section">
+  <img class="hero-logo" src="sourcelogobg.png" alt="SOURCE">
+  <h1 class="hero-title">SOURCEDCS</h1>
+  <p class="hero-subtitle">VIRTUAL AVIATION SQUADRON · DCS WORLD</p>
   <div class="welcome-divider"></div>
-  <p class="welcome-desc">
-    A collection of open-source web tools built for DCS World mission planners,
-    briefers, and GCI operators. Load your ATO package, brief your flight,
-    and run your GCI server — all from the browser.
+  <p class="hero-desc">
+    An open-source virtual aviation squadron built around realistic tactical aviation in DCS World.
+    Professional briefing tools, structured combined-arms operations, and a community of dedicated sim pilots.
   </p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">
+      <span class="btn-icon">⊕</span> JOIN DISCORD
+    </a>
+    <button class="btn btn-secondary" id="heroLoginBtn" onclick="loginWithCasdoor()">
+      <span class="btn-icon">→</span> MEMBER LOGIN
+    </button>
+  </div>
+  <div class="hero-stats">
+    <div class="stat-item">
+      <div class="stat-value">OPEN SOURCE</div>
+      <div class="stat-label">ALL TOOLS</div>
+    </div>
+    <div class="stat-sep">·</div>
+    <div class="stat-item">
+      <div class="stat-value">TACTICAL</div>
+      <div class="stat-label">OPS FOCUS</div>
+    </div>
+    <div class="stat-sep">·</div>
+    <div class="stat-item">
+      <div class="stat-value">REALISTIC</div>
+      <div class="stat-label">PROCEDURES</div>
+    </div>
+  </div>
 </section>
 
-<!-- ── Linktree ──────────────────────────────────────────── -->
-<section class="linktree-section">
-  <div class="section-label">TOOLS &amp; LINKS</div>
-  <div class="link-list">
-
-    <a class="link-card" href="/atobrief/" target="_blank" rel="noopener">
-      <div class="link-card-icon">⊕</div>
-      <div class="link-card-body">
-        <div class="link-card-title">ATO BRIEF</div>
-        <div class="link-card-desc">Tactical briefing app — load &amp; present ATO/ACO/SPINS/COMMS packages with live room sync</div>
-      </div>
-      <span class="link-card-tag">WEB APP</span>
-      <div class="link-card-arrow">→</div>
+<!-- ══════════════════════════════════════════════════════════
+     QUICK LINKS BAR
+══════════════════════════════════════════════════════════ -->
+<div class="quicklinks-bar">
+  <div class="quicklinks-inner">
+    <a class="quicklink quicklink-discord" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">
+      <span class="ql-icon">⊕</span> DISCORD
     </a>
-
-    <a class="link-card" href="/asacs_link/" target="_blank" rel="noopener">
-      <div class="link-card-icon">◉</div>
-      <div class="link-card-body">
-        <div class="link-card-title">ASACS LINK</div>
-        <div class="link-card-desc">DCS GCI server — real-time unit datalink with coalition filtering for WebSocket clients</div>
-      </div>
-      <span class="link-card-tag">SERVER</span>
-      <div class="link-card-arrow">→</div>
+    <a class="quicklink" href="https://wiki.sourcedcs.page" target="_blank" rel="noopener">
+      <span class="ql-icon">≡</span> WIKI
     </a>
-
-    <a class="link-card" href="/tools/miztoyaml/" target="_blank" rel="noopener">
-      <div class="link-card-icon">⟐</div>
-      <div class="link-card-body">
-        <div class="link-card-title">MIZ TO YAML</div>
-        <div class="link-card-desc">Convert DCS .miz mission files into ATO BRIEF–compatible YAML packages</div>
-      </div>
-      <span class="link-card-tag">TOOL</span>
-      <div class="link-card-arrow">→</div>
+    <a class="quicklink" href="https://ato.sourcedcs.page" target="_blank" rel="noopener">
+      <span class="ql-icon">⊡</span> ATO BRIEF
     </a>
-
-    <a class="link-card" href="https://github.com/NikNam3/sourcedcs" target="_blank" rel="noopener">
-      <div class="link-card-icon">⌥</div>
-      <div class="link-card-body">
-        <div class="link-card-title">GITHUB</div>
-        <div class="link-card-desc">Source code, issues, and documentation — NikNam3 / sourcedcs</div>
-      </div>
-      <span class="link-card-tag">REPO</span>
-      <div class="link-card-arrow">→</div>
+    <a class="quicklink" href="https://olympus.sourcedcs.page" target="_blank" rel="noopener">
+      <span class="ql-icon">◎</span> OLYMPUS
     </a>
-
-    <a class="link-card" href="https://github.com/NikNam3/sourcedcs/blob/main/docs/atobrief/yaml-format.md" target="_blank" rel="noopener">
-      <div class="link-card-icon">≡</div>
-      <div class="link-card-body">
-        <div class="link-card-title">YAML FORMAT REFERENCE</div>
-        <div class="link-card-desc">Full schema reference for ATO BRIEF package files (.yaml)</div>
-      </div>
-      <span class="link-card-tag">DOCS</span>
-      <div class="link-card-arrow">→</div>
+    <a class="quicklink" href="https://asacs.sourcedcs.page" target="_blank" rel="noopener">
+      <span class="ql-icon">◉</span> ASACS
     </a>
+    <a class="quicklink" href="schedule.html">
+      <span class="ql-icon">⊞</span> SCHEDULE
+    </a>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     ABOUT / MISSION
+══════════════════════════════════════════════════════════ -->
+<section id="about" class="content-section">
+  <div class="section-container">
+    <div class="section-label">ABOUT THE SQUADRON</div>
+    <div class="about-intro">
+      <h2 class="section-title">What is SOURCE?</h2>
+      <p class="section-desc">
+        SOURCE is a DCS World virtual aviation squadron dedicated to realistic, coordinated tactical aviation.
+        We operate across multiple airframes with an emphasis on combined-arms missions, structured briefings,
+        and open-source tooling that any sim pilot can use or contribute to.
+        Our name reflects our core value: everything we build is open — our tools, our procedures, our community.
+      </p>
+    </div>
+    <div class="about-grid">
+      <div class="about-card">
+        <div class="about-card-icon">⊕</div>
+        <div class="about-card-title">TACTICAL OPERATIONS</div>
+        <div class="about-card-desc">Full ATO/ACO/SPINS packages, professional briefings, and coordinated combined-arms execution across multiple airframes.</div>
+      </div>
+      <div class="about-card">
+        <div class="about-card-icon">◉</div>
+        <div class="about-card-title">OPEN-SOURCE TOOLS</div>
+        <div class="about-card-desc">All our tactical tools — ATO Brief, ASACS GCI server, Miz-to-YAML — are fully open source and free to use.</div>
+      </div>
+      <div class="about-card">
+        <div class="about-card-icon">≡</div>
+        <div class="about-card-title">REALISTIC PROCEDURES</div>
+        <div class="about-card-desc">We follow real-world-inspired procedures: proper comms discipline, ROE, SPINS, ACO, and mission planning cycles.</div>
+      </div>
+      <div class="about-card">
+        <div class="about-card-icon">⌥</div>
+        <div class="about-card-title">WELCOMING COMMUNITY</div>
+        <div class="about-card-desc">Whether you're new to DCS or a veteran simmer, SOURCE has a place for motivated, team-first pilots.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     GALLERY
+══════════════════════════════════════════════════════════ -->
+<section id="gallery" class="content-section gallery-section">
+  <div class="section-container">
+    <div class="section-label">GALLERY</div>
+    <div class="gallery-grid">
+
+      <div class="gallery-item">
+        <div class="gallery-placeholder gp-1"></div>
+        <div class="gallery-caption">F/A-18C HORNET — LOW-LEVEL STRIKE</div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-placeholder gp-2"></div>
+        <div class="gallery-caption">FORMATION FLIGHT — PERSIAN GULF</div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-placeholder gp-3"></div>
+        <div class="gallery-caption">ASACS LINK — GCI DATALINK PICTURE</div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-placeholder gp-4"></div>
+        <div class="gallery-caption">ATO BRIEF — PACKAGE PRESENTATION</div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-placeholder gp-5"></div>
+        <div class="gallery-caption">F-16C VIPER — COMBAT AIR PATROL</div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-placeholder gp-6"></div>
+        <div class="gallery-caption">CAUCASUS — NIGHT OPERATIONS</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     PILOT ROSTER
+══════════════════════════════════════════════════════════ -->
+<section id="roster" class="content-section">
+  <div class="section-container">
+    <div class="section-label">PILOT ROSTER</div>
+    <div class="roster-scroll">
+      <table class="roster-table">
+        <thead>
+          <tr>
+            <th>CALLSIGN</th>
+            <th>RANK</th>
+            <th>AIRFRAME</th>
+            <th>ROLE</th>
+            <th>STATUS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="callsign">NIKNAM</span></td>
+            <td>SQ/LDR</td>
+            <td>F/A-18C · F-16C</td>
+            <td>Squadron Leader · Developer</td>
+            <td><span class="status-badge badge-active">ACTIVE</span></td>
+          </tr>
+          <tr class="roster-open-row">
+            <td colspan="5" class="roster-open-cell">
+              <span>PILOT SLOTS OPEN — </span>
+              <a href="#recruit">APPLY NOW →</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     SERVER STATUS + DISCORD WIDGET
+══════════════════════════════════════════════════════════ -->
+<section class="content-section status-discord-section">
+  <div class="section-container status-discord-grid">
+
+    <!-- DCS Server Status -->
+    <div class="status-card">
+      <div class="section-label">DCS SERVER STATUS</div>
+      <div class="server-status-body">
+        <div class="status-row">
+          <div class="status-dot" id="serverDot"></div>
+          <div class="status-info">
+            <div class="status-name" id="serverName">SOURCE DCS SERVER</div>
+            <div class="status-detail" id="serverDetail">CHECKING...</div>
+          </div>
+        </div>
+        <div class="status-links">
+          <a class="status-link" href="https://olympus.sourcedcs.page" target="_blank" rel="noopener">OLYMPUS GCS →</a>
+          <a class="status-link" href="https://asacs.sourcedcs.page" target="_blank" rel="noopener">ASACS LINK →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Discord Widget -->
+    <div class="discord-widget-card">
+      <div class="section-label">DISCORD — JOIN THE SQUADRON</div>
+      <!-- Replace DISCORD_SERVER_ID with your actual Discord server ID.
+           Enable the widget in Server Settings → Widget first. -->
+      <iframe
+        src="https://discord.com/widget?id=DISCORD_SERVER_ID&theme=dark"
+        width="100%" height="300"
+        allowtransparency="true"
+        frameborder="0"
+        sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+        class="discord-iframe"
+        title="SOURCE Discord">
+      </iframe>
+      <a class="btn btn-primary discord-join-btn"
+         href="https://discord.gg/sourcedcs"
+         target="_blank" rel="noopener">
+        <span class="btn-icon">⊕</span> JOIN DISCORD SERVER
+      </a>
+    </div>
 
   </div>
 </section>
 
+<!-- ══════════════════════════════════════════════════════════
+     RECRUITMENT
+══════════════════════════════════════════════════════════ -->
+<section id="recruit" class="content-section recruit-section">
+  <div class="section-container">
+    <div class="section-label">JOIN SOURCE</div>
+    <div class="recruit-grid">
+
+      <div class="recruit-info">
+        <h2 class="section-title">How to Join</h2>
+        <p class="section-desc">
+          SOURCE welcomes motivated DCS pilots committed to realistic, coordinated operations.
+          No previous virtual squadron experience required — just a good attitude,
+          a working mic, and a willingness to follow procedures.
+        </p>
+        <div class="recruit-steps">
+          <div class="recruit-step">
+            <div class="step-num">01</div>
+            <div class="step-body">
+              <div class="step-title">JOIN DISCORD</div>
+              <div class="step-desc">Join our Discord server and introduce yourself in the #recruitment channel.</div>
+            </div>
+          </div>
+          <div class="recruit-step">
+            <div class="step-num">02</div>
+            <div class="step-body">
+              <div class="step-title">CREATE AN ACCOUNT</div>
+              <div class="step-desc">Register on our portal at <a href="https://auth.sourcedcs.page" target="_blank" rel="noopener">auth.sourcedcs.page</a> to access member tools and the wiki.</div>
+            </div>
+          </div>
+          <div class="recruit-step">
+            <div class="step-num">03</div>
+            <div class="step-body">
+              <div class="step-title">FLY WITH US</div>
+              <div class="step-desc">Join a training sortie or observer slot to get familiar with SOURCE procedures and comms.</div>
+            </div>
+          </div>
+          <div class="recruit-step">
+            <div class="step-num">04</div>
+            <div class="step-body">
+              <div class="step-title">BECOME A MEMBER</div>
+              <div class="step-desc">After evaluation you'll be formally inducted, assigned a callsign, and get access to all ops.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="recruit-reqs">
+        <div class="reqs-card">
+          <div class="reqs-title">REQUIREMENTS</div>
+          <ul class="reqs-list">
+            <li>DCS World installed (at least one full airframe module)</li>
+            <li>Working headset and microphone</li>
+            <li>SRS (Simple Radio Standalone) installed</li>
+            <li>Discord account</li>
+            <li>Commitment to attend at least one op per month</li>
+            <li>Respectful, team-first attitude</li>
+          </ul>
+          <div class="reqs-note">Age 16+ · English required for comms</div>
+          <a class="btn btn-primary"
+             href="https://discord.gg/sourcedcs"
+             target="_blank" rel="noopener"
+             style="width:100%;justify-content:center;margin-top:24px;">
+            <span class="btn-icon">⊕</span> APPLY VIA DISCORD
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     TOOLS & LINKS
+══════════════════════════════════════════════════════════ -->
+<section class="linktree-section">
+  <div class="section-container">
+    <div class="section-label">TOOLS &amp; LINKS</div>
+    <div class="link-list">
+
+      <a class="link-card" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">
+        <div class="link-card-icon">⊕</div>
+        <div class="link-card-body">
+          <div class="link-card-title">DISCORD SERVER</div>
+          <div class="link-card-desc">Join the SOURCE community — ops scheduling, briefings, coordination, and casual flying</div>
+        </div>
+        <span class="link-card-tag">COMMUNITY</span>
+        <div class="link-card-arrow">→</div>
+      </a>
+
+      <a class="link-card" href="https://wiki.sourcedcs.page" target="_blank" rel="noopener">
+        <div class="link-card-icon">≡</div>
+        <div class="link-card-body">
+          <div class="link-card-title">WIKI</div>
+          <div class="link-card-desc">Squadron wiki — SOPs, procedures, airframe guides, and mission archives</div>
+        </div>
+        <span class="link-card-tag">DOCS</span>
+        <div class="link-card-arrow">→</div>
+      </a>
+
+      <a class="link-card" href="https://ato.sourcedcs.page" target="_blank" rel="noopener">
+        <div class="link-card-icon">⊡</div>
+        <div class="link-card-body">
+          <div class="link-card-title">ATO BRIEF</div>
+          <div class="link-card-desc">Tactical briefing app — load &amp; present ATO/ACO/SPINS/COMMS packages with live room sync</div>
+        </div>
+        <span class="link-card-tag">WEB APP</span>
+        <div class="link-card-arrow">→</div>
+      </a>
+
+      <a class="link-card" href="https://olympus.sourcedcs.page" target="_blank" rel="noopener">
+        <div class="link-card-icon">◎</div>
+        <div class="link-card-body">
+          <div class="link-card-title">OLYMPUS</div>
+          <div class="link-card-desc">Real-time DCS mission control and ground control station — live map with all units</div>
+        </div>
+        <span class="link-card-tag">GCS</span>
+        <div class="link-card-arrow">→</div>
+      </a>
+
+      <a class="link-card" href="https://asacs.sourcedcs.page" target="_blank" rel="noopener">
+        <div class="link-card-icon">◉</div>
+        <div class="link-card-body">
+          <div class="link-card-title">ASACS LINK</div>
+          <div class="link-card-desc">DCS GCI server — real-time unit datalink with coalition filtering for WebSocket clients</div>
+        </div>
+        <span class="link-card-tag">SERVER</span>
+        <div class="link-card-arrow">→</div>
+      </a>
+
+      <a class="link-card" href="schedule.html">
+        <div class="link-card-icon">⊞</div>
+        <div class="link-card-body">
+          <div class="link-card-title">OPERATIONS SCHEDULE</div>
+          <div class="link-card-desc">Upcoming sorties, training events, and campaign operations calendar</div>
+        </div>
+        <span class="link-card-tag">OPS</span>
+        <div class="link-card-arrow">→</div>
+      </a>
+
+      <a class="link-card" href="https://github.com/NikNam3/sourcedcs" target="_blank" rel="noopener">
+        <div class="link-card-icon">⌥</div>
+        <div class="link-card-body">
+          <div class="link-card-title">GITHUB</div>
+          <div class="link-card-desc">Source code, issues, and documentation — NikNam3 / sourcedcs</div>
+        </div>
+        <span class="link-card-tag">REPO</span>
+        <div class="link-card-arrow">→</div>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     FOOTER
+══════════════════════════════════════════════════════════ -->
 <footer>
-  <span class="footer-text">SOURCEDCS</span>
-  <span class="footer-sep">·</span>
-  <a class="footer-link" href="https://github.com/NikNam3/sourcedcs" target="_blank" rel="noopener">GitHub</a>
-  <span class="footer-sep">·</span>
-  <span class="footer-text">MIT License</span>
+  <div class="footer-inner">
+    <div class="footer-brand-area">
+      <img class="footer-logo" src="sourcelogobg.png" alt="SOURCE">
+      <span class="footer-brand">SOURCEDCS</span>
+    </div>
+    <div class="footer-links-row">
+      <a class="footer-link" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">Discord</a>
+      <span class="footer-sep">·</span>
+      <a class="footer-link" href="https://wiki.sourcedcs.page" target="_blank" rel="noopener">Wiki</a>
+      <span class="footer-sep">·</span>
+      <a class="footer-link" href="https://ato.sourcedcs.page" target="_blank" rel="noopener">ATO Brief</a>
+      <span class="footer-sep">·</span>
+      <a class="footer-link" href="https://olympus.sourcedcs.page" target="_blank" rel="noopener">Olympus</a>
+      <span class="footer-sep">·</span>
+      <a class="footer-link" href="https://asacs.sourcedcs.page" target="_blank" rel="noopener">ASACS</a>
+      <span class="footer-sep">·</span>
+      <a class="footer-link" href="https://github.com/NikNam3/sourcedcs" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <div class="footer-copy">
+      <span class="footer-text">MIT License</span>
+      <span class="footer-sep">·</span>
+      <span class="footer-text">© 2025 SOURCEDCS</span>
+    </div>
+  </div>
 </footer>
 
+<!-- ══════════════════════════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════════════════════════ -->
 <script>
-  function setTheme(t) {
-    document.documentElement.classList.toggle('movie', t === 'movie');
-    document.querySelectorAll('.theme-btn').forEach(function(btn) {
-      btn.classList.toggle('active', btn.dataset.theme === t);
-    });
-    try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
+/* ── Theme ──────────────────────────────────────────────── */
+function setTheme(t) {
+  document.documentElement.classList.toggle('movie', t === 'movie');
+  document.querySelectorAll('.theme-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.theme === t);
+  });
+  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
+}
+
+(function() {
+  try {
+    var saved = localStorage.getItem('sdcs-theme');
+    if (saved === 'movie') setTheme('movie');
+  } catch(e) {}
+})();
+
+/* ── Auth / Casdoor ─────────────────────────────────────── */
+var CASDOOR_CLIENT_ID = 'sourcedcs-web';
+var CASDOOR_ENDPOINT  = 'https://auth.sourcedcs.page';
+
+function loginWithCasdoor() {
+  var redirectUri = encodeURIComponent(window.location.origin + '/auth-callback.html');
+  var state = Math.random().toString(36).slice(2);
+  try { sessionStorage.setItem('sdcs-oauth-state', state); } catch(e) {}
+  window.location.href = CASDOOR_ENDPOINT
+    + '/login/oauth/authorize?client_id=' + CASDOOR_CLIENT_ID
+    + '&redirect_uri=' + redirectUri
+    + '&response_type=token'
+    + '&scope=openid+profile'
+    + '&state=' + state;
+}
+
+function logoutCasdoor() {
+  try {
+    localStorage.removeItem('sdcs-token');
+    localStorage.removeItem('sdcs-user');
+  } catch(e) {}
+  window.location.reload();
+}
+
+(function() {
+  var token = null;
+  var user  = null;
+  try {
+    token = localStorage.getItem('sdcs-token');
+    user  = JSON.parse(localStorage.getItem('sdcs-user') || 'null');
+  } catch(e) {}
+
+  if (token) {
+    var name = (user && user.name) ? user.name.toUpperCase() : 'PILOT';
+    var btn  = document.getElementById('loginBtn');
+    var hero = document.getElementById('heroLoginBtn');
+    if (btn) {
+      btn.textContent = name;
+      btn.onclick = logoutCasdoor;
+      btn.title = 'Click to log out';
+    }
+    if (hero) {
+      hero.textContent = '→ MY ACCOUNT';
+      hero.onclick = function() {
+        window.open(CASDOOR_ENDPOINT, '_blank', 'noopener');
+      };
+    }
+  }
+})();
+
+/* ── Server Status ──────────────────────────────────────── */
+(function() {
+  var dot    = document.getElementById('serverDot');
+  var name   = document.getElementById('serverName');
+  var detail = document.getElementById('serverDetail');
+
+  function setStatus(state, detailText) {
+    dot.className   = 'status-dot ' + state;
+    detail.textContent = detailText;
   }
 
-  (function() {
-    try {
-      var saved = localStorage.getItem('sdcs-theme');
-      if (saved === 'movie') setTheme('movie');
-    } catch(e) {}
-  })();
+  setStatus('checking', 'CHECKING...');
+
+  var ctrl    = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timeout = setTimeout(function() {
+    if (ctrl) ctrl.abort();
+    setStatus('offline', 'OFFLINE / UNREACHABLE');
+  }, 6000);
+
+  fetch('https://olympus.sourcedcs.page/olympus/command/status', {
+    method: 'GET',
+    mode:   'cors',
+    signal: ctrl ? ctrl.signal : undefined
+  })
+  .then(function(r) {
+    clearTimeout(timeout);
+    setStatus(r.ok ? 'online' : 'offline', r.ok ? 'ONLINE' : 'OFFLINE');
+  })
+  .catch(function() {
+    clearTimeout(timeout);
+    setStatus('offline', 'OFFLINE / UNREACHABLE');
+  });
+})();
 </script>
 
 </body>
