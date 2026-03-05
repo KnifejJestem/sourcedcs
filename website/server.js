@@ -149,11 +149,11 @@ const applyLimiter = rateLimit({
 /* ─── Body parsing ──────────────────────────────────────── */
 app.use(express.json({ limit: '50kb' }));
 
-/* ─── Auth helpers ──────────────────────────────────────── */
-// Comma-separated list of admin usernames (case-insensitive)
-const ADMIN_USERS = (process.env.ADMIN_USERS || 'niknam')
-  .split(',').map(s => s.trim().toLowerCase());
+/* ─── Casdoor config (read from env) ────────────────────── */
+const CASDOOR_CLIENT_ID = process.env.CASDOOR_CLIENT_ID || 'sourcedcs-web';
+const CASDOOR_ENDPOINT  = process.env.CASDOOR_ENDPOINT  || 'https://auth.sourcedcs.page';
 
+/* ─── Auth helpers ──────────────────────────────────────── */
 function decodeJWT(token) {
   try {
     const parts = token.split('.');
@@ -174,10 +174,25 @@ function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  const name = (req.user?.name || req.user?.preferred_username || req.user?.sub || '').toLowerCase();
-  if (!ADMIN_USERS.includes(name)) return res.status(403).json({ error: 'Admin access required' });
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  const isAdmin = roles.some(r =>
+    (typeof r === 'string' ? r : (r?.name || '')) === 'admin'
+  );
+  if (!isAdmin) return res.status(403).json({ error: 'Admin access required' });
   next();
 }
+
+/* ─── Dynamic config for client ─────────────────────────── */
+/* Serves Casdoor connection settings as a JS file so the client reads
+   them from environment variables rather than hardcoded values. */
+app.get('/js/config.js', (_req, res) => {
+  res.set('Content-Type', 'application/javascript; charset=utf-8');
+  res.set('Cache-Control', 'no-store');
+  res.send(
+    'var CASDOOR_CLIENT_ID = ' + JSON.stringify(CASDOOR_CLIENT_ID) + ';\n' +
+    'var CASDOOR_ENDPOINT  = ' + JSON.stringify(CASDOOR_ENDPOINT)  + ';\n'
+  );
+});
 
 /* ─── Static files ──────────────────────────────────────── */
 const PUBLIC = path.join(__dirname, 'public');
