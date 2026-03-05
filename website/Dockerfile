@@ -10,13 +10,14 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy production dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy application code
 COPY server.js     ./
 COPY package.json  ./
 COPY public/       ./public/
+
+# Create data dir as root, then hand ownership to node
+RUN mkdir -p /app/data && chown -R node:node /app/data
 
 ENV NODE_ENV=production
 ENV PORT=3000
