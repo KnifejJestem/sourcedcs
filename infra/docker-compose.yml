@@ -69,7 +69,7 @@ services:
         ssl_certificate_key /etc/letsencrypt/live/'$$DOMAIN'/privkey.pem;
         location / {
           set \$$upstream main-website;
-          proxy_pass http://\$$upstream:3000;
+          proxy_pass http://\$$upstream:7000;
           proxy_set_header Host $$host;
           proxy_set_header X-Real-IP $$remote_addr;
           proxy_set_header X-Forwarded-Proto https; }
@@ -166,7 +166,7 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=7000
     networks:
       - web
 
