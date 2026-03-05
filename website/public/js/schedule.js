@@ -6,6 +6,15 @@ function setTheme(t) {
 }
 (function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
 
+/* ── Apply external links from config ── */
+(function() {
+  function setLink(id, url) { var el = document.getElementById(id); if (el && url) el.href = url; }
+  setLink('schedDiscordLink', typeof DISCORD_URL !== 'undefined' ? DISCORD_URL : null);
+  setLink('footerDiscordLink', typeof DISCORD_URL !== 'undefined' ? DISCORD_URL : null);
+  setLink('footerWikiLink',   typeof WIKI_URL    !== 'undefined' ? WIKI_URL    : null);
+  setLink('footerGithubLink', typeof GITHUB_URL  !== 'undefined' ? GITHUB_URL  : null);
+})();
+
 /* getToken, loginWithCasdoor and isAdminRole are provided by /js/auth.js */
 
 function getUser()   { try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) { return null; } }

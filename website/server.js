@@ -70,6 +70,14 @@ app.use(express.json({ limit: '50kb' }));
 const CASDOOR_CLIENT_ID = process.env.CASDOOR_CLIENT_ID;
 const CASDOOR_ENDPOINT  = process.env.CASDOOR_ENDPOINT;
 
+/* ─── External link config (read from env) ──────────────── */
+const DISCORD_URL = process.env.DISCORD_URL  || 'https://discord.gg/sourcedcs';
+const WIKI_URL    = process.env.WIKI_URL     || 'https://wiki.sourcedcs.page';
+const ATO_URL     = process.env.ATO_URL      || 'https://ato.sourcedcs.page';
+const OLYMPUS_URL = process.env.OLYMPUS_URL  || 'https://olympus.sourcedcs.page';
+const ASACS_URL   = process.env.ASACS_URL    || 'https://asacs.sourcedcs.page';
+const GITHUB_URL  = process.env.GITHUB_URL   || 'https://github.com/NikNam3/sourcedcs';
+
 /* ─── Auth helpers ──────────────────────────────────────── */
 function decodeJWT(token) {
   try {
@@ -107,7 +115,13 @@ app.get('/js/config.js', (_req, res) => {
   res.set('Cache-Control', 'no-store');
   res.send(
     'var CASDOOR_CLIENT_ID = ' + JSON.stringify(CASDOOR_CLIENT_ID) + ';\n' +
-    'var CASDOOR_ENDPOINT  = ' + JSON.stringify(CASDOOR_ENDPOINT)  + ';\n'
+    'var CASDOOR_ENDPOINT  = ' + JSON.stringify(CASDOOR_ENDPOINT)  + ';\n' +
+    'var DISCORD_URL = '       + JSON.stringify(DISCORD_URL)        + ';\n' +
+    'var WIKI_URL    = '       + JSON.stringify(WIKI_URL)           + ';\n' +
+    'var ATO_URL     = '       + JSON.stringify(ATO_URL)            + ';\n' +
+    'var OLYMPUS_URL = '       + JSON.stringify(OLYMPUS_URL)        + ';\n' +
+    'var ASACS_URL   = '       + JSON.stringify(ASACS_URL)          + ';\n' +
+    'var GITHUB_URL  = '       + JSON.stringify(GITHUB_URL)         + ';\n'
   );
 });
 
@@ -204,7 +218,7 @@ api.post('/apply', applyLimiter, (req, res) => {
   res.status(201).json({
     ok:      true,
     message: 'Application received! Join our Discord to get started:',
-    discord: 'https://discord.gg/sourcedcs'
+    discord: DISCORD_URL
   });
 });
 
