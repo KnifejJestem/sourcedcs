@@ -23,6 +23,9 @@ function loadJSON(file, fallback) {
 function saveJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
 }
+function sanitizeStr(value, maxLen) {
+  return String(value || '').trim().slice(0, maxLen);
+}
 
 /* Seed events — used when no events.json exists yet */
 const SEED_EVENTS = [
@@ -288,12 +291,12 @@ api.post('/roster', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
   if (!callsign) return res.status(400).json({ error: 'callsign is required' });
   const entry = {
     id:       nextRosterId++,
-    callsign: String(callsign).trim().slice(0, 32),
-    rank:     String(rank || '').trim().slice(0, 32),
-    airframe: String(airframe || '').trim().slice(0, 64),
-    role:     String(role || '').trim().slice(0, 64),
-    status:   String(status || 'active').trim().slice(0, 16),
-    squadron: String(squadron || '').trim().slice(0, 16),
+    callsign: sanitizeStr(callsign, 32),
+    rank:     sanitizeStr(rank, 32),
+    airframe: sanitizeStr(airframe, 64),
+    role:     sanitizeStr(role, 64),
+    status:   sanitizeStr(status || 'active', 16),
+    squadron: sanitizeStr(squadron, 16),
   };
   roster.push(entry);
   saveJSON(ROSTER_FILE, roster);
@@ -305,12 +308,12 @@ api.put('/roster/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res) =>
   const idx = roster.findIndex(r => r.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Pilot not found' });
   const { callsign, rank, airframe, role, status, squadron } = req.body;
-  if (callsign !== undefined) roster[idx].callsign = String(callsign).trim().slice(0, 32);
-  if (rank !== undefined)     roster[idx].rank     = String(rank).trim().slice(0, 32);
-  if (airframe !== undefined) roster[idx].airframe = String(airframe).trim().slice(0, 64);
-  if (role !== undefined)     roster[idx].role     = String(role).trim().slice(0, 64);
-  if (status !== undefined)   roster[idx].status   = String(status).trim().slice(0, 16);
-  if (squadron !== undefined) roster[idx].squadron = String(squadron).trim().slice(0, 16);
+  if (callsign !== undefined) roster[idx].callsign = sanitizeStr(callsign, 32);
+  if (rank !== undefined)     roster[idx].rank     = sanitizeStr(rank, 32);
+  if (airframe !== undefined) roster[idx].airframe = sanitizeStr(airframe, 64);
+  if (role !== undefined)     roster[idx].role     = sanitizeStr(role, 64);
+  if (status !== undefined)   roster[idx].status   = sanitizeStr(status, 16);
+  if (squadron !== undefined) roster[idx].squadron = sanitizeStr(squadron, 16);
   saveJSON(ROSTER_FILE, roster);
   res.json(roster[idx]);
 });
@@ -351,14 +354,14 @@ api.post('/squadrons', writeOpsLimiter, requireAuth, requireAdmin, (req, res) =>
   if (!id || !designator || !name) return res.status(400).json({ error: 'id, designator and name are required' });
   if (squadrons.find(s => s.id === id)) return res.status(409).json({ error: 'Squadron ID already exists' });
   const sq = {
-    id:         String(id).trim().slice(0, 16),
-    designator: String(designator).trim().slice(0, 16),
-    name:       String(name).trim().slice(0, 32),
-    airframe:   String(airframe || '').trim().slice(0, 64),
-    tags:       Array.isArray(tags) ? tags.map(t => String(t).trim().slice(0, 16)) : [],
-    shortDesc:  String(shortDesc || '').trim().slice(0, 500),
-    fullDesc:   String(fullDesc || '').trim().slice(0, 2000),
-    image:      String(image || '').trim().slice(0, 256),
+    id:         sanitizeStr(id, 16),
+    designator: sanitizeStr(designator, 16),
+    name:       sanitizeStr(name, 32),
+    airframe:   sanitizeStr(airframe, 64),
+    tags:       Array.isArray(tags) ? tags.map(t => sanitizeStr(t, 16)) : [],
+    shortDesc:  sanitizeStr(shortDesc, 500),
+    fullDesc:   sanitizeStr(fullDesc, 2000),
+    image:      sanitizeStr(image, 256),
   };
   squadrons.push(sq);
   saveJSON(SQUADRONS_FILE, squadrons);
