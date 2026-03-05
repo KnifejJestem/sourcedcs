@@ -186,6 +186,7 @@ cython_debug/
 /.idea
 node_modules/
 website/node_modules/
+website/data/applications.json
 vendor/
 /.claude
 infra/.env.example

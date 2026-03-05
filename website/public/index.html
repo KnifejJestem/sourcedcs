@@ -12,9 +12,6 @@
 
 <div class="scanline"></div>
 
-<!-- ══════════════════════════════════════════════════════════
-     HEADER
-══════════════════════════════════════════════════════════ -->
 <header>
   <a class="header-logo-link" href="/">
     <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
@@ -22,9 +19,9 @@
   </a>
   <nav class="header-nav" aria-label="Main navigation">
     <a class="nav-link" href="#about">ABOUT</a>
-    <a class="nav-link" href="#roster">ROSTER</a>
+    <a class="nav-link" href="#subsquadrons">WINGS</a>
     <a class="nav-link" href="schedule.html">SCHEDULE</a>
-    <a class="nav-link" href="#recruit">JOIN</a>
+    <a class="nav-link" href="#join">JOIN</a>
   </nav>
   <div class="header-spacer"></div>
   <div class="header-right">
@@ -39,182 +36,123 @@
   </div>
 </header>
 
-<!-- ══════════════════════════════════════════════════════════
-     HERO
-══════════════════════════════════════════════════════════ -->
 <section class="hero-section">
   <img class="hero-logo" src="sourcelogobg.png" alt="SOURCE">
   <h1 class="hero-title">SOURCEDCS</h1>
-  <p class="hero-subtitle">VIRTUAL AVIATION SQUADRON · DCS WORLD</p>
+  <p class="hero-subtitle">VIRTUAL AVIATION SQUADRON &middot; DCS WORLD</p>
   <div class="welcome-divider"></div>
-  <p class="hero-desc">
-    An open-source virtual aviation squadron built around realistic tactical aviation in DCS World.
-    Professional briefing tools, structured combined-arms operations, and a community of dedicated sim pilots.
-  </p>
+  <p class="hero-desc">An open-source virtual aviation squadron built around realistic tactical aviation in DCS World. Professional briefing tools, structured combined-arms operations, and a community of dedicated sim pilots.</p>
   <div class="hero-actions">
-    <a class="btn btn-primary" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">
-      <span class="btn-icon">⊕</span> JOIN DISCORD
-    </a>
-    <button class="btn btn-secondary" id="heroLoginBtn" onclick="loginWithCasdoor()">
-      <span class="btn-icon">→</span> MEMBER LOGIN
-    </button>
+    <a class="btn btn-primary" href="#join"><span class="btn-icon">&#x2295;</span> JOIN THE SQUADRON</a>
+    <button class="btn btn-secondary" id="heroMemberBtn" onclick="loginWithCasdoor()"><span class="btn-icon">&rarr;</span> MEMBER LOGIN</button>
   </div>
   <div class="hero-stats">
-    <div class="stat-item">
-      <div class="stat-value">OPEN SOURCE</div>
-      <div class="stat-label">ALL TOOLS</div>
-    </div>
-    <div class="stat-sep">·</div>
-    <div class="stat-item">
-      <div class="stat-value">TACTICAL</div>
-      <div class="stat-label">OPS FOCUS</div>
-    </div>
-    <div class="stat-sep">·</div>
-    <div class="stat-item">
-      <div class="stat-value">REALISTIC</div>
-      <div class="stat-label">PROCEDURES</div>
+    <div class="stat-item"><div class="stat-value">OPEN SOURCE</div><div class="stat-label">ALL TOOLS</div></div>
+    <div class="stat-sep">&middot;</div>
+    <div class="stat-item"><div class="stat-value">TACTICAL</div><div class="stat-label">OPS FOCUS</div></div>
+    <div class="stat-sep">&middot;</div>
+    <div class="stat-item"><div class="stat-value">REALISTIC</div><div class="stat-label">PROCEDURES</div></div>
+  </div>
+</section>
+
+<!-- MEMBER PORTAL — hidden until logged in -->
+<section class="member-portal" id="memberPortal" style="display:none">
+  <div class="section-container">
+    <div class="section-label">MEMBER HUB</div>
+    <p class="member-welcome" id="memberWelcome">WELCOME BACK, PILOT</p>
+    <div class="member-tools-grid">
+      <a class="member-tool-card" href="https://wiki.sourcedcs.page" target="_blank" rel="noopener">
+        <div class="mtc-icon">&#x2261;</div><div class="mtc-title">WIKI</div><div class="mtc-desc">SOPs, procedures, airframe guides</div><div class="mtc-arrow">&rarr;</div>
+      </a>
+      <a class="member-tool-card" href="https://ato.sourcedcs.page" target="_blank" rel="noopener">
+        <div class="mtc-icon">&#x2291;</div><div class="mtc-title">ATO BRIEF</div><div class="mtc-desc">Load &amp; present mission briefings</div><div class="mtc-arrow">&rarr;</div>
+      </a>
+      <a class="member-tool-card" href="https://olympus.sourcedcs.page" target="_blank" rel="noopener">
+        <div class="mtc-icon">&#x25CE;</div><div class="mtc-title">OLYMPUS</div><div class="mtc-desc">Real-time DCS ground control station</div><div class="mtc-arrow">&rarr;</div>
+      </a>
+      <a class="member-tool-card" href="https://asacs.sourcedcs.page" target="_blank" rel="noopener">
+        <div class="mtc-icon">&#x25C9;</div><div class="mtc-title">ASACS LINK</div><div class="mtc-desc">Live GCI datalink picture</div><div class="mtc-arrow">&rarr;</div>
+      </a>
+      <a class="member-tool-card" href="schedule.html">
+        <div class="mtc-icon">&#x229E;</div><div class="mtc-title">SCHEDULE</div><div class="mtc-desc">Upcoming ops &amp; training sorties</div><div class="mtc-arrow">&rarr;</div>
+      </a>
+      <a class="member-tool-card" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">
+        <div class="mtc-icon">&#x2295;</div><div class="mtc-title">DISCORD</div><div class="mtc-desc">Squadron comms &amp; coordination</div><div class="mtc-arrow">&rarr;</div>
+      </a>
     </div>
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════════════════════
-     QUICK LINKS BAR
-══════════════════════════════════════════════════════════ -->
-<div class="quicklinks-bar">
-  <div class="quicklinks-inner">
-    <a class="quicklink quicklink-discord" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">
-      <span class="ql-icon">⊕</span> DISCORD
-    </a>
-    <a class="quicklink" href="https://wiki.sourcedcs.page" target="_blank" rel="noopener">
-      <span class="ql-icon">≡</span> WIKI
-    </a>
-    <a class="quicklink" href="https://ato.sourcedcs.page" target="_blank" rel="noopener">
-      <span class="ql-icon">⊡</span> ATO BRIEF
-    </a>
-    <a class="quicklink" href="https://olympus.sourcedcs.page" target="_blank" rel="noopener">
-      <span class="ql-icon">◎</span> OLYMPUS
-    </a>
-    <a class="quicklink" href="https://asacs.sourcedcs.page" target="_blank" rel="noopener">
-      <span class="ql-icon">◉</span> ASACS
-    </a>
-    <a class="quicklink" href="schedule.html">
-      <span class="ql-icon">⊞</span> SCHEDULE
-    </a>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════════
-     ABOUT / MISSION
-══════════════════════════════════════════════════════════ -->
 <section id="about" class="content-section">
   <div class="section-container">
     <div class="section-label">ABOUT THE SQUADRON</div>
     <div class="about-intro">
       <h2 class="section-title">What is SOURCE?</h2>
-      <p class="section-desc">
-        SOURCE is a DCS World virtual aviation squadron dedicated to realistic, coordinated tactical aviation.
-        We operate across multiple airframes with an emphasis on combined-arms missions, structured briefings,
-        and open-source tooling that any sim pilot can use or contribute to.
-        Our name reflects our core value: everything we build is open — our tools, our procedures, our community.
-      </p>
+      <p class="section-desc">SOURCE is a DCS World virtual aviation squadron dedicated to realistic, coordinated tactical aviation. We operate across multiple airframes with an emphasis on combined-arms missions, structured briefings, and open-source tooling that any sim pilot can use or contribute to.</p>
     </div>
     <div class="about-grid">
-      <div class="about-card">
-        <div class="about-card-icon">⊕</div>
-        <div class="about-card-title">TACTICAL OPERATIONS</div>
-        <div class="about-card-desc">Full ATO/ACO/SPINS packages, professional briefings, and coordinated combined-arms execution across multiple airframes.</div>
-      </div>
-      <div class="about-card">
-        <div class="about-card-icon">◉</div>
-        <div class="about-card-title">OPEN-SOURCE TOOLS</div>
-        <div class="about-card-desc">All our tactical tools — ATO Brief, ASACS GCI server, Miz-to-YAML — are fully open source and free to use.</div>
-      </div>
-      <div class="about-card">
-        <div class="about-card-icon">≡</div>
-        <div class="about-card-title">REALISTIC PROCEDURES</div>
-        <div class="about-card-desc">We follow real-world-inspired procedures: proper comms discipline, ROE, SPINS, ACO, and mission planning cycles.</div>
-      </div>
-      <div class="about-card">
-        <div class="about-card-icon">⌥</div>
-        <div class="about-card-title">WELCOMING COMMUNITY</div>
-        <div class="about-card-desc">Whether you're new to DCS or a veteran simmer, SOURCE has a place for motivated, team-first pilots.</div>
-      </div>
+      <div class="about-card"><div class="about-card-icon">&#x2295;</div><div class="about-card-title">TACTICAL OPERATIONS</div><div class="about-card-desc">Full ATO/ACO/SPINS packages, professional briefings, and coordinated combined-arms execution across multiple airframes.</div></div>
+      <div class="about-card"><div class="about-card-icon">&#x25C9;</div><div class="about-card-title">OPEN-SOURCE TOOLS</div><div class="about-card-desc">All our tactical tools &mdash; ATO Brief, ASACS GCI server, Miz-to-YAML &mdash; are fully open source and free to use.</div></div>
+      <div class="about-card"><div class="about-card-icon">&#x2261;</div><div class="about-card-title">REALISTIC PROCEDURES</div><div class="about-card-desc">We follow real-world-inspired procedures: proper comms discipline, ROE, SPINS, ACO, and mission planning cycles.</div></div>
+      <div class="about-card"><div class="about-card-icon">&#x2325;</div><div class="about-card-title">WELCOMING COMMUNITY</div><div class="about-card-desc">Whether you're new to DCS or a veteran simmer, SOURCE has a place for motivated, team-first pilots.</div></div>
     </div>
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════════════════════
-     GALLERY
-══════════════════════════════════════════════════════════ -->
-<section id="gallery" class="content-section gallery-section">
+<section id="subsquadrons" class="content-section subsq-section">
   <div class="section-container">
-    <div class="section-label">GALLERY</div>
-    <div class="gallery-grid">
-
-      <div class="gallery-item">
-        <div class="gallery-placeholder gp-1"></div>
-        <div class="gallery-caption">F/A-18C HORNET — LOW-LEVEL STRIKE</div>
+    <div class="section-label">WINGS</div>
+    <h2 class="section-title">Sub-Squadrons</h2>
+    <p class="section-desc">SOURCE operates two tactical wings, each focused on a distinct mission set. When you apply, choose the wing that fits your preferred airframe and role.</p>
+    <div class="subsq-grid">
+      <div class="subsq-card">
+        <div class="subsq-designator">VF-1</div>
+        <div class="subsq-name">WILDCATS</div>
+        <div class="subsq-airframe">F/A-18C HORNET</div>
+        <div class="subsq-role-tags"><span class="subsq-tag">STRIKE</span><span class="subsq-tag">CAS</span><span class="subsq-tag">SEAD</span></div>
+        <p class="subsq-desc">VF-1 specialises in precision strike, close air support, and suppression of enemy air defences. Pilots fly the F/A-18C Hornet in a multi-role capacity, often leading package strike elements in campaign operations.</p>
+        <button class="btn btn-secondary subsq-apply-btn" onclick="openApplyModal('vf1')">APPLY TO VF-1 &rarr;</button>
       </div>
-
-      <div class="gallery-item">
-        <div class="gallery-placeholder gp-2"></div>
-        <div class="gallery-caption">FORMATION FLIGHT — PERSIAN GULF</div>
+      <div class="subsq-card">
+        <div class="subsq-designator">VA-2</div>
+        <div class="subsq-name">SPARTANS</div>
+        <div class="subsq-airframe">F-16C VIPER</div>
+        <div class="subsq-role-tags"><span class="subsq-tag">CAP</span><span class="subsq-tag">SEAD</span><span class="subsq-tag">ESCORT</span></div>
+        <p class="subsq-desc">VA-2 focuses on combat air patrol, fighter escort, and SEAD coordination. Pilots fly the F-16C Viper, providing air superiority and protecting strike packages in contested airspace.</p>
+        <button class="btn btn-secondary subsq-apply-btn" onclick="openApplyModal('va2')">APPLY TO VA-2 &rarr;</button>
       </div>
-
-      <div class="gallery-item">
-        <div class="gallery-placeholder gp-3"></div>
-        <div class="gallery-caption">ASACS LINK — GCI DATALINK PICTURE</div>
-      </div>
-
-      <div class="gallery-item">
-        <div class="gallery-placeholder gp-4"></div>
-        <div class="gallery-caption">ATO BRIEF — PACKAGE PRESENTATION</div>
-      </div>
-
-      <div class="gallery-item">
-        <div class="gallery-placeholder gp-5"></div>
-        <div class="gallery-caption">F-16C VIPER — COMBAT AIR PATROL</div>
-      </div>
-
-      <div class="gallery-item">
-        <div class="gallery-placeholder gp-6"></div>
-        <div class="gallery-caption">CAUCASUS — NIGHT OPERATIONS</div>
-      </div>
-
     </div>
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════════════════════
-     PILOT ROSTER
-══════════════════════════════════════════════════════════ -->
+<section class="content-section ops-preview-section">
+  <div class="section-container">
+    <div class="ops-preview-header-row">
+      <span class="section-label" style="margin-bottom:0">UPCOMING OPERATIONS</span>
+      <a class="ops-preview-view-all" href="schedule.html">VIEW FULL SCHEDULE &rarr;</a>
+    </div>
+    <div class="ops-preview-grid" id="opsPreviewGrid">
+      <div class="ops-preview-loading">LOADING OPERATIONS...</div>
+    </div>
+  </div>
+</section>
+
 <section id="roster" class="content-section">
   <div class="section-container">
     <div class="section-label">PILOT ROSTER</div>
     <div class="roster-scroll">
       <table class="roster-table">
-        <thead>
-          <tr>
-            <th>CALLSIGN</th>
-            <th>RANK</th>
-            <th>AIRFRAME</th>
-            <th>ROLE</th>
-            <th>STATUS</th>
-          </tr>
-        </thead>
+        <thead><tr><th>CALLSIGN</th><th>RANK</th><th>AIRFRAME</th><th>ROLE</th><th>STATUS</th></tr></thead>
         <tbody>
           <tr>
             <td><span class="callsign">NIKNAM</span></td>
             <td>SQ/LDR</td>
-            <td>F/A-18C · F-16C</td>
-            <td>Squadron Leader · Developer</td>
+            <td>F/A-18C &middot; F-16C</td>
+            <td>Squadron Leader &middot; Developer</td>
             <td><span class="status-badge badge-active">ACTIVE</span></td>
           </tr>
           <tr class="roster-open-row">
-            <td colspan="5" class="roster-open-cell">
-              <span>PILOT SLOTS OPEN — </span>
-              <a href="#recruit">APPLY NOW →</a>
-            </td>
+            <td colspan="5" class="roster-open-cell">PILOT SLOTS OPEN &mdash; <a href="#join">APPLY NOW &rarr;</a></td>
           </tr>
         </tbody>
       </table>
@@ -222,101 +160,21 @@
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════════════════════
-     SERVER STATUS + DISCORD WIDGET
-══════════════════════════════════════════════════════════ -->
-<section class="content-section status-discord-section">
-  <div class="section-container status-discord-grid">
-
-    <!-- DCS Server Status -->
-    <div class="status-card">
-      <div class="section-label">DCS SERVER STATUS</div>
-      <div class="server-status-body">
-        <div class="status-row">
-          <div class="status-dot" id="serverDot"></div>
-          <div class="status-info">
-            <div class="status-name" id="serverName">SOURCE DCS SERVER</div>
-            <div class="status-detail" id="serverDetail">CHECKING...</div>
-          </div>
-        </div>
-        <div class="status-links">
-          <a class="status-link" href="https://olympus.sourcedcs.page" target="_blank" rel="noopener">OLYMPUS GCS →</a>
-          <a class="status-link" href="https://asacs.sourcedcs.page" target="_blank" rel="noopener">ASACS LINK →</a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Discord Widget -->
-    <div class="discord-widget-card">
-      <div class="section-label">DISCORD — JOIN THE SQUADRON</div>
-      <!-- Replace DISCORD_SERVER_ID with your actual Discord server ID.
-           Enable the widget in Server Settings → Widget first. -->
-      <iframe
-        src="https://discord.com/widget?id=DISCORD_SERVER_ID&theme=dark"
-        width="100%" height="300"
-        allowtransparency="true"
-        frameborder="0"
-        sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
-        class="discord-iframe"
-        title="SOURCE Discord">
-      </iframe>
-      <a class="btn btn-primary discord-join-btn"
-         href="https://discord.gg/sourcedcs"
-         target="_blank" rel="noopener">
-        <span class="btn-icon">⊕</span> JOIN DISCORD SERVER
-      </a>
-    </div>
-
-  </div>
-</section>
-
-<!-- ══════════════════════════════════════════════════════════
-     RECRUITMENT
-══════════════════════════════════════════════════════════ -->
-<section id="recruit" class="content-section recruit-section">
+<section id="join" class="content-section recruit-section">
   <div class="section-container">
     <div class="section-label">JOIN SOURCE</div>
     <div class="recruit-grid">
-
       <div class="recruit-info">
         <h2 class="section-title">How to Join</h2>
-        <p class="section-desc">
-          SOURCE welcomes motivated DCS pilots committed to realistic, coordinated operations.
-          No previous virtual squadron experience required — just a good attitude,
-          a working mic, and a willingness to follow procedures.
-        </p>
+        <p class="section-desc">SOURCE welcomes motivated DCS pilots committed to realistic, coordinated operations. No previous virtual squadron experience required &mdash; just a good attitude, a working mic, and a willingness to follow procedures.</p>
         <div class="recruit-steps">
-          <div class="recruit-step">
-            <div class="step-num">01</div>
-            <div class="step-body">
-              <div class="step-title">JOIN DISCORD</div>
-              <div class="step-desc">Join our Discord server and introduce yourself in the #recruitment channel.</div>
-            </div>
-          </div>
-          <div class="recruit-step">
-            <div class="step-num">02</div>
-            <div class="step-body">
-              <div class="step-title">CREATE AN ACCOUNT</div>
-              <div class="step-desc">Register on our portal at <a href="https://auth.sourcedcs.page" target="_blank" rel="noopener">auth.sourcedcs.page</a> to access member tools and the wiki.</div>
-            </div>
-          </div>
-          <div class="recruit-step">
-            <div class="step-num">03</div>
-            <div class="step-body">
-              <div class="step-title">FLY WITH US</div>
-              <div class="step-desc">Join a training sortie or observer slot to get familiar with SOURCE procedures and comms.</div>
-            </div>
-          </div>
-          <div class="recruit-step">
-            <div class="step-num">04</div>
-            <div class="step-body">
-              <div class="step-title">BECOME A MEMBER</div>
-              <div class="step-desc">After evaluation you'll be formally inducted, assigned a callsign, and get access to all ops.</div>
-            </div>
-          </div>
+          <div class="recruit-step"><div class="step-num">01</div><div class="step-body"><div class="step-title">SUBMIT AN APPLICATION</div><div class="step-desc">Fill in the short form with your callsign, timezone, and preferred wing.</div></div></div>
+          <div class="recruit-step"><div class="step-num">02</div><div class="step-body"><div class="step-title">JOIN DISCORD</div><div class="step-desc">We'll reach out on Discord within 48 hours to introduce you to the squadron.</div></div></div>
+          <div class="recruit-step"><div class="step-num">03</div><div class="step-body"><div class="step-title">FLY WITH US</div><div class="step-desc">Join a training sortie or observer slot to get familiar with SOURCE procedures and comms.</div></div></div>
+          <div class="recruit-step"><div class="step-num">04</div><div class="step-body"><div class="step-title">BECOME A MEMBER</div><div class="step-desc">After evaluation you'll be formally inducted, assigned a callsign, and get access to all ops.</div></div></div>
         </div>
+        <button class="btn btn-primary apply-open-btn" onclick="openApplyModal()"><span class="btn-icon">&#x2295;</span> APPLY TO JOIN SOURCE</button>
       </div>
-
       <div class="recruit-reqs">
         <div class="reqs-card">
           <div class="reqs-title">REQUIREMENTS</div>
@@ -328,236 +186,270 @@
             <li>Commitment to attend at least one op per month</li>
             <li>Respectful, team-first attitude</li>
           </ul>
-          <div class="reqs-note">Age 16+ · English required for comms</div>
-          <a class="btn btn-primary"
-             href="https://discord.gg/sourcedcs"
-             target="_blank" rel="noopener"
-             style="width:100%;justify-content:center;margin-top:24px;">
-            <span class="btn-icon">⊕</span> APPLY VIA DISCORD
-          </a>
+          <div class="reqs-note">Age 16+ &middot; English required for comms</div>
+          <button class="btn btn-primary" onclick="openApplyModal()" style="width:100%;justify-content:center;margin-top:24px;"><span class="btn-icon">&#x2295;</span> APPLY NOW</button>
         </div>
       </div>
-
     </div>
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════════════════════
-     TOOLS & LINKS
-══════════════════════════════════════════════════════════ -->
-<section class="linktree-section">
-  <div class="section-container">
-    <div class="section-label">TOOLS &amp; LINKS</div>
-    <div class="link-list">
-
-      <a class="link-card" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">
-        <div class="link-card-icon">⊕</div>
-        <div class="link-card-body">
-          <div class="link-card-title">DISCORD SERVER</div>
-          <div class="link-card-desc">Join the SOURCE community — ops scheduling, briefings, coordination, and casual flying</div>
-        </div>
-        <span class="link-card-tag">COMMUNITY</span>
-        <div class="link-card-arrow">→</div>
-      </a>
-
-      <a class="link-card" href="https://wiki.sourcedcs.page" target="_blank" rel="noopener">
-        <div class="link-card-icon">≡</div>
-        <div class="link-card-body">
-          <div class="link-card-title">WIKI</div>
-          <div class="link-card-desc">Squadron wiki — SOPs, procedures, airframe guides, and mission archives</div>
-        </div>
-        <span class="link-card-tag">DOCS</span>
-        <div class="link-card-arrow">→</div>
-      </a>
-
-      <a class="link-card" href="https://ato.sourcedcs.page" target="_blank" rel="noopener">
-        <div class="link-card-icon">⊡</div>
-        <div class="link-card-body">
-          <div class="link-card-title">ATO BRIEF</div>
-          <div class="link-card-desc">Tactical briefing app — load &amp; present ATO/ACO/SPINS/COMMS packages with live room sync</div>
-        </div>
-        <span class="link-card-tag">WEB APP</span>
-        <div class="link-card-arrow">→</div>
-      </a>
-
-      <a class="link-card" href="https://olympus.sourcedcs.page" target="_blank" rel="noopener">
-        <div class="link-card-icon">◎</div>
-        <div class="link-card-body">
-          <div class="link-card-title">OLYMPUS</div>
-          <div class="link-card-desc">Real-time DCS mission control and ground control station — live map with all units</div>
-        </div>
-        <span class="link-card-tag">GCS</span>
-        <div class="link-card-arrow">→</div>
-      </a>
-
-      <a class="link-card" href="https://asacs.sourcedcs.page" target="_blank" rel="noopener">
-        <div class="link-card-icon">◉</div>
-        <div class="link-card-body">
-          <div class="link-card-title">ASACS LINK</div>
-          <div class="link-card-desc">DCS GCI server — real-time unit datalink with coalition filtering for WebSocket clients</div>
-        </div>
-        <span class="link-card-tag">SERVER</span>
-        <div class="link-card-arrow">→</div>
-      </a>
-
-      <a class="link-card" href="schedule.html">
-        <div class="link-card-icon">⊞</div>
-        <div class="link-card-body">
-          <div class="link-card-title">OPERATIONS SCHEDULE</div>
-          <div class="link-card-desc">Upcoming sorties, training events, and campaign operations calendar</div>
-        </div>
-        <span class="link-card-tag">OPS</span>
-        <div class="link-card-arrow">→</div>
-      </a>
-
-      <a class="link-card" href="https://github.com/NikNam3/sourcedcs" target="_blank" rel="noopener">
-        <div class="link-card-icon">⌥</div>
-        <div class="link-card-body">
-          <div class="link-card-title">GITHUB</div>
-          <div class="link-card-desc">Source code, issues, and documentation — NikNam3 / sourcedcs</div>
-        </div>
-        <span class="link-card-tag">REPO</span>
-        <div class="link-card-arrow">→</div>
-      </a>
-
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════════════════════════════════════════════
-     FOOTER
-══════════════════════════════════════════════════════════ -->
 <footer>
   <div class="footer-inner">
-    <div class="footer-brand-area">
-      <img class="footer-logo" src="sourcelogobg.png" alt="SOURCE">
-      <span class="footer-brand">SOURCEDCS</span>
-    </div>
+    <div class="footer-brand-area"><img class="footer-logo" src="sourcelogobg.png" alt="SOURCE"><span class="footer-brand">SOURCEDCS</span></div>
     <div class="footer-links-row">
       <a class="footer-link" href="https://discord.gg/sourcedcs" target="_blank" rel="noopener">Discord</a>
-      <span class="footer-sep">·</span>
+      <span class="footer-sep">&middot;</span>
       <a class="footer-link" href="https://wiki.sourcedcs.page" target="_blank" rel="noopener">Wiki</a>
-      <span class="footer-sep">·</span>
+      <span class="footer-sep">&middot;</span>
       <a class="footer-link" href="https://ato.sourcedcs.page" target="_blank" rel="noopener">ATO Brief</a>
-      <span class="footer-sep">·</span>
-      <a class="footer-link" href="https://olympus.sourcedcs.page" target="_blank" rel="noopener">Olympus</a>
-      <span class="footer-sep">·</span>
-      <a class="footer-link" href="https://asacs.sourcedcs.page" target="_blank" rel="noopener">ASACS</a>
-      <span class="footer-sep">·</span>
+      <span class="footer-sep">&middot;</span>
+      <a class="footer-link" href="schedule.html">Schedule</a>
+      <span class="footer-sep">&middot;</span>
       <a class="footer-link" href="https://github.com/NikNam3/sourcedcs" target="_blank" rel="noopener">GitHub</a>
     </div>
-    <div class="footer-copy">
-      <span class="footer-text">MIT License</span>
-      <span class="footer-sep">·</span>
-      <span class="footer-text">© 2025 SOURCEDCS</span>
-    </div>
+    <div class="footer-copy"><span class="footer-text">MIT License</span><span class="footer-sep">&middot;</span><span class="footer-text">&copy; 2025 SOURCEDCS</span></div>
   </div>
 </footer>
 
-<!-- ══════════════════════════════════════════════════════════
-     SCRIPTS
-══════════════════════════════════════════════════════════ -->
+<!-- APPLY MODAL -->
+<div class="modal-overlay" id="applyModalOverlay" role="dialog" aria-modal="true" aria-labelledby="applyModalTitle" style="display:none">
+  <div class="modal" id="applyModal">
+    <div class="modal-header">
+      <div class="modal-title" id="applyModalTitle">&#x2295; APPLY TO JOIN SOURCE</div>
+      <button class="modal-close" onclick="closeApplyModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-intro">Fill in the form below. We'll contact you on Discord within 48 hours.</p>
+      <form id="applyForm" onsubmit="submitApplication(event)" novalidate>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="fCallsign">CALLSIGN / HANDLE <span class="form-required">*</span></label>
+            <input class="form-input" id="fCallsign" name="callsign" type="text" maxlength="32" placeholder="e.g. VIPER27" required autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fDiscord">DISCORD USERNAME <span class="form-required">*</span></label>
+            <input class="form-input" id="fDiscord" name="discordHandle" type="text" maxlength="64" placeholder="e.g. viper27" required autocomplete="off">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="fAge">AGE GROUP <span class="form-required">*</span></label>
+            <select class="form-select" id="fAge" name="age" required>
+              <option value="">&mdash; SELECT &mdash;</option>
+              <option value="16-17">16 &ndash; 17</option>
+              <option value="18-24">18 &ndash; 24</option>
+              <option value="25-34">25 &ndash; 34</option>
+              <option value="35+">35+</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fTimezone">TIMEZONE <span class="form-required">*</span></label>
+            <select class="form-select" id="fTimezone" name="timezone" required>
+              <option value="">&mdash; SELECT &mdash;</option>
+              <option value="UTC-8">UTC&minus;8 (PST)</option>
+              <option value="UTC-7">UTC&minus;7 (MST)</option>
+              <option value="UTC-6">UTC&minus;6 (CST)</option>
+              <option value="UTC-5">UTC&minus;5 (EST)</option>
+              <option value="UTC-4">UTC&minus;4 (Atlantic)</option>
+              <option value="UTC">UTC / GMT</option>
+              <option value="UTC+1">UTC+1 (CET)</option>
+              <option value="UTC+2">UTC+2 (EET)</option>
+              <option value="UTC+3">UTC+3 (MSK)</option>
+              <option value="UTC+5:30">UTC+5:30 (IST)</option>
+              <option value="UTC+8">UTC+8 (AWST)</option>
+              <option value="UTC+10">UTC+10 (AEST)</option>
+              <option value="UTC+12">UTC+12 (NZST)</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="fSquadron">PREFERRED WING <span class="form-required">*</span></label>
+            <select class="form-select" id="fSquadron" name="subSquadron" required>
+              <option value="">&mdash; SELECT &mdash;</option>
+              <option value="vf1">VF-1 WILDCATS &mdash; F/A-18C (Strike / CAS)</option>
+              <option value="va2">VA-2 SPARTANS &mdash; F-16C (CAP / SEAD)</option>
+              <option value="undecided">UNDECIDED / NO PREFERENCE</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fExp">DCS EXPERIENCE</label>
+            <select class="form-select" id="fExp" name="experience">
+              <option value="">&mdash; SELECT &mdash;</option>
+              <option value="beginner">New to DCS (&lt;100 hrs)</option>
+              <option value="intermediate">Familiar (100&ndash;500 hrs)</option>
+              <option value="advanced">Experienced (500+ hrs)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="fModules">MODULES OWNED <span class="form-hint">(optional)</span></label>
+          <input class="form-input" id="fModules" name="modules" type="text" maxlength="300" placeholder="e.g. F/A-18C, F-16C, Combined Arms...">
+        </div>
+        <div class="form-error"  id="applyFormError"   style="display:none"></div>
+        <div class="form-success" id="applyFormSuccess" style="display:none"></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeApplyModal()">CANCEL</button>
+          <button type="submit" class="btn btn-primary" id="applySubmitBtn"><span class="btn-icon">&#x2295;</span> SUBMIT APPLICATION</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
-/* ── Theme ──────────────────────────────────────────────── */
+/* ── Theme ── */
 function setTheme(t) {
   document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.theme === t);
-  });
+  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
   try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
 }
+(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
 
-(function() {
-  try {
-    var saved = localStorage.getItem('sdcs-theme');
-    if (saved === 'movie') setTheme('movie');
-  } catch(e) {}
-})();
-
-/* ── Auth / Casdoor ─────────────────────────────────────── */
+/* ── Auth ── */
 var CASDOOR_CLIENT_ID = 'sourcedcs-web';
 var CASDOOR_ENDPOINT  = 'https://auth.sourcedcs.page';
-
+function getToken() { try { return localStorage.getItem('sdcs-token'); } catch(e) { return null; } }
 function loginWithCasdoor() {
-  var redirectUri = encodeURIComponent(window.location.origin + '/auth-callback.html');
-  var state = Math.random().toString(36).slice(2);
-  try { sessionStorage.setItem('sdcs-oauth-state', state); } catch(e) {}
-  window.location.href = CASDOOR_ENDPOINT
-    + '/login/oauth/authorize?client_id=' + CASDOOR_CLIENT_ID
-    + '&redirect_uri=' + redirectUri
-    + '&response_type=token'
-    + '&scope=openid+profile'
-    + '&state=' + state;
+  var ru = encodeURIComponent(window.location.origin + '/auth-callback.html');
+  var st = Math.random().toString(36).slice(2);
+  try { sessionStorage.setItem('sdcs-oauth-state', st); } catch(e) {}
+  window.location.href = CASDOOR_ENDPOINT + '/login/oauth/authorize?client_id=' + CASDOOR_CLIENT_ID + '&redirect_uri=' + ru + '&response_type=token&scope=openid+profile&state=' + st;
 }
-
 function logoutCasdoor() {
-  try {
-    localStorage.removeItem('sdcs-token');
-    localStorage.removeItem('sdcs-user');
-  } catch(e) {}
-  window.location.reload();
+  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {}
+  location.reload();
 }
-
 (function() {
-  var token = null;
+  var token = getToken();
   var user  = null;
-  try {
-    token = localStorage.getItem('sdcs-token');
-    user  = JSON.parse(localStorage.getItem('sdcs-user') || 'null');
-  } catch(e) {}
-
-  if (token) {
-    var name = (user && user.name) ? user.name.toUpperCase() : 'PILOT';
-    var btn  = document.getElementById('loginBtn');
-    var hero = document.getElementById('heroLoginBtn');
-    if (btn) {
-      btn.textContent = name;
-      btn.onclick = logoutCasdoor;
-      btn.title = 'Click to log out';
-    }
-    if (hero) {
-      hero.textContent = '→ MY ACCOUNT';
-      hero.onclick = function() {
-        window.open(CASDOOR_ENDPOINT, '_blank', 'noopener');
-      };
-    }
+  try { user = JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) {}
+  if (!token) return;
+  var name = (user && user.name) ? user.name.toUpperCase() : 'PILOT';
+  var btn = document.getElementById('loginBtn');
+  if (btn) { btn.textContent = name; btn.title = 'Click to log out'; btn.onclick = logoutCasdoor; }
+  var hero = document.getElementById('heroMemberBtn');
+  if (hero) {
+    hero.textContent = '\u2192 MEMBER HUB';
+    hero.onclick = function() { document.getElementById('memberPortal').scrollIntoView({ behavior: 'smooth' }); };
+  }
+  var portal = document.getElementById('memberPortal');
+  if (portal) {
+    portal.style.display = '';
+    var wel = document.getElementById('memberWelcome');
+    if (wel) wel.textContent = 'WELCOME BACK, ' + name;
   }
 })();
 
-/* ── Server Status ──────────────────────────────────────── */
+/* ── Upcoming ops preview ── */
 (function() {
-  var dot    = document.getElementById('serverDot');
-  var name   = document.getElementById('serverName');
-  var detail = document.getElementById('serverDetail');
+  var grid = document.getElementById('opsPreviewGrid');
+  var MON  = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  function typeClass(t) { return 'type-' + t; }
+  function typeLabel(t) { return {campaign:'CAMPAIGN',training:'TRAINING',cap:'CAP',strike:'STRIKE',cas:'CAS'}[t] || t.toUpperCase(); }
+  fetch('/api/events').then(function(r){return r.json();}).then(function(evs) {
+    var now = new Date();
+    var list = evs.filter(function(e) { return new Date(e.date) >= now && e.status !== 'cancelled' && e.status !== 'complete'; })
+                  .sort(function(a,b) { return new Date(a.date)-new Date(b.date); }).slice(0,3);
+    if (!list.length) { grid.innerHTML = '<div class="ops-preview-empty">No upcoming operations scheduled. Check back soon.</div>'; return; }
+    grid.innerHTML = list.map(function(op) {
+      var d = new Date(op.date);
+      var fp = op.slots ? Math.round(op.filledSlots/op.slots*100) : 0;
+      return '<div class="ops-preview-card">' +
+        '<div class="opc-date"><span class="opc-day">' + String(d.getUTCDate()).padStart(2,'0') + '</span><span class="opc-month">' + MON[d.getUTCMonth()] + '</span><span class="opc-time">' + String(d.getUTCHours()).padStart(2,'0') + ':' + String(d.getUTCMinutes()).padStart(2,'0') + 'Z</span></div>' +
+        '<div class="opc-body"><span class="op-badge ' + typeClass(op.type) + ' opc-badge">' + typeLabel(op.type) + '</span><div class="opc-name">' + op.name + '</div><div class="opc-map">' + op.map + (op.airframes && op.airframes.length ? ' &middot; ' + op.airframes.join(', ') : '') + '</div>' +
+        (op.slots ? '<div class="opc-slots">SLOTS ' + op.filledSlots + '/' + op.slots + '<div class="opc-fill-bar"><div class="opc-fill-inner" style="width:' + fp + '%"></div></div></div>' : '') + '</div></div>';
+    }).join('');
+  }).catch(function() { grid.innerHTML = '<div class="ops-preview-empty">Unable to load operations.</div>'; });
+})();
 
-  function setStatus(state, detailText) {
-    dot.className   = 'status-dot ' + state;
-    detail.textContent = detailText;
+/* ── Apply modal ── */
+function openApplyModal(wing) {
+  document.getElementById('applyModalOverlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  if (wing) {
+    setTimeout(function() {
+      var sel = document.getElementById('fSquadron');
+      if (sel) sel.value = wing;
+    }, 30);
+  }
+  setTimeout(function() { document.getElementById('fCallsign').focus(); }, 30);
+}
+function closeApplyModal() {
+  document.getElementById('applyModalOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+  document.getElementById('applyFormError').style.display   = 'none';
+  document.getElementById('applyFormSuccess').style.display = 'none';
+  var btn = document.getElementById('applySubmitBtn');
+  btn.disabled = false; btn.innerHTML = '<span class="btn-icon">&#x2295;</span> SUBMIT APPLICATION';
+}
+document.getElementById('applyModalOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeApplyModal();
+});
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeApplyModal(); });
+
+function submitApplication(e) {
+  e.preventDefault();
+  var form    = document.getElementById('applyForm');
+  var errEl   = document.getElementById('applyFormError');
+  var succEl  = document.getElementById('applyFormSuccess');
+  var btn     = document.getElementById('applySubmitBtn');
+
+  /* Basic validation */
+  var missing = [];
+  if (!form.callsign.value.trim())     missing.push('callsign');
+  if (!form.discordHandle.value.trim()) missing.push('Discord username');
+  if (!form.age.value)                 missing.push('age group');
+  if (!form.timezone.value)            missing.push('timezone');
+  if (!form.subSquadron.value)         missing.push('preferred wing');
+  if (missing.length) {
+    errEl.textContent   = 'Please fill in: ' + missing.join(', ') + '.';
+    errEl.style.display = '';
+    return;
   }
 
-  setStatus('checking', 'CHECKING...');
+  errEl.style.display  = 'none';
+  succEl.style.display = 'none';
+  btn.disabled         = true;
+  btn.textContent      = 'SUBMITTING...';
 
-  var ctrl    = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  var timeout = setTimeout(function() {
-    if (ctrl) ctrl.abort();
-    setStatus('offline', 'OFFLINE / UNREACHABLE');
-  }, 6000);
-
-  fetch('https://olympus.sourcedcs.page/olympus/command/status', {
-    method: 'GET',
-    mode:   'cors',
-    signal: ctrl ? ctrl.signal : undefined
+  fetch('/api/apply', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({
+      callsign:     form.callsign.value.trim(),
+      discordHandle:form.discordHandle.value.trim(),
+      age:          form.age.value,
+      timezone:     form.timezone.value,
+      subSquadron:  form.subSquadron.value,
+      experience:   form.experience.value,
+      modules:      form.modules.value.trim(),
+    }),
   })
-  .then(function(r) {
-    clearTimeout(timeout);
-    setStatus(r.ok ? 'online' : 'offline', r.ok ? 'ONLINE' : 'OFFLINE');
+  .then(function(r) { return r.json().then(function(j) { return { ok:r.ok, body:j }; }); })
+  .then(function(res) {
+    if (!res.ok) {
+      errEl.textContent   = res.body.error || 'Submission failed — please try again.';
+      errEl.style.display = '';
+      btn.disabled        = false;
+      btn.innerHTML       = '<span class="btn-icon">&#x2295;</span> SUBMIT APPLICATION';
+      return;
+    }
+    form.reset();
+    succEl.textContent   = res.body.message || 'Application received!';
+    succEl.style.display = '';
+    btn.innerHTML        = '&#x2713; SUBMITTED';
+    setTimeout(closeApplyModal, 3500);
   })
   .catch(function() {
-    clearTimeout(timeout);
-    setStatus('offline', 'OFFLINE / UNREACHABLE');
+    errEl.textContent   = 'Network error — please check your connection and try again.';
+    errEl.style.display = '';
+    btn.disabled        = false;
+    btn.innerHTML       = '<span class="btn-icon">&#x2295;</span> SUBMIT APPLICATION';
   });
-})();
+}
 </script>
-
 </body>
 </html>
