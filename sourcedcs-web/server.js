@@ -4,16 +4,17 @@ const express   = require('express');
 const rateLimit = require('express-rate-limit');
 const path      = require('path');
 const fs        = require('fs');
+const https     = require('https');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
 /* ─── Data persistence ──────────────────────────────────── */
-const DATA_DIR      = path.join(__dirname, 'data');
-const EVENTS_FILE   = path.join(DATA_DIR, 'events.json');
-const APPS_FILE     = path.join(DATA_DIR, 'applications.json');
-const ROSTER_FILE   = path.join(DATA_DIR, 'roster.json');
+const DATA_DIR       = path.join(__dirname, 'data');
+const EVENTS_FILE    = path.join(DATA_DIR, 'events.json');
+const APPS_FILE      = path.join(DATA_DIR, 'applications.json');
 const SQUADRONS_FILE = path.join(DATA_DIR, 'squadrons.json');
+const DISCORD_ROLES_FILE = path.join(DATA_DIR, 'discord-roles.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -33,11 +34,129 @@ let events = loadJSON(EVENTS_FILE, []);
 let applications = loadJSON(APPS_FILE, []);
 let nextEventId = events.reduce((m, e) => Math.max(m, e.id || 0), 0) + 1;
 
-
-
-let roster = loadJSON(ROSTER_FILE, []);
 let squadrons = loadJSON(SQUADRONS_FILE, []);
-let nextRosterId = roster.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
+
+/* Load discord role → squadron mapping (role names as keys) */
+const discordRoles = loadJSON(DISCORD_ROLES_FILE, {});
+
+/* ─── Discord bot config ────────────────────────────────── */
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
+const DISCORD_GUILD_ID  = process.env.DISCORD_GUILD_ID  || '';
+
+/* Roster in-memory cache (populated from Discord) */
+let rosterCache   = null;
+let rosterCacheAt = 0;
+const ROSTER_CACHE_TTL = 5 * 60 * 1000; /* 5 minutes */
+
+/* ─── Discord REST helpers ──────────────────────────────── */
+function discordRequest(apiPath) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'discord.com',
+      path:     '/api/v10' + apiPath,
+      method:   'GET',
+      headers: {
+        'Authorization': 'Bot ' + DISCORD_BOT_TOKEN,
+        'User-Agent':    'SourceDCS-Web/1.0 (https://github.com/NikNam3/sourcedcs)',
+      },
+    };
+    const req = https.request(options, (res) => {
+      let raw = '';
+      res.on('data', chunk => { raw += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(raw)); }
+          catch { reject(new Error('Discord: invalid JSON response')); }
+        } else {
+          reject(new Error('Discord API ' + res.statusCode + ': ' + raw.slice(0, 200)));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+async function fetchAllGuildMembers(guildId) {
+  const members = [];
+  let after = '0';
+  for (;;) {
+    const batch = await discordRequest(
+      '/guilds/' + guildId + '/members?limit=1000&after=' + after
+    );
+    members.push(...batch);
+    if (batch.length < 1000) break;
+    after = batch[batch.length - 1].user.id;
+  }
+  return members;
+}
+
+/**
+ * Parse a Discord nickname in the format:  (foo) bar "CALLSIGN"
+ * Returns the callsign from the quotes, or falls back to the bare display
+ * name (the word after the parenthetical), or the whole nick as a last
+ * resort.
+ */
+/* Matches: (prefix) displayName "CALLSIGN" — captures CALLSIGN */
+const RE_FULL_FORMAT = /^\([^)]*\)\s+\S+\s+"([^"]*)"/;
+/* Matches: (prefix) displayName — captures displayName */
+const RE_BARE_FORMAT = /^\([^)]*\)\s+(\S+)/;
+
+function parseCallsign(nick) {
+  if (!nick) return '';
+  /* Full format: (prefix) displayName "CALLSIGN" */
+  const full = nick.match(RE_FULL_FORMAT);
+  if (full) {
+    const cs = full[1].trim();
+    if (cs) return cs;
+  }
+  /* Callsign missing or empty — use the bare display name after (prefix) */
+  const bare = nick.match(RE_BARE_FORMAT);
+  if (bare) return bare[1];
+  /* No parenthetical at all — use the whole nick */
+  return nick.trim();
+}
+
+async function buildRosterFromDiscord() {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID) {
+    console.warn('[roster] DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set — roster will be empty');
+    return [];
+  }
+
+  /* Resolve role IDs → names */
+  const guildRoles = await discordRequest('/guilds/' + DISCORD_GUILD_ID + '/roles');
+  const roleIdToName = {};
+  for (const r of guildRoles) roleIdToName[r.id] = r.name;
+
+  const members = await fetchAllGuildMembers(DISCORD_GUILD_ID);
+
+  const roster = [];
+  for (const member of members) {
+    if (!member.user || member.user.bot) continue;
+
+    let matched = null;
+    for (const roleId of (member.roles || [])) {
+      const roleName = roleIdToName[roleId];
+      if (roleName && discordRoles[roleName]) {
+        matched = discordRoles[roleName];
+        break;
+      }
+    }
+    if (!matched) continue;
+
+    const nick     = member.nick || member.user.global_name || member.user.username || '';
+    const callsign = parseCallsign(nick);
+
+    roster.push({
+      id:       member.user.id,
+      callsign,
+      role:     matched.role     || '',
+      squadron: matched.squadron || '',
+    });
+  }
+
+  return roster;
+}
 
 /* ─── Rate limiting ─────────────────────────────────────── */
 const limiter = rateLimit({
@@ -227,50 +346,26 @@ api.get('/applications', requireAuth, requireAdmin, (_req, res) => {
   res.json(applications);
 });
 
-/* ── Roster (public read, admin write) ── */
-api.get('/roster', (_req, res) => {
-  res.json(roster);
+/* ── Roster (live from Discord) ── */
+api.get('/roster', async (_req, res) => {
+  const now = Date.now();
+  if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
+    try {
+      rosterCache   = await buildRosterFromDiscord();
+      rosterCacheAt = now;
+    } catch (err) {
+      console.error('[roster] Discord fetch failed:', err.message);
+      if (!rosterCache) rosterCache = [];
+    }
+  }
+  res.json(rosterCache);
 });
 
-api.post('/roster', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
-  const { callsign, rank, airframe, role, status, squadron } = req.body;
-  if (!callsign) return res.status(400).json({ error: 'callsign is required' });
-  const entry = {
-    id:       nextRosterId++,
-    callsign: sanitizeStr(callsign, 32),
-    rank:     sanitizeStr(rank, 32),
-    airframe: sanitizeStr(airframe, 64),
-    role:     sanitizeStr(role, 64),
-    status:   sanitizeStr(status || 'active', 16),
-    squadron: sanitizeStr(squadron, 16),
-  };
-  roster.push(entry);
-  saveJSON(ROSTER_FILE, roster);
-  res.status(201).json(entry);
-});
-
-api.put('/roster/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
-  const id  = Number(req.params.id);
-  const idx = roster.findIndex(r => r.id === id);
-  if (idx === -1) return res.status(404).json({ error: 'Pilot not found' });
-  const { callsign, rank, airframe, role, status, squadron } = req.body;
-  if (callsign !== undefined) roster[idx].callsign = sanitizeStr(callsign, 32);
-  if (rank !== undefined)     roster[idx].rank     = sanitizeStr(rank, 32);
-  if (airframe !== undefined) roster[idx].airframe = sanitizeStr(airframe, 64);
-  if (role !== undefined)     roster[idx].role     = sanitizeStr(role, 64);
-  if (status !== undefined)   roster[idx].status   = sanitizeStr(status, 16);
-  if (squadron !== undefined) roster[idx].squadron = sanitizeStr(squadron, 16);
-  saveJSON(ROSTER_FILE, roster);
-  res.json(roster[idx]);
-});
-
-api.delete('/roster/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
-  const id  = Number(req.params.id);
-  const idx = roster.findIndex(r => r.id === id);
-  if (idx === -1) return res.status(404).json({ error: 'Pilot not found' });
-  roster.splice(idx, 1);
-  saveJSON(ROSTER_FILE, roster);
-  res.json({ ok: true });
+/* Admin: force-refresh the roster cache */
+api.post('/roster/refresh', writeOpsLimiter, requireAuth, requireAdmin, (_req, res) => {
+  rosterCache   = null;
+  rosterCacheAt = 0;
+  res.json({ ok: true, message: 'Roster cache cleared — next GET will re-fetch from Discord.' });
 });
 
 /* ── Squadrons (public read, admin write) ── */
