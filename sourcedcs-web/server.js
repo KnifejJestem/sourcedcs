@@ -331,5 +331,5 @@ app.get('*', (_req, res) => {
 
 /* ─── Start ─────────────────────────────────────────────── */
 app.listen(PORT, () => {
-  console.log(`[sourcedcs-website] listening on http://0.0.0.0:${PORT}`);
+  console.log(`[sourcedcs-web] listening on http://0.0.0.0:${PORT}`);
 });

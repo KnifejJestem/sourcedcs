@@ -160,7 +160,7 @@ services:
   # ─────────────────────────────────────────
   main-website:
     build:
-      context: ../website
+      context: ../sourcedcs-web
       dockerfile: Dockerfile
     container_name: main-website
     restart: unless-stopped

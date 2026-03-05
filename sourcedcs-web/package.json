@@ -1,5 +1,5 @@
 {
-  "name": "sourcedcs-website",
+  "name": "sourcedcs-web",
   "version": "1.0.0",
   "description": "SOURCE DCS main website — Node.js / Express server",
   "main": "server.js",

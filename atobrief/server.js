@@ -41,9 +41,10 @@ const io     = new Server(server);
 
 // ── Serve static front-end assets ────────────────────────────
 // Only expose the directories the browser actually needs.
-app.get('/',  (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.use('/css',  express.static(path.join(__dirname, 'css')));
-app.use('/js',   express.static(path.join(__dirname, 'js')));
+const PUBLIC = path.join(__dirname, 'public');
+app.get('/',  (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
+app.use('/css',  express.static(path.join(PUBLIC, 'css')));
+app.use('/js',   express.static(path.join(PUBLIC, 'js')));
 app.use('/data', express.static(path.join(__dirname, 'data')));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules', 'js-yaml', 'dist')));
 
