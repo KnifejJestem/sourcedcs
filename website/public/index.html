@@ -17,7 +17,7 @@
     <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
     <div class="header-title">SOURCEDCS</div>
   </a>
-  <nav class="header-nav" aria-label="Main navigation">
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
     <a class="nav-link" href="#about">ABOUT</a>
     <a class="nav-link" href="#subsquadrons">WINGS</a>
     <a class="nav-link" href="schedule.html">SCHEDULE</a>
@@ -25,6 +25,9 @@
   </nav>
   <div class="header-spacer"></div>
   <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
     <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
     <div class="hdr-toggle-group">
       <span class="hdr-toggle-label">DISPLAY</span>
@@ -46,13 +49,7 @@
     <a class="btn btn-primary" href="#join"><span class="btn-icon">&#x2295;</span> JOIN THE SQUADRON</a>
     <button class="btn btn-secondary" id="heroMemberBtn" onclick="loginWithCasdoor()"><span class="btn-icon">&rarr;</span> MEMBER LOGIN</button>
   </div>
-  <div class="hero-stats">
-    <div class="stat-item"><div class="stat-value">OPEN SOURCE</div><div class="stat-label">ALL TOOLS</div></div>
-    <div class="stat-sep">&middot;</div>
-    <div class="stat-item"><div class="stat-value">TACTICAL</div><div class="stat-label">OPS FOCUS</div></div>
-    <div class="stat-sep">&middot;</div>
-    <div class="stat-item"><div class="stat-value">REALISTIC</div><div class="stat-label">PROCEDURES</div></div>
-  </div>
+
 </section>
 
 <!-- MEMBER PORTAL — hidden until logged in -->
@@ -103,23 +100,14 @@
   <div class="section-container">
     <div class="section-label">WINGS</div>
     <h2 class="section-title">Sub-Squadrons</h2>
-    <p class="section-desc">SOURCE operates two tactical wings, each focused on a distinct mission set. When you apply, choose the wing that fits your preferred airframe and role.</p>
-    <div class="subsq-grid">
-      <div class="subsq-card">
-        <div class="subsq-designator">VF-1</div>
-        <div class="subsq-name">WILDCATS</div>
-        <div class="subsq-airframe">F/A-18C HORNET</div>
-        <div class="subsq-role-tags"><span class="subsq-tag">STRIKE</span><span class="subsq-tag">CAS</span><span class="subsq-tag">SEAD</span></div>
-        <p class="subsq-desc">VF-1 specialises in precision strike, close air support, and suppression of enemy air defences. Pilots fly the F/A-18C Hornet in a multi-role capacity, often leading package strike elements in campaign operations.</p>
-        <button class="btn btn-secondary subsq-apply-btn" onclick="openApplyModal('vf1')">APPLY TO VF-1 &rarr;</button>
-      </div>
-      <div class="subsq-card">
-        <div class="subsq-designator">VA-2</div>
-        <div class="subsq-name">SPARTANS</div>
-        <div class="subsq-airframe">F-16C VIPER</div>
-        <div class="subsq-role-tags"><span class="subsq-tag">CAP</span><span class="subsq-tag">SEAD</span><span class="subsq-tag">ESCORT</span></div>
-        <p class="subsq-desc">VA-2 focuses on combat air patrol, fighter escort, and SEAD coordination. Pilots fly the F-16C Viper, providing air superiority and protecting strike packages in contested airspace.</p>
-        <button class="btn btn-secondary subsq-apply-btn" onclick="openApplyModal('va2')">APPLY TO VA-2 &rarr;</button>
+    <p class="section-desc">SOURCE operates multiple tactical wings, each focused on a distinct mission set. When you apply, choose the wing that fits your preferred airframe and role.</p>
+    <div class="subsq-grid" id="subsqGrid">
+      <div class="ops-preview-loading">LOADING WINGS...</div>
+    </div>
+    <div class="admin-bar" id="subsqAdminBar" style="display:none;margin-top:20px">
+      <span class="admin-bar-label">ADMIN: SQUADRON MANAGEMENT</span>
+      <div class="admin-bar-actions">
+        <button class="btn btn-primary admin-add-btn" onclick="openSquadronModal()"><span class="btn-icon">&#x2295;</span> ADD WING</button>
       </div>
     </div>
   </div>
@@ -140,20 +128,17 @@
 <section id="roster" class="content-section">
   <div class="section-container">
     <div class="section-label">PILOT ROSTER</div>
+    <div class="admin-bar" id="rosterAdminBar" style="display:none">
+      <span class="admin-bar-label">ADMIN: ROSTER MANAGEMENT</span>
+      <div class="admin-bar-actions">
+        <button class="btn btn-primary admin-add-btn" onclick="openRosterModal()"><span class="btn-icon">&#x2295;</span> ADD PILOT</button>
+      </div>
+    </div>
     <div class="roster-scroll">
       <table class="roster-table">
-        <thead><tr><th>CALLSIGN</th><th>RANK</th><th>AIRFRAME</th><th>ROLE</th><th>STATUS</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><span class="callsign">NIKNAM</span></td>
-            <td>SQ/LDR</td>
-            <td>F/A-18C &middot; F-16C</td>
-            <td>Squadron Leader &middot; Developer</td>
-            <td><span class="status-badge badge-active">ACTIVE</span></td>
-          </tr>
-          <tr class="roster-open-row">
-            <td colspan="5" class="roster-open-cell">PILOT SLOTS OPEN &mdash; <a href="#join">APPLY NOW &rarr;</a></td>
-          </tr>
+        <thead><tr><th>CALLSIGN</th><th>RANK</th><th>AIRFRAME</th><th>ROLE</th><th>STATUS</th><th class="roster-admin-col" style="display:none"></th></tr></thead>
+        <tbody id="rosterBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-3)">LOADING ROSTER...</td></tr>
         </tbody>
       </table>
     </div>
@@ -187,7 +172,6 @@
             <li>Respectful, team-first attitude</li>
           </ul>
           <div class="reqs-note">Age 16+ &middot; English required for comms</div>
-          <button class="btn btn-primary" onclick="openApplyModal()" style="width:100%;justify-content:center;margin-top:24px;"><span class="btn-icon">&#x2295;</span> APPLY NOW</button>
         </div>
       </div>
     </div>
@@ -269,8 +253,7 @@
             <label class="form-label" for="fSquadron">PREFERRED WING <span class="form-required">*</span></label>
             <select class="form-select" id="fSquadron" name="subSquadron" required>
               <option value="">&mdash; SELECT &mdash;</option>
-              <option value="vf1">VF-1 WILDCATS &mdash; F/A-18C (Strike / CAS)</option>
-              <option value="va2">VA-2 SPARTANS &mdash; F-16C (CAP / SEAD)</option>
+              <!-- Populated dynamically from /api/squadrons -->
               <option value="undecided">UNDECIDED / NO PREFERENCE</option>
             </select>
           </div>
@@ -299,6 +282,77 @@
   </div>
 </div>
 
+<!-- ROSTER MODAL -->
+<div class="modal-overlay" id="rosterModalOverlay" role="dialog" aria-modal="true" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="rosterModalTitle">&#x2295; ADD PILOT</div>
+      <button class="modal-close" onclick="closeRosterModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="rosterForm" onsubmit="submitRoster(event)" novalidate>
+        <input type="hidden" id="rEditId" value="">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" for="rCallsign">CALLSIGN <span class="form-required">*</span></label><input class="form-input" id="rCallsign" maxlength="32" required></div>
+          <div class="form-group"><label class="form-label" for="rRank">RANK</label><input class="form-input" id="rRank" maxlength="32"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" for="rAirframe">AIRFRAME</label><input class="form-input" id="rAirframe" maxlength="64"></div>
+          <div class="form-group"><label class="form-label" for="rRole">ROLE</label><input class="form-input" id="rRole" maxlength="64"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="rStatus">STATUS</label>
+            <select class="form-select" id="rStatus"><option value="active">ACTIVE</option><option value="inactive">INACTIVE</option><option value="reserve">RESERVE</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="rSquadron">SQUADRON</label>
+            <select class="form-select" id="rSquadron">
+              <option value="">— NONE —</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-error" id="rosterFormError" style="display:none"></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeRosterModal()">CANCEL</button>
+          <button type="submit" class="btn btn-primary" id="rosterSubmitBtn"><span class="btn-icon">&#x2295;</span> SAVE PILOT</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- SQUADRON MODAL -->
+<div class="modal-overlay" id="sqModalOverlay" role="dialog" aria-modal="true" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="sqModalTitle">&#x2295; ADD WING</div>
+      <button class="modal-close" onclick="closeSqModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="sqForm" onsubmit="submitSquadron(event)" novalidate>
+        <input type="hidden" id="sqEditId" value="">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" for="sqId">ID (slug) <span class="form-required">*</span></label><input class="form-input" id="sqId" maxlength="16" placeholder="e.g. vf3" required></div>
+          <div class="form-group"><label class="form-label" for="sqDesignator">DESIGNATOR <span class="form-required">*</span></label><input class="form-input" id="sqDesignator" maxlength="16" placeholder="e.g. VF-3" required></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" for="sqName">NAME <span class="form-required">*</span></label><input class="form-input" id="sqName" maxlength="32" placeholder="e.g. HAWKS" required></div>
+          <div class="form-group"><label class="form-label" for="sqAirframe">AIRFRAME</label><input class="form-input" id="sqAirframe" maxlength="64" placeholder="e.g. F-15E STRIKE EAGLE"></div>
+        </div>
+        <div class="form-group"><label class="form-label" for="sqTags">ROLE TAGS <span class="form-hint">(comma-separated)</span></label><input class="form-input" id="sqTags" maxlength="128" placeholder="e.g. STRIKE, CAS, SEAD"></div>
+        <div class="form-group"><label class="form-label" for="sqShortDesc">SHORT DESCRIPTION</label><textarea class="form-input" id="sqShortDesc" rows="3" maxlength="500" style="resize:vertical"></textarea></div>
+        <div class="form-group"><label class="form-label" for="sqFullDesc">FULL DESCRIPTION <span class="form-hint">(for detail page)</span></label><textarea class="form-input" id="sqFullDesc" rows="4" maxlength="2000" style="resize:vertical"></textarea></div>
+        <div class="form-error" id="sqFormError" style="display:none"></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeSqModal()">CANCEL</button>
+          <button type="submit" class="btn btn-primary" id="sqSubmitBtn"><span class="btn-icon">&#x2295;</span> SAVE WING</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ── Theme ── */
 function setTheme(t) {
@@ -313,6 +367,7 @@ var CASDOOR_CLIENT_ID = 'sourcedcs-web';
 var CASDOOR_ENDPOINT  = 'https://auth.sourcedcs.page';
 function getToken() { try { return localStorage.getItem('sdcs-token'); } catch(e) { return null; } }
 function loginWithCasdoor() {
+  try { localStorage.setItem('sdcs-return-url', window.location.href); } catch(e) {}
   var ru = encodeURIComponent(window.location.origin + '/auth-callback.html');
   var st = Math.random().toString(36).slice(2);
   try { sessionStorage.setItem('sdcs-oauth-state', st); } catch(e) {}
@@ -341,6 +396,64 @@ function logoutCasdoor() {
     var wel = document.getElementById('memberWelcome');
     if (wel) wel.textContent = 'WELCOME BACK, ' + name;
   }
+})();
+
+/* ── Hamburger menu ── */
+(function() {
+  var hamburger = document.getElementById('hamburgerBtn');
+  var nav       = document.getElementById('mainNav');
+  if (!hamburger || !nav) return;
+  function closeNav() {
+    nav.classList.remove('nav-open');
+    hamburger.classList.remove('open');
+    hamburger.setAttribute('aria-expanded', 'false');
+  }
+  hamburger.addEventListener('click', function() {
+    var open = nav.classList.toggle('nav-open');
+    hamburger.classList.toggle('open', open);
+    hamburger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  nav.querySelectorAll('.nav-link').forEach(function(link) {
+    link.addEventListener('click', closeNav);
+  });
+})();
+
+/* ── Smooth scroll ── */
+document.querySelectorAll('a[href^="#"]').forEach(function(link) {
+  link.addEventListener('click', function(e) {
+    var id = this.getAttribute('href');
+    if (id === '#') return;
+    var target = document.querySelector(id);
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth' });
+      history.replaceState(null, '', id);
+    }
+  });
+});
+
+/* ── Scroll-spy ── */
+(function() {
+  var sections = document.querySelectorAll('section[id]');
+  var navLinks = document.querySelectorAll('.header-nav .nav-link[href^="#"]');
+  if (!sections.length || !navLinks.length) return;
+  /* Cache href→id mapping to avoid repeated DOM reads during scroll */
+  var linkHrefs = [];
+  navLinks.forEach(function(link) { linkHrefs.push(link.getAttribute('href')); });
+  var HEADER_HEIGHT = 80; /* sticky header height (48px) + scroll padding */
+  function onScroll() {
+    var scrollY = window.scrollY + HEADER_HEIGHT;
+    var current = '';
+    sections.forEach(function(sec) {
+      if (sec.offsetTop <= scrollY) current = sec.id;
+    });
+    var target = '#' + current;
+    navLinks.forEach(function(link, i) {
+      link.classList.toggle('active-nav', linkHrefs[i] === target);
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 })();
 
 /* ── Upcoming ops preview ── */
@@ -438,10 +551,20 @@ function submitApplication(e) {
       return;
     }
     form.reset();
-    succEl.textContent   = res.body.message || 'Application received!';
+    succEl.textContent = '';
+    succEl.appendChild(document.createTextNode(res.body.message || 'Application received!'));
+    if (res.body.discord) {
+      var dLink = document.createElement('a');
+      dLink.href = res.body.discord;
+      dLink.target = '_blank';
+      dLink.rel = 'noopener';
+      dLink.style.cssText = 'color:var(--green);text-decoration:underline;margin-left:4px';
+      dLink.textContent = 'JOIN DISCORD \u2192';
+      succEl.appendChild(document.createTextNode(' '));
+      succEl.appendChild(dLink);
+    }
     succEl.style.display = '';
     btn.innerHTML        = '&#x2713; SUBMITTED';
-    setTimeout(closeApplyModal, 3500);
   })
   .catch(function() {
     errEl.textContent   = 'Network error — please check your connection and try again.';
@@ -450,6 +573,266 @@ function submitApplication(e) {
     btn.innerHTML       = '<span class="btn-icon">&#x2295;</span> SUBMIT APPLICATION';
   });
 }
+
+/* ── Admin detection ── */
+var ADMIN_USERS = ['niknam'];
+var isAdmin = false;
+(function() {
+  var token = getToken();
+  if (!token) return;
+  try {
+    var parts = token.split('.');
+    if (parts.length !== 3) return;
+    var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    var name = (payload.name || payload.preferred_username || payload.sub || '').toLowerCase();
+    if (ADMIN_USERS.indexOf(name) !== -1) {
+      isAdmin = true;
+    }
+  } catch(e) {}
+})();
+
+/* ── Data-driven sub-squadrons ── */
+var SQUADRONS = [];
+(function() {
+  var grid = document.getElementById('subsqGrid');
+  fetch('/api/squadrons').then(function(r){return r.json();}).then(function(sqs) {
+    SQUADRONS = sqs;
+    renderSquadrons(sqs);
+    populateWingSelects(sqs);
+    if (isAdmin) {
+      document.getElementById('subsqAdminBar').style.display = '';
+    }
+  }).catch(function() { grid.innerHTML = '<div class="ops-preview-empty">Unable to load wings.</div>'; });
+})();
+
+function renderSquadrons(sqs) {
+  var grid = document.getElementById('subsqGrid');
+  if (!sqs.length) { grid.innerHTML = '<div class="ops-preview-empty">No wings configured.</div>'; return; }
+  grid.innerHTML = sqs.map(function(sq) {
+    var tags = (sq.tags || []).map(function(t) { return '<span class="subsq-tag">' + escH(t) + '</span>'; }).join('');
+    return '<div class="subsq-card">' +
+      '<div class="subsq-designator">' + escH(sq.designator) + '</div>' +
+      '<div class="subsq-name">' + escH(sq.name) + '</div>' +
+      '<div class="subsq-airframe">' + escH(sq.airframe) + '</div>' +
+      '<div class="subsq-role-tags">' + tags + '</div>' +
+      '<p class="subsq-desc">' + escH(sq.shortDesc) + '</p>' +
+      '<div class="subsq-card-actions">' +
+        '<a class="btn btn-secondary subsq-apply-btn" href="wing.html?id=' + encodeURIComponent(sq.id) + '">VIEW DETAILS &rarr;</a>' +
+        '<button class="btn btn-secondary subsq-apply-btn" onclick="openApplyModal(\'' + escH(sq.id) + '\')">APPLY &rarr;</button>' +
+        (isAdmin ? '<button class="btn btn-ghost admin-edit-btn" onclick="editSquadron(\'' + escH(sq.id) + '\')">&#x270E; EDIT</button>' +
+                   '<button class="btn btn-ghost admin-delete-btn" onclick="deleteSquadron(\'' + escH(sq.id) + '\')">&#x2715; DELETE</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function populateWingSelects(sqs) {
+  var selectors = [document.getElementById('fSquadron'), document.getElementById('rSquadron')];
+  selectors.forEach(function(sel) {
+    if (!sel) return;
+    var keep = sel.id === 'fSquadron' ? 'undecided' : '';
+    var opts = Array.from(sel.options).filter(function(o) { return o.value === '' || o.value === keep; });
+    sel.innerHTML = '';
+    opts.forEach(function(o) { sel.appendChild(o); });
+    sqs.forEach(function(sq) {
+      var o = document.createElement('option');
+      o.value = sq.id;
+      o.textContent = sq.designator + ' ' + sq.name + ' \u2014 ' + sq.airframe;
+      /* Insert before the "undecided" option if it exists */
+      var undecided = sel.querySelector('option[value="undecided"]');
+      if (undecided) sel.insertBefore(o, undecided);
+      else sel.appendChild(o);
+    });
+  });
+}
+
+function escH(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+/* ── Squadron modal ── */
+function openSquadronModal(id) {
+  var overlay = document.getElementById('sqModalOverlay');
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  document.getElementById('sqFormError').style.display = 'none';
+  if (id) {
+    var sq = SQUADRONS.find(function(s){return s.id===id;});
+    if (sq) {
+      document.getElementById('sqModalTitle').textContent = '\u270E EDIT WING';
+      document.getElementById('sqEditId').value = sq.id;
+      document.getElementById('sqId').value = sq.id;
+      document.getElementById('sqId').disabled = true;
+      document.getElementById('sqDesignator').value = sq.designator;
+      document.getElementById('sqName').value = sq.name;
+      document.getElementById('sqAirframe').value = sq.airframe || '';
+      document.getElementById('sqTags').value = (sq.tags||[]).join(', ');
+      document.getElementById('sqShortDesc').value = sq.shortDesc || '';
+      document.getElementById('sqFullDesc').value = sq.fullDesc || '';
+    }
+  } else {
+    document.getElementById('sqModalTitle').textContent = '\u2295 ADD WING';
+    document.getElementById('sqEditId').value = '';
+    document.getElementById('sqId').disabled = false;
+    document.getElementById('sqForm').reset();
+  }
+}
+function closeSqModal() {
+  document.getElementById('sqModalOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function editSquadron(id) { openSquadronModal(id); }
+function deleteSquadron(id) {
+  if (!confirm('Delete this wing? This cannot be undone.')) return;
+  fetch('/api/squadrons/' + id, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + (getToken()||'') }
+  }).then(function(r){return r.json();}).then(function() {
+    SQUADRONS = SQUADRONS.filter(function(s){return s.id!==id;});
+    renderSquadrons(SQUADRONS);
+    populateWingSelects(SQUADRONS);
+  });
+}
+function submitSquadron(e) {
+  e.preventDefault();
+  var editId = document.getElementById('sqEditId').value;
+  var data = {
+    id:         document.getElementById('sqId').value.trim(),
+    designator: document.getElementById('sqDesignator').value.trim(),
+    name:       document.getElementById('sqName').value.trim(),
+    airframe:   document.getElementById('sqAirframe').value.trim(),
+    tags:       document.getElementById('sqTags').value.split(',').map(function(t){return t.trim();}).filter(Boolean),
+    shortDesc:  document.getElementById('sqShortDesc').value.trim(),
+    fullDesc:   document.getElementById('sqFullDesc').value.trim(),
+  };
+  if (!data.id || !data.designator || !data.name) {
+    document.getElementById('sqFormError').textContent = 'ID, designator and name are required.';
+    document.getElementById('sqFormError').style.display = '';
+    return;
+  }
+  var url    = editId ? '/api/squadrons/' + editId : '/api/squadrons';
+  var method = editId ? 'PUT' : 'POST';
+  fetch(url, {
+    method: method,
+    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+(getToken()||'') },
+    body: JSON.stringify(data)
+  }).then(function(r){return r.json().then(function(j){return {ok:r.ok,body:j};});})
+  .then(function(res) {
+    if (!res.ok) { document.getElementById('sqFormError').textContent = res.body.error; document.getElementById('sqFormError').style.display = ''; return; }
+    if (editId) { var idx = SQUADRONS.findIndex(function(s){return s.id===editId;}); if (idx!==-1) SQUADRONS[idx]=res.body; }
+    else SQUADRONS.push(res.body);
+    renderSquadrons(SQUADRONS);
+    populateWingSelects(SQUADRONS);
+    closeSqModal();
+  });
+}
+document.getElementById('sqModalOverlay').addEventListener('click', function(e) { if (e.target === this) closeSqModal(); });
+
+/* ── Data-driven roster ── */
+var ROSTER = [];
+(function() {
+  fetch('/api/roster').then(function(r){return r.json();}).then(function(list) {
+    ROSTER = list;
+    renderRoster(list);
+    if (isAdmin) {
+      document.getElementById('rosterAdminBar').style.display = '';
+      document.querySelectorAll('.roster-admin-col').forEach(function(el){el.style.display='';});
+    }
+  }).catch(function() {
+    document.getElementById('rosterBody').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-3)">Unable to load roster.</td></tr>';
+  });
+})();
+
+function renderRoster(list) {
+  var tbody = document.getElementById('rosterBody');
+  if (!list.length) {
+    tbody.innerHTML = '<tr class="roster-open-row"><td colspan="' + (isAdmin?6:5) + '" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="#join">APPLY NOW \u2192</a></td></tr>';
+    return;
+  }
+  var html = list.map(function(p) {
+    var badge = p.status === 'active' ? 'badge-active' : 'badge-inactive';
+    return '<tr>' +
+      '<td><span class="callsign">' + escH(p.callsign) + '</span></td>' +
+      '<td>' + escH(p.rank) + '</td>' +
+      '<td>' + escH(p.airframe) + '</td>' +
+      '<td>' + escH(p.role) + '</td>' +
+      '<td><span class="status-badge ' + badge + '">' + escH(p.status).toUpperCase() + '</span></td>' +
+      (isAdmin ? '<td class="roster-admin-col"><button class="admin-edit-btn" onclick="editRoster(' + p.id + ')">&#x270E;</button> <button class="admin-delete-btn" onclick="deleteRoster(' + p.id + ')">&#x2715;</button></td>' : '') +
+    '</tr>';
+  }).join('');
+  html += '<tr class="roster-open-row"><td colspan="' + (isAdmin?6:5) + '" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="#join">APPLY NOW \u2192</a></td></tr>';
+  tbody.innerHTML = html;
+}
+
+/* ── Roster modal ── */
+function openRosterModal(id) {
+  var overlay = document.getElementById('rosterModalOverlay');
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  document.getElementById('rosterFormError').style.display = 'none';
+  if (id) {
+    var p = ROSTER.find(function(r){return r.id===id;});
+    if (p) {
+      document.getElementById('rosterModalTitle').textContent = '\u270E EDIT PILOT';
+      document.getElementById('rEditId').value = p.id;
+      document.getElementById('rCallsign').value = p.callsign;
+      document.getElementById('rRank').value = p.rank || '';
+      document.getElementById('rAirframe').value = p.airframe || '';
+      document.getElementById('rRole').value = p.role || '';
+      document.getElementById('rStatus').value = p.status || 'active';
+      document.getElementById('rSquadron').value = p.squadron || '';
+    }
+  } else {
+    document.getElementById('rosterModalTitle').textContent = '\u2295 ADD PILOT';
+    document.getElementById('rEditId').value = '';
+    document.getElementById('rosterForm').reset();
+  }
+}
+function closeRosterModal() {
+  document.getElementById('rosterModalOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function editRoster(id) { openRosterModal(id); }
+function deleteRoster(id) {
+  if (!confirm('Remove this pilot from the roster?')) return;
+  fetch('/api/roster/' + id, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + (getToken()||'') }
+  }).then(function(r){return r.json();}).then(function() {
+    ROSTER = ROSTER.filter(function(r){return r.id!==id;});
+    renderRoster(ROSTER);
+  });
+}
+function submitRoster(e) {
+  e.preventDefault();
+  var editId = document.getElementById('rEditId').value;
+  var data = {
+    callsign: document.getElementById('rCallsign').value.trim(),
+    rank:     document.getElementById('rRank').value.trim(),
+    airframe: document.getElementById('rAirframe').value.trim(),
+    role:     document.getElementById('rRole').value.trim(),
+    status:   document.getElementById('rStatus').value,
+    squadron: document.getElementById('rSquadron').value,
+  };
+  if (!data.callsign) {
+    document.getElementById('rosterFormError').textContent = 'Callsign is required.';
+    document.getElementById('rosterFormError').style.display = '';
+    return;
+  }
+  var url    = editId ? '/api/roster/' + editId : '/api/roster';
+  var method = editId ? 'PUT' : 'POST';
+  fetch(url, {
+    method: method,
+    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+(getToken()||'') },
+    body: JSON.stringify(data)
+  }).then(function(r){return r.json().then(function(j){return {ok:r.ok,body:j};});})
+  .then(function(res) {
+    if (!res.ok) { document.getElementById('rosterFormError').textContent = res.body.error; document.getElementById('rosterFormError').style.display = ''; return; }
+    if (editId) { var idx = ROSTER.findIndex(function(r){return r.id===Number(editId);}); if (idx!==-1) ROSTER[idx]=res.body; }
+    else ROSTER.push(res.body);
+    renderRoster(ROSTER);
+    closeRosterModal();
+  });
+}
+document.getElementById('rosterModalOverlay').addEventListener('click', function(e) { if (e.target === this) closeRosterModal(); });
 </script>
 </body>
 </html>
