@@ -16,41 +16,42 @@ Load a YAML package via the upload screen (drag-drop or file picker) or by joini
 ## Architecture Overview
 
 ```
-index.html                          Single-page shell
+public/
+├── index.html                      Single-page shell
 ├── css/                            Styling (theme tokens, layout, views, editor)
-├── js/
-│   ├── app.js                      Global state (STATE), utilities, YAML loading, registry resolution
-│   ├── session.js                  Socket.io presenter/presentee sync
-│   ├── loadout.js                  Weapon loadout code parser & renderer
-│   ├── geo-data.js                 Country outlines (Natural Earth CDN) + city DB
-│   ├── views/
-│   │   ├── view-helpers.js         Shared doc-rendering helpers (tables, headers, KV rows)
-│   │   ├── view-ato.js             ATO: intel strip, mission cards, Gantt timeline, detail panel
-│   │   ├── view-aco.js             ACO: airspace control measure table
-│   │   ├── view-spins.js           SPINS: flexible section-based operational procedures
-│   │   ├── view-comms.js           COMMS: UHF/VHF preset frequency tables
-│   │   └── view-weather.js         Weather: METAR/TAF parsers, decoded display, mission notes
-│   ├── map/
-│   │   ├── map-main.js             Entry point (renderMAP), SVG element factories
-│   │   ├── map-state.js            Pan/zoom viewport state (MAP_VP)
-│   │   ├── map-data.js             Coordinate collection from ATO + ACO data
-│   │   ├── map-interact.js         Mouse/touch drag, scroll zoom, coord picker integration
-│   │   ├── map-render.js           Main draw loop, viewport transform, measurement tool
-│   │   ├── map-ui.js               Popups, coord formatting, sidebar legend
-│   │   ├── map-draw-layers.js      Country outlines, city dots/labels
-│   │   ├── map-draw-zones.js       Airspace shapes (anchor, circle, polygon), engagement zones
-│   │   ├── map-draw-routes.js      Flight paths / steer-point lines
-│   │   └── map-draw-markers.js     Airfields, carriers, targets, marshal points, steer points
-│   └── editor/
-│       ├── editor-core.js          Editor state (EDITOR), dialog framework, form helpers, export
-│       ├── editor-registry.js      CRUD for registry categories (airfields, carriers, targets…)
-│       ├── editor-missions.js      Mission add/edit/delete with registry dropdowns
-│       └── editor-sections.js      Times, ACO, SPINS, COMMS, Weather section editors
-├── server.js                       Express + Socket.io server, session management
-└── data/                           Data files
-    ├── weaponsdata.json            CLSID → weapon name lookup table
-    ├── spins.md                    Sample SPINS markdown (## and ### headings)
-    └── weather.txt                 Additional METAR/TAF strings for weather tab
+└── js/
+    ├── app.js                      Global state (STATE), utilities, YAML loading, registry resolution
+    ├── session.js                  Socket.io presenter/presentee sync
+    ├── loadout.js                  Weapon loadout code parser & renderer
+    ├── geo-data.js                 Country outlines (Natural Earth CDN) + city DB
+    ├── views/
+    │   ├── view-helpers.js         Shared doc-rendering helpers (tables, headers, KV rows)
+    │   ├── view-ato.js             ATO: intel strip, mission cards, Gantt timeline, detail panel
+    │   ├── view-aco.js             ACO: airspace control measure table
+    │   ├── view-spins.js           SPINS: flexible section-based operational procedures
+    │   ├── view-comms.js           COMMS: UHF/VHF preset frequency tables
+    │   └── view-weather.js         Weather: METAR/TAF parsers, decoded display, mission notes
+    ├── map/
+    │   ├── map-main.js             Entry point (renderMAP), SVG element factories
+    │   ├── map-state.js            Pan/zoom viewport state (MAP_VP)
+    │   ├── map-data.js             Coordinate collection from ATO + ACO data
+    │   ├── map-interact.js         Mouse/touch drag, scroll zoom, coord picker integration
+    │   ├── map-render.js           Main draw loop, viewport transform, measurement tool
+    │   ├── map-ui.js               Popups, coord formatting, sidebar legend
+    │   ├── map-draw-layers.js      Country outlines, city dots/labels
+    │   ├── map-draw-zones.js       Airspace shapes (anchor, circle, polygon), engagement zones
+    │   ├── map-draw-routes.js      Flight paths / steer-point lines
+    │   └── map-draw-markers.js     Airfields, carriers, targets, marshal points, steer points
+    └── editor/
+        ├── editor-core.js          Editor state (EDITOR), dialog framework, form helpers, export
+        ├── editor-registry.js      CRUD for registry categories (airfields, carriers, targets…)
+        ├── editor-missions.js      Mission add/edit/delete with registry dropdowns
+        └── editor-sections.js      Times, ACO, SPINS, COMMS, Weather section editors
+server.js                           Express + Socket.io server, session management
+data/                               Data files
+├── weaponsdata.json                CLSID → weapon name lookup table
+├── spins.md                        Sample SPINS markdown (## and ### headings)
+└── weather.txt                     Additional METAR/TAF strings for weather tab
 ```
 
 ---

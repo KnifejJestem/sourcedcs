@@ -1,0 +1,14 @@
+{
+  "name": "sourcedcs-asacs-link",
+  "version": "1.0.0",
+  "description": "DCS GCI Server — receives unit data from DCS via UDP and distributes to WebSocket clients",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
