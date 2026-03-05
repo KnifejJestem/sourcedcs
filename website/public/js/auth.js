@@ -1,5 +1,4 @@
 /* ── Shared auth utilities ──────────────────────────────── */
-/* CASDOOR_CLIENT_ID and CASDOOR_ENDPOINT are set by /js/config.js */
 
 function getToken() { try { return localStorage.getItem('sdcs-token'); } catch(e) { return null; } }
 
