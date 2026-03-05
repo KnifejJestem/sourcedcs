@@ -9,9 +9,11 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 /* ─── Data persistence ──────────────────────────────────── */
-const DATA_DIR    = path.join(__dirname, 'data');
-const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
-const APPS_FILE   = path.join(DATA_DIR, 'applications.json');
+const DATA_DIR      = path.join(__dirname, 'data');
+const EVENTS_FILE   = path.join(DATA_DIR, 'events.json');
+const APPS_FILE     = path.join(DATA_DIR, 'applications.json');
+const ROSTER_FILE   = path.join(DATA_DIR, 'roster.json');
+const SQUADRONS_FILE = path.join(DATA_DIR, 'squadrons.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -89,6 +91,33 @@ const SEED_EVENTS = [
 let events = loadJSON(EVENTS_FILE, SEED_EVENTS.map(e => ({ ...e })));
 let applications = loadJSON(APPS_FILE, []);
 let nextEventId = events.reduce((m, e) => Math.max(m, e.id || 0), 0) + 1;
+
+/* Seed roster */
+const SEED_ROSTER = [
+  { id: 1, callsign: 'NIKNAM', rank: 'SQ/LDR', airframe: 'F/A-18C · F-16C', role: 'Squadron Leader · Developer', status: 'active', squadron: 'vf1' }
+];
+
+/* Seed squadrons */
+const SEED_SQUADRONS = [
+  {
+    id: 'vf1', designator: 'VF-1', name: 'WILDCATS', airframe: 'F/A-18C HORNET',
+    tags: ['STRIKE', 'CAS', 'SEAD'],
+    shortDesc: 'VF-1 specialises in precision strike, close air support, and suppression of enemy air defences. Pilots fly the F/A-18C Hornet in a multi-role capacity, often leading package strike elements in campaign operations.',
+    fullDesc: 'VF-1 WILDCATS is SOURCE\'s premier strike wing. Operating the F/A-18C Hornet, VF-1 pilots train extensively in precision strike, close air support (CAS), and suppression/destruction of enemy air defences (SEAD/DEAD). The wing regularly leads package strike elements during campaign operations and is proficient in both day and night operations. VF-1 pilots are expected to maintain proficiency in carrier operations, CASE I/III recoveries, and multi-role mission planning.',
+    image: ''
+  },
+  {
+    id: 'va2', designator: 'VA-2', name: 'SPARTANS', airframe: 'F-16C VIPER',
+    tags: ['CAP', 'SEAD', 'ESCORT'],
+    shortDesc: 'VA-2 focuses on combat air patrol, fighter escort, and SEAD coordination. Pilots fly the F-16C Viper, providing air superiority and protecting strike packages in contested airspace.',
+    fullDesc: 'VA-2 SPARTANS is SOURCE\'s air superiority and escort wing. Flying the F-16C Viper, VA-2 pilots specialise in combat air patrol (CAP), fighter escort, and SEAD coordination. The wing provides air superiority coverage for strike packages operating in contested airspace. VA-2 pilots train in BVR and WVR engagements, threat identification, and coordinated intercept procedures using ASACS GCI datalink.',
+    image: ''
+  }
+];
+
+let roster = loadJSON(ROSTER_FILE, SEED_ROSTER.map(r => ({ ...r })));
+let squadrons = loadJSON(SQUADRONS_FILE, SEED_SQUADRONS.map(s => ({ ...s })));
+let nextRosterId = roster.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
 
 /* ─── Rate limiting ─────────────────────────────────────── */
 const limiter = rateLimit({
@@ -239,13 +268,109 @@ api.post('/apply', applyLimiter, (req, res) => {
   saveJSON(APPS_FILE, applications);
   res.status(201).json({
     ok:      true,
-    message: 'Application received. We will contact you on Discord within 48 hours.'
+    message: 'Application received! Join our Discord to get started:',
+    discord: 'https://discord.gg/sourcedcs'
   });
 });
 
 /* Admin: list applications */
 api.get('/applications', requireAuth, requireAdmin, (_req, res) => {
   res.json(applications);
+});
+
+/* ── Roster (public read, admin write) ── */
+api.get('/roster', (_req, res) => {
+  res.json(roster);
+});
+
+api.post('/roster', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const { callsign, rank, airframe, role, status, squadron } = req.body;
+  if (!callsign) return res.status(400).json({ error: 'callsign is required' });
+  const entry = {
+    id:       nextRosterId++,
+    callsign: String(callsign).trim().slice(0, 32),
+    rank:     String(rank || '').trim().slice(0, 32),
+    airframe: String(airframe || '').trim().slice(0, 64),
+    role:     String(role || '').trim().slice(0, 64),
+    status:   String(status || 'active').trim().slice(0, 16),
+    squadron: String(squadron || '').trim().slice(0, 16),
+  };
+  roster.push(entry);
+  saveJSON(ROSTER_FILE, roster);
+  res.status(201).json(entry);
+});
+
+api.put('/roster/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const id  = Number(req.params.id);
+  const idx = roster.findIndex(r => r.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Pilot not found' });
+  const { callsign, rank, airframe, role, status, squadron } = req.body;
+  if (callsign !== undefined) roster[idx].callsign = String(callsign).trim().slice(0, 32);
+  if (rank !== undefined)     roster[idx].rank     = String(rank).trim().slice(0, 32);
+  if (airframe !== undefined) roster[idx].airframe = String(airframe).trim().slice(0, 64);
+  if (role !== undefined)     roster[idx].role     = String(role).trim().slice(0, 64);
+  if (status !== undefined)   roster[idx].status   = String(status).trim().slice(0, 16);
+  if (squadron !== undefined) roster[idx].squadron = String(squadron).trim().slice(0, 16);
+  saveJSON(ROSTER_FILE, roster);
+  res.json(roster[idx]);
+});
+
+api.delete('/roster/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const id  = Number(req.params.id);
+  const idx = roster.findIndex(r => r.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Pilot not found' });
+  roster.splice(idx, 1);
+  saveJSON(ROSTER_FILE, roster);
+  res.json({ ok: true });
+});
+
+/* ── Squadrons (public read, admin write) ── */
+api.get('/squadrons', (_req, res) => {
+  res.json(squadrons);
+});
+
+api.get('/squadrons/:id', (req, res) => {
+  const sq = squadrons.find(s => s.id === req.params.id);
+  if (!sq) return res.status(404).json({ error: 'Squadron not found' });
+  res.json(sq);
+});
+
+api.put('/squadrons/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const idx = squadrons.findIndex(s => s.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Squadron not found' });
+  const allowed = ['designator', 'name', 'airframe', 'tags', 'shortDesc', 'fullDesc', 'image'];
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) squadrons[idx][key] = req.body[key];
+  }
+  saveJSON(SQUADRONS_FILE, squadrons);
+  res.json(squadrons[idx]);
+});
+
+api.post('/squadrons', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const { id, designator, name, airframe, tags, shortDesc, fullDesc, image } = req.body;
+  if (!id || !designator || !name) return res.status(400).json({ error: 'id, designator and name are required' });
+  if (squadrons.find(s => s.id === id)) return res.status(409).json({ error: 'Squadron ID already exists' });
+  const sq = {
+    id:         String(id).trim().slice(0, 16),
+    designator: String(designator).trim().slice(0, 16),
+    name:       String(name).trim().slice(0, 32),
+    airframe:   String(airframe || '').trim().slice(0, 64),
+    tags:       Array.isArray(tags) ? tags.map(t => String(t).trim().slice(0, 16)) : [],
+    shortDesc:  String(shortDesc || '').trim().slice(0, 500),
+    fullDesc:   String(fullDesc || '').trim().slice(0, 2000),
+    image:      String(image || '').trim().slice(0, 256),
+  };
+  squadrons.push(sq);
+  saveJSON(SQUADRONS_FILE, squadrons);
+  res.status(201).json(sq);
+});
+
+api.delete('/squadrons/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const idx = squadrons.findIndex(s => s.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Squadron not found' });
+  squadrons.splice(idx, 1);
+  saveJSON(SQUADRONS_FILE, squadrons);
+  res.json({ ok: true });
 });
 
 app.use('/api', api);

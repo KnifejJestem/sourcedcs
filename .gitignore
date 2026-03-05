@@ -187,6 +187,8 @@ cython_debug/
 node_modules/
 website/node_modules/
 website/data/applications.json
+website/data/roster.json
+website/data/squadrons.json
 vendor/
 /.claude
 infra/.env.example

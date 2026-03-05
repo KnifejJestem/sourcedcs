@@ -1133,8 +1133,16 @@ footer { padding: 0; }
 }
 
 .subsq-apply-btn {
-  margin-top: 16px;
+  margin-top: 0;
   align-self: flex-start;
+}
+
+.subsq-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  align-items: center;
 }
 
 /* ═══════════════════════════════════════════════════════════
