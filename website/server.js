@@ -27,99 +27,16 @@ function sanitizeStr(value, maxLen) {
   return String(value || '').trim().slice(0, maxLen);
 }
 
-/* Seed events — used when no events.json exists yet */
-const SEED_EVENTS = [
-  {
-    id: 1,
-    name: 'OPERATION IRON SHIELD',
-    type: 'campaign',
-    status: 'planned',
-    date: '2026-04-05T18:00:00Z',
-    map: 'Syria',
-    airframes: ['F/A-18C', 'F-16C'],
-    description: 'Defensive counter-air campaign over northern Syria. Package includes CAP, SEAD, and tanker support. Full ATO briefing required.',
-    slots: 8,
-    filledSlots: 3
-  },
-  {
-    id: 2,
-    name: 'TRAINING SORTIE — BFM FUNDAMENTALS',
-    type: 'training',
-    status: 'planned',
-    date: '2026-03-29T17:00:00Z',
-    map: 'Persian Gulf',
-    airframes: ['Any'],
-    description: 'Basic fighter manoeuvres training session. All skill levels welcome. Instructor: NIKNAM.',
-    slots: 6,
-    filledSlots: 2
-  },
-  {
-    id: 3,
-    name: 'OPERATION DESERT HAMMER',
-    type: 'strike',
-    status: 'planned',
-    date: '2026-04-12T19:00:00Z',
-    map: 'Persian Gulf',
-    airframes: ['F/A-18C'],
-    description: 'Precision strike against hardened targets. SEAD support provided. SPINS package mandatory.',
-    slots: 4,
-    filledSlots: 1
-  },
-  {
-    id: 4,
-    name: 'CAUCASUS CAP EXERCISE',
-    type: 'cap',
-    status: 'planned',
-    date: '2026-04-19T16:00:00Z',
-    map: 'Caucasus',
-    airframes: ['F-16C', 'F/A-18C'],
-    description: 'Combat Air Patrol exercise with GCI integration. ASACS LINK will be used for live datalink.',
-    slots: 4,
-    filledSlots: 0
-  },
-  {
-    id: 5,
-    name: 'TRAINING SORTIE — ATO BRIEF WALKTHROUGH',
-    type: 'training',
-    status: 'complete',
-    date: '2025-03-15T17:00:00Z',
-    map: 'Caucasus',
-    airframes: ['Any'],
-    description: 'Introduction to the ATO Brief tool and SOURCE mission planning procedures.',
-    slots: 8,
-    filledSlots: 8
-  }
-];
 
-let events = loadJSON(EVENTS_FILE, SEED_EVENTS.map(e => ({ ...e })));
+
+let events = loadJSON(EVENTS_FILE);
 let applications = loadJSON(APPS_FILE, []);
 let nextEventId = events.reduce((m, e) => Math.max(m, e.id || 0), 0) + 1;
 
-/* Seed roster */
-const SEED_ROSTER = [
-  { id: 1, callsign: 'NIKNAM', rank: 'SQ/LDR', airframe: 'F/A-18C · F-16C', role: 'Squadron Leader · Developer', status: 'active', squadron: 'vf1' }
-];
 
-/* Seed squadrons */
-const SEED_SQUADRONS = [
-  {
-    id: 'vf1', designator: 'VF-1', name: 'WILDCATS', airframe: 'F/A-18C HORNET',
-    tags: ['STRIKE', 'CAS', 'SEAD'],
-    shortDesc: 'VF-1 specialises in precision strike, close air support, and suppression of enemy air defences. Pilots fly the F/A-18C Hornet in a multi-role capacity, often leading package strike elements in campaign operations.',
-    fullDesc: 'VF-1 WILDCATS is SOURCE\'s premier strike wing. Operating the F/A-18C Hornet, VF-1 pilots train extensively in precision strike, close air support (CAS), and suppression/destruction of enemy air defences (SEAD/DEAD). The wing regularly leads package strike elements during campaign operations and is proficient in both day and night operations. VF-1 pilots are expected to maintain proficiency in carrier operations, CASE I/III recoveries, and multi-role mission planning.',
-    image: ''
-  },
-  {
-    id: 'va2', designator: 'VA-2', name: 'SPARTANS', airframe: 'F-16C VIPER',
-    tags: ['CAP', 'SEAD', 'ESCORT'],
-    shortDesc: 'VA-2 focuses on combat air patrol, fighter escort, and SEAD coordination. Pilots fly the F-16C Viper, providing air superiority and protecting strike packages in contested airspace.',
-    fullDesc: 'VA-2 SPARTANS is SOURCE\'s air superiority and escort wing. Flying the F-16C Viper, VA-2 pilots specialise in combat air patrol (CAP), fighter escort, and SEAD coordination. The wing provides air superiority coverage for strike packages operating in contested airspace. VA-2 pilots train in BVR and WVR engagements, threat identification, and coordinated intercept procedures using ASACS GCI datalink.',
-    image: ''
-  }
-];
 
-let roster = loadJSON(ROSTER_FILE, SEED_ROSTER.map(r => ({ ...r })));
-let squadrons = loadJSON(SQUADRONS_FILE, SEED_SQUADRONS.map(s => ({ ...s })));
+let roster = loadJSON(ROSTER_FILE);
+let squadrons = loadJSON(SQUADRONS_FILE);
 let nextRosterId = roster.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
 
 /* ─── Rate limiting ─────────────────────────────────────── */
