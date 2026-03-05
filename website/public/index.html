@@ -17,7 +17,7 @@
     <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
     <div class="header-title">SOURCEDCS</div>
   </a>
-  <nav class="header-nav" aria-label="Main navigation">
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
     <a class="nav-link" href="#about">ABOUT</a>
     <a class="nav-link" href="#subsquadrons">WINGS</a>
     <a class="nav-link" href="schedule.html">SCHEDULE</a>
@@ -25,6 +25,9 @@
   </nav>
   <div class="header-spacer"></div>
   <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
     <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
     <div class="hdr-toggle-group">
       <span class="hdr-toggle-label">DISPLAY</span>
@@ -46,13 +49,7 @@
     <a class="btn btn-primary" href="#join"><span class="btn-icon">&#x2295;</span> JOIN THE SQUADRON</a>
     <button class="btn btn-secondary" id="heroMemberBtn" onclick="loginWithCasdoor()"><span class="btn-icon">&rarr;</span> MEMBER LOGIN</button>
   </div>
-  <div class="hero-stats">
-    <div class="stat-item"><div class="stat-value">OPEN SOURCE</div><div class="stat-label">ALL TOOLS</div></div>
-    <div class="stat-sep">&middot;</div>
-    <div class="stat-item"><div class="stat-value">TACTICAL</div><div class="stat-label">OPS FOCUS</div></div>
-    <div class="stat-sep">&middot;</div>
-    <div class="stat-item"><div class="stat-value">REALISTIC</div><div class="stat-label">PROCEDURES</div></div>
-  </div>
+
 </section>
 
 <!-- MEMBER PORTAL — hidden until logged in -->
@@ -313,6 +310,7 @@ var CASDOOR_CLIENT_ID = 'sourcedcs-web';
 var CASDOOR_ENDPOINT  = 'https://auth.sourcedcs.page';
 function getToken() { try { return localStorage.getItem('sdcs-token'); } catch(e) { return null; } }
 function loginWithCasdoor() {
+  try { localStorage.setItem('sdcs-return-url', window.location.href); } catch(e) {}
   var ru = encodeURIComponent(window.location.origin + '/auth-callback.html');
   var st = Math.random().toString(36).slice(2);
   try { sessionStorage.setItem('sdcs-oauth-state', st); } catch(e) {}
@@ -341,6 +339,58 @@ function logoutCasdoor() {
     var wel = document.getElementById('memberWelcome');
     if (wel) wel.textContent = 'WELCOME BACK, ' + name;
   }
+})();
+
+/* ── Hamburger menu ── */
+(function() {
+  var hamburger = document.getElementById('hamburgerBtn');
+  var nav       = document.getElementById('mainNav');
+  if (!hamburger || !nav) return;
+  hamburger.addEventListener('click', function() {
+    var open = nav.classList.toggle('nav-open');
+    hamburger.classList.toggle('open', open);
+    hamburger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  nav.querySelectorAll('.nav-link').forEach(function(link) {
+    link.addEventListener('click', function() {
+      nav.classList.remove('nav-open');
+      hamburger.classList.remove('open');
+      hamburger.setAttribute('aria-expanded', 'false');
+    });
+  });
+})();
+
+/* ── Smooth scroll ── */
+document.querySelectorAll('a[href^="#"]').forEach(function(link) {
+  link.addEventListener('click', function(e) {
+    var id = this.getAttribute('href');
+    if (id === '#') return;
+    var target = document.querySelector(id);
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth' });
+      history.replaceState(null, '', id);
+    }
+  });
+});
+
+/* ── Scroll-spy ── */
+(function() {
+  var sections = document.querySelectorAll('section[id]');
+  var navLinks = document.querySelectorAll('.header-nav .nav-link[href^="#"]');
+  if (!sections.length || !navLinks.length) return;
+  function onScroll() {
+    var scrollY = window.scrollY + 80;
+    var current = '';
+    sections.forEach(function(sec) {
+      if (sec.offsetTop <= scrollY) current = sec.id;
+    });
+    navLinks.forEach(function(link) {
+      link.classList.toggle('active-nav', link.getAttribute('href') === '#' + current);
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 })();
 
 /* ── Upcoming ops preview ── */

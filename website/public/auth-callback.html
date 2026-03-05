@@ -122,7 +122,9 @@
   }
 
   status.textContent = 'LOGGED IN — REDIRECTING...';
-  window.location.replace('/');
+  var returnUrl = '/';
+  try { returnUrl = localStorage.getItem('sdcs-return-url') || '/'; localStorage.removeItem('sdcs-return-url'); } catch(e) {}
+  window.location.replace(returnUrl);
 })();
 </script>
 </body>

@@ -18,7 +18,7 @@
     <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
     <div class="header-title">SOURCEDCS</div>
   </a>
-  <nav class="header-nav" aria-label="Main navigation">
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
     <a class="nav-link" href="/#about">ABOUT</a>
     <a class="nav-link" href="/#subsquadrons">WINGS</a>
     <a class="nav-link active-nav" href="schedule.html">SCHEDULE</a>
@@ -26,6 +26,9 @@
   </nav>
   <div class="header-spacer"></div>
   <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
     <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
     <div class="hdr-toggle-group">
       <span class="hdr-toggle-label">DISPLAY</span>
@@ -191,6 +194,7 @@ var CASDOOR_ENDPOINT  = 'https://auth.sourcedcs.page';
 function getToken()  { try { return localStorage.getItem('sdcs-token');  } catch(e) { return null; } }
 function getUser()   { try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) { return null; } }
 function loginWithCasdoor() {
+  try { localStorage.setItem('sdcs-return-url', window.location.href); } catch(e) {}
   var ru = encodeURIComponent(window.location.origin + '/auth-callback.html');
   var st = Math.random().toString(36).slice(2);
   try { sessionStorage.setItem('sdcs-oauth-state', st); } catch(e) {}
@@ -436,6 +440,25 @@ function deleteEvent(id) {
   })
   .catch(function() { alert('Failed to delete event. Please check your connection and try again.'); });
 }
+
+/* ── Hamburger menu ── */
+(function() {
+  var hamburger = document.getElementById('hamburgerBtn');
+  var nav       = document.getElementById('mainNav');
+  if (!hamburger || !nav) return;
+  hamburger.addEventListener('click', function() {
+    var open = nav.classList.toggle('nav-open');
+    hamburger.classList.toggle('open', open);
+    hamburger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  nav.querySelectorAll('.nav-link').forEach(function(link) {
+    link.addEventListener('click', function() {
+      nav.classList.remove('nav-open');
+      hamburger.classList.remove('open');
+      hamburger.setAttribute('aria-expanded', 'false');
+    });
+  });
+})();
 </script>
 
 </body>

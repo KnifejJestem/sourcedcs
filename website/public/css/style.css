@@ -73,6 +73,7 @@
    RESET + BASE
 ═══════════════════════════════════════════════════════════ */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -396,6 +397,55 @@ footer {
 }
 .nav-link:hover { color: var(--text); border-color: var(--border); }
 :root.movie .nav-link:hover { color: var(--accent); border-color: var(--border-strong); }
+.nav-link.active-nav { color: var(--text); border-bottom: 1px solid var(--text); }
+:root.movie .nav-link.active-nav { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Hamburger button ──────────────────────────────────── */
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  background: none;
+  border: 1px solid var(--border);
+  padding: 6px 7px;
+  cursor: pointer;
+  z-index: 110;
+}
+.hamburger-line {
+  display: block;
+  width: 16px;
+  height: 1.5px;
+  background: var(--text);
+  transition: transform .2s, opacity .2s;
+}
+:root.movie .hamburger-line { background: var(--accent); }
+.hamburger-btn.open .hamburger-line:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+.hamburger-btn.open .hamburger-line:nth-child(2) { opacity: 0; }
+.hamburger-btn.open .hamburger-line:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
+
+@media (max-width: 640px) {
+  .header-nav {
+    display: none;
+    position: absolute;
+    top: 48px;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border-strong);
+    padding: 8px 0;
+    z-index: 100;
+  }
+  .header-nav.nav-open { display: flex; }
+  .header-nav .nav-link {
+    padding: 10px 24px;
+    font-size: 10px;
+    border: none;
+  }
+  .header-nav .nav-link:hover { background: var(--bg3); }
+  .hamburger-btn { display: flex; }
+}
 
 .login-btn {
   font-family: var(--font-mono);
@@ -413,10 +463,6 @@ footer {
 .login-btn:hover { background: var(--text-2); }
 :root.movie .login-btn { background: var(--accent); color: #000; }
 :root.movie .login-btn:hover { background: #2de06a; }
-
-@media (max-width: 640px) {
-  .header-nav { display: none; }
-}
 
 /* ═══════════════════════════════════════════════════════════
    HERO SECTION
