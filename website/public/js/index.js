@@ -17,9 +17,9 @@ function logoutCasdoor() {
   var user  = null;
   try { user = JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) {}
   if (!token) return;
-  var name = (user && user.name) ? user.name.toUpperCase() : 'PILOT';
+  var name = (user && user.name) ? user.name.toUpperCase() : 'USER';
   var btn = document.getElementById('loginBtn');
-  if (btn) { btn.textContent = name; btn.title = 'Click to log out'; btn.onclick = logoutCasdoor; }
+  if (btn) { btn.textContent = name + ' \u23FB'; btn.title = 'Click to log out'; btn.classList.add('login-btn--logout'); btn.onclick = logoutCasdoor; }
   var hero = document.getElementById('heroMemberBtn');
   if (hero) {
     hero.textContent = '\u2192 MEMBER HUB';

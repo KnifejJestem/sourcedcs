@@ -17,9 +17,9 @@ function logout() {
 var currentToken = getToken();
 (function() {
   var user = getUser();
-  var name = (user && user.name) ? user.name.toUpperCase() : 'PILOT';
+  var name = (user && user.name) ? user.name.toUpperCase() : 'USER';
   var btn = document.getElementById('loginBtn');
-  if (btn) { btn.textContent = name; btn.title = 'Click to log out'; btn.onclick = logout; }
+  if (btn) { btn.textContent = name + ' \u23FB'; btn.title = 'Click to log out'; btn.classList.add('login-btn--logout'); btn.onclick = logout; }
   /* Only show admin bar if user has the "admin" role */
   if (isAdminRole(currentToken)) {
     var bar = document.getElementById('adminBar');
