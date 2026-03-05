@@ -1,5 +1,7 @@
 'use strict';
 
+require('dotenv').config(); /* load .env for local development */
+
 const express   = require('express');
 const rateLimit = require('express-rate-limit');
 const path      = require('path');
