@@ -152,8 +152,8 @@ const applyLimiter = rateLimit({
 app.use(express.json({ limit: '50kb' }));
 
 /* ─── Casdoor config (read from env) ────────────────────── */
-const CASDOOR_CLIENT_ID = process.env.CASDOOR_CLIENT_ID || 'sourcedcs-web';
-const CASDOOR_ENDPOINT  = process.env.CASDOOR_ENDPOINT  || 'https://auth.sourcedcs.page';
+const CASDOOR_CLIENT_ID = process.env.CASDOOR_CLIENT_ID;
+const CASDOOR_ENDPOINT  = process.env.CASDOOR_ENDPOINT;
 
 /* ─── Auth helpers ──────────────────────────────────────── */
 function decodeJWT(token) {
