@@ -24,3 +24,15 @@ function isAdminRole(token) {
     });
   } catch(e) { return false; }
 }
+
+/* Returns true if the given JWT contains at least one role in its roles claim. */
+function hasAnyRole(token) {
+  if (!token) return false;
+  try {
+    var parts = token.split('.');
+    if (parts.length !== 3) return false;
+    var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    var roles = payload.roles || [];
+    return Array.isArray(roles) && roles.length > 0;
+  } catch(e) { return false; }
+}
