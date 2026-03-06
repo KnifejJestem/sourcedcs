@@ -1363,6 +1363,42 @@ footer { padding: 0; }
   border-top: 1px solid var(--border);
 }
 
+/* Apply modal — step indicator */
+.apply-step-indicator {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  margin-bottom: 12px;
+}
+
+/* Apply modal — account setup steps list */
+.apply-account-steps {
+  margin: 16px 0 4px;
+}
+.apply-account-steps .recruit-step {
+  margin-bottom: 14px;
+}
+
+/* Apply modal — Discord CTA (shown after successful submission) */
+.apply-discord-cta {
+  margin: 16px 0 4px;
+  text-align: center;
+}
+.apply-discord-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  letter-spacing: 2px;
+  padding: 14px 28px;
+  text-decoration: none;
+  width: 100%;
+  justify-content: center;
+}
+:root.movie .apply-discord-btn {
+  box-shadow: 0 0 20px rgba(57,255,122,.25);
+}
+
 /* Ghost / cancel button */
 .btn-ghost {
   background: transparent;

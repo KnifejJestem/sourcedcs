@@ -205,80 +205,120 @@
       <button class="modal-close" onclick="closeApplyModal()" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
-      <p class="modal-intro">Fill in the form below. We'll contact you on Discord within 48 hours.</p>
-      <form id="applyForm" onsubmit="submitApplication(event)" novalidate>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="fCallsign">CALLSIGN / HANDLE <span class="form-required">*</span></label>
-            <input class="form-input" id="fCallsign" name="callsign" type="text" maxlength="32" placeholder="e.g. VIPER27" required autocomplete="off">
+
+      <!-- STEP 1: Create a Discord account -->
+      <div id="applyStep1">
+        <div class="apply-step-indicator">STEP 1 OF 2</div>
+        <p class="modal-intro">Before applying, make sure you have a Discord account. You do not need to join the server yet &mdash; just have an account ready.</p>
+        <div class="apply-account-steps">
+          <div class="recruit-step">
+            <div class="step-num">01</div>
+            <div class="step-body">
+              <div class="step-title">CREATE A DISCORD ACCOUNT</div>
+              <div class="step-desc">If you don't have one yet, go to <a href="https://discord.com" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline">discord.com</a> and sign up for free. A Discord account is required to receive your acceptance and communicate with the squadron.</div>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="fDiscord">DISCORD USERNAME <span class="form-required">*</span></label>
-            <input class="form-input" id="fDiscord" name="discordHandle" type="text" maxlength="64" placeholder="e.g. viper27" required autocomplete="off">
+          <div class="recruit-step">
+            <div class="step-num">02</div>
+            <div class="step-body">
+              <div class="step-title">NO ROLE NEEDED YET</div>
+              <div class="step-desc">You do not need any existing role or server membership to apply. Just have your Discord username ready to enter in the application form.</div>
+            </div>
           </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="fAge">AGE GROUP <span class="form-required">*</span></label>
-            <select class="form-select" id="fAge" name="age" required>
-              <option value="">&mdash; SELECT &mdash;</option>
-              <option value="16-17">16 &ndash; 17</option>
-              <option value="18-24">18 &ndash; 24</option>
-              <option value="25-34">25 &ndash; 34</option>
-              <option value="35+">35+</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="fTimezone">TIMEZONE <span class="form-required">*</span></label>
-            <select class="form-select" id="fTimezone" name="timezone" required>
-              <option value="">&mdash; SELECT &mdash;</option>
-              <option value="UTC-8">UTC&minus;8 (PST)</option>
-              <option value="UTC-7">UTC&minus;7 (MST)</option>
-              <option value="UTC-6">UTC&minus;6 (CST)</option>
-              <option value="UTC-5">UTC&minus;5 (EST)</option>
-              <option value="UTC-4">UTC&minus;4 (Atlantic)</option>
-              <option value="UTC">UTC / GMT</option>
-              <option value="UTC+1">UTC+1 (CET)</option>
-              <option value="UTC+2">UTC+2 (EET)</option>
-              <option value="UTC+3">UTC+3 (MSK)</option>
-              <option value="UTC+5:30">UTC+5:30 (IST)</option>
-              <option value="UTC+8">UTC+8 (AWST)</option>
-              <option value="UTC+10">UTC+10 (AEST)</option>
-              <option value="UTC+12">UTC+12 (NZST)</option>
-              <option value="other">Other</option>
-            </select>
+          <div class="recruit-step">
+            <div class="step-num">03</div>
+            <div class="step-body">
+              <div class="step-title">FILL OUT THE APPLICATION</div>
+              <div class="step-desc">Click <strong>Continue</strong> below to fill out the short application form. We'll review it and reach out on Discord within 48 hours.</div>
+            </div>
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="fSquadron">PREFERRED WING <span class="form-required">*</span></label>
-            <select class="form-select" id="fSquadron" name="subSquadron" required>
-              <option value="">&mdash; SELECT &mdash;</option>
-              <!-- Populated dynamically from /api/squadrons -->
-              <option value="undecided">UNDECIDED / NO PREFERENCE</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="fExp">DCS EXPERIENCE</label>
-            <select class="form-select" id="fExp" name="experience">
-              <option value="">&mdash; SELECT &mdash;</option>
-              <option value="beginner">New to DCS (&lt;100 hrs)</option>
-              <option value="intermediate">Familiar (100&ndash;500 hrs)</option>
-              <option value="advanced">Experienced (500+ hrs)</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="fModules">MODULES OWNED <span class="form-hint">(optional)</span></label>
-          <input class="form-input" id="fModules" name="modules" type="text" maxlength="300" placeholder="e.g. F/A-18C, F-16C, Combined Arms...">
-        </div>
-        <div class="form-error"  id="applyFormError"   style="display:none"></div>
-        <div class="form-success" id="applyFormSuccess" style="display:none"></div>
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" onclick="closeApplyModal()">CANCEL</button>
-          <button type="submit" class="btn btn-primary" id="applySubmitBtn"><span class="btn-icon">&#x2295;</span> SUBMIT APPLICATION</button>
+          <button type="button" class="btn btn-primary" onclick="showApplyStep2()"><span class="btn-icon">&rarr;</span> CONTINUE TO APPLICATION</button>
         </div>
-      </form>
+      </div>
+
+      <!-- STEP 2: Application form -->
+      <div id="applyStep2" style="display:none">
+        <div class="apply-step-indicator">STEP 2 OF 2</div>
+        <p class="modal-intro">Fill in the form below. We'll contact you on Discord within 48 hours.</p>
+        <form id="applyForm" onsubmit="submitApplication(event)" novalidate>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="fCallsign">CALLSIGN / HANDLE <span class="form-required">*</span></label>
+              <input class="form-input" id="fCallsign" name="callsign" type="text" maxlength="32" placeholder="e.g. VIPER27" required autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="fDiscord">DISCORD USERNAME <span class="form-required">*</span></label>
+              <input class="form-input" id="fDiscord" name="discordHandle" type="text" maxlength="64" placeholder="e.g. viper27" required autocomplete="off">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="fAge">AGE GROUP <span class="form-required">*</span></label>
+              <select class="form-select" id="fAge" name="age" required>
+                <option value="">&mdash; SELECT &mdash;</option>
+                <option value="16-17">16 &ndash; 17</option>
+                <option value="18-24">18 &ndash; 24</option>
+                <option value="25-34">25 &ndash; 34</option>
+                <option value="35+">35+</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="fTimezone">TIMEZONE <span class="form-required">*</span></label>
+              <select class="form-select" id="fTimezone" name="timezone" required>
+                <option value="">&mdash; SELECT &mdash;</option>
+                <option value="UTC-8">UTC&minus;8 (PST)</option>
+                <option value="UTC-7">UTC&minus;7 (MST)</option>
+                <option value="UTC-6">UTC&minus;6 (CST)</option>
+                <option value="UTC-5">UTC&minus;5 (EST)</option>
+                <option value="UTC-4">UTC&minus;4 (Atlantic)</option>
+                <option value="UTC">UTC / GMT</option>
+                <option value="UTC+1">UTC+1 (CET)</option>
+                <option value="UTC+2">UTC+2 (EET)</option>
+                <option value="UTC+3">UTC+3 (MSK)</option>
+                <option value="UTC+5:30">UTC+5:30 (IST)</option>
+                <option value="UTC+8">UTC+8 (AWST)</option>
+                <option value="UTC+10">UTC+10 (AEST)</option>
+                <option value="UTC+12">UTC+12 (NZST)</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="fSquadron">PREFERRED WING <span class="form-required">*</span></label>
+              <select class="form-select" id="fSquadron" name="subSquadron" required>
+                <option value="">&mdash; SELECT &mdash;</option>
+                <!-- Populated dynamically from /api/squadrons -->
+                <option value="undecided">UNDECIDED / NO PREFERENCE</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="fExp">DCS EXPERIENCE</label>
+              <select class="form-select" id="fExp" name="experience">
+                <option value="">&mdash; SELECT &mdash;</option>
+                <option value="beginner">New to DCS (&lt;100 hrs)</option>
+                <option value="intermediate">Familiar (100&ndash;500 hrs)</option>
+                <option value="advanced">Experienced (500+ hrs)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fModules">MODULES OWNED <span class="form-hint">(optional)</span></label>
+            <input class="form-input" id="fModules" name="modules" type="text" maxlength="300" placeholder="e.g. F/A-18C, F-16C, Combined Arms...">
+          </div>
+          <div class="form-error"  id="applyFormError"   style="display:none"></div>
+          <div class="form-success" id="applyFormSuccess" style="display:none"></div>
+          <div id="applyDiscordCta" class="apply-discord-cta" style="display:none"></div>
+          <div class="form-actions" id="applyFormActions">
+            <button type="button" class="btn btn-ghost" onclick="closeApplyModal()">CANCEL</button>
+            <button type="submit" class="btn btn-primary" id="applySubmitBtn"><span class="btn-icon">&#x2295;</span> SUBMIT APPLICATION</button>
+          </div>
+        </form>
+      </div>
+
     </div>
   </div>
 </div>

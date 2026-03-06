@@ -133,11 +133,23 @@ document.querySelectorAll('a[href^="#"]').forEach(function(link) {
 function openApplyModal(wing) {
   document.getElementById('applyModalOverlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  /* Always start at step 1 */
+  document.getElementById('applyStep1').style.display = '';
+  document.getElementById('applyStep2').style.display = 'none';
   if (wing) {
-    setTimeout(function() {
-      var sel = document.getElementById('fSquadron');
-      if (sel) sel.value = wing;
-    }, 30);
+    /* Store the wing so step 2 can pre-select it */
+    document.getElementById('applyModalOverlay').dataset.pendingWing = wing;
+  } else {
+    delete document.getElementById('applyModalOverlay').dataset.pendingWing;
+  }
+}
+function showApplyStep2() {
+  document.getElementById('applyStep1').style.display = 'none';
+  document.getElementById('applyStep2').style.display = '';
+  var pendingWing = document.getElementById('applyModalOverlay').dataset.pendingWing;
+  if (pendingWing) {
+    var sel = document.getElementById('fSquadron');
+    if (sel) sel.value = pendingWing;
   }
   setTimeout(function() { document.getElementById('fCallsign').focus(); }, 30);
 }
@@ -146,6 +158,8 @@ function closeApplyModal() {
   document.body.style.overflow = '';
   document.getElementById('applyFormError').style.display   = 'none';
   document.getElementById('applyFormSuccess').style.display = 'none';
+  document.getElementById('applyDiscordCta').style.display  = 'none';
+  document.getElementById('applyFormActions').style.display = '';
   var btn = document.getElementById('applySubmitBtn');
   btn.disabled = false; btn.innerHTML = '<span class="btn-icon">&#x2295;</span> SUBMIT APPLICATION';
 }
@@ -202,19 +216,21 @@ function submitApplication(e) {
       return;
     }
     form.reset();
-    succEl.textContent = '';
-    succEl.appendChild(document.createTextNode(res.body.message || 'Application received!'));
+    succEl.textContent = res.body.message || 'Application received!';
+    succEl.style.display = '';
     if (res.body.discord) {
+      var cta = document.getElementById('applyDiscordCta');
+      cta.innerHTML = '';
       var dLink = document.createElement('a');
       dLink.href = res.body.discord;
       dLink.target = '_blank';
       dLink.rel = 'noopener';
-      dLink.style.cssText = 'color:var(--green);text-decoration:underline;margin-left:4px';
-      dLink.textContent = 'JOIN DISCORD \u2192';
-      succEl.appendChild(document.createTextNode(' '));
-      succEl.appendChild(dLink);
+      dLink.className = 'btn btn-primary apply-discord-btn';
+      dLink.innerHTML = '<span class="btn-icon">&#x2295;</span> JOIN THE DISCORD SERVER';
+      cta.appendChild(dLink);
+      cta.style.display = '';
     }
-    succEl.style.display = '';
+    document.getElementById('applyFormActions').style.display = 'none';
     btn.innerHTML        = '&#x2713; SUBMITTED';
   })
   .catch(function() {
@@ -240,6 +256,8 @@ var SQUADRONS = [];
     if (isAdmin) {
       document.getElementById('subsqAdminBar').style.display = '';
     }
+    /* Re-render roster now that squadron names are available */
+    if (ROSTER.length) renderRoster(ROSTER);
   }).catch(function() { grid.innerHTML = '<div class="ops-preview-empty">Unable to load wings.</div>'; });
 })();
 
@@ -378,6 +396,11 @@ var ROSTER = [];
   });
 })();
 
+function squadronDisplayName(id) {
+  var sq = SQUADRONS.find(function(s) { return s.id === id; });
+  return sq ? sq.designator + ' ' + sq.name : id;
+}
+
 function renderRoster(list) {
   var tbody = document.getElementById('rosterBody');
   if (!list.length) {
@@ -388,7 +411,7 @@ function renderRoster(list) {
     return '<tr>' +
       '<td><span class="callsign">' + escH(p.callsign) + '</span></td>' +
       '<td>' + escH(p.role) + '</td>' +
-      '<td>' + escH(p.squadron) + '</td>' +
+      '<td>' + escH(squadronDisplayName(p.squadron)) + '</td>' +
     '</tr>';
   }).join('');
   html += '<tr class="roster-open-row"><td colspan="3" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="#join">APPLY NOW \u2192</a></td></tr>';
