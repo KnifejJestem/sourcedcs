@@ -10,6 +10,17 @@ function loginWithCasdoor() {
   window.location.href = CASDOOR_ENDPOINT + '/login/oauth/authorize?client_id=' + CASDOOR_CLIENT_ID + '&redirect_uri=' + ru + '&response_type=code&scope=openid+profile&state=' + st;
 }
 
+/* Redirect to Casdoor signup page. Accepts an optional custom return URL so
+   callers can direct the user to a specific page (e.g. with ?apply=1) after
+   they complete registration. Falls back to the current page. */
+function signupWithCasdoor(customReturnUrl) {
+  try { localStorage.setItem('sdcs-return-url', customReturnUrl || window.location.href); } catch(e) {}
+  var ru = encodeURIComponent(window.location.origin + '/auth-callback.html');
+  var st = Math.random().toString(36).slice(2);
+  try { sessionStorage.setItem('sdcs-oauth-state', st); } catch(e) {}
+  window.location.href = CASDOOR_ENDPOINT + '/signup/oauth/authorize?client_id=' + CASDOOR_CLIENT_ID + '&redirect_uri=' + ru + '&response_type=code&scope=openid+profile&state=' + st;
+}
+
 /* Returns true if the given JWT contains an "admin" role in its roles claim.
    Casdoor encodes roles as an array of objects ({ name: '...' }) or strings. */
 function isAdminRole(token) {
