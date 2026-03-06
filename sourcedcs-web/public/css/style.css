@@ -586,6 +586,13 @@ footer {
 :root.movie .hero-featured-shot:hover .hero-featured-cta { color: var(--accent); }
 :root.movie .hero-featured-shot { border-color: var(--border-strong); }
 :root.movie .hero-featured-shot:hover { border-color: var(--accent); box-shadow: 0 0 24px rgba(57,255,122,.12); }
+.hero-featured-wrap { position: relative; }
+.hero-admin-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+}
 
 /* Buttons */
 .btn {

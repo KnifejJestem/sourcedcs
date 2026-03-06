@@ -17,6 +17,7 @@ const APPS_FILE          = path.join(DATA_DIR, 'applications.json');
 const SQUADRONS_FILE     = path.join(DATA_DIR, 'squadrons.json');
 const DISCORD_ROLES_FILE = path.join(DATA_DIR, 'discord-roles.json');
 const GALLERY_FILE       = path.join(DATA_DIR, 'gallery.json');
+const HERO_FILE          = path.join(DATA_DIR, 'hero-image.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
 if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
@@ -43,6 +44,10 @@ const DEFAULT_GALLERY = [
 ];
 
 let gallery = loadJSON(GALLERY_FILE, DEFAULT_GALLERY);
+
+/* Hero image — the single cinematic shot shown at the top of the main page */
+const DEFAULT_HERO = { src: 'gallery/shot-01.svg', alt: 'Formation Flight — Dawn Patrol over Caucasus', caption: 'FORMATION FLIGHT · CAUCASUS THEATRE · DAWN PATROL' };
+let heroImage = loadJSON(HERO_FILE, DEFAULT_HERO);
 
 /* Multer — images land in the data volume (not in the Docker image) */
 const upload = multer({
@@ -694,6 +699,30 @@ api.delete('/gallery/:idx', writeOpsLimiter, requireAuth, requireAdmin, (req, re
     }
   }
   res.json({ ok: true });
+});
+
+/* ── Hero image (public read, admin write + image upload) ── */
+const MAX_HERO_SRC_LEN  = 512;
+const MAX_HERO_TEXT_LEN = 200;
+
+api.get('/hero-image', (_req, res) => res.json(heroImage));
+
+api.put('/hero-image', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ error: 'Expected object' });
+  }
+  heroImage = {
+    src:     sanitizeStr(req.body.src,     MAX_HERO_SRC_LEN),
+    alt:     sanitizeStr(req.body.alt,     MAX_HERO_TEXT_LEN),
+    caption: sanitizeStr(req.body.caption, MAX_HERO_TEXT_LEN),
+  };
+  saveJSON(HERO_FILE, heroImage);
+  res.json(heroImage);
+});
+
+api.post('/hero-image/upload', writeOpsLimiter, requireAuth, requireAdmin, upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+  res.json({ src: '/gallery-uploads/' + req.file.filename });
 });
 
 /* ── Squadrons (public read, admin write) ── */

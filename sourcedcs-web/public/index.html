@@ -58,6 +58,9 @@
       <div class="hero-featured-caption" id="heroFeaturedCaption"></div>
       <div class="hero-featured-cta">&#x25A0; FLIGHT GALLERY &mdash; VIEW ALL SHOTS &rarr;</div>
     </a>
+    <div class="hero-admin-overlay" id="heroAdminOverlay" style="display:none">
+      <button class="admin-edit-btn" onclick="openHeroEditModal(event)">&#x270E; EDIT IMAGE</button>
+    </div>
   </div>
 
 </section>
@@ -407,6 +410,37 @@
         <button type="button" class="btn btn-ghost" onclick="closeDiscordRolesModal()">CANCEL</button>
         <button type="button" class="btn btn-primary" id="drSaveBtn" onclick="saveDiscordRoles()"><span class="btn-icon">&#x2713;</span> SAVE MAPPING</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- HERO IMAGE EDIT MODAL -->
+<div class="modal-overlay" id="heroEditModalOverlay" role="dialog" aria-modal="true" aria-labelledby="heroEditModalTitle" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="heroEditModalTitle">&#x270E; EDIT HERO IMAGE</div>
+      <button class="modal-close" onclick="closeHeroEditModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="heroEditForm" onsubmit="submitHeroEdit(event)" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="heroEditFile">NEW IMAGE FILE <span class="form-hint">(JPEG, PNG, WebP &mdash; max 20 MB; leave blank to keep current)</span></label>
+          <input class="form-input" id="heroEditFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="heroEditCaption">CAPTION (shown on image)</label>
+          <input class="form-input" id="heroEditCaption" type="text" maxlength="200" placeholder="FORMATION FLIGHT &middot; CAUCASUS">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="heroEditAlt">ALT TEXT (screen readers / tooltip)</label>
+          <input class="form-input" id="heroEditAlt" type="text" maxlength="200" placeholder="Formation Flight over Caucasus at dawn">
+        </div>
+        <div class="form-error" id="heroEditError" style="display:none"></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeHeroEditModal()">CANCEL</button>
+          <button type="submit" class="btn btn-primary" id="heroEditSaveBtn">&#x2713; SAVE</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
