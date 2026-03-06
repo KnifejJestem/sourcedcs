@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authenticating… — ATO BRIEF</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%274%27 fill=%27%231a2a1a%27/%3E%3Ctext x=%2716%27 y=%2722%27 text-anchor=%27middle%27 font-family=%27monospace%27 font-size=%2714%27 font-weight=%27bold%27 fill=%27%2339ff7a%27%3EATO%3C/text%3E%3C/svg%3E">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d1a0d;
+      color: #c8d8c8;
+      font-family: 'Courier New', Courier, monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 18px;
+      text-align: center;
+    }
+    .cb-title {
+      font-size: 18px;
+      letter-spacing: 4px;
+      color: #39ff7a;
+    }
+    .cb-status {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      color: #8aab8a;
+    }
+    .cb-error {
+      font-size: 11px;
+      color: #ff5555;
+      max-width: 400px;
+      line-height: 1.6;
+    }
+    .cb-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #2a3a2a;
+      border-top-color: #39ff7a;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="cb-title">ATO BRIEF</div>
+<div class="cb-spinner" id="spinner"></div>
+<div class="cb-status" id="cbStatus">AUTHENTICATING...</div>
+<div class="cb-error" id="cbError" style="display:none"></div>
+
+<script src="/js/config.js"></script>
+<script>
+(function() {
+  var status = document.getElementById('cbStatus');
+  var errEl  = document.getElementById('cbError');
+  var spin   = document.getElementById('spinner');
+
+  function fail(msg) {
+    spin.style.display  = 'none';
+    status.textContent  = 'AUTHENTICATION FAILED';
+    errEl.style.display = '';
+    errEl.textContent   = msg || 'An unknown error occurred. Please try again.';
+  }
+
+  var params = {};
+  window.location.search.slice(1).split('&').forEach(function(pair) {
+    var idx = pair.indexOf('=');
+    if (idx > 0) params[decodeURIComponent(pair.slice(0, idx))] = decodeURIComponent(pair.slice(idx + 1));
+  });
+
+  var savedState = null;
+  try { savedState = sessionStorage.getItem('ato-oauth-state'); } catch(e) {}
+  /* Reject if state is returned by server but missing from sessionStorage (possible CSRF or broken flow) */
+  if (params.state && !savedState) {
+    fail('Session state missing — possible CSRF attack or session expired. Please log in again.');
+    return;
+  }
+  if (savedState && params.state && params.state !== savedState) {
+    fail('State mismatch — possible CSRF attack. Please log in again.');
+    return;
+  }
+  try { sessionStorage.removeItem('ato-oauth-state'); } catch(e) {}
+
+  if (params.error) {
+    fail('Auth error: ' + (params.error_description || params.error));
+    return;
+  }
+
+  var code = params.code;
+  if (!code) {
+    fail('No authorization code received. The login may have been cancelled or the client is misconfigured.');
+    return;
+  }
+
+  var redirectUri = window.location.origin + '/auth-callback.html';
+  var fetchOk;
+  fetch('/api/auth/token', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ code: code, redirectUri: redirectUri }),
+  })
+  .then(function(r) { fetchOk = r.ok; return r.json(); })
+  .then(function(data) {
+    if (!fetchOk || !data.access_token) {
+      fail(data.error || 'No access token received from server.');
+      return;
+    }
+    try { localStorage.setItem('ato-token', data.access_token); } catch(e) {}
+    status.textContent = 'LOGGED IN — REDIRECTING...';
+    var returnUrl = '/';
+    try { returnUrl = localStorage.getItem('ato-return-url') || '/'; localStorage.removeItem('ato-return-url'); } catch(e) {}
+    window.location.replace(returnUrl);
+  })
+  .catch(function(err) {
+    fail('Network error during login. Please try again. (' + (err.message || err) + ')');
+  });
+})();
+</script>
+</body>
+</html>

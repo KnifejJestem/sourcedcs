@@ -227,6 +227,28 @@
 <!-- Toast notification -->
 <div class="toast" id="toast"></div>
 
+<script src="/js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+/* ── Auth gate: redirect to Casdoor if no valid token is present ─ */
+(function() {
+  var token = getToken();
+  if (!token) { loginWithCasdoor(); return; }
+  /* Check JWT expiry (exp claim) without a library */
+  try {
+    var parts = token.split('.');
+    if (parts.length !== 3) { loginWithCasdoor(); return; }
+    var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (payload.exp && Math.floor(Date.now() / 1000) >= payload.exp) {
+      try { localStorage.removeItem('ato-token'); } catch(e) {}
+      loginWithCasdoor();
+    }
+  } catch(e) {
+    /* Malformed token — redirect to login */
+    loginWithCasdoor();
+  }
+})();
+</script>
 <script src="/vendor/js-yaml.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="js/app.js"></script>

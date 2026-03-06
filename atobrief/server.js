@@ -17,10 +17,11 @@
 
 'use strict';
 
-const crypto  = require('crypto');
-const express = require('express');
-const http    = require('http');
-const path    = require('path');
+const crypto     = require('crypto');
+const express    = require('express');
+const http       = require('http');
+const path       = require('path');
+const rateLimit  = require('express-rate-limit');
 const { Server } = require('socket.io');
 
 function hashPassword(pw) {
@@ -39,6 +40,104 @@ const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server);
 
+// ── Casdoor / auth config ────────────────────────────────────
+const CASDOOR_CLIENT_ID     = process.env.ATOBRIEF_CLIENT_ID     || '';
+const CASDOOR_CLIENT_SECRET = process.env.ATOBRIEF_CLIENT_SECRET || '';
+const CASDOOR_ENDPOINT      = process.env.CASDOOR_ENDPOINT       || '';
+
+// ── Rate limiters ────────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs:        15 * 60 * 1000,
+  max:             20,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message:         { error: 'Too many auth requests — please wait before trying again.' },
+});
+
+app.use(express.json({ limit: '50kb' }));
+
+// ── Dynamic config endpoint (exposes Casdoor settings to client) ─
+app.get('/js/config.js', (_req, res) => {
+  res.set('Content-Type', 'application/javascript; charset=utf-8');
+  res.set('Cache-Control', 'no-store');
+  res.send(
+    'var CASDOOR_CLIENT_ID = ' + JSON.stringify(CASDOOR_CLIENT_ID) + ';\n' +
+    'var CASDOOR_ENDPOINT  = ' + JSON.stringify(CASDOOR_ENDPOINT)  + ';\n'
+  );
+});
+
+// ── Casdoor token exchange (server-side; keeps client_secret private) ─
+function casdoorTokenExchange(code, redirectUri) {
+  return new Promise((resolve, reject) => {
+    if (!CASDOOR_ENDPOINT || !CASDOOR_CLIENT_ID || !CASDOOR_CLIENT_SECRET) {
+      return reject(new Error('Casdoor is not configured (missing env vars)'));
+    }
+    const payload = JSON.stringify({
+      grant_type:    'authorization_code',
+      client_id:     CASDOOR_CLIENT_ID,
+      client_secret: CASDOOR_CLIENT_SECRET,
+      code,
+      redirect_uri:  redirectUri,
+    });
+    let parsed;
+    try { parsed = new URL(CASDOOR_ENDPOINT); } catch {
+      return reject(new Error('CASDOOR_ENDPOINT is not a valid URL'));
+    }
+    const isHttps = parsed.protocol === 'https:';
+    const mod     = isHttps ? require('https') : require('http');
+    const options = {
+      hostname: parsed.hostname,
+      port:     parsed.port || (isHttps ? 443 : 80),
+      path:     '/api/login/oauth/access_token',
+      method:   'POST',
+      headers:  {
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+    const req = mod.request(options, (res) => {
+      let raw = '';
+      res.on('data', chunk => { raw += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(raw)); }
+        catch { reject(new Error('Casdoor returned invalid JSON (HTTP ' + res.statusCode + ')')); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+// ── Auth token exchange endpoint ──────────────────────────────
+const MAX_AUTH_CODE_LEN    = 512;
+const MAX_REDIRECT_URI_LEN = 512;
+app.post('/api/auth/token', authLimiter, async (req, res) => {
+  const { code, redirectUri } = req.body;
+  if (!code || typeof code !== 'string' || code.length > MAX_AUTH_CODE_LEN) {
+    return res.status(400).json({ error: 'Missing or invalid code' });
+  }
+  if (!redirectUri || typeof redirectUri !== 'string' || redirectUri.length > MAX_REDIRECT_URI_LEN) {
+    return res.status(400).json({ error: 'Missing or invalid redirectUri' });
+  }
+  try {
+    const tokenData = await casdoorTokenExchange(code, redirectUri);
+    if (tokenData.error) {
+      console.warn('[auth] Casdoor token exchange error:', tokenData.error, tokenData.error_description);
+      return res.status(400).json({ error: tokenData.error_description || tokenData.error });
+    }
+    const accessToken = tokenData.access_token;
+    if (!accessToken) {
+      console.warn('[auth] Casdoor response missing access_token:', JSON.stringify(tokenData).slice(0, 200));
+      return res.status(502).json({ error: 'No access token returned by auth server' });
+    }
+    res.json({ access_token: accessToken });
+  } catch (err) {
+    console.error('[auth] Token exchange failed:', err.message);
+    res.status(502).json({ error: 'Auth server unreachable or returned an error' });
+  }
+});
+
 // ── Serve static front-end assets ────────────────────────────
 // Only expose the directories the browser actually needs.
 const PUBLIC = path.join(__dirname, 'public');
@@ -47,6 +146,7 @@ app.use('/css',  express.static(path.join(PUBLIC, 'css')));
 app.use('/js',   express.static(path.join(PUBLIC, 'js')));
 app.use('/data', express.static(path.join(__dirname, 'data')));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules', 'js-yaml', 'dist')));
+app.get('/auth-callback.html', (_req, res) => res.sendFile(path.join(PUBLIC, 'auth-callback.html')));
 
 // ── Session store ────────────────────────────────────────────
 // Each session represents a briefing room that one presenter
