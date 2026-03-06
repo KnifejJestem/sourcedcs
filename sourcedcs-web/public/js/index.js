@@ -463,7 +463,7 @@ function renderDrList() {
         '<td style="padding:6px 8px;border-bottom:1px solid var(--border)">' + (sq   ? escH(sq)   : '<span style="color:var(--text-3)">—</span>') + '</td>' +
         '<td style="padding:6px 8px;border-bottom:1px solid var(--border)">' + (role ? escH(role) : '<span style="color:var(--text-3)">—</span>') + '</td>' +
         '<td style="padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap">' +
-          '<button class="btn btn-ghost admin-delete-btn" style="padding:2px 8px;font-size:11px" onclick="removeDrEntry(' + JSON.stringify(k) + ')">&#x2715;</button>' +
+          '<button class="btn btn-ghost admin-delete-btn" style="padding:2px 8px;font-size:11px" data-role-key="' + escH(k) + '" onclick="removeDrEntry(this.dataset.roleKey)">&#x2715;</button>' +
         '</td>' +
       '</tr>';
     }).join('') +
