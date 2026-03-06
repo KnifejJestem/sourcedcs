@@ -19,6 +19,7 @@
   </a>
   <nav class="header-nav" id="mainNav" aria-label="Main navigation">
     <a class="nav-link" href="#about">ABOUT</a>
+    <a class="nav-link" href="#gallery">GALLERY</a>
     <a class="nav-link" href="#subsquadrons">WINGS</a>
     <a class="nav-link" href="schedule.html">SCHEDULE</a>
     <a class="nav-link" href="#join">JOIN</a>
@@ -92,6 +93,76 @@
       <div class="about-card"><div class="about-card-icon">&#x25C9;</div><div class="about-card-title">OPEN-SOURCE TOOLS</div><div class="about-card-desc">All our tactical tools &mdash; ATO Brief, ASACS GCI server, Miz-to-YAML &mdash; are fully open source and free to use.</div></div>
       <div class="about-card"><div class="about-card-icon">&#x2261;</div><div class="about-card-title">REALISTIC PROCEDURES</div><div class="about-card-desc">We follow real-world-inspired procedures: proper comms discipline, ROE, SPINS, ACO, and mission planning cycles.</div></div>
       <div class="about-card"><div class="about-card-icon">&#x2325;</div><div class="about-card-title">WELCOMING COMMUNITY</div><div class="about-card-desc">Whether you're new to DCS or a veteran simmer, SOURCE has a place for motivated, team-first pilots.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- GALLERY SECTION -->
+<section id="gallery" class="content-section gallery-section">
+  <div class="section-container">
+    <div class="section-label">FLIGHT GALLERY</div>
+    <h2 class="section-title">Shots from the Front</h2>
+    <p class="section-desc">A selection of screenshots captured during SOURCE operations — from high-altitude CAP to low-level CAS runs and carrier recoveries.</p>
+
+    <!-- Slideshow -->
+    <div class="slideshow" id="gallerySlideshow" aria-label="Flight gallery slideshow">
+      <div class="slideshow-track" id="slideshowTrack">
+        <div class="slide active" data-index="0">
+          <img src="gallery/shot-01.svg" alt="Formation Flight — Dawn Patrol over Caucasus" class="slide-img" loading="lazy">
+          <div class="slide-caption">FORMATION FLIGHT &middot; CAUCASUS THEATRE &middot; DAWN PATROL</div>
+        </div>
+        <div class="slide" data-index="1">
+          <img src="gallery/shot-02.svg" alt="Night Operations — Overwatch over the Gulf" class="slide-img" loading="lazy">
+          <div class="slide-caption">NIGHT OPERATIONS &middot; PERSIAN GULF &middot; OVERWATCH</div>
+        </div>
+        <div class="slide" data-index="2">
+          <img src="gallery/shot-03.svg" alt="Dusk Intercept — Afterburner Run" class="slide-img" loading="lazy">
+          <div class="slide-caption">DUSK INTERCEPT &middot; COASTAL SWEEP &middot; AFTERBURNER RUN</div>
+        </div>
+        <div class="slide" data-index="3">
+          <img src="gallery/shot-04.svg" alt="CAS Mission — Mountain Valley Run" class="slide-img" loading="lazy">
+          <div class="slide-caption">CAS MISSION &middot; CAUCASUS WINTER &middot; MOUNTAIN VALLEY RUN</div>
+        </div>
+        <div class="slide" data-index="4">
+          <img src="gallery/shot-05.svg" alt="Carrier Approach — Case I Recovery" class="slide-img" loading="lazy">
+          <div class="slide-caption">CARRIER APPROACH &middot; PERSIAN GULF &middot; CASE I RECOVERY</div>
+        </div>
+        <div class="slide" data-index="5">
+          <img src="gallery/shot-06.svg" alt="Precision Strike — GBU-12 Delivery" class="slide-img" loading="lazy">
+          <div class="slide-caption">PRECISION STRIKE &middot; SYRIAN THEATRE &middot; GBU-12 DELIVERY</div>
+        </div>
+      </div>
+      <button class="slideshow-btn slideshow-btn--prev" id="slidePrev" aria-label="Previous slide">&#x2039;</button>
+      <button class="slideshow-btn slideshow-btn--next" id="slideNext" aria-label="Next slide">&#x203A;</button>
+      <div class="slideshow-dots" id="slideshowDots" role="tablist" aria-label="Go to slide"></div>
+    </div>
+
+    <!-- Thumbnail grid -->
+    <div class="gallery-grid" id="galleryGrid">
+      <div class="gallery-item" role="button" tabindex="0" data-slide="0" title="Formation Flight — Dawn Patrol">
+        <img src="gallery/shot-01.svg" alt="Formation Flight — Dawn Patrol" class="gallery-thumb" loading="lazy">
+        <div class="gallery-caption">FORMATION FLIGHT &middot; DAWN PATROL</div>
+      </div>
+      <div class="gallery-item" role="button" tabindex="0" data-slide="1" title="Night Operations — Overwatch">
+        <img src="gallery/shot-02.svg" alt="Night Operations — Overwatch" class="gallery-thumb" loading="lazy">
+        <div class="gallery-caption">NIGHT OPERATIONS &middot; OVERWATCH</div>
+      </div>
+      <div class="gallery-item" role="button" tabindex="0" data-slide="2" title="Dusk Intercept — Afterburner Run">
+        <img src="gallery/shot-03.svg" alt="Dusk Intercept — Afterburner Run" class="gallery-thumb" loading="lazy">
+        <div class="gallery-caption">DUSK INTERCEPT &middot; AFTERBURNER RUN</div>
+      </div>
+      <div class="gallery-item" role="button" tabindex="0" data-slide="3" title="CAS Mission — Mountain Valley">
+        <img src="gallery/shot-04.svg" alt="CAS Mission — Mountain Valley" class="gallery-thumb" loading="lazy">
+        <div class="gallery-caption">CAS MISSION &middot; WINTER VALLEY</div>
+      </div>
+      <div class="gallery-item" role="button" tabindex="0" data-slide="4" title="Carrier Approach — Case I">
+        <img src="gallery/shot-05.svg" alt="Carrier Approach — Case I Recovery" class="gallery-thumb" loading="lazy">
+        <div class="gallery-caption">CARRIER APPROACH &middot; CASE I</div>
+      </div>
+      <div class="gallery-item" role="button" tabindex="0" data-slide="5" title="Precision Strike — GBU-12">
+        <img src="gallery/shot-06.svg" alt="Precision Strike — GBU-12 Delivery" class="gallery-thumb" loading="lazy">
+        <div class="gallery-caption">PRECISION STRIKE &middot; GBU-12</div>
+      </div>
     </div>
   </div>
 </section>

@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="sky6" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a2840"/>
+      <stop offset="30%" stop-color="#2a4060"/>
+      <stop offset="65%" stop-color="#4080a0"/>
+      <stop offset="85%" stop-color="#60a8c0"/>
+      <stop offset="100%" stop-color="#70b8d0"/>
+    </linearGradient>
+    <linearGradient id="desert6" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c8a070"/>
+      <stop offset="50%" stop-color="#b08050"/>
+      <stop offset="100%" stop-color="#906030"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Desert sky -->
+  <rect width="1280" height="720" fill="url(#sky6)"/>
+
+  <!-- High altitude sparse cirrus -->
+  <g opacity="0.45" fill="#d0dce8">
+    <ellipse cx="200" cy="80" rx="300" ry="12"/>
+    <ellipse cx="700" cy="60" rx="350" ry="10"/>
+    <ellipse cx="1100" cy="90" rx="280" ry="11"/>
+    <ellipse cx="450" cy="140" rx="200" ry="8"/>
+    <ellipse cx="950" cy="120" rx="240" ry="9"/>
+  </g>
+
+  <!-- Horizon haze / dust -->
+  <rect x="0" y="430" width="1280" height="40" fill="#c8905040" opacity="0.4"/>
+
+  <!-- Desert terrain -->
+  <rect x="0" y="470" width="1280" height="250" fill="url(#desert6)"/>
+
+  <!-- Desert terrain features -->
+  <!-- Wadi / dry riverbed -->
+  <path d="M0,540 Q160,530 280,545 Q400,558 500,542 Q580,530 640,538 Q720,548 820,535 Q920,522 1040,540 Q1160,556 1280,538 L1280,550 Q1160,568 1040,552 Q920,538 820,548 Q720,562 640,552 Q580,544 500,556 Q400,572 280,560 Q160,545 0,556 Z" fill="#804820" opacity="0.6"/>
+
+  <!-- Rocky outcroppings -->
+  <polygon points="100,470 140,450 180,470" fill="#786050"/>
+  <polygon points="160,470 190,458 220,470" fill="#705848"/>
+  <polygon points="900,470 950,445 1000,470" fill="#786050"/>
+  <polygon points="980,470 1020,455 1060,470" fill="#705848"/>
+  <polygon points="500,470 540,460 580,470" fill="#786050"/>
+  <polygon points="1150,470 1190,452 1230,470" fill="#705848"/>
+
+  <!-- Desert road / highway -->
+  <path d="M200,600 Q400,580 640,590 Q880,600 1100,580" stroke="#a09070" stroke-width="3" fill="none" opacity="0.5"/>
+  <!-- Road markings -->
+  <path d="M200,600 Q400,580 640,590 Q880,600 1100,580" stroke="#c0b090" stroke-width="1" fill="none" stroke-dasharray="30,20" opacity="0.3"/>
+
+  <!-- Target / convoy (small vehicles) -->
+  <g transform="translate(620,590)">
+    <rect x="-35" y="-5" width="16" height="8" fill="#4a5830" rx="1"/>
+    <rect x="-14" y="-5" width="16" height="8" fill="#4a5830" rx="1"/>
+    <rect x="7" y="-5" width="16" height="8" fill="#4a5830" rx="1"/>
+    <rect x="28" y="-5" width="14" height="8" fill="#3a4828" rx="1"/>
+    <!-- Vehicle wheels -->
+    <circle cx="-29" cy="3" r="2" fill="#2a3020"/><circle cx="-23" cy="3" r="2" fill="#2a3020"/>
+    <circle cx="-8" cy="3" r="2" fill="#2a3020"/><circle cx="-2" cy="3" r="2" fill="#2a3020"/>
+    <circle cx="13" cy="3" r="2" fill="#2a3020"/><circle cx="19" cy="3" r="2" fill="#2a3020"/>
+    <circle cx="32" cy="3" r="2" fill="#2a3020"/><circle cx="38" cy="3" r="2" fill="#2a3020"/>
+  </g>
+
+  <!-- LITENING/Sniper pod view overlay (targeting box) -->
+  <rect x="550" y="570" width="140" height="50" fill="none" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+  <line x1="620" y1="558" x2="620" y2="572" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+  <line x1="620" y1="622" x2="620" y2="636" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+  <line x1="540" y1="595" x2="554" y2="595" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+  <line x1="686" y1="595" x2="700" y2="595" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+  <text x="698" y="573" font-family="monospace" font-size="9" fill="#39ff7a" opacity="0.75">TGT</text>
+  <text x="698" y="585" font-family="monospace" font-size="9" fill="#39ff7a" opacity="0.75">LOCK</text>
+
+  <!-- F-16 style overhead (banking hard, diving) -->
+  <g transform="translate(640,310) rotate(25) scale(0.95)">
+    <!-- Fuselage - slim -->
+    <ellipse cx="0" cy="0" rx="88" ry="10" fill="#2c3038"/>
+    <!-- Delta wing -->
+    <polygon points="-5,-8 -68,35 -68,44 -5,10" fill="#262830"/>
+    <polygon points="-5,-8 52,25 52,34 -5,10" fill="#262830"/>
+    <!-- Missile on wing -->
+    <rect x="-62" y="32" width="22" height="5" fill="#1e2028" rx="1"/>
+    <rect x="40" y="22" width="22" height="5" fill="#1e2028" rx="1"/>
+    <!-- Horizontal tail -->
+    <polygon points="58,-4 86,12 86,18 58,5" fill="#262830"/>
+    <polygon points="58,-4 30,10 30,16 58,5" fill="#262830"/>
+    <!-- Vertical tail - F-16 single -->
+    <polygon points="40,-8 52,-48 58,-46 48,0" fill="#2c3038"/>
+    <!-- Intake below -->
+    <ellipse cx="-15" cy="10" rx="14" ry="5" fill="#202428"/>
+    <!-- Canopy -->
+    <ellipse cx="-28" cy="-6" rx="16" ry="5" fill="#283040"/>
+    <ellipse cx="-30" cy="-7" rx="9" ry="3" fill="#5090b0" opacity="0.5"/>
+    <!-- Wing refueling pod -->
+    <rect x="-30" y="-12" width="10" height="4" fill="#202428" rx="1"/>
+  </g>
+
+  <!-- HUD -->
+  <g font-family="monospace" fill="#39ff7a" font-size="12" opacity="0.7">
+    <text x="1100" y="340" font-size="11">ALT</text>
+    <text x="1100" y="356" font-size="16" font-weight="bold">14800</text>
+    <text x="80" y="340" font-size="11">KIAS</text>
+    <text x="80" y="356" font-size="16" font-weight="bold">395</text>
+    <text x="590" y="80" text-anchor="middle" font-size="11">HDG</text>
+    <text x="590" y="96" text-anchor="middle" font-size="16" font-weight="bold">160</text>
+    <text x="80" y="390" font-size="11">A/G</text>
+    <text x="80" y="406" font-size="13">GBU-12</text>
+    <text x="1100" y="390" font-size="11">REL IN</text>
+    <text x="1100" y="406" font-size="13">08 SEC</text>
+    <!-- HUD horizon indicator -->
+    <line x1="455" y1="345" x2="525" y2="345" stroke="#39ff7a" stroke-width="1.5" opacity="0.6"/>
+    <line x1="655" y1="345" x2="725" y2="345" stroke="#39ff7a" stroke-width="1.5" opacity="0.6"/>
+    <!-- Bank angle indicator -->
+    <line x1="590" y1="120" x2="608" y2="108" stroke="#39ff7a" stroke-width="1.5" opacity="0.6"/>
+    <circle cx="590" cy="130" r="18" stroke="#39ff7a" stroke-width="1" fill="none" opacity="0.4"/>
+    <!-- Velocity vector -->
+    <circle cx="618" cy="315" r="6" stroke="#39ff7a" stroke-width="1.5" fill="none" opacity="0.7"/>
+    <line x1="618" y1="309" x2="618" y2="300" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+    <line x1="612" y1="315" x2="603" y2="315" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+    <line x1="624" y1="315" x2="633" y2="315" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+  </g>
+
+  <!-- Caption -->
+  <rect x="0" y="660" width="1280" height="60" fill="#000" opacity="0.55"/>
+  <text x="40" y="695" font-family="monospace" font-size="13" fill="#c0d8c8" letter-spacing="3">PRECISION STRIKE · SYRIAN THEATRE · GBU-12 DELIVERY</text>
+</svg>

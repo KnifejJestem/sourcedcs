@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="sky1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="45%" stop-color="#1a3a6b"/>
+      <stop offset="100%" stop-color="#2d6fa8"/>
+    </linearGradient>
+    <linearGradient id="sun1" cx="50%" cy="50%" r="50%" fx="50%" fy="50%" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#ffe8a0" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ff8c00" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ground1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2d4a1e"/>
+      <stop offset="100%" stop-color="#1a2e10"/>
+    </linearGradient>
+    <filter id="glow1">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Sky -->
+  <rect width="1280" height="720" fill="url(#sky1)"/>
+
+  <!-- Sun glow -->
+  <radialGradient id="sunGlow" cx="75%" cy="38%" r="30%">
+    <stop offset="0%" stop-color="#ffe090" stop-opacity="0.6"/>
+    <stop offset="40%" stop-color="#ff8000" stop-opacity="0.15"/>
+    <stop offset="100%" stop-color="#ff8000" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="1280" height="720" fill="url(#sunGlow)"/>
+
+  <!-- Sun disc -->
+  <circle cx="960" cy="274" r="44" fill="#ffe8a0" opacity="0.95"/>
+  <circle cx="960" cy="274" r="60" fill="#ffbb40" opacity="0.3"/>
+  <circle cx="960" cy="274" r="90" fill="#ff8800" opacity="0.12"/>
+
+  <!-- Horizon haze -->
+  <ellipse cx="640" cy="490" rx="900" ry="60" fill="#4a9fd4" opacity="0.18"/>
+
+  <!-- Ground -->
+  <rect x="0" y="490" width="1280" height="230" fill="url(#ground1)"/>
+
+  <!-- Ground fields -->
+  <rect x="0" y="490" width="200" height="230" fill="#253d18" opacity="0.7"/>
+  <rect x="210" y="500" width="160" height="220" fill="#1e3414" opacity="0.8"/>
+  <rect x="380" y="490" width="250" height="230" fill="#2a4820" opacity="0.6"/>
+  <rect x="640" y="500" width="180" height="220" fill="#1a3010" opacity="0.9"/>
+  <rect x="830" y="490" width="220" height="230" fill="#243c18" opacity="0.7"/>
+  <rect x="1060" y="505" width="220" height="215" fill="#1e3414" opacity="0.8"/>
+
+  <!-- Field borders/roads -->
+  <line x1="200" y1="490" x2="200" y2="720" stroke="#3a5828" stroke-width="2"/>
+  <line x1="370" y1="490" x2="370" y2="720" stroke="#3a5828" stroke-width="2"/>
+  <line x1="630" y1="490" x2="630" y2="720" stroke="#3a5828" stroke-width="2"/>
+  <line x1="820" y1="490" x2="820" y2="720" stroke="#3a5828" stroke-width="2"/>
+  <line x1="1060" y1="490" x2="1060" y2="720" stroke="#3a5828" stroke-width="2"/>
+
+  <!-- Clouds -->
+  <g opacity="0.85">
+    <ellipse cx="200" cy="200" rx="120" ry="35" fill="#c8d8e8"/>
+    <ellipse cx="240" cy="185" rx="80" ry="30" fill="#dae8f4"/>
+    <ellipse cx="140" cy="190" rx="70" ry="25" fill="#d0e0ee"/>
+  </g>
+  <g opacity="0.7">
+    <ellipse cx="750" cy="160" rx="150" ry="38" fill="#c0d4e8"/>
+    <ellipse cx="800" cy="142" rx="100" ry="32" fill="#d0e2f4"/>
+    <ellipse cx="680" cy="152" rx="90" ry="28" fill="#ccdaec"/>
+  </g>
+  <g opacity="0.6">
+    <ellipse cx="1100" cy="220" rx="110" ry="30" fill="#b8ccdf"/>
+    <ellipse cx="1140" cy="205" rx="75" ry="25" fill="#c8dcf0"/>
+  </g>
+  <g opacity="0.75">
+    <ellipse cx="430" cy="280" rx="90" ry="25" fill="#b8cce0"/>
+    <ellipse cx="470" cy="265" rx="65" ry="22" fill="#c8dcf0"/>
+  </g>
+
+  <!-- Aircraft silhouette — F/A-18 style, banking right -->
+  <g transform="translate(500,350) rotate(-12)">
+    <!-- Fuselage -->
+    <ellipse cx="0" cy="0" rx="90" ry="12" fill="#1a1a1a"/>
+    <!-- Wings (swept) -->
+    <polygon points="-20,-8 -75,30 -75,38 -20,10" fill="#141414"/>
+    <polygon points="-20,-8 45,22 45,30 -20,10" fill="#141414"/>
+    <!-- Horizontal stabs -->
+    <polygon points="55,-4 90,14 90,20 55,6" fill="#141414"/>
+    <polygon points="55,-4 20,12 20,18 55,6" fill="#141414"/>
+    <!-- Vertical tails -->
+    <polygon points="45,-6 60,-36 65,-36 55,0" fill="#1a1a1a" opacity="0.9"/>
+    <polygon points="30,-6 40,-30 44,-30 38,0" fill="#1a1a1a" opacity="0.7"/>
+    <!-- Canopy glint -->
+    <ellipse cx="-30" cy="-6" rx="14" ry="5" fill="#3a6090" opacity="0.8"/>
+    <ellipse cx="-32" cy="-7" rx="8" ry="3" fill="#6ab0d0" opacity="0.6"/>
+  </g>
+
+  <!-- Wingman silhouette (distant, smaller) -->
+  <g transform="translate(760,310) rotate(-8) scale(0.45)">
+    <ellipse cx="0" cy="0" rx="90" ry="12" fill="#111"/>
+    <polygon points="-20,-8 -75,30 -75,38 -20,10" fill="#0e0e0e"/>
+    <polygon points="-20,-8 45,22 45,30 -20,10" fill="#0e0e0e"/>
+    <polygon points="55,-4 90,14 90,20 55,6" fill="#0e0e0e"/>
+    <polygon points="45,-6 60,-36 65,-36 55,0" fill="#111"/>
+  </g>
+
+  <!-- HUD overlay elements -->
+  <g font-family="monospace" fill="#39ff7a" font-size="12" opacity="0.75">
+    <!-- Altitude -->
+    <text x="1100" y="340" text-anchor="start" font-size="11">ALT</text>
+    <text x="1100" y="356" text-anchor="start" font-size="16" font-weight="bold">18450</text>
+    <!-- Speed -->
+    <text x="80" y="340" text-anchor="start" font-size="11">KIAS</text>
+    <text x="80" y="356" text-anchor="start" font-size="16" font-weight="bold">312</text>
+    <!-- Heading -->
+    <text x="590" y="80" text-anchor="middle" font-size="11">HDG</text>
+    <text x="590" y="96" text-anchor="middle" font-size="16" font-weight="bold">245</text>
+    <!-- Horizon line -->
+    <line x1="440" y1="365" x2="520" y2="365" stroke="#39ff7a" stroke-width="1.5" opacity="0.6"/>
+    <line x1="660" y1="365" x2="740" y2="365" stroke="#39ff7a" stroke-width="1.5" opacity="0.6"/>
+  </g>
+
+  <!-- Caption bar -->
+  <rect x="0" y="660" width="1280" height="60" fill="#000" opacity="0.55"/>
+  <text x="40" y="695" font-family="monospace" font-size="13" fill="#c0d8c8" letter-spacing="3">FORMATION FLIGHT · CAUCASUS THEATRE · DAWN PATROL</text>
+</svg>

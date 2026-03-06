@@ -692,6 +692,99 @@ footer {
    GALLERY
 ═══════════════════════════════════════════════════════════ */
 .gallery-section { background: var(--bg2); }
+
+/* ── Slideshow ── */
+.slideshow {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md);
+  margin-bottom: 24px;
+  background: #000;
+}
+
+.slideshow-track { position: relative; width: 100%; }
+
+.slide {
+  display: none;
+  position: relative;
+  width: 100%;
+}
+.slide.active { display: block; }
+
+.slide-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  display: block;
+  object-fit: cover;
+}
+
+.slide-caption {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 10px 16px;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #c0d8c8;
+  background: linear-gradient(transparent, rgba(0,0,0,.65));
+  text-transform: uppercase;
+}
+:root.movie .slide-caption { color: var(--accent); }
+
+.slideshow-btn {
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  z-index: 10;
+  background: rgba(0,0,0,.40);
+  border: 1px solid rgba(255,255,255,.15);
+  color: rgba(255,255,255,.80);
+  font-size: 28px;
+  line-height: 1;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  font-family: inherit;
+}
+.slideshow-btn:hover {
+  background: rgba(0,0,0,.65);
+  border-color: rgba(255,255,255,.45);
+  color: #fff;
+}
+:root.movie .slideshow-btn:hover { border-color: var(--accent); color: var(--accent); }
+.slideshow-btn--prev { left: 12px; }
+.slideshow-btn--next { right: 12px; }
+
+.slideshow-dots {
+  position: absolute;
+  bottom: 40px; left: 0; right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+.slideshow-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.35);
+  border: 1px solid rgba(255,255,255,.25);
+  cursor: pointer;
+  transition: background .2s, border-color .2s;
+  padding: 0;
+  font-family: inherit;
+}
+.slideshow-dot.active, .slideshow-dot:hover {
+  background: rgba(255,255,255,.9);
+  border-color: rgba(255,255,255,.9);
+}
+:root.movie .slideshow-dot.active,
+:root.movie .slideshow-dot:hover { background: var(--accent); border-color: var(--accent); }
+
+/* Fade animation */
+.slide { animation: none; }
+.slide.slide-fade-in { animation: slideFadeIn .4s ease; }
+@keyframes slideFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Gallery thumbnail grid ── */
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -710,26 +803,12 @@ footer {
 .gallery-item:hover { border-color: var(--text); box-shadow: var(--shadow-md); }
 :root.movie .gallery-item:hover { border-color: var(--accent); box-shadow: 0 0 14px rgba(57,255,122,.12); }
 
-/* Placeholder "screenshots" via CSS */
-.gallery-placeholder {
+.gallery-thumb {
   width: 100%;
   aspect-ratio: 16/9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
+  object-fit: cover;
 }
-.gp-1 { background: linear-gradient(135deg, #1a2a35 0%, #0d1f2e 40%, #1e3040 100%); }
-.gp-2 { background: linear-gradient(135deg, #1e2d20 0%, #0f1e12 40%, #1a3222 100%); }
-.gp-3 { background: linear-gradient(135deg, #0a0f1a 0%, #0d1a2a 50%, #091018 100%); }
-.gp-4 { background: linear-gradient(135deg, #1a1a1e 0%, #0e1018 40%, #141620 100%); }
-.gp-5 { background: linear-gradient(135deg, #1e1a0e 0%, #2a2005 40%, #1a1608 100%); }
-.gp-6 { background: linear-gradient(135deg, #080810 0%, #050510 40%, #0c0c1a 100%); }
-:root.movie .gp-1 { background: linear-gradient(135deg, #0a1f14 0%, #071510 40%, #0d261a 100%); }
-:root.movie .gp-2 { background: linear-gradient(135deg, #081508 0%, #071007 40%, #0d1f0d 100%); }
-:root.movie .gp-3 { background: linear-gradient(135deg, #050a0f 0%, #040d18 50%, #030810 100%); }
-:root.movie .gp-4 { background: linear-gradient(135deg, #080a06 0%, #060808 40%, #0a0c08 100%); }
-:root.movie .gp-5 { background: linear-gradient(135deg, #0a0e05 0%, #0e1204 40%, #080b04 100%); }
-:root.movie .gp-6 { background: linear-gradient(135deg, #030307 0%, #020308 40%, #040410 100%); }
 
 .gallery-caption {
   padding: 8px 12px;
@@ -740,6 +819,7 @@ footer {
   background: var(--bg-card);
   text-transform: uppercase;
 }
+
 
 /* ═══════════════════════════════════════════════════════════
    PILOT ROSTER
