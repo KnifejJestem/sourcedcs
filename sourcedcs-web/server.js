@@ -281,12 +281,21 @@ const applyLimiter = rateLimit({
   message:         { error: 'Too many applications — please wait before trying again.' }
 });
 
+const authLimiter = rateLimit({
+  windowMs:        60 * 1000,
+  max:             20,
+  standardHeaders: 'draft-7',
+  legacyHeaders:   false,
+  message:         { error: 'Too many auth requests — please wait before trying again.' }
+});
+
 /* ─── Body parsing ──────────────────────────────────────── */
 app.use(express.json({ limit: '50kb' }));
 
 /* ─── Casdoor config (read from env) ────────────────────── */
-const CASDOOR_CLIENT_ID = process.env.CASDOOR_CLIENT_ID;
-const CASDOOR_ENDPOINT  = process.env.CASDOOR_ENDPOINT;
+const CASDOOR_CLIENT_ID     = process.env.CASDOOR_CLIENT_ID;
+const CASDOOR_CLIENT_SECRET = process.env.CASDOOR_CLIENT_SECRET;
+const CASDOOR_ENDPOINT      = process.env.CASDOOR_ENDPOINT;
 
 /* ─── External link config (read from env) ──────────────── */
 const DISCORD_URL = process.env.DISCORD_URL  || 'https://discord.gg/sourcedcs';
@@ -295,6 +304,51 @@ const ATO_URL     = process.env.ATO_URL      || 'https://ato.sourcedcs.page';
 const OLYMPUS_URL = process.env.OLYMPUS_URL  || 'https://olympus.sourcedcs.page';
 const ASACS_URL   = process.env.ASACS_URL    || 'https://asacs.sourcedcs.page';
 const GITHUB_URL  = process.env.GITHUB_URL   || 'https://github.com/NikNam3/sourcedcs';
+
+/* ─── Casdoor token exchange helper ────────────────────── */
+/* Exchanges an authorization code for an access token by calling Casdoor's
+   token endpoint server-side. The client_secret never leaves the server. */
+function casdoorTokenExchange(code, redirectUri) {
+  return new Promise((resolve, reject) => {
+    if (!CASDOOR_ENDPOINT || !CASDOOR_CLIENT_ID || !CASDOOR_CLIENT_SECRET) {
+      return reject(new Error('Casdoor is not configured (missing env vars)'));
+    }
+    const payload = JSON.stringify({
+      grant_type:    'authorization_code',
+      client_id:     CASDOOR_CLIENT_ID,
+      client_secret: CASDOOR_CLIENT_SECRET,
+      code,
+      redirect_uri:  redirectUri,
+    });
+    let parsed;
+    try { parsed = new URL(CASDOOR_ENDPOINT); } catch {
+      return reject(new Error('CASDOOR_ENDPOINT is not a valid URL'));
+    }
+    const isHttps = parsed.protocol === 'https:';
+    const mod     = isHttps ? require('https') : require('http');
+    const options = {
+      hostname: parsed.hostname,
+      port:     parsed.port || (isHttps ? 443 : 80),
+      path:     '/api/login/oauth/access_token',
+      method:   'POST',
+      headers:  {
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+    const req = mod.request(options, (res) => {
+      let raw = '';
+      res.on('data', chunk => { raw += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(raw)); }
+        catch { reject(new Error('Casdoor returned invalid JSON (HTTP ' + res.statusCode + '): ' + raw.slice(0, 200))); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
 
 /* ─── Auth helpers ──────────────────────────────────────── */
 function decodeJWT(token) {
@@ -358,6 +412,35 @@ const api = express.Router();
 /* Health check */
 api.get('/health', (_req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
+});
+
+/* ── Auth: exchange authorization code for access token ── */
+const MAX_AUTH_CODE_LEN    = 512;
+const MAX_REDIRECT_URI_LEN = 512;
+api.post('/auth/token', authLimiter, async (req, res) => {
+  const { code, redirectUri } = req.body;
+  if (!code || typeof code !== 'string' || code.length > MAX_AUTH_CODE_LEN) {
+    return res.status(400).json({ error: 'Missing or invalid code' });
+  }
+  if (!redirectUri || typeof redirectUri !== 'string' || redirectUri.length > MAX_REDIRECT_URI_LEN) {
+    return res.status(400).json({ error: 'Missing or invalid redirectUri' });
+  }
+  try {
+    const tokenData = await casdoorTokenExchange(code, redirectUri);
+    if (tokenData.error) {
+      console.warn('[auth] Casdoor token exchange error:', tokenData.error, tokenData.error_description);
+      return res.status(400).json({ error: tokenData.error_description || tokenData.error });
+    }
+    const accessToken = tokenData.access_token;
+    if (!accessToken) {
+      console.warn('[auth] Casdoor response missing access_token:', JSON.stringify(tokenData).slice(0, 200));
+      return res.status(502).json({ error: 'No access token returned by auth server' });
+    }
+    res.json({ access_token: accessToken });
+  } catch (err) {
+    console.error('[auth] Token exchange failed:', err.message);
+    res.status(502).json({ error: 'Auth server unreachable or returned an error' });
+  }
 });
 
 /* ── Events (public read, admin write) ── */
