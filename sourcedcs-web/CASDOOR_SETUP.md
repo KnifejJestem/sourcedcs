@@ -4,7 +4,7 @@ This document explains how to configure [Casdoor](https://casdoor.org) as the id
 
 ## Overview
 
-The SOURCE DCS website uses Casdoor's **OAuth 2.0 Implicit Flow** for authentication. Tokens are JWTs stored client-side in `localStorage`. The server decodes the JWT to identify the user and check admin permissions — no session state is kept server-side.
+The SOURCE DCS website uses Casdoor's **OAuth 2.0 Authorization Code Flow** (RFC 6749 §4.1) for authentication. The server exchanges the authorization code for a JWT access token — the client secret never leaves the server. Tokens are stored client-side in `localStorage`.
 
 ## 1. Deploy Casdoor
 
@@ -36,9 +36,10 @@ The SOURCE DCS deployment points its Casdoor instance at `https://auth.sourcedcs
 | **Name** | `sourcedcs-web` |
 | **Organization** | `sourcedcs` (the org you created) |
 | **Client ID** | Auto-generated — copy this value |
+| **Client Secret** | Auto-generated — copy this value |
 | **Redirect URIs** | `https://sourcedcs.page/auth-callback.html` (replace with your actual domain) |
-| **Grant Types** | `implicit` (enable the Implicit grant) |
-| **Response Type** | `token` |
+| **Grant Types** | `authorization_code` |
+| **Response Type** | `code` |
 | **Token Format** | `JWT` |
 
 > **Redirect URI note:** The redirect URI must exactly match the URL Casdoor redirects to after login. The website sends users to `<origin>/auth-callback.html`, so use your production domain (e.g. `https://sourcedcs.page/auth-callback.html`). For local development, also add `http://localhost:3000/auth-callback.html`.
@@ -52,10 +53,11 @@ Copy `.env.example` to `.env` (for local development) and set the values for you
 
 ```bash
 CASDOOR_CLIENT_ID=<your-client-id-from-above>
+CASDOOR_CLIENT_SECRET=<your-client-secret-from-above>
 CASDOOR_ENDPOINT=https://auth.sourcedcs.page
 ```
 
-These values are served to the browser automatically via `/js/config.js` — do **not** hardcode them in the JS source files.
+`CASDOOR_CLIENT_ID` and `CASDOOR_ENDPOINT` are served to the browser via `/js/config.js` — do **not** hardcode them in the JS source files. `CASDOOR_CLIENT_SECRET` is **only** used server-side and must never be exposed to the browser.
 
 ## 4. Configure JWT Claims
 
@@ -96,11 +98,18 @@ Admin UI is only shown to users whose JWT contains an `admin` role, so non-admin
 ```
 User clicks LOGIN
     ↓
-Browser redirects to Casdoor /login/oauth/authorize
+Browser redirects to Casdoor /login/oauth/authorize?response_type=code&...
     ↓
 User logs in / registers at Casdoor
     ↓
-Casdoor redirects back to /auth-callback.html with #access_token=<JWT>
+Casdoor redirects back to /auth-callback.html?code=<CODE>&state=<STATE>
+    ↓
+auth-callback.html POSTs the code to the server at POST /api/auth/token
+    ↓
+Server exchanges code for JWT via Casdoor's token endpoint (server-to-server)
+using the client_secret (never exposed to the browser)
+    ↓
+Server returns the JWT access token to the browser
     ↓
 auth-callback.html stores JWT in localStorage, redirects to saved return URL
     ↓
@@ -117,8 +126,9 @@ Configure token lifetime in Casdoor under **Applications** → your app → **To
 
 ## 9. Security Notes
 
-- The implicit flow does **not** use a client secret — tokens are exposed to the browser. This is acceptable for this use case since the website is a public-facing community tool.
-- Token **signature verification** is not performed server-side in the current implementation (the server only decodes the JWT payload). For production deployments with sensitive operations, consider switching to the **Authorization Code** flow and verifying signatures with Casdoor's public key.
+- The Authorization Code flow keeps the `client_secret` server-side — it is never sent to the browser. This is more secure than the implicit flow.
+- Token **signature verification** is not performed server-side in the current implementation (the server only decodes the JWT payload). For additional hardening, consider verifying signatures with Casdoor's public key.
 - Admin access is determined by the Casdoor `admin` role assigned in the Casdoor admin panel — no local user lists to maintain.
 - Always use HTTPS in production to protect tokens in transit.
+- The authorization code is single-use and short-lived; it cannot be replayed.
 
