@@ -82,7 +82,7 @@ function roleColor(role) {
       '<div class="subsq-name" style="font-size:clamp(14px,3vw,20px);margin-bottom:4px">' + escH(sq.name) + '</div>' +
       '<div class="subsq-airframe" style="margin-bottom:12px">' + escH(sq.airframe) + '</div>' +
       '<div class="subsq-role-tags" style="justify-content:center">' + tags + '</div>' +
-      '<div style="margin-top:24px"><a class="btn btn-primary" href="/?apply=1&wing=' + encodeURIComponent(wingId) + '"><span class="btn-icon">&#x2295;</span> APPLY TO ' + escH(sq.designator) + '</a></div>';
+      '<div style="margin-top:24px"><a class="btn btn-primary" href="https://sourcedcs.page/#join"><span class="btn-icon">&#x2295;</span> APPLY TO ' + escH(sq.designator) + '</a></div>';
 
     /* Detail */
     document.getElementById('wingDetail').innerHTML =
