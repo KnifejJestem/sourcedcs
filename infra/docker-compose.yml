@@ -180,6 +180,8 @@ services:
       - APPLY_CHANNEL_ID=${APPLY_CHANNEL_ID}
     networks:
       - web
+    volumes:
+      - sourcedcs-web-data:/app/data
 
 networks:
   web:
@@ -194,3 +196,4 @@ volumes:
   certbot-webroot:
   certbot-certs:
   casdoor-conf:
+  sourcedcs-web-data:
