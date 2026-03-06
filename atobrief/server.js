@@ -141,12 +141,12 @@ app.post('/api/auth/token', authLimiter, async (req, res) => {
 // ── Serve static front-end assets ────────────────────────────
 // Only expose the directories the browser actually needs.
 const PUBLIC = path.join(__dirname, 'public');
-app.get('/',  (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
-app.use('/css',  express.static(path.join(PUBLIC, 'css')));
-app.use('/js',   express.static(path.join(PUBLIC, 'js')));
-app.use('/data', express.static(path.join(__dirname, 'data')));
+app.use('/css',    express.static(path.join(PUBLIC, 'css')));
+app.use('/js',     express.static(path.join(PUBLIC, 'js')));
+app.use('/data',   express.static(path.join(__dirname, 'data')));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules', 'js-yaml', 'dist')));
-app.get('/auth-callback.html', (_req, res) => res.sendFile(path.join(PUBLIC, 'auth-callback.html')));
+/* Serve index.html and auth-callback.html from public root */
+app.use(express.static(PUBLIC, { index: 'index.html', dotfiles: 'ignore' }));
 
 // ── Session store ────────────────────────────────────────────
 // Each session represents a briefing room that one presenter
