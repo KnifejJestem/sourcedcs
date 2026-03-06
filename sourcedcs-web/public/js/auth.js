@@ -7,7 +7,7 @@ function loginWithCasdoor() {
   var ru = encodeURIComponent(window.location.origin + '/auth-callback.html');
   var st = Math.random().toString(36).slice(2);
   try { sessionStorage.setItem('sdcs-oauth-state', st); } catch(e) {}
-  window.location.href = CASDOOR_ENDPOINT + '/login/oauth/authorize?client_id=' + CASDOOR_CLIENT_ID + '&redirect_uri=' + ru + '&response_type=token&scope=openid+profile&state=' + st;
+  window.location.href = CASDOOR_ENDPOINT + '/login/oauth/authorize?client_id=' + CASDOOR_CLIENT_ID + '&redirect_uri=' + ru + '&response_type=code&scope=openid+profile&state=' + st;
 }
 
 /* Returns true if the given JWT contains an "admin" role in its roles claim.
