@@ -37,7 +37,7 @@ let nextEventId = events.reduce((m, e) => Math.max(m, e.id || 0), 0) + 1;
 let squadrons = loadJSON(SQUADRONS_FILE, []);
 
 /* Load discord role → squadron mapping (role names as keys) */
-const discordRoles = loadJSON(DISCORD_ROLES_FILE, {});
+let discordRoles = loadJSON(DISCORD_ROLES_FILE, {});
 
 /* ─── Discord bot config ────────────────────────────────── */
 const DISCORD_BOT_TOKEN  = process.env.DISCORD_BOT_TOKEN  || '';
@@ -564,6 +564,48 @@ api.post('/roster/refresh', writeOpsLimiter, requireAuth, requireAdmin, (_req, r
   rosterCache   = null;
   rosterCacheAt = 0;
   res.json({ ok: true, message: 'Roster cache cleared — next GET will re-fetch from Discord.' });
+});
+
+/* ── Discord roles mapping (admin read/write) ── */
+api.get('/discord-roles', requireAuth, requireAdmin, (_req, res) => {
+  res.json(discordRoles);
+});
+
+const MAX_ROLE_NAME_LEN   = 100;
+const MAX_SQUADRON_ID_LEN = 16;
+const MAX_ROLE_LABEL_LEN  = 100;
+
+api.put('/discord-roles', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const body = req.body;
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return res.status(400).json({ error: 'Request body must be a JSON object' });
+  }
+  /* Validate and sanitize entries; strip the _comment key */
+  const sanitized = {};
+  for (const [roleName, mapping] of Object.entries(body)) {
+    if (roleName === '_comment') continue;
+    if (roleName.trim().length === 0) {
+      return res.status(400).json({ error: 'Role name must not be empty or whitespace' });
+    }
+    if (typeof mapping !== 'object' || mapping === null) {
+      return res.status(400).json({ error: 'Each mapping value must be an object with "squadron" and "role" fields' });
+    }
+    if (!mapping.squadron || !mapping.role ||
+        String(mapping.squadron).trim().length === 0 ||
+        String(mapping.role).trim().length === 0) {
+      return res.status(400).json({ error: 'Each mapping must have non-empty "squadron" and "role" fields' });
+    }
+    sanitized[sanitizeStr(roleName, MAX_ROLE_NAME_LEN)] = {
+      squadron: sanitizeStr(mapping.squadron, MAX_SQUADRON_ID_LEN),
+      role:     sanitizeStr(mapping.role,     MAX_ROLE_LABEL_LEN),
+    };
+  }
+  discordRoles = sanitized;
+  saveJSON(DISCORD_ROLES_FILE, discordRoles);
+  /* Bust the roster cache so the new mapping takes effect immediately */
+  rosterCache   = null;
+  rosterCacheAt = 0;
+  res.json(discordRoles);
 });
 
 /* ── Squadrons (public read, admin write) ── */
