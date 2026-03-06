@@ -178,6 +178,7 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
       - APPLY_CHANNEL_ID=${APPLY_CHANNEL_ID}
+      - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
     networks:
       - web
     volumes:
