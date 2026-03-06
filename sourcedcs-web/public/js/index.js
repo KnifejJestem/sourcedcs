@@ -427,7 +427,7 @@ function openDiscordRolesModal() {
     return r.json();
   }).then(function(data) {
     for (var k in data) {
-      if (k !== '_comment') drEntries[k] = { squadron: data[k].squadron, role: data[k].role };
+      if (k !== '_comment') drEntries[k] = { squadron: data[k].squadron || '', role: data[k].role || '' };
     }
     renderDrList();
   }).catch(function() {
@@ -456,10 +456,12 @@ function renderDrList() {
     '<th style="padding:6px 8px;border-bottom:1px solid var(--border)"></th>' +
     '</tr></thead><tbody>' +
     keys.map(function(k) {
+      var sq   = drEntries[k].squadron || '';
+      var role = drEntries[k].role     || '';
       return '<tr>' +
         '<td style="padding:6px 8px;border-bottom:1px solid var(--border)">' + escH(k) + '</td>' +
-        '<td style="padding:6px 8px;border-bottom:1px solid var(--border)">' + escH(drEntries[k].squadron) + '</td>' +
-        '<td style="padding:6px 8px;border-bottom:1px solid var(--border)">' + escH(drEntries[k].role) + '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid var(--border)">' + (sq   ? escH(sq)   : '<span style="color:var(--text-3)">—</span>') + '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid var(--border)">' + (role ? escH(role) : '<span style="color:var(--text-3)">—</span>') + '</td>' +
         '<td style="padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap">' +
           '<button class="btn btn-ghost admin-delete-btn" style="padding:2px 8px;font-size:11px" onclick="removeDrEntry(' + JSON.stringify(k) + ')">&#x2715;</button>' +
         '</td>' +
@@ -479,8 +481,13 @@ function addDiscordRoleEntry(e) {
   var roleName = document.getElementById('drRoleName').value.trim();
   var squadron = document.getElementById('drSquadron').value.trim();
   var roleLabel= document.getElementById('drRoleLabel').value.trim();
-  if (!roleName || !squadron || !roleLabel) {
-    errEl.textContent   = 'All three fields are required.';
+  if (!roleName) {
+    errEl.textContent   = 'Discord role name is required.';
+    errEl.style.display = '';
+    return;
+  }
+  if (!squadron && !roleLabel) {
+    errEl.textContent   = 'At least one of Squadron ID or Role Label is required.';
     errEl.style.display = '';
     return;
   }
