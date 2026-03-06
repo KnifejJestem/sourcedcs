@@ -2,6 +2,7 @@
 
 const express   = require('express');
 const rateLimit = require('express-rate-limit');
+const multer    = require('multer');
 const path      = require('path');
 const fs        = require('fs');
 const https     = require('https');
@@ -10,13 +11,16 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 /* ─── Data persistence ──────────────────────────────────── */
-const DATA_DIR       = path.join(__dirname, 'data');
-const EVENTS_FILE    = path.join(DATA_DIR, 'events.json');
-const APPS_FILE      = path.join(DATA_DIR, 'applications.json');
-const SQUADRONS_FILE = path.join(DATA_DIR, 'squadrons.json');
+const DATA_DIR           = path.join(__dirname, 'data');
+const EVENTS_FILE        = path.join(DATA_DIR, 'events.json');
+const APPS_FILE          = path.join(DATA_DIR, 'applications.json');
+const SQUADRONS_FILE     = path.join(DATA_DIR, 'squadrons.json');
 const DISCORD_ROLES_FILE = path.join(DATA_DIR, 'discord-roles.json');
+const GALLERY_FILE       = path.join(DATA_DIR, 'gallery.json');
+const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 function loadJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
@@ -28,7 +32,34 @@ function sanitizeStr(value, maxLen) {
   return String(value || '').trim().slice(0, maxLen);
 }
 
+/* Default gallery (used when gallery.json does not yet exist in the volume) */
+const DEFAULT_GALLERY = [
+  { src: 'gallery/shot-01.svg', alt: 'Formation Flight — Dawn Patrol over Caucasus', caption: 'FORMATION FLIGHT · CAUCASUS THEATRE · DAWN PATROL' },
+  { src: 'gallery/shot-02.svg', alt: 'Night Operations — Overwatch over the Gulf',   caption: 'NIGHT OPERATIONS · PERSIAN GULF · OVERWATCH' },
+  { src: 'gallery/shot-03.svg', alt: 'Dusk Intercept — Afterburner Run',              caption: 'DUSK INTERCEPT · COASTAL SWEEP · AFTERBURNER RUN' },
+  { src: 'gallery/shot-04.svg', alt: 'CAS Mission — Mountain Valley Run',             caption: 'CAS MISSION · CAUCASUS WINTER · MOUNTAIN VALLEY RUN' },
+  { src: 'gallery/shot-05.svg', alt: 'Carrier Approach — Case I Recovery',            caption: 'CARRIER APPROACH · PERSIAN GULF · CASE I RECOVERY' },
+  { src: 'gallery/shot-06.svg', alt: 'Precision Strike — GBU-12 Delivery',            caption: 'PRECISION STRIKE · SYRIAN THEATRE · GBU-12 DELIVERY' },
+];
 
+let gallery = loadJSON(GALLERY_FILE, DEFAULT_GALLERY);
+
+/* Multer — images land in the data volume (not in the Docker image) */
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename:    (_req, file, cb) => {
+      /* Use timestamp + random suffix; strip any path components from the extension */
+      const ext = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '') || '.jpg';
+      cb(null, Date.now() + '-' + Math.random().toString(36).slice(2) + ext);
+    },
+  }),
+  limits:     { fileSize: 20 * 1024 * 1024 }, /* 20 MB */
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(jpeg|png|webp|gif)$/.test(file.mimetype);
+    cb(ok ? null : new Error('Only JPEG, PNG, WebP or GIF files are allowed'), ok);
+  },
+});
 
 let events = loadJSON(EVENTS_FILE, []);
 let applications = loadJSON(APPS_FILE, []);
@@ -413,6 +444,13 @@ app.use(express.static(PUBLIC, {
   dotfiles: 'ignore',
 }));
 
+/* Serve admin-uploaded gallery images from the data volume */
+app.use('/gallery-uploads', express.static(UPLOADS_DIR, {
+  maxAge:   '7d',
+  etag:     true,
+  dotfiles: 'ignore',
+}));
+
 /* ─── API router ────────────────────────────────────────── */
 const api = express.Router();
 
@@ -613,6 +651,49 @@ api.put('/discord-roles', writeOpsLimiter, requireAuth, requireAdmin, (req, res)
   rosterCache   = null;
   rosterCacheAt = 0;
   res.json(discordRoles);
+});
+
+/* ── Gallery (public read, admin write + image upload) ── */
+const MAX_GALLERY_SRC_LEN  = 512;
+const MAX_GALLERY_TEXT_LEN = 200;
+const MAX_GALLERY_ITEMS    = 100;
+
+api.get('/gallery', (_req, res) => res.json(gallery));
+
+api.put('/gallery', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  if (!Array.isArray(req.body)) return res.status(400).json({ error: 'Expected array' });
+  if (req.body.length > MAX_GALLERY_ITEMS) return res.status(400).json({ error: 'Too many gallery items' });
+  gallery = req.body.map(s => ({
+    src:     sanitizeStr(s.src,     MAX_GALLERY_SRC_LEN),
+    alt:     sanitizeStr(s.alt,     MAX_GALLERY_TEXT_LEN),
+    caption: sanitizeStr(s.caption, MAX_GALLERY_TEXT_LEN),
+  }));
+  saveJSON(GALLERY_FILE, gallery);
+  res.json(gallery);
+});
+
+api.post('/gallery/upload', writeOpsLimiter, requireAuth, requireAdmin, upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+  res.json({ src: '/gallery-uploads/' + req.file.filename });
+});
+
+api.delete('/gallery/:idx', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const idx = parseInt(req.params.idx, 10);
+  if (isNaN(idx) || idx < 0 || idx >= gallery.length) {
+    return res.status(400).json({ error: 'Invalid index' });
+  }
+  const [removed] = gallery.splice(idx, 1);
+  saveJSON(GALLERY_FILE, gallery);
+  /* Clean up uploaded file from the volume (ignore public static assets) */
+  if (removed.src && removed.src.startsWith('/gallery-uploads/')) {
+    const filename = path.basename(removed.src);
+    /* Guard against path traversal */
+    if (filename && !filename.includes('/') && !filename.includes('..')) {
+      const filepath = path.join(UPLOADS_DIR, filename);
+      try { if (fs.existsSync(filepath)) fs.unlinkSync(filepath); } catch { /* ignore */ }
+    }
+  }
+  res.json({ ok: true });
 });
 
 /* ── Squadrons (public read, admin write) ── */

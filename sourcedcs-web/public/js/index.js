@@ -641,3 +641,20 @@ document.getElementById('drModalOverlay').addEventListener('click', function(e) 
     openApplyModal(wing || undefined);
   }
 })();
+
+/* ── Hero featured shot — fetch first gallery image from API ── */
+(function() {
+  var featuredImg     = document.getElementById('heroFeaturedImg');
+  var featuredCaption = document.getElementById('heroFeaturedCaption');
+  if (!featuredImg) return;
+  fetch('/api/gallery')
+    .then(function(r) { return r.json(); })
+    .then(function(shots) {
+      var shot = shots[0];
+      if (!shot) return;
+      featuredImg.src = shot.src;
+      featuredImg.alt = shot.alt || '';
+      if (featuredCaption) featuredCaption.textContent = shot.caption || '';
+    })
+    .catch(function(err) { console.warn('[gallery] Failed to load featured shot:', err.message); });
+})();
