@@ -629,12 +629,12 @@ document.getElementById('drModalOverlay').addEventListener('click', function(e) 
   if (e.target === this) closeDiscordRolesModal();
 });
 
-/* ── Auto-open apply form after Casdoor signup ── */
+/* ── Auto-open apply form when ?apply=1 is in the URL ── */
 /* When the user returns from Casdoor registration with ?apply=1 in the URL,
-   open the application form immediately (they are now logged in). */
+   or arrives from the wing detail page, open the application form. */
 (function() {
   var params = new URLSearchParams(window.location.search);
-  if (params.get('apply') === '1' && getToken()) {
+  if (params.get('apply') === '1') {
     var wing = params.get('wing') || '';
     /* Clean the URL so a page refresh doesn't reopen the modal */
     history.replaceState(null, '', window.location.pathname + window.location.hash);

@@ -161,9 +161,9 @@ async function fetchAllGuildMembers(guildId) {
  * resort.
  */
 /* Matches: (prefix) displayName "CALLSIGN" — captures CALLSIGN */
-const RE_FULL_FORMAT = /^\([^)]*\)\s+\S+\s+"([^"]*)"/;
-/* Matches: (prefix) displayName — captures displayName */
-const RE_BARE_FORMAT = /^\([^)]*\)\s+(\S+)/;
+const RE_FULL_FORMAT = /^\([^)]*\)\s+[^"]+?\s+"([^"]*)"/;
+/* Matches: (prefix) displayName (optionally followed by "CALLSIGN") — captures displayName */
+const RE_BARE_FORMAT = /^\([^)]*\)\s+([^"]+?)(?:\s+"[^"]*")?$/;
 
 function parseCallsign(nick) {
   if (!nick) return '';
