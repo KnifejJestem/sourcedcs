@@ -871,6 +871,33 @@ footer {
   text-transform: uppercase;
 }
 
+/* Gallery loading placeholder */
+.gallery-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+}
+
+/* ── Gallery admin overlay (visible in edit mode) ── */
+.gallery-admin-overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+  z-index: 20;
+}
+.gallery-admin-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
 
 /* ═══════════════════════════════════════════════════════════
    PILOT ROSTER

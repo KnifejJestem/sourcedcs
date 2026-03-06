@@ -108,28 +108,31 @@
   </div>
 </section>
 
-<!-- GALLERY SECTION
-     ─────────────────────────────────────────────────────────
-     TO ADD / CHANGE PHOTOS AND THEIR CAPTIONS:
-       Edit the GALLERY_SHOTS array near the bottom of js/index.js
-       Each entry has: src, alt, slideCaption, thumbCaption
-     ──────────────────────────────────────────────────────── -->
+<!-- GALLERY SECTION -->
 <section id="gallery" class="content-section gallery-section">
   <div class="section-container">
     <div class="section-label">FLIGHT GALLERY</div>
     <h2 class="section-title">Shots from the Front</h2>
     <p class="section-desc">A selection of screenshots captured during SOURCE operations — from high-altitude CAP to low-level CAS runs and carrier recoveries.</p>
 
-    <!-- Slideshow — populated by JS from GALLERY_SHOTS in index.js -->
+    <!-- Admin bar — only visible to logged-in admins -->
+    <div class="admin-bar" id="galleryAdminBar" style="display:none">
+      <span class="admin-bar-label">ADMIN: GALLERY MANAGEMENT</span>
+      <div class="admin-bar-actions">
+        <button class="admin-toggle-btn" id="galleryEditBtn" onclick="toggleGalleryEdit()">&#x270E; EDIT GALLERY</button>
+        <button class="btn btn-primary admin-add-btn" id="galleryAddBtn" style="display:none" onclick="openGalAddModal()">&#x2295; ADD PHOTO</button>
+      </div>
+    </div>
+
+    <!-- Cinematic slideshow — populated by /api/gallery -->
     <div class="slideshow" id="gallerySlideshow" aria-label="Flight gallery slideshow">
-      <div class="slideshow-track" id="slideshowTrack"></div>
+      <div class="slideshow-track" id="slideshowTrack">
+        <div class="gallery-loading">LOADING GALLERY...</div>
+      </div>
       <button class="slideshow-btn slideshow-btn--prev" id="slidePrev" aria-label="Previous slide">&#x2039;</button>
       <button class="slideshow-btn slideshow-btn--next" id="slideNext" aria-label="Next slide">&#x203A;</button>
       <div class="slideshow-dots" id="slideshowDots" role="tablist" aria-label="Go to slide"></div>
     </div>
-
-    <!-- Thumbnail grid — populated by JS from GALLERY_SHOTS in index.js -->
-    <div class="gallery-grid" id="galleryGrid"></div>
   </div>
 </section>
 
@@ -234,6 +237,63 @@
     <div class="footer-copy"><span class="footer-text">MIT License</span><span class="footer-sep">&middot;</span><span class="footer-text">&copy; 2025 SOURCEDCS</span></div>
   </div>
 </footer>
+
+<!-- GALLERY EDIT CAPTION MODAL -->
+<div class="modal-overlay" id="galEditModalOverlay" role="dialog" aria-modal="true" aria-labelledby="galEditModalTitle" style="display:none">
+  <div class="modal" id="galEditModal">
+    <div class="modal-header">
+      <div class="modal-title" id="galEditModalTitle">&#x270E; EDIT SHOT</div>
+      <button class="modal-close" onclick="closeGalEditModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="galEditForm" onsubmit="submitGalEdit(event)" novalidate>
+        <input type="hidden" id="galEditIdx">
+        <div class="form-group">
+          <label class="form-label" for="galEditCaption">CAPTION (shown on photo)</label>
+          <input class="form-input" id="galEditCaption" type="text" maxlength="200" placeholder="FORMATION FLIGHT &middot; CAUCASUS">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="galEditAlt">ALT TEXT (screen readers / tooltip)</label>
+          <input class="form-input" id="galEditAlt" type="text" maxlength="200" placeholder="Formation Flight over Caucasus at dawn">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeGalEditModal()">CANCEL</button>
+          <button type="submit" class="btn btn-primary">SAVE</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- GALLERY ADD PHOTO MODAL -->
+<div class="modal-overlay" id="galAddModalOverlay" role="dialog" aria-modal="true" aria-labelledby="galAddModalTitle" style="display:none">
+  <div class="modal" id="galAddModal">
+    <div class="modal-header">
+      <div class="modal-title" id="galAddModalTitle">&#x2295; ADD PHOTO</div>
+      <button class="modal-close" onclick="closeGalAddModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="galAddForm" onsubmit="submitGalAdd(event)" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="galAddFile">IMAGE FILE (JPEG, PNG, WebP &mdash; max 20 MB)</label>
+          <input class="form-input" id="galAddFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="galAddCaption">CAPTION (shown on photo)</label>
+          <input class="form-input" id="galAddCaption" type="text" maxlength="200" placeholder="FORMATION FLIGHT &middot; CAUCASUS">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="galAddAlt">ALT TEXT (screen readers / tooltip)</label>
+          <input class="form-input" id="galAddAlt" type="text" maxlength="200" placeholder="Formation Flight over Caucasus at dawn">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeGalAddModal()">CANCEL</button>
+          <button type="submit" class="btn btn-primary" id="galAddSaveBtn">&#x2295; UPLOAD</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- APPLY MODAL -->
 <div class="modal-overlay" id="applyModalOverlay" role="dialog" aria-modal="true" aria-labelledby="applyModalTitle" style="display:none">
