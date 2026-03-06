@@ -40,8 +40,9 @@ let squadrons = loadJSON(SQUADRONS_FILE, []);
 const discordRoles = loadJSON(DISCORD_ROLES_FILE, {});
 
 /* ─── Discord bot config ────────────────────────────────── */
-const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
-const DISCORD_GUILD_ID  = process.env.DISCORD_GUILD_ID  || '';
+const DISCORD_BOT_TOKEN  = process.env.DISCORD_BOT_TOKEN  || '';
+const DISCORD_GUILD_ID   = process.env.DISCORD_GUILD_ID   || '';
+const APPLY_CHANNEL_ID   = process.env.APPLY_CHANNEL_ID   || '';
 
 /* Roster in-memory cache (populated from Discord) */
 let rosterCache   = null;
@@ -50,6 +51,7 @@ const ROSTER_CACHE_TTL = 5 * 60 * 1000; /* 5 minutes */
 
 /* ─── Discord REST helpers ──────────────────────────────── */
 function discordRequest(apiPath) {
+  console.debug('[discord] GET /api/v10' + apiPath);
   return new Promise((resolve, reject) => {
     const options = {
       hostname: 'discord.com',
@@ -64,15 +66,71 @@ function discordRequest(apiPath) {
       let raw = '';
       res.on('data', chunk => { raw += chunk; });
       res.on('end', () => {
+        console.debug('[discord] GET /api/v10' + apiPath + ' → HTTP ' + res.statusCode);
+        if (res.statusCode === 429) {
+          const retry = res.headers['retry-after'];
+          console.warn('[discord] Rate limited — retry-after: ' + retry + 's');
+        }
         if (res.statusCode >= 200 && res.statusCode < 300) {
           try { resolve(JSON.parse(raw)); }
-          catch { reject(new Error('Discord: invalid JSON response')); }
+          catch (e) {
+            console.error('[discord] Failed to parse JSON from GET /api/v10' + apiPath + ':', e.message, '| raw:', raw.slice(0, 200));
+            reject(new Error('Discord: invalid JSON response'));
+          }
         } else {
-          reject(new Error('Discord API ' + res.statusCode + ': ' + raw.slice(0, 200)));
+          const msg = 'Discord API ' + res.statusCode + ': ' + raw.slice(0, 200);
+          console.error('[discord] Error on GET /api/v10' + apiPath + ':', msg);
+          reject(new Error(msg));
         }
       });
     });
-    req.on('error', reject);
+    req.on('error', (err) => {
+      console.error('[discord] Network error on GET /api/v10' + apiPath + ':', err.message);
+      reject(err);
+    });
+    req.end();
+  });
+}
+
+/* POST to a Discord API endpoint (e.g. send a message to a channel) */
+function discordPost(apiPath, body) {
+  const payload = JSON.stringify(body);
+  console.debug('[discord] POST /api/v10' + apiPath);
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'discord.com',
+      path:     '/api/v10' + apiPath,
+      method:   'POST',
+      headers: {
+        'Authorization':  'Bot ' + DISCORD_BOT_TOKEN,
+        'User-Agent':     'SourceDCS-Web/1.0 (https://github.com/NikNam3/sourcedcs)',
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+    const req = https.request(options, (res) => {
+      let raw = '';
+      res.on('data', chunk => { raw += chunk; });
+      res.on('end', () => {
+        console.debug('[discord] POST /api/v10' + apiPath + ' → HTTP ' + res.statusCode);
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(raw)); }
+          catch (e) {
+            console.error('[discord] Failed to parse JSON from POST /api/v10' + apiPath + ':', e.message, '| raw:', raw.slice(0, 200));
+            resolve({});
+          }
+        } else {
+          const msg = 'Discord API ' + res.statusCode + ': ' + raw.slice(0, 400);
+          console.error('[discord] Error on POST /api/v10' + apiPath + ':', msg);
+          reject(new Error(msg));
+        }
+      });
+    });
+    req.on('error', (err) => {
+      console.error('[discord] Network error on POST /api/v10' + apiPath + ':', err.message);
+      reject(err);
+    });
+    req.write(payload);
     req.end();
   });
 }
@@ -80,14 +138,19 @@ function discordRequest(apiPath) {
 async function fetchAllGuildMembers(guildId) {
   const members = [];
   let after = '0';
+  let page  = 0;
+  console.debug('[roster] Fetching guild members for guild', guildId);
   for (;;) {
+    page++;
     const batch = await discordRequest(
       '/guilds/' + guildId + '/members?limit=1000&after=' + after
     );
+    console.debug('[roster] Page ' + page + ': received ' + batch.length + ' members (after=' + after + ')');
     members.push(...batch);
     if (batch.length < 1000) break;
     after = batch[batch.length - 1].user.id;
   }
+  console.debug('[roster] Total members fetched:', members.length);
   return members;
 }
 
@@ -123,13 +186,18 @@ async function buildRosterFromDiscord() {
     return [];
   }
 
+  console.debug('[roster] Starting roster build from Discord (guild=' + DISCORD_GUILD_ID + ')');
+
   /* Resolve role IDs → names */
   const guildRoles = await discordRequest('/guilds/' + DISCORD_GUILD_ID + '/roles');
   const roleIdToName = {};
   for (const r of guildRoles) roleIdToName[r.id] = r.name;
+  console.debug('[roster] Guild has ' + guildRoles.length + ' roles; configured mapping covers ' + Object.keys(discordRoles).length + ' role name(s)');
 
   const members = await fetchAllGuildMembers(DISCORD_GUILD_ID);
 
+  let matchedCount = 0;
+  let skippedCount = 0;
   const roster = [];
   for (const member of members) {
     if (!member.user || member.user.bot) continue;
@@ -142,7 +210,8 @@ async function buildRosterFromDiscord() {
         break;
       }
     }
-    if (!matched) continue;
+    if (!matched) { skippedCount++; continue; }
+    matchedCount++;
 
     const nick     = member.nick || member.user.global_name || member.user.username || '';
     const callsign = parseCallsign(nick);
@@ -155,7 +224,37 @@ async function buildRosterFromDiscord() {
     });
   }
 
+  console.debug('[roster] Build complete — matched: ' + matchedCount + ', skipped (no role): ' + skippedCount + ', roster size: ' + roster.length);
   return roster;
+}
+
+/* Send a new application as a Discord embed to the configured channel */
+async function sendApplicationToDiscord(application) {
+  if (!DISCORD_BOT_TOKEN) {
+    console.warn('[apply] DISCORD_BOT_TOKEN not set — cannot post application to Discord');
+    return;
+  }
+  if (!APPLY_CHANNEL_ID) {
+    console.warn('[apply] APPLY_CHANNEL_ID not set — cannot post application to Discord');
+    return;
+  }
+  const embed = {
+    title:  '📋 New Application',
+    color:  0x00b0f4,
+    fields: [
+      { name: 'Callsign',       value: application.callsign      || '—', inline: true },
+      { name: 'Discord',        value: application.discordHandle || '—', inline: true },
+      { name: 'Age Group',      value: String(application.age)   || '—', inline: true },
+      { name: 'Timezone',       value: application.timezone      || '—', inline: true },
+      { name: 'Preferred Wing', value: application.subSquadron   || '—', inline: true },
+      { name: 'Experience',     value: application.experience    || 'N/A', inline: false },
+      { name: 'Modules',        value: application.modules       || 'N/A', inline: false },
+    ],
+    timestamp: application.submittedAt,
+    footer:    { text: 'Application ID: ' + application.id },
+  };
+  await discordPost('/channels/' + APPLY_CHANNEL_ID + '/messages', { embeds: [embed] });
+  console.debug('[apply] Application ' + application.id + ' posted to Discord channel ' + APPLY_CHANNEL_ID);
 }
 
 /* ─── Rate limiting ─────────────────────────────────────── */
@@ -332,8 +431,19 @@ api.post('/apply', applyLimiter, (req, res) => {
     status:        'pending',
   };
 
-  applications.push(application);
-  saveJSON(APPS_FILE, applications);
+  /* Send application to the configured Discord channel.
+     Falls back to JSON storage if APPLY_CHANNEL_ID is not set or if posting fails. */
+  if (APPLY_CHANNEL_ID) {
+    sendApplicationToDiscord(application).catch(err => {
+      console.error('[apply] Failed to post application to Discord:', err.message, '— falling back to JSON storage');
+      applications.push(application);
+      saveJSON(APPS_FILE, applications);
+    });
+  } else {
+    applications.push(application);
+    saveJSON(APPS_FILE, applications);
+  }
+
   res.status(201).json({
     ok:      true,
     message: 'Application received! Join our Discord to get started:',
@@ -350,13 +460,18 @@ api.get('/applications', requireAuth, requireAdmin, (_req, res) => {
 api.get('/roster', async (_req, res) => {
   const now = Date.now();
   if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
+    console.debug('[roster] Cache miss — fetching from Discord');
     try {
       rosterCache   = await buildRosterFromDiscord();
       rosterCacheAt = now;
+      console.debug('[roster] Cache updated, ' + rosterCache.length + ' entries');
     } catch (err) {
       console.error('[roster] Discord fetch failed:', err.message);
+      console.error('[roster] Stack:', err.stack);
       if (!rosterCache) rosterCache = [];
     }
+  } else {
+    console.debug('[roster] Serving from cache (' + rosterCache.length + ' entries, age ' + Math.round((now - rosterCacheAt) / 1000) + 's)');
   }
   res.json(rosterCache);
 });
@@ -427,4 +542,8 @@ app.get('*', (_req, res) => {
 /* ─── Start ─────────────────────────────────────────────── */
 app.listen(PORT, () => {
   console.log(`[sourcedcs-web] listening on http://0.0.0.0:${PORT}`);
+  console.log('[sourcedcs-web] Config:');
+  console.log('  DISCORD_BOT_TOKEN  :', DISCORD_BOT_TOKEN  ? '*** (set)' : 'NOT SET');
+  console.log('  DISCORD_GUILD_ID   :', DISCORD_GUILD_ID   || 'NOT SET');
+  console.log('  APPLY_CHANNEL_ID   :', APPLY_CHANNEL_ID   || 'NOT SET (applications will be stored in JSON)');
 });
