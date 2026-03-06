@@ -46,6 +46,14 @@ function setTheme(t) {
 
 function escH(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
+/* Shared role→color palette (kept in sync with index.js ROSTER_COLORS) */
+var ROSTER_COLORS = ['#1a3a6b','#1a5c2e','#7c5000','#9b1c1c','#4a2075','#1a5a5a'];
+function roleColor(role) {
+  var h = 0;
+  for (var i = 0; i < (role||'').length; i++) h = (h * 31 + role.charCodeAt(i)) & 0x7fffffff;
+  return ROSTER_COLORS[h % ROSTER_COLORS.length];
+}
+
 /* ── Load wing data ── */
 (function() {
   var params = new URLSearchParams(window.location.search);
@@ -67,7 +75,9 @@ function escH(s) { var d = document.createElement('div'); d.textContent = s || '
 
     /* Hero */
     var tags = (sq.tags || []).map(function(t){return '<span class="subsq-tag">'+escH(t)+'</span>';}).join('');
+    var logoHtml = sq.image ? '<img class="wing-hero-logo" src="' + escH(sq.image) + '" alt="" onerror="this.style.display=\'none\'">' : '';
     document.getElementById('wingHero').innerHTML =
+      logoHtml +
       '<div class="subsq-designator" style="font-size:clamp(36px,8vw,72px);margin-bottom:8px">' + escH(sq.designator) + '</div>' +
       '<div class="subsq-name" style="font-size:clamp(14px,3vw,20px);margin-bottom:4px">' + escH(sq.name) + '</div>' +
       '<div class="subsq-airframe" style="margin-bottom:12px">' + escH(sq.airframe) + '</div>' +
@@ -83,12 +93,13 @@ function escH(s) { var d = document.createElement('div'); d.textContent = s || '
     var wingPilots = roster.filter(function(p) { return p.squadron === sq.id; });
     var tbody = document.getElementById('wingRosterBody');
     if (!wingPilots.length) {
-      tbody.innerHTML = '<tr class="roster-open-row"><td colspan="5" class="roster-open-cell">NO PILOTS ASSIGNED YET \u2014 <a href="/#join">APPLY NOW \u2192</a></td></tr>';
+      tbody.innerHTML = '<tr class="roster-open-row"><td colspan="2" class="roster-open-cell">NO PILOTS ASSIGNED YET \u2014 <a href="/#join">APPLY NOW \u2192</a></td></tr>';
     } else {
       tbody.innerHTML = wingPilots.map(function(p) {
-        var badge = p.status === 'active' ? 'badge-active' : 'badge-inactive';
-        return '<tr><td><span class="callsign">' + escH(p.callsign) + '</span></td><td>' + escH(p.rank) + '</td><td>' + escH(p.airframe) + '</td><td>' + escH(p.role) + '</td><td><span class="status-badge ' + badge + '">' + escH(p.status).toUpperCase() + '</span></td></tr>';
-      }).join('') + '<tr class="roster-open-row"><td colspan="5" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="/#join">APPLY NOW \u2192</a></td></tr>';
+        var c = roleColor(p.role || '');
+        var roleHtml = p.role ? '<span class="role-badge" style="color:' + c + ';border-color:' + c + '">' + escH(p.role) + '</span>' : '';
+        return '<tr><td><span class="callsign">' + escH(p.callsign) + '</span></td><td>' + roleHtml + '</td></tr>';
+      }).join('') + '<tr class="roster-open-row"><td colspan="2" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="/#join">APPLY NOW \u2192</a></td></tr>';
     }
   }).catch(function() {
     document.getElementById('wingHero').innerHTML = '<div style="color:var(--red)">Error loading wing data.</div>';

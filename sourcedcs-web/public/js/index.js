@@ -287,7 +287,9 @@ function renderSquadrons(sqs) {
   if (!sqs.length) { grid.innerHTML = '<div class="ops-preview-empty">No wings configured.</div>'; return; }
   grid.innerHTML = sqs.map(function(sq) {
     var tags = (sq.tags || []).map(function(t) { return '<span class="subsq-tag">' + escH(t) + '</span>'; }).join('');
+    var logoHtml = sq.image ? '<img class="subsq-logo" src="' + escH(sq.image) + '" alt="" onerror="this.style.display=\'none\'">' : '';
     return '<div class="subsq-card">' +
+      logoHtml +
       '<div class="subsq-designator">' + escH(sq.designator) + '</div>' +
       '<div class="subsq-name">' + escH(sq.name) + '</div>' +
       '<div class="subsq-airframe">' + escH(sq.airframe) + '</div>' +
@@ -344,6 +346,7 @@ function openSquadronModal(id) {
       document.getElementById('sqTags').value = (sq.tags||[]).join(', ');
       document.getElementById('sqShortDesc').value = sq.shortDesc || '';
       document.getElementById('sqFullDesc').value = sq.fullDesc || '';
+      document.getElementById('sqImage').value = sq.image || '';
     }
   } else {
     document.getElementById('sqModalTitle').textContent = '\u2295 ADD WING';
@@ -379,6 +382,7 @@ function submitSquadron(e) {
     tags:       document.getElementById('sqTags').value.split(',').map(function(t){return t.trim();}).filter(Boolean),
     shortDesc:  document.getElementById('sqShortDesc').value.trim(),
     fullDesc:   document.getElementById('sqFullDesc').value.trim(),
+    image:      document.getElementById('sqImage').value.trim(),
   };
   if (!data.id || !data.designator || !data.name) {
     document.getElementById('sqFormError').textContent = 'ID, designator and name are required.';
@@ -422,16 +426,63 @@ function squadronDisplayName(id) {
   return sq ? sq.designator + ' ' + sq.name : id;
 }
 
+/* ── Roster tab palette (cycles per squadron index) ── */
+var ROSTER_COLORS = ['#1a3a6b','#1a5c2e','#7c5000','#9b1c1c','#4a2075','#1a5a5a'];
+
+function roleColor(role) {
+  var h = 0;
+  for (var i = 0; i < (role||'').length; i++) h = (h * 31 + role.charCodeAt(i)) & 0x7fffffff;
+  return ROSTER_COLORS[h % ROSTER_COLORS.length];
+}
+
+var activeRosterTab = 'ALL';
+
+function setRosterTab(tabId) {
+  activeRosterTab = tabId;
+  renderRoster(ROSTER);
+}
+
 function renderRoster(list) {
+  /* Build ordered list of unique squadron IDs present in the roster */
+  var sqIds = [];
+  list.forEach(function(p) {
+    if (p.squadron && sqIds.indexOf(p.squadron) === -1) sqIds.push(p.squadron);
+  });
+
+  /* Render tab strip */
+  var tabsEl = document.getElementById('rosterTabs');
+  if (tabsEl) {
+    var tabsHtml = '<button class="roster-tab-btn' + (activeRosterTab === 'ALL' ? ' tab-active' : '') +
+      '" onclick="setRosterTab(\'ALL\')">ALL (' + list.length + ')</button>';
+    sqIds.forEach(function(id, i) {
+      var color = ROSTER_COLORS[i % ROSTER_COLORS.length];
+      var name  = squadronDisplayName(id);
+      var count = list.filter(function(p) { return p.squadron === id; }).length;
+      var isActive = activeRosterTab === id;
+      tabsHtml += '<button class="roster-tab-btn' + (isActive ? ' tab-active' : '') +
+        '" onclick="setRosterTab(\'' + escH(id) + '\')"' +
+        ' style="--tab-color:' + color + '">' +
+        escH(name) + ' (' + count + ')</button>';
+    });
+    tabsEl.innerHTML = tabsHtml;
+  }
+
+  /* Filter by active tab */
+  var filtered = activeRosterTab === 'ALL' ? list : list.filter(function(p) { return p.squadron === activeRosterTab; });
+
   var tbody = document.getElementById('rosterBody');
-  if (!list.length) {
+  if (!filtered.length) {
     tbody.innerHTML = '<tr class="roster-open-row"><td colspan="3" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="#join">APPLY NOW \u2192</a></td></tr>';
     return;
   }
-  var html = list.map(function(p) {
+  var html = filtered.map(function(p) {
+    var color = roleColor(p.role || '');
+    var roleHtml = p.role
+      ? '<span class="role-badge" style="color:' + color + ';border-color:' + color + '">' + escH(p.role) + '</span>'
+      : '';
     return '<tr>' +
       '<td><span class="callsign">' + escH(p.callsign) + '</span></td>' +
-      '<td>' + escH(p.role) + '</td>' +
+      '<td>' + roleHtml + '</td>' +
       '<td>' + escH(squadronDisplayName(p.squadron)) + '</td>' +
     '</tr>';
   }).join('');

@@ -796,6 +796,63 @@ footer {
 .roster-open-cell a { color: var(--text); text-decoration: underline; }
 :root.movie .roster-open-cell a { color: var(--accent); }
 
+/* ── Roster tab strip ────────────────────────────────────── */
+.roster-tabs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-top: 16px;
+}
+.roster-tab-btn {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px 18px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+  position: relative;
+  margin-bottom: -2px;
+}
+.roster-tab-btn:hover { color: var(--text); background: var(--bg2); }
+.roster-tab-btn.tab-active {
+  color: var(--text);
+  background: var(--bg-card);
+  border-bottom-color: var(--tab-color, var(--accent));
+}
+:root.movie .roster-tab-btn.tab-active { color: var(--accent); }
+
+/* ── Role color badge ────────────────────────────────────── */
+.role-badge {
+  display: inline-block;
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  opacity: .9;
+}
+
+/* ── Squadron logo ───────────────────────────────────────── */
+.subsq-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  display: block;
+  margin-bottom: 4px;
+}
+.wing-hero-logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 16px;
+}
+
 /* ═══════════════════════════════════════════════════════════
    STATUS + DISCORD (2-column)
 ═══════════════════════════════════════════════════════════ */
