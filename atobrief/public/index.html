@@ -46,8 +46,23 @@
       <button class="load-btn" id="exportYamlBtn" style="display:none" onclick="openExportDialog()">EXPORT</button>
       <button class="load-btn" id="leaveRoomBtn" style="display:none" onclick="leaveSession()">LEAVE ROOM</button>
       <button class="load-btn" id="joinRoomBtn" onclick="openJoinDialog()">JOIN ROOM</button>
+      <div class="hdr-divider"></div>
+      <button class="logout-btn" id="logoutBtn" onclick="logoutAto()" title="Log out" aria-label="Log out">USER &#x23FB;</button>
     </div>
   </header>
+
+<!-- No-role screen — shown when user is logged in but has no squadron roles -->
+<div class="no-role-screen" id="noRoleScreen" style="display:none">
+  <div class="no-role-box">
+    <div class="no-role-title">ACCESS RESTRICTED</div>
+    <p class="no-role-msg">You must be a SOURCE squadron member to access ATO BRIEF.</p>
+    <p class="no-role-msg">Join the squadron on the main website, then log in again once your role has been assigned.</p>
+    <div class="no-role-actions">
+      <a class="no-role-link" href="https://sourcedcs.page/#join" target="_blank" rel="noopener">JOIN THE SQUADRON &rarr;</a>
+      <button class="no-role-logout" onclick="logoutAto()">LOG OUT &#x23FB;</button>
+    </div>
+  </div>
+</div>
 
   <div class="body">
 
@@ -235,17 +250,31 @@
   var token = getToken();
   if (!token) { loginWithCasdoor(); return; }
   /* Check JWT expiry (exp claim) without a library */
+  var payload = null;
   try {
     var parts = token.split('.');
     if (parts.length !== 3) { loginWithCasdoor(); return; }
-    var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
     if (payload.exp && Math.floor(Date.now() / 1000) >= payload.exp) {
       try { localStorage.removeItem('ato-token'); } catch(e) {}
       loginWithCasdoor();
+      return;
     }
   } catch(e) {
     /* Malformed token — redirect to login */
     loginWithCasdoor();
+    return;
+  }
+  /* Show username in logout button */
+  var name = (payload && payload.name) ? payload.name.toUpperCase() : 'USER';
+  var logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.textContent = name + ' \u23FB';
+  /* If user has no roles, show the restricted-access screen */
+  if (!hasAnyRole(token)) {
+    var noRoleScreen = document.getElementById('noRoleScreen');
+    if (noRoleScreen) noRoleScreen.style.display = '';
+    var app = document.querySelector('.app');
+    if (app) app.style.display = 'none';
   }
 })();
 </script>
