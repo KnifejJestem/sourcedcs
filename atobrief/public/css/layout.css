@@ -363,3 +363,79 @@ header {
 :root.movie .toast { background: var(--cap); color: #000; }
 :root.movie .toast.toast-error { background: var(--red); color: #fff; }
 
+/* ── Logout button (shared base, used in header and no-role screen) ─ */
+.logout-btn,
+.no-role-logout {
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.logout-btn:hover,
+.no-role-logout:hover { background: var(--red); border-color: var(--red); color: #fff; }
+/* Header logout button — compact padding, no text-wrap */
+.logout-btn { padding: 5px 12px; white-space: nowrap; }
+/* No-role screen logout button — wider padding to match the join link */
+.no-role-logout { padding: 7px 20px; }
+
+/* ── No-role restricted-access screen ───────────────────────── */
+.no-role-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9995;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.no-role-box {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  padding: 48px 56px;
+  max-width: 520px;
+  width: 100%;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+.no-role-title {
+  font-size: 13px;
+  letter-spacing: 4px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 24px;
+}
+:root.movie .no-role-title { color: var(--cap); }
+.no-role-msg {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--text-2);
+  line-height: 1.7;
+  margin-bottom: 10px;
+}
+.no-role-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+.no-role-link {
+  display: inline-block;
+  border: 1px solid var(--text);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  padding: 7px 20px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background .15s, color .15s;
+}
+.no-role-link:hover { background: var(--text); color: var(--text-inv); }
+:root.movie .no-role-link { border-color: var(--cap); color: var(--cap); }
+:root.movie .no-role-link:hover { background: var(--cap); color: #000; }
+
