@@ -43,11 +43,13 @@ const DEFAULT_GALLERY = [
   { src: 'gallery/shot-06.svg', alt: 'Precision Strike — GBU-12 Delivery',            caption: 'PRECISION STRIKE · SYRIAN THEATRE · GBU-12 DELIVERY' },
 ];
 
-let gallery = loadJSON(GALLERY_FILE, DEFAULT_GALLERY);
+const rawGallery = loadJSON(GALLERY_FILE, null);
+let gallery = Array.isArray(rawGallery) ? rawGallery : DEFAULT_GALLERY;
 
 /* Hero image — the single cinematic shot shown at the top of the main page */
 const DEFAULT_HERO = { src: 'gallery/shot-01.svg', alt: 'Formation Flight — Dawn Patrol over Caucasus', caption: 'FORMATION FLIGHT · CAUCASUS THEATRE · DAWN PATROL' };
-let heroImage = loadJSON(HERO_FILE, DEFAULT_HERO);
+const rawHero = loadJSON(HERO_FILE, null);
+let heroImage = (rawHero && typeof rawHero === 'object' && !Array.isArray(rawHero)) ? rawHero : DEFAULT_HERO;
 
 /* Multer — images land in the data volume (not in the Docker image) */
 const upload = multer({
@@ -675,7 +677,9 @@ api.put('/gallery', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
     alt:     sanitizeStr(s.alt,     MAX_GALLERY_TEXT_LEN),
     caption: sanitizeStr(s.caption, MAX_GALLERY_TEXT_LEN),
   }));
-  saveJSON(GALLERY_FILE, gallery);
+  try { saveJSON(GALLERY_FILE, gallery); } catch (err) {
+    return res.status(500).json({ error: 'Failed to save gallery: ' + err.message });
+  }
   res.json(gallery);
 });
 
@@ -690,7 +694,10 @@ api.delete('/gallery/:idx', writeOpsLimiter, requireAuth, requireAdmin, (req, re
     return res.status(400).json({ error: 'Invalid index' });
   }
   const [removed] = gallery.splice(idx, 1);
-  saveJSON(GALLERY_FILE, gallery);
+  try { saveJSON(GALLERY_FILE, gallery); } catch (err) {
+    gallery.splice(idx, 0, removed); /* roll back in-memory change */
+    return res.status(500).json({ error: 'Failed to save gallery: ' + err.message });
+  }
   /* Clean up uploaded file from the volume (ignore public static assets) */
   if (removed.src && removed.src.startsWith('/gallery-uploads/')) {
     const filename = path.basename(removed.src);
@@ -718,7 +725,9 @@ api.put('/hero-image', writeOpsLimiter, requireAuth, requireAdmin, (req, res) =>
     alt:     sanitizeStr(req.body.alt,     MAX_HERO_TEXT_LEN),
     caption: sanitizeStr(req.body.caption, MAX_HERO_TEXT_LEN),
   };
-  saveJSON(HERO_FILE, heroImage);
+  try { saveJSON(HERO_FILE, heroImage); } catch (err) {
+    return res.status(500).json({ error: 'Failed to save hero image: ' + err.message });
+  }
   res.json(heroImage);
 });
 

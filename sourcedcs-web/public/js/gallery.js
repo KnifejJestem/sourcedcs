@@ -66,7 +66,7 @@ function parseJSONResponse(r, defaultMsg) {
       .catch(function() { throw new Error(defaultMsg + ' (HTTP ' + r.status + ')'); })
       .then(function(d) { throw new Error(d.error || defaultMsg); });
   }
-  return r.json();
+  return r.json().catch(function() { throw new Error(defaultMsg); });
 }
 
 (function initGallery() {

@@ -695,7 +695,14 @@ function submitHeroEdit(e) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
       body:    JSON.stringify(entry),
     })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (!r.ok) {
+          return r.json()
+            .catch(function() { throw new Error('Save failed (HTTP ' + r.status + ')'); })
+            .then(function(d) { throw new Error(d.error || 'Save failed'); });
+        }
+        return r.json().catch(function() { throw new Error('Save failed'); });
+      })
       .then(function(updated) {
         heroData = updated;
         var featuredImg     = document.getElementById('heroFeaturedImg');
@@ -716,7 +723,14 @@ function submitHeroEdit(e) {
       headers: { 'Authorization': 'Bearer ' + getToken() },
       body:    fd,
     })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (!r.ok) {
+          return r.json()
+            .catch(function() { throw new Error('Upload failed (HTTP ' + r.status + ')'); })
+            .then(function(d) { throw new Error(d.error || 'Upload failed'); });
+        }
+        return r.json().catch(function() { throw new Error('Upload failed'); });
+      })
       .then(function(resp) {
         if (resp.error) throw new Error(resp.error);
         return applyUpdate(resp.src);
