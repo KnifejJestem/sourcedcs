@@ -1,0 +1,70 @@
+/* ═══════════════════════════════════════════════════════════
+   GALLERY PAGE STYLES
+   Imports all tokens from css/style.css (loaded first)
+═══════════════════════════════════════════════════════════ */
+
+/* ── Gallery page hero ──────────────────────────────────── */
+.gal-hero {
+  border-bottom: 1px solid var(--border);
+  padding: 48px 24px 40px;
+  background: var(--bg2);
+}
+.gal-hero-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.gal-hero-title {
+  font-family: 'Orbitron', monospace;
+  font-weight: 900;
+  font-size: clamp(20px, 4vw, 36px);
+  letter-spacing: 4px;
+  color: var(--text);
+  margin: 10px 0 6px;
+}
+:root.movie .gal-hero-title { color: var(--accent); text-shadow: 0 0 20px rgba(57,255,122,.3); }
+.gal-hero-sub {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+}
+.gal-counter {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  border: 1px solid var(--border-strong);
+  padding: 4px 12px;
+  white-space: nowrap;
+}
+:root.movie .gal-counter { border-color: var(--border-strong); color: var(--accent); }
+
+/* ── Gallery main area ──────────────────────────────────── */
+.gal-main {
+  background: var(--bg);
+  padding: 0 0 48px;
+}
+
+.gal-slideshow-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 0;
+}
+
+/* Make the slideshow taller / more cinematic on the gallery page */
+.gal-main .slide-img {
+  aspect-ratio: 21/9;
+}
+@media (max-width: 640px) {
+  .gal-main .slide-img { aspect-ratio: 16/9; }
+}
+
+/* Admin bar inside gallery page */
+.gal-admin-row {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
