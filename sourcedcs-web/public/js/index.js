@@ -642,19 +642,99 @@ document.getElementById('drModalOverlay').addEventListener('click', function(e) 
   }
 })();
 
-/* ── Hero featured shot — fetch first gallery image from API ── */
+/* ── Hero featured shot — fetch hero image from API ── */
+var heroData = null;
 (function() {
   var featuredImg     = document.getElementById('heroFeaturedImg');
   var featuredCaption = document.getElementById('heroFeaturedCaption');
   if (!featuredImg) return;
-  fetch('/api/gallery')
+  fetch('/api/hero-image')
     .then(function(r) { return r.json(); })
-    .then(function(shots) {
-      var shot = shots[0];
-      if (!shot) return;
-      featuredImg.src = shot.src;
+    .then(function(shot) {
+      heroData = shot;
+      featuredImg.src = shot.src || '';
       featuredImg.alt = shot.alt || '';
       if (featuredCaption) featuredCaption.textContent = shot.caption || '';
+      if (isAdmin) document.getElementById('heroAdminOverlay').style.display = '';
     })
-    .catch(function(err) { console.warn('[gallery] Failed to load featured shot:', err.message); });
+    .catch(function(err) { console.warn('[hero] Failed to load hero image:', err.message); });
 })();
+
+/* ── Admin: hero image edit ── */
+function openHeroEditModal(e) {
+  if (e) e.preventDefault();
+  document.getElementById('heroEditForm').reset();
+  document.getElementById('heroEditCaption').value = (heroData && heroData.caption) || '';
+  document.getElementById('heroEditAlt').value     = (heroData && heroData.alt)     || '';
+  document.getElementById('heroEditError').style.display = 'none';
+  var btn = document.getElementById('heroEditSaveBtn');
+  btn.disabled    = false;
+  btn.textContent = '\u2713 SAVE';
+  document.getElementById('heroEditModalOverlay').style.display = '';
+}
+
+function closeHeroEditModal() {
+  document.getElementById('heroEditModalOverlay').style.display = 'none';
+}
+
+function submitHeroEdit(e) {
+  e.preventDefault();
+  var file    = document.getElementById('heroEditFile').files[0];
+  var caption = document.getElementById('heroEditCaption').value.trim();
+  var alt     = document.getElementById('heroEditAlt').value.trim();
+  var errEl   = document.getElementById('heroEditError');
+  var saveBtn = document.getElementById('heroEditSaveBtn');
+  errEl.style.display = 'none';
+  saveBtn.disabled    = true;
+  saveBtn.textContent = 'SAVING\u2026';
+
+  function applyUpdate(src) {
+    var entry = { src: src, alt: alt, caption: caption };
+    return fetch('/api/hero-image', {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+      body:    JSON.stringify(entry),
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(updated) {
+        heroData = updated;
+        var featuredImg     = document.getElementById('heroFeaturedImg');
+        var featuredCaption = document.getElementById('heroFeaturedCaption');
+        featuredImg.src = updated.src;
+        featuredImg.alt = updated.alt || '';
+        if (featuredCaption) featuredCaption.textContent = updated.caption || '';
+        closeHeroEditModal();
+      });
+  }
+
+  var p;
+  if (file) {
+    var fd = new FormData();
+    fd.append('image', file);
+    p = fetch('/api/hero-image/upload', {
+      method:  'POST',
+      headers: { 'Authorization': 'Bearer ' + getToken() },
+      body:    fd,
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(resp) {
+        if (resp.error) throw new Error(resp.error);
+        return applyUpdate(resp.src);
+      });
+  } else {
+    p = applyUpdate((heroData && heroData.src) || '');
+  }
+
+  p.catch(function(err) {
+    errEl.textContent    = 'Save failed: ' + err.message;
+    errEl.style.display  = '';
+  }).finally(function() {
+    saveBtn.disabled    = false;
+    saveBtn.textContent = '\u2713 SAVE';
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var heroOverlay = document.getElementById('heroEditModalOverlay');
+  if (heroOverlay) heroOverlay.addEventListener('click', function(e) { if (e.target === this) closeHeroEditModal(); });
+});
