@@ -643,18 +643,110 @@ document.getElementById('drModalOverlay').addEventListener('click', function(e) 
 })();
 
 /* ── Gallery Slideshow ── */
+/* ════════════════════════════════════════════════════════════════
+   TO ADD, REMOVE OR RENAME GALLERY PHOTOS:
+     1. Drop the image file into sourcedcs-web/public/gallery/
+     2. Add / edit an entry in GALLERY_SHOTS below.
+        Each entry has:
+          src          – path relative to public/, e.g. 'gallery/shot-01.svg'
+          alt          – screen-reader description (also used as tooltip)
+          slideCaption – caption shown on the large slideshow image
+          thumbCaption – caption shown under the thumbnail in the grid
+   That's the only place you need to touch — both the slideshow and
+   the thumbnail grid are built automatically from this list.
+   ═══════════════════════════════════════════════════════════════ */
+var GALLERY_SHOTS = [
+  {
+    src:          'gallery/shot-01.svg',
+    alt:          'Formation Flight \u2014 Dawn Patrol over Caucasus',
+    slideCaption: 'FORMATION FLIGHT \u00b7 CAUCASUS THEATRE \u00b7 DAWN PATROL',
+    thumbCaption: 'FORMATION FLIGHT \u00b7 DAWN PATROL'
+  },
+  {
+    src:          'gallery/shot-02.svg',
+    alt:          'Night Operations \u2014 Overwatch over the Gulf',
+    slideCaption: 'NIGHT OPERATIONS \u00b7 PERSIAN GULF \u00b7 OVERWATCH',
+    thumbCaption: 'NIGHT OPERATIONS \u00b7 OVERWATCH'
+  },
+  {
+    src:          'gallery/shot-03.svg',
+    alt:          'Dusk Intercept \u2014 Afterburner Run',
+    slideCaption: 'DUSK INTERCEPT \u00b7 COASTAL SWEEP \u00b7 AFTERBURNER RUN',
+    thumbCaption: 'DUSK INTERCEPT \u00b7 AFTERBURNER RUN'
+  },
+  {
+    src:          'gallery/shot-04.svg',
+    alt:          'CAS Mission \u2014 Mountain Valley Run',
+    slideCaption: 'CAS MISSION \u00b7 CAUCASUS WINTER \u00b7 MOUNTAIN VALLEY RUN',
+    thumbCaption: 'CAS MISSION \u00b7 WINTER VALLEY'
+  },
+  {
+    src:          'gallery/shot-05.svg',
+    alt:          'Carrier Approach \u2014 Case I Recovery',
+    slideCaption: 'CARRIER APPROACH \u00b7 PERSIAN GULF \u00b7 CASE I RECOVERY',
+    thumbCaption: 'CARRIER APPROACH \u00b7 CASE I'
+  },
+  {
+    src:          'gallery/shot-06.svg',
+    alt:          'Precision Strike \u2014 GBU-12 Delivery',
+    slideCaption: 'PRECISION STRIKE \u00b7 SYRIAN THEATRE \u00b7 GBU-12 DELIVERY',
+    thumbCaption: 'PRECISION STRIKE \u00b7 GBU-12'
+  }
+];
+
 (function() {
-  var slides   = document.querySelectorAll('#gallerySlideshow .slide');
+  var track    = document.getElementById('slideshowTrack');
   var dotsWrap = document.getElementById('slideshowDots');
   var prevBtn  = document.getElementById('slidePrev');
   var nextBtn  = document.getElementById('slideNext');
   var grid     = document.getElementById('galleryGrid');
-  if (!slides.length || !dotsWrap) return;
+  if (!track || !dotsWrap || !grid) return;
 
   var current  = 0;
-  var total    = slides.length;
+  var total    = GALLERY_SHOTS.length;
   var timer    = null;
   var INTERVAL = 5000;
+
+  /* Build slides */
+  var slides = [];
+  GALLERY_SHOTS.forEach(function(shot, idx) {
+    var div = document.createElement('div');
+    div.className = 'slide' + (idx === 0 ? ' active' : '');
+    div.setAttribute('data-index', idx);
+    var img = document.createElement('img');
+    img.src = shot.src;
+    img.alt = shot.alt;
+    img.className = 'slide-img';
+    img.loading = 'lazy';
+    var cap = document.createElement('div');
+    cap.className = 'slide-caption';
+    cap.textContent = shot.slideCaption;
+    div.appendChild(img);
+    div.appendChild(cap);
+    track.appendChild(div);
+    slides.push(div);
+  });
+
+  /* Build thumbnail grid */
+  GALLERY_SHOTS.forEach(function(shot, idx) {
+    var item = document.createElement('div');
+    item.className = 'gallery-item';
+    item.setAttribute('role', 'button');
+    item.setAttribute('tabindex', '0');
+    item.setAttribute('data-slide', idx);
+    item.title = shot.alt;
+    var img = document.createElement('img');
+    img.src = shot.src;
+    img.alt = shot.alt;
+    img.className = 'gallery-thumb';
+    img.loading = 'lazy';
+    var cap = document.createElement('div');
+    cap.className = 'gallery-caption';
+    cap.textContent = shot.thumbCaption;
+    item.appendChild(img);
+    item.appendChild(cap);
+    grid.appendChild(item);
+  });
 
   /* Build dots */
   var dots = [];
@@ -687,25 +779,23 @@ document.getElementById('drModalOverlay').addEventListener('click', function(e) 
   if (nextBtn) nextBtn.addEventListener('click', function() { showSlide(current + 1); resetTimer(); });
 
   /* Thumbnail grid — delegated click + keyboard handler */
-  if (grid) {
-    function handleThumbActivate(e) {
-      var item = e.target.closest('.gallery-item[data-slide]');
-      if (!item) return;
-      var idx = parseInt(item.getAttribute('data-slide'), 10);
-      if (!isNaN(idx)) {
-        showSlide(idx);
-        resetTimer();
-        document.getElementById('gallerySlideshow').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
+  function handleThumbActivate(e) {
+    var item = e.target.closest('.gallery-item[data-slide]');
+    if (!item) return;
+    var idx = parseInt(item.getAttribute('data-slide'), 10);
+    if (!isNaN(idx)) {
+      showSlide(idx);
+      resetTimer();
+      document.getElementById('gallerySlideshow').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
-    grid.addEventListener('click', handleThumbActivate);
-    grid.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleThumbActivate(e);
-      }
-    });
   }
+  grid.addEventListener('click', handleThumbActivate);
+  grid.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleThumbActivate(e);
+    }
+  });
 
   /* Pause on hover */
   var ss = document.getElementById('gallerySlideshow');
