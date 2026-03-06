@@ -177,6 +177,7 @@ services:
       - GITHUB_URL=${GITHUB_URL}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+      - APPLY_CHANNEL_ID=${APPLY_CHANNEL_ID}
     networks:
       - web
 
