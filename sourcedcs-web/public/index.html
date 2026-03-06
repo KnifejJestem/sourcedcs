@@ -206,36 +206,36 @@
     </div>
     <div class="modal-body">
 
-      <!-- STEP 1: Create a Discord account -->
+      <!-- STEP 1: Create a SOURCE portal account (shown when not logged in) -->
       <div id="applyStep1">
         <div class="apply-step-indicator">STEP 1 OF 2</div>
-        <p class="modal-intro">Before applying, make sure you have a Discord account. You do not need to join the server yet &mdash; just have an account ready.</p>
+        <p class="modal-intro">To apply you first need a SOURCE portal account. Registration is free and takes less than a minute &mdash; once done you'll be brought straight back here to complete your application.</p>
         <div class="apply-account-steps">
           <div class="recruit-step">
             <div class="step-num">01</div>
             <div class="step-body">
-              <div class="step-title">CREATE A DISCORD ACCOUNT</div>
-              <div class="step-desc">If you don't have one yet, go to <a href="https://discord.com" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline">discord.com</a> and sign up for free. A Discord account is required to receive your acceptance and communicate with the squadron.</div>
+              <div class="step-title">CREATE A SOURCE ACCOUNT</div>
+              <div class="step-desc">Click <strong>Create Account</strong> below. You'll be taken to our secure portal to register with a username and password. No payment required.</div>
             </div>
           </div>
           <div class="recruit-step">
             <div class="step-num">02</div>
             <div class="step-body">
-              <div class="step-title">NO ROLE NEEDED YET</div>
-              <div class="step-desc">You do not need any existing role or server membership to apply. Just have your Discord username ready to enter in the application form.</div>
+              <div class="step-title">RETURN &amp; COMPLETE YOUR APPLICATION</div>
+              <div class="step-desc">After registering you'll be redirected straight back here to fill out the short application form.</div>
             </div>
           </div>
           <div class="recruit-step">
             <div class="step-num">03</div>
             <div class="step-body">
-              <div class="step-title">FILL OUT THE APPLICATION</div>
-              <div class="step-desc">Click <strong>Continue</strong> below to fill out the short application form. We'll review it and reach out on Discord within 48 hours.</div>
+              <div class="step-title">HAVE YOUR DISCORD USERNAME READY</div>
+              <div class="step-desc">You'll need a Discord account to receive your acceptance. If you don't have one yet, <a href="https://discord.com" target="_blank" rel="noopener" style="color:var(--text);text-decoration:underline">sign up at discord.com</a> before continuing.</div>
             </div>
           </div>
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" onclick="closeApplyModal()">CANCEL</button>
-          <button type="button" class="btn btn-primary" onclick="showApplyStep2()"><span class="btn-icon">&rarr;</span> CONTINUE TO APPLICATION</button>
+          <button type="button" class="btn btn-primary" onclick="applyCreateAccount()"><span class="btn-icon">&rarr;</span> CREATE ACCOUNT</button>
         </div>
       </div>
 

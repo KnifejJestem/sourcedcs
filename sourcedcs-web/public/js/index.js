@@ -133,15 +133,36 @@ document.querySelectorAll('a[href^="#"]').forEach(function(link) {
 function openApplyModal(wing) {
   document.getElementById('applyModalOverlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
-  /* Always start at step 1 */
-  document.getElementById('applyStep1').style.display = '';
-  document.getElementById('applyStep2').style.display = 'none';
   if (wing) {
-    /* Store the wing so step 2 can pre-select it */
     document.getElementById('applyModalOverlay').dataset.pendingWing = wing;
   } else {
     delete document.getElementById('applyModalOverlay').dataset.pendingWing;
   }
+  var token = getToken();
+  if (!token) {
+    /* Not logged in — show account-creation prompt (step 1) */
+    document.getElementById('applyStep1').style.display = '';
+    document.getElementById('applyStep2').style.display = 'none';
+  } else {
+    /* Already logged in — skip straight to the application form (step 2) */
+    document.getElementById('applyStep1').style.display = 'none';
+    document.getElementById('applyStep2').style.display = '';
+    if (wing) {
+      var sel = document.getElementById('fSquadron');
+      if (sel) sel.value = wing;
+    }
+    setTimeout(function() { document.getElementById('fCallsign').focus(); }, 30);
+  }
+}
+/* Redirect to Casdoor signup, returning to this page with ?apply=1 so the
+   application form opens automatically after the user has registered. */
+function applyCreateAccount() {
+  var overlay = document.getElementById('applyModalOverlay');
+  var pendingWing = (overlay && overlay.dataset.pendingWing) || '';
+  var qs = new URLSearchParams({ apply: '1' });
+  if (pendingWing) qs.set('wing', pendingWing);
+  var returnUrl = window.location.origin + window.location.pathname + '?' + qs.toString();
+  signupWithCasdoor(returnUrl);
 }
 function showApplyStep2() {
   document.getElementById('applyStep1').style.display = 'none';
@@ -556,3 +577,16 @@ function saveDiscordRoles() {
 document.getElementById('drModalOverlay').addEventListener('click', function(e) {
   if (e.target === this) closeDiscordRolesModal();
 });
+
+/* ── Auto-open apply form after Casdoor signup ── */
+/* When the user returns from Casdoor registration with ?apply=1 in the URL,
+   open the application form immediately (they are now logged in). */
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('apply') === '1' && getToken()) {
+    var wing = params.get('wing') || '';
+    /* Clean the URL so a page refresh doesn't reopen the modal */
+    history.replaceState(null, '', window.location.pathname + window.location.hash);
+    openApplyModal(wing || undefined);
+  }
+})();
