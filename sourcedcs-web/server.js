@@ -301,6 +301,7 @@ const limiter = rateLimit({
   max:             300,
   standardHeaders: 'draft-7',
   legacyHeaders:   false,
+  message:         { error: 'Too many requests — please try again later.' },
 });
 app.use(limiter);
 
@@ -309,6 +310,7 @@ const writeOpsLimiter = rateLimit({
   max:             40,
   standardHeaders: 'draft-7',
   legacyHeaders:   false,
+  message:         { error: 'Too many requests — please try again later.' },
 });
 
 const applyLimiter = rateLimit({
@@ -746,6 +748,18 @@ api.delete('/squadrons/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, r
 });
 
 app.use('/api', api);
+
+/* ─── JSON error handler ─────────────────────────────── */
+/* Catches errors passed via next(err) (e.g. from multer, body-parser,
+   or any route handler) and returns a JSON response so the client
+   can always call .json() on the response without a parse failure. */
+// eslint-disable-next-line no-unused-vars
+app.use(function jsonErrorHandler(err, req, res, _next) {
+  const status  = err.status || err.statusCode || 500;
+  const message = err.message || 'Internal server error';
+  console.error('[error]', status, message);
+  res.status(status).json({ error: message });
+});
 
 /* ─── SPA fallback ──────────────────────────────────────── */
 app.get('*', (_req, res) => {

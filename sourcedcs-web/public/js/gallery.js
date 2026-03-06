@@ -59,6 +59,16 @@ var galTimer    = null;
 var galEditMode = false;
 var GAL_INTERVAL = 5000;
 
+/* ── Fetch helper: parses JSON or throws a readable error ── */
+function parseJSONResponse(r, defaultMsg) {
+  if (!r.ok) {
+    return r.json()
+      .catch(function() { throw new Error(defaultMsg + ' (HTTP ' + r.status + ')'); })
+      .then(function(d) { throw new Error(d.error || defaultMsg); });
+  }
+  return r.json();
+}
+
 (function initGallery() {
   var prevBtn = document.getElementById('slidePrev');
   var nextBtn = document.getElementById('slideNext');
@@ -95,6 +105,7 @@ var GAL_INTERVAL = 5000;
 })();
 
 function galBuild(shots) {
+  if (!Array.isArray(shots)) shots = [];
   var track    = document.getElementById('slideshowTrack');
   var dotsWrap = document.getElementById('slideshowDots');
   var counter  = document.getElementById('galCounter');
@@ -226,7 +237,7 @@ function submitGalEdit(e) {
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
     body:    JSON.stringify(updated),
   })
-    .then(function(r) { return r.json(); })
+    .then(function(r) { return parseJSONResponse(r, 'Save failed'); })
     .then(function(saved) { closeGalEditModal(); galBuild(saved); })
     .catch(function(err) { alert('Save failed: ' + err.message); });
 }
@@ -262,7 +273,7 @@ function submitGalAdd(e) {
     headers: { 'Authorization': 'Bearer ' + getToken() },
     body:    fd,
   })
-    .then(function(r) { return r.json(); })
+    .then(function(r) { return parseJSONResponse(r, 'Upload failed'); })
     .then(function(resp) {
       if (resp.error) throw new Error(resp.error);
       var newEntry = { src: resp.src, alt: alt || file.name, caption: caption };
@@ -272,7 +283,7 @@ function submitGalAdd(e) {
         body:    JSON.stringify(galleryData.concat([newEntry])),
       });
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) { return parseJSONResponse(r, 'Gallery save failed'); })
     .then(function(updated) { closeGalAddModal(); galBuild(updated); })
     .catch(function(err) { alert('Upload failed: ' + err.message); })
     .finally(function() {
@@ -289,7 +300,7 @@ function deleteGalleryShot(idx) {
     method:  'DELETE',
     headers: { 'Authorization': 'Bearer ' + getToken() },
   })
-    .then(function(r) { return r.json(); })
+    .then(function(r) { return parseJSONResponse(r, 'Delete failed'); })
     .then(function(resp) {
       if (resp.error) throw new Error(resp.error);
       return fetch('/api/gallery').then(function(r) { return r.json(); });
