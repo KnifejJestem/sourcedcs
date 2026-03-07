@@ -55,9 +55,7 @@ var galleryData = [];
 var galSlides   = [];
 var galDots     = [];
 var galCurrent  = 0;
-var galTimer    = null;
 var galEditMode = false;
-var GAL_INTERVAL = 5000;
 
 /* ── Fetch helper: parses JSON or throws a readable error ── */
 function parseJSONResponse(r, defaultMsg) {
@@ -69,6 +67,16 @@ function parseJSONResponse(r, defaultMsg) {
   return r.json().catch(function() { throw new Error(defaultMsg); });
 }
 
+/* Fisher-Yates shuffle (returns a new array) */
+function shuffleArray(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
 (function initGallery() {
   var prevBtn = document.getElementById('slidePrev');
   var nextBtn = document.getElementById('slideNext');
@@ -78,7 +86,7 @@ function parseJSONResponse(r, defaultMsg) {
   fetch('/api/gallery')
     .then(function(r) { return r.json(); })
     .then(function(shots) {
-      galBuild(shots);
+      galBuild(shuffleArray(shots));
       if (isAdmin) document.getElementById('galleryAdminBar').style.display = '';
     })
     .catch(function() {
@@ -86,12 +94,8 @@ function parseJSONResponse(r, defaultMsg) {
       if (track) track.innerHTML = '<div class="ops-preview-empty" style="padding:80px 24px;text-align:center">Gallery unavailable.</div>';
     });
 
-  if (prevBtn) prevBtn.addEventListener('click', function() { galShow(galCurrent - 1); galResetTimer(); });
-  if (nextBtn) nextBtn.addEventListener('click', function() { galShow(galCurrent + 1); galResetTimer(); });
-
-  /* Pause on hover */
-  ss.addEventListener('mouseenter', function() { clearInterval(galTimer); });
-  ss.addEventListener('mouseleave', galResetTimer);
+  if (prevBtn) prevBtn.addEventListener('click', function() { galShow(galCurrent - 1); });
+  if (nextBtn) nextBtn.addEventListener('click', function() { galShow(galCurrent + 1); });
 
   /* Touch/swipe */
   var touchStartX = null;
@@ -99,7 +103,7 @@ function parseJSONResponse(r, defaultMsg) {
   ss.addEventListener('touchend', function(e) {
     if (touchStartX === null) return;
     var dx = e.changedTouches[0].clientX - touchStartX;
-    if (Math.abs(dx) > 40) { galShow(dx < 0 ? galCurrent + 1 : galCurrent - 1); galResetTimer(); }
+    if (Math.abs(dx) > 40) { galShow(dx < 0 ? galCurrent + 1 : galCurrent - 1); }
     touchStartX = null;
   }, { passive: true });
 })();
@@ -115,7 +119,6 @@ function galBuild(shots) {
   galSlides   = [];
   galDots     = [];
   galCurrent  = 0;
-  clearInterval(galTimer);
   track.innerHTML    = '';
   dotsWrap.innerHTML = '';
 
@@ -176,13 +179,12 @@ function galBuild(shots) {
     dot.setAttribute('role', 'tab');
     dot.setAttribute('aria-label', 'Slide ' + (idx + 1));
     (function(i) {
-      dot.addEventListener('click', function() { galShow(i); galResetTimer(); });
+      dot.addEventListener('click', function() { galShow(i); });
     })(idx);
     dotsWrap.appendChild(dot);
     galDots.push(dot);
   });
 
-  galResetTimer();
 }
 
 function galShow(idx) {
@@ -192,13 +194,6 @@ function galShow(idx) {
   galCurrent = (idx + galSlides.length) % galSlides.length;
   galSlides[galCurrent].classList.add('active', 'slide-fade-in');
   galDots[galCurrent].classList.add('active');
-}
-
-function galResetTimer() {
-  clearInterval(galTimer);
-  if (galSlides.length > 1) {
-    galTimer = setInterval(function() { galShow(galCurrent + 1); }, GAL_INTERVAL);
-  }
 }
 
 /* ── Admin: toggle edit mode ── */
