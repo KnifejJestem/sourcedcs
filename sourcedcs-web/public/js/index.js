@@ -642,113 +642,32 @@ document.getElementById('drModalOverlay').addEventListener('click', function(e) 
   }
 })();
 
-/* ── Hero featured shot — fetch hero image from API ── */
-var heroData = null;
+/* ── Hero gallery preview — pick two random shots from the gallery ── */
 (function() {
-  var featuredImg     = document.getElementById('heroFeaturedImg');
-  var featuredCaption = document.getElementById('heroFeaturedCaption');
-  if (!featuredImg) return;
-  fetch('/api/hero-image')
+  var img1 = document.getElementById('heroGalleryImg1');
+  var img2 = document.getElementById('heroGalleryImg2');
+  var cap1 = document.getElementById('heroGalleryCaption1');
+  var cap2 = document.getElementById('heroGalleryCaption2');
+  if (!img1 || !img2) return;
+
+  fetch('/api/gallery')
     .then(function(r) { return r.json(); })
-    .then(function(shot) {
-      heroData = shot;
-      featuredImg.src = shot.src || '';
-      featuredImg.alt = shot.alt || '';
-      if (featuredCaption) featuredCaption.textContent = shot.caption || '';
-      if (isAdmin) document.getElementById('heroAdminOverlay').style.display = '';
+    .then(function(shots) {
+      if (!Array.isArray(shots) || shots.length === 0) return;
+      /* Fisher-Yates shuffle then pick first two */
+      var arr = shots.slice();
+      for (var i = arr.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+      }
+      var pick1 = arr[0];
+      var pick2 = arr.length > 1 ? arr[1] : arr[0];
+      img1.src = pick1.src || '';
+      img1.alt = pick1.alt || '';
+      if (cap1) cap1.textContent = pick1.caption || '';
+      img2.src = pick2.src || '';
+      img2.alt = pick2.alt || '';
+      if (cap2) cap2.textContent = pick2.caption || '';
     })
-    .catch(function(err) { console.warn('[hero] Failed to load hero image:', err.message); });
+    .catch(function(err) { console.warn('[hero-gallery] Failed to load gallery:', err.message); });
 })();
-
-/* ── Admin: hero image edit ── */
-function openHeroEditModal(e) {
-  if (e) e.preventDefault();
-  document.getElementById('heroEditForm').reset();
-  document.getElementById('heroEditCaption').value = (heroData && heroData.caption) || '';
-  document.getElementById('heroEditAlt').value     = (heroData && heroData.alt)     || '';
-  document.getElementById('heroEditError').style.display = 'none';
-  var btn = document.getElementById('heroEditSaveBtn');
-  btn.disabled    = false;
-  btn.textContent = '\u2713 SAVE';
-  document.getElementById('heroEditModalOverlay').style.display = '';
-}
-
-function closeHeroEditModal() {
-  document.getElementById('heroEditModalOverlay').style.display = 'none';
-}
-
-function submitHeroEdit(e) {
-  e.preventDefault();
-  var file    = document.getElementById('heroEditFile').files[0];
-  var caption = document.getElementById('heroEditCaption').value.trim();
-  var alt     = document.getElementById('heroEditAlt').value.trim();
-  var errEl   = document.getElementById('heroEditError');
-  var saveBtn = document.getElementById('heroEditSaveBtn');
-  errEl.style.display = 'none';
-  saveBtn.disabled    = true;
-  saveBtn.textContent = 'SAVING\u2026';
-
-  function applyUpdate(src) {
-    var entry = { src: src, alt: alt, caption: caption };
-    return fetch('/api/hero-image', {
-      method:  'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-      body:    JSON.stringify(entry),
-    })
-      .then(function(r) {
-        if (!r.ok) {
-          return r.json()
-            .catch(function() { throw new Error('Save failed (HTTP ' + r.status + ')'); })
-            .then(function(d) { throw new Error(d.error || 'Save failed'); });
-        }
-        return r.json().catch(function() { throw new Error('Save failed'); });
-      })
-      .then(function(updated) {
-        heroData = updated;
-        var featuredImg     = document.getElementById('heroFeaturedImg');
-        var featuredCaption = document.getElementById('heroFeaturedCaption');
-        featuredImg.src = updated.src;
-        featuredImg.alt = updated.alt || '';
-        if (featuredCaption) featuredCaption.textContent = updated.caption || '';
-        closeHeroEditModal();
-      });
-  }
-
-  var p;
-  if (file) {
-    var fd = new FormData();
-    fd.append('image', file);
-    p = fetch('/api/hero-image/upload', {
-      method:  'POST',
-      headers: { 'Authorization': 'Bearer ' + getToken() },
-      body:    fd,
-    })
-      .then(function(r) {
-        if (!r.ok) {
-          return r.json()
-            .catch(function() { throw new Error('Upload failed (HTTP ' + r.status + ')'); })
-            .then(function(d) { throw new Error(d.error || 'Upload failed'); });
-        }
-        return r.json().catch(function() { throw new Error('Upload failed'); });
-      })
-      .then(function(resp) {
-        if (resp.error) throw new Error(resp.error);
-        return applyUpdate(resp.src);
-      });
-  } else {
-    p = applyUpdate((heroData && heroData.src) || '');
-  }
-
-  p.catch(function(err) {
-    errEl.textContent    = 'Save failed: ' + err.message;
-    errEl.style.display  = '';
-  }).finally(function() {
-    saveBtn.disabled    = false;
-    saveBtn.textContent = '\u2713 SAVE';
-  });
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  var heroOverlay = document.getElementById('heroEditModalOverlay');
-  if (heroOverlay) heroOverlay.addEventListener('click', function(e) { if (e.target === this) closeHeroEditModal(); });
-});

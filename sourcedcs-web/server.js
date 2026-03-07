@@ -497,8 +497,87 @@ api.post('/auth/token', authLimiter, async (req, res) => {
   }
 });
 
-/* ── Events (public read, admin write) ── */
-api.get('/events', (_req, res) => {
+/* ─── Discord scheduled events sync ─────────────────────── */
+/* Fetches guild scheduled events from Discord and merges them into the
+   local events list. Completed events are logged with status 'complete'. */
+let eventsSyncAt = 0;
+const EVENTS_SYNC_TTL = 5 * 60 * 1000; /* 5 minutes */
+
+function mapDiscordEventStatus(discordStatus) {
+  /* Discord statuses: 1=SCHEDULED, 2=ACTIVE, 3=COMPLETED, 4=CANCELED */
+  switch (discordStatus) {
+    case 1: return 'planned';
+    case 2: return 'active';
+    case 3: return 'complete';
+    case 4: return 'cancelled';
+    default: return 'planned';
+  }
+}
+
+async function syncDiscordScheduledEvents() {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID) return;
+  try {
+    const discordEvents = await discordRequest(
+      '/guilds/' + DISCORD_GUILD_ID + '/scheduled-events'
+    );
+    if (!Array.isArray(discordEvents)) return;
+
+    let changed = false;
+    for (const de of discordEvents) {
+      const discordId = 'discord-' + de.id;
+      const status    = mapDiscordEventStatus(de.status);
+      const idx       = events.findIndex(e => e.discordEventId === discordId);
+
+      if (idx !== -1) {
+        /* Update existing synced event */
+        const existing = events[idx];
+        if (existing.status !== status || existing.name !== de.name) {
+          events[idx] = {
+            ...existing,
+            name:        de.name || existing.name,
+            status:      status,
+            date:        de.scheduled_start_time || existing.date,
+            description: de.description || existing.description,
+          };
+          changed = true;
+          console.debug('[events-sync] Updated event', discordId, '→', status);
+        }
+      } else {
+        /* Create new event from Discord */
+        const ev = {
+          id:              nextEventId++,
+          discordEventId:  discordId,
+          name:            String(de.name || 'Discord Event').trim(),
+          type:            'campaign',
+          status:          status,
+          date:            de.scheduled_start_time || new Date().toISOString(),
+          map:             (de.entity_metadata && de.entity_metadata.location) || '',
+          airframes:       [],
+          description:     String(de.description || '').trim(),
+          slots:           0,
+          filledSlots:     0,
+        };
+        events.push(ev);
+        changed = true;
+        console.debug('[events-sync] Created event', discordId, ':', ev.name);
+      }
+    }
+
+    if (changed) {
+      saveJSON(EVENTS_FILE, events);
+    }
+    eventsSyncAt = Date.now();
+    console.debug('[events-sync] Sync complete, ' + discordEvents.length + ' Discord event(s) processed');
+  } catch (err) {
+    console.error('[events-sync] Discord fetch failed:', err.message);
+  }
+}
+
+api.get('/events', async (_req, res) => {
+  /* Auto-sync from Discord scheduled events (cached) */
+  if (Date.now() - eventsSyncAt > EVENTS_SYNC_TTL) {
+    await syncDiscordScheduledEvents();
+  }
   res.json(events);
 });
 
@@ -540,6 +619,13 @@ api.delete('/events/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res)
   events.splice(idx, 1);
   saveJSON(EVENTS_FILE, events);
   res.json({ ok: true });
+});
+
+/* Admin: force-refresh Discord scheduled events sync */
+api.post('/events/sync', writeOpsLimiter, requireAuth, requireAdmin, async (_req, res) => {
+  eventsSyncAt = 0;
+  await syncDiscordScheduledEvents();
+  res.json({ ok: true, message: 'Discord events synced.', count: events.length });
 });
 
 /* ── Applications ── */

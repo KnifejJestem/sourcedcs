@@ -51,17 +51,18 @@
     <button class="btn btn-secondary" id="heroMemberBtn" onclick="loginWithCasdoor()"><span class="btn-icon">&rarr;</span> MEMBER LOGIN</button>
   </div>
 
-  <!-- Hero featured shot — single cinematic DCS screenshot to entice visitors -->
-  <div class="hero-featured-wrap">
-    <a href="gallery.html" class="hero-featured-shot" id="heroFeaturedShot" aria-label="View the flight gallery">
-      <img src="gallery/shot-01.svg" alt="" class="hero-featured-img" id="heroFeaturedImg" aria-hidden="true">
-      <div class="hero-featured-caption" id="heroFeaturedCaption"></div>
-      <div class="hero-featured-cta">&#x25A0; FLIGHT GALLERY &mdash; VIEW ALL SHOTS &rarr;</div>
+  <!-- Hero gallery preview — two random shots from the flight gallery -->
+  <div class="hero-gallery-wrap">
+    <a href="gallery.html" class="hero-gallery-card" id="heroGalleryCard1" aria-label="View the flight gallery">
+      <img src="gallery/shot-01.svg" alt="" class="hero-gallery-img" id="heroGalleryImg1" aria-hidden="true">
+      <div class="hero-gallery-caption" id="heroGalleryCaption1"></div>
     </a>
-    <div class="hero-admin-overlay" id="heroAdminOverlay" style="display:none">
-      <button class="admin-edit-btn" onclick="openHeroEditModal(event)">&#x270E; EDIT IMAGE</button>
-    </div>
+    <a href="gallery.html" class="hero-gallery-card" id="heroGalleryCard2" aria-label="View the flight gallery">
+      <img src="gallery/shot-02.svg" alt="" class="hero-gallery-img" id="heroGalleryImg2" aria-hidden="true">
+      <div class="hero-gallery-caption" id="heroGalleryCaption2"></div>
+    </a>
   </div>
+  <a href="gallery.html" class="hero-gallery-cta-link">&#x25A0; FLIGHT GALLERY &mdash; VIEW ALL SHOTS &rarr;</a>
 
 </section>
 
@@ -415,35 +416,6 @@
 </div>
 
 <!-- HERO IMAGE EDIT MODAL -->
-<div class="modal-overlay" id="heroEditModalOverlay" role="dialog" aria-modal="true" aria-labelledby="heroEditModalTitle" style="display:none">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="heroEditModalTitle">&#x270E; EDIT HERO IMAGE</div>
-      <button class="modal-close" onclick="closeHeroEditModal()" aria-label="Close">&times;</button>
-    </div>
-    <div class="modal-body">
-      <form id="heroEditForm" onsubmit="submitHeroEdit(event)" novalidate>
-        <div class="form-group">
-          <label class="form-label" for="heroEditFile">NEW IMAGE FILE <span class="form-hint">(JPEG, PNG, WebP &mdash; max 20 MB; leave blank to keep current)</span></label>
-          <input class="form-input" id="heroEditFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="heroEditCaption">CAPTION (shown on image)</label>
-          <input class="form-input" id="heroEditCaption" type="text" maxlength="200" placeholder="FORMATION FLIGHT &middot; CAUCASUS">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="heroEditAlt">ALT TEXT (screen readers / tooltip)</label>
-          <input class="form-input" id="heroEditAlt" type="text" maxlength="200" placeholder="Formation Flight over Caucasus at dawn">
-        </div>
-        <div class="form-error" id="heroEditError" style="display:none"></div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-ghost" onclick="closeHeroEditModal()">CANCEL</button>
-          <button type="submit" class="btn btn-primary" id="heroEditSaveBtn">&#x2713; SAVE</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 
 <script src="/js/config.js"></script>
 <script src="/js/auth.js"></script>
