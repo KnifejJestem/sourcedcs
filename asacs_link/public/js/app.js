@@ -136,16 +136,18 @@ function connectWs(token) {
   _ws = ws;
 
   ws.addEventListener('open', () => {
+    console.debug('[ASACS] WebSocket connected');
     setStatus('connected');
   });
 
   ws.addEventListener('message', e => {
     let msg;
-    try { msg = JSON.parse(e.data); } catch { return; }
+    try { msg = JSON.parse(e.data); } catch { console.warn('[ASACS] Failed to parse message:', e.data); return; }
     handleMessage(msg);
   });
 
   ws.addEventListener('close', ev => {
+    console.debug(`[ASACS] WebSocket closed: code=${ev.code} reason=${ev.reason}`);
     setStatus('offline');
     if (ev.code !== 4001 && ev.code !== 1000) {
       toast('CONNECTION LOST — RECONNECTING IN 5s');
@@ -156,7 +158,8 @@ function connectWs(token) {
     }
   });
 
-  ws.addEventListener('error', () => {
+  ws.addEventListener('error', (err) => {
+    console.error('[ASACS] WebSocket error:', err);
     setStatus('error');
   });
 }
@@ -170,9 +173,11 @@ async function reauth() {
 
 // ── Message handling ──────────────────────────────────────────
 function handleMessage(msg) {
+  console.debug('[ASACS] Message received:', msg.type, msg);
   switch (msg.type) {
     case 'snapshot':
     case 'update':
+      console.debug(`[ASACS] ${msg.type}: ${(msg.units || []).length} unit(s), ts=${msg.ts}`);
       _units       = msg.units || [];
       _lastUpdateTs = msg.ts || Date.now();
       renderUnits();
@@ -180,12 +185,14 @@ function handleMessage(msg) {
       break;
 
     case 'mission':
+      console.debug('[ASACS] Mission data received:', msg.data);
       _mission = msg.data || null;
       renderMission();
       updateStats();
       break;
 
     case 'sim_stop':
+      console.debug('[ASACS] sim_stop received — clearing state');
       _units   = [];
       _mission = null;
       renderUnits();
@@ -196,7 +203,7 @@ function handleMessage(msg) {
 
     default:
       // Forward unknown types to console only
-      console.debug('[ASACS]', msg);
+      console.debug('[ASACS] Unknown message type:', msg);
   }
 }
 
@@ -270,9 +277,12 @@ function renderUnits() {
   const tbody = $('unitTableBody');
 
   if (!_units || _units.length === 0) {
+    console.debug('[ASACS] renderUnits: no tracks to display');
     tbody.innerHTML = '<tr><td colspan="14" class="empty-state">NO TRACKS</td></tr>';
     return;
   }
+
+  console.debug(`[ASACS] renderUnits: rendering ${_units.length} track(s)`);
 
   // Sort: friendly first, then hostile, then neutral; within group by id
   const order = { friendly: 0, admin: 0, hostile: 1, neutral: 2 };

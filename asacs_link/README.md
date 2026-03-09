@@ -51,6 +51,19 @@ npm install
 npm start
 ```
 
+To enable detailed pipeline diagnostics (highly recommended when troubleshooting missing tracks):
+
+```bash
+ASACS_VERBOSE=true npm start
+```
+
+With verbose mode the server logs every UDP units packet received from DCS,
+the unit count stored in state, and the filtered count sent to each coalition.
+On the DCS side, set `VERBOSE = true` at the top of `mygci_export.lua` (it is
+`true` by default) to log `LoGetWorldObjects()` results and per-frame send
+activity to the DCS log file.  In the browser, open the developer console
+(F12) to see per-message diagnostics from the client-side JavaScript.
+
 Edit `config.js` to change passwords and ports before deployment.
 
 ### 2. Install DCS files
