@@ -1,22 +1,25 @@
 /**
  * GCI Server Configuration
  * Edit this file to change passwords, ports, and behavior.
+ * In production, set passwords via environment variables:
+ *   ASACS_PASSWORD_BLUE, ASACS_PASSWORD_RED,
+ *   ASACS_PASSWORD_NEUTRAL, ASACS_PASSWORD_ADMIN
  */
 
 const config = {
   // WebSocket / HTTP port (clients connect here)
-  wsPort: 3000,
+  wsPort: parseInt(process.env.PORT || '3000', 10),
 
   // UDP port (DCS Lua hook sends data here)
-  udpHost: '127.0.0.1',
+  udpHost: process.env.ASACS_UDP_HOST || '0.0.0.0',
   udpPort: 7788,
 
-  // Coalition passwords — change these before deployment
+  // Coalition passwords — override via env vars before deployment
   passwords: {
-    blue:    'blue_pass',
-    red:     'red_pass',
-    neutral: 'neutral_pass',
-    admin:   'admin_pass',  // sees all units, all coalitions
+    blue:    process.env.ASACS_PASSWORD_BLUE    || 'blue_pass',
+    red:     process.env.ASACS_PASSWORD_RED     || 'red_pass',
+    neutral: process.env.ASACS_PASSWORD_NEUTRAL || 'neutral_pass',
+    admin:   process.env.ASACS_PASSWORD_ADMIN   || 'admin_pass',
   },
 
   // Realism rules
