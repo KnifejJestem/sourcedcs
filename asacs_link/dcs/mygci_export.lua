@@ -27,8 +27,20 @@ udp:settimeout(0)
 
 local last_update = 0
 
+-- Verbose logging: set VERBOSE = true to enable per-frame diagnostic output.
+-- When tracks are missing, flip this to true and check the DCS log file
+-- (%DCS_SAVED_GAMES%/Logs/dcs.log) for [MyGCI][VERBOSE] lines.
+-- Leave false in production to avoid log spam.
+local VERBOSE = false
+
 local function log(msg)
     io.write("[MyGCI] " .. tostring(msg) .. "\n")
+end
+
+local function logv(msg)
+    if VERBOSE then
+        io.write("[MyGCI][VERBOSE] " .. tostring(msg) .. "\n")
+    end
 end
 
 -- ─── Tiny JSON encoder ─────────────────────────────────────────────────────
@@ -98,9 +110,17 @@ local SQUAWK_MODULO = 4096
 
 local function extract_units()
     local objects = LoGetWorldObjects()
-    if not objects then return {} end
+    if not objects then
+        logv("LoGetWorldObjects() returned nil — no world objects available")
+        return {}
+    end
+
+    local obj_count = 0
+    for _ in pairs(objects) do obj_count = obj_count + 1 end
+    logv("LoGetWorldObjects() returned " .. obj_count .. " object(s)")
 
     local units = {}
+    local skipped_no_lla = 0
     for id, obj in pairs(objects) do
         local lla = obj.LatLongAlt
         if lla then
@@ -141,8 +161,12 @@ local function extract_units()
                 -- Ground speed is not exposed by LoGetWorldObjects.
                 spd = 0,
             }
+        else
+            skipped_no_lla = skipped_no_lla + 1
         end
     end
+    logv("Extracted " .. #units .. " unit(s) with position data" ..
+         (skipped_no_lla > 0 and (", skipped " .. skipped_no_lla .. " without LatLongAlt") or ""))
     return units
 end
 
@@ -165,7 +189,13 @@ function LuaExportAfterNextFrame()
         last_update = now
         local ok, units = pcall(extract_units)
         if ok and units then
-            send_json({ type = "units", units = units })
+            logv("Sending " .. #units .. " unit(s) via UDP to " .. SERVER_HOST .. ":" .. SERVER_PORT)
+            local sent_ok, send_err = pcall(send_json, { type = "units", units = units })
+            if not sent_ok then
+                log("ERROR sending units packet: " .. tostring(send_err))
+            end
+        else
+            log("ERROR in extract_units: " .. tostring(units))
         end
     end
 end

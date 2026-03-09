@@ -19,6 +19,14 @@ import { StateStore } from './state.js';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PUBLIC_DIR = join(__dirname, 'public');
 
+// Verbose logging: set ASACS_VERBOSE=true in the environment to enable
+// detailed per-packet diagnostics that trace the unit data pipeline.
+const VERBOSE = process.env.ASACS_VERBOSE === 'true' || process.env.ASACS_VERBOSE === '1';
+
+function logv(...args) {
+  if (VERBOSE) console.log('[VERBOSE]', ...args);
+}
+
 // MIME types for static file serving
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -161,11 +169,16 @@ wss.on('connection', (ws, req) => {
   // Send current mission data immediately on connect
   const mission = state.getMission();
   if (mission) {
+    logv(`[WS] Sending mission data to ${clientId}: name="${mission.name}"`);
     send(ws, { type: 'mission', data: mission });
+  } else {
+    logv(`[WS] No mission data available yet for ${clientId}`);
   }
 
   // Send a snapshot of current units immediately
+  const rawUnitCount = state.unitCount();
   const snapshot = filterUnitsForCoalition(state.getAllUnits(), coalition);
+  logv(`[WS] Snapshot for ${clientId} (${coalition}): ${rawUnitCount} raw units → ${snapshot.length} after filter`);
   send(ws, { type: 'snapshot', units: snapshot, ts: Date.now() });
 
   ws.on('close', () => {
@@ -187,11 +200,14 @@ function send(ws, data) {
 
 // ─── Broadcast Loop (2 Hz) ────────────────────────────────────────────────────
 
+let _broadcastTick = 0;
+
 setInterval(() => {
   if (clients.size === 0) return;
 
   const allUnits = state.getAllUnits();
   const ts = Date.now();
+  _broadcastTick++;
 
   // Cache filtered views per coalition to avoid recomputing for each client
   const coalitionCache = new Map();
@@ -205,6 +221,14 @@ setInterval(() => {
       units: coalitionCache.get(coalition),
       ts,
     });
+  }
+
+  // Log a summary every 10 ticks (~5 s) to avoid log spam
+  if (VERBOSE && _broadcastTick % 10 === 0) {
+    const summary = [...coalitionCache.entries()]
+      .map(([c, u]) => `${c}:${u.length}`)
+      .join(', ');
+    logv(`[Broadcast] tick=${_broadcastTick} raw=${allUnits.size} filtered=[${summary}] clients=${clients.size}`);
   }
 }, 500); // 2 Hz
 
@@ -231,18 +255,27 @@ udp.bind(config.udpPort, config.udpHost, () => {
 
 function handleDcsPacket(packet) {
   switch (packet.type) {
-    case 'units':
+    case 'units': {
+      const incomingCount = Array.isArray(packet.units) ? packet.units.length : 0;
+      logv(`[UDP] Received units packet: ${incomingCount} unit(s) from DCS`);
+      if (incomingCount === 0) {
+        logv('[UDP] WARNING: units packet contained 0 units — DCS may have no world objects');
+      }
       state.updateUnits(packet.units);
+      logv(`[UDP] State updated: ${state.unitCount()} unit(s) now in store`);
       break;
+    }
     case 'mission':
       state.updateMission(packet.data);
       console.log(`[DCS] Mission loaded: ${packet.data?.name}`);
+      logv(`[DCS] Mission data: theatre="${packet.data?.theatre}" startTime=${packet.data?.startTime}`);
       // Broadcast mission update to all clients
       for (const { ws } of clients.values()) {
         send(ws, { type: 'mission', data: packet.data });
       }
       break;
     case 'sim_stop':
+      console.log('[DCS] Simulation stopped — clearing state');
       state.clear();
       for (const { ws } of clients.values()) {
         send(ws, { type: 'sim_stop' });
@@ -251,12 +284,14 @@ function handleDcsPacket(packet) {
     case 'player_connect':
     case 'player_disconnect':
     case 'slot_change':
+      logv(`[DCS] Player event: ${packet.type} id=${packet.id}`);
       // Broadcast player events to admin clients only (for now)
       for (const { ws, coalition } of clients.values()) {
         if (coalition === 'admin') send(ws, packet);
       }
       break;
     default:
+      logv(`[DCS] Unknown packet type: "${packet.type}"`);
       // Forward unknown packet types as-is to admin clients
       for (const { ws, coalition } of clients.values()) {
         if (coalition === 'admin') send(ws, packet);
@@ -271,4 +306,9 @@ httpServer.listen(config.wsPort, () => {
   console.log(`[INFO] Blue password:  ${config.passwords.blue}`);
   console.log(`[INFO] Red password:   ${config.passwords.red}`);
   console.log(`[INFO] Admin password: ${config.passwords.admin}`);
+  if (VERBOSE) {
+    console.log('[INFO] Verbose logging ENABLED (ASACS_VERBOSE=true)');
+  } else {
+    console.log('[INFO] Set ASACS_VERBOSE=true for detailed pipeline diagnostics');
+  }
 });
