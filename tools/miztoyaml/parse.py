@@ -98,6 +98,71 @@ def parse_groups(coalition_block: str, theatre: str) -> list[Group]:
     return groups
 
 
+# ── Polygon handler registry ─────────────────────────────────────────────────
+# Maps polygon_mode string → handler(ob, name, origin_x, origin_y) → Drawing|None
+# To add a new polygon type, register a handler here.
+_POLYGON_HANDLERS: dict[str, object] = {}
+
+
+def polygon_handler(mode: str):
+    """Decorator: register a polygon-mode handler for parse_drawings()."""
+    def decorator(fn):
+        _POLYGON_HANDLERS[mode] = fn
+        return fn
+    return decorator
+
+
+@polygon_handler('circle')
+def _parse_circle(ob, name, origin_x, origin_y):
+    return Drawing(
+        name=name, polygon_mode='circle',
+        origin_x=origin_x, origin_y=origin_y,
+        radius_m=lua_num(ob, 'radius'),
+    )
+
+
+@polygon_handler('rect')
+def _parse_rect(ob, name, origin_x, origin_y):
+    return Drawing(
+        name=name, polygon_mode='rect',
+        origin_x=origin_x, origin_y=origin_y,
+        width_m=lua_num(ob, 'width'),
+        height_m=lua_num(ob, 'height'),
+        angle_deg=lua_num(ob, 'angle') or 0.0,
+    )
+
+
+@polygon_handler('free')
+def _parse_free(ob, name, origin_x, origin_y):
+    pts_block = lua_get_block(ob, 'points')
+    rel_points: list[tuple[float, float]] = []
+    if pts_block:
+        raw: list[tuple[int, float, float]] = []
+        for idx, pb in lua_iter_array(pts_block):
+            xy = lua_xy(pb)
+            if xy:
+                raw.append((idx, xy[0], xy[1]))
+        raw.sort()
+        seen: set[tuple[float, float]] = set()
+        for _idx, rx, ry in raw:
+            pt = (round(rx, 1), round(ry, 1))
+            if pt not in seen:
+                seen.add(pt)
+                rel_points.append((rx, ry))
+        if len(rel_points) >= 2:
+            first = (round(rel_points[0][0], 1), round(rel_points[0][1], 1))
+            last  = (round(rel_points[-1][0], 1), round(rel_points[-1][1], 1))
+            if first == last:
+                rel_points.pop()
+    if len(rel_points) >= 3:
+        return Drawing(
+            name=name, polygon_mode='free',
+            origin_x=origin_x, origin_y=origin_y,
+            rel_points=rel_points,
+        )
+    return None
+
+
 def parse_drawings(mission_text: str) -> list[Drawing]:
     drawings_block = lua_get_block(mission_text, 'drawings')
     if not drawings_block:
@@ -106,7 +171,6 @@ def parse_drawings(mission_text: str) -> list[Drawing]:
     if not layers_block:
         return []
 
-    # Find the layer named "Common"
     common_block = None
     for _li, layer in lua_iter_array(layers_block):
         if lua_str(layer, 'name') == 'Common':
@@ -131,60 +195,15 @@ def parse_drawings(mission_text: str) -> list[Drawing]:
         origin_x = lua_num(ob, 'mapX') or 0.0
         origin_y = lua_num(ob, 'mapY') or 0.0
 
-        if pmode == 'circle':
-            result.append(Drawing(
-                name=name, polygon_mode='circle',
-                origin_x=origin_x, origin_y=origin_y,
-                radius_m=lua_num(ob, 'radius'),
-            ))
-
-        elif pmode == 'rect':
-            result.append(Drawing(
-                name=name, polygon_mode='rect',
-                origin_x=origin_x, origin_y=origin_y,
-                width_m=lua_num(ob, 'width'),
-                height_m=lua_num(ob, 'height'),
-                angle_deg=lua_num(ob, 'angle') or 0.0,
-            ))
-
-        elif pmode == 'free':
-            pts_block = lua_get_block(ob, 'points')
-            rel_points: list[tuple[float, float]] = []
-            if pts_block:
-                # Collect all points sorted by Lua index.
-                # In DCS, (0,0) means the mapX/mapY origin IS a real vertex —
-                # it is NOT padding.  Multiple (0,0) entries are duplicates
-                # of the same origin vertex; keep only one.
-                # The last point is a polygon-close back to the first; drop it.
-                raw: list[tuple[int, float, float]] = []
-                for idx, pb in lua_iter_array(pts_block):
-                    xy = lua_xy(pb)
-                    if xy:
-                        raw.append((idx, xy[0], xy[1]))
-                raw.sort()
-
-                seen: set[tuple[float, float]] = set()
-                for _idx, rx, ry in raw:
-                    pt = (round(rx, 1), round(ry, 1))
-                    if pt not in seen:
-                        seen.add(pt)
-                        rel_points.append((rx, ry))
-
-                # Drop trailing close-vertex if it duplicates the first
-                if len(rel_points) >= 2:
-                    first = (round(rel_points[0][0], 1), round(rel_points[0][1], 1))
-                    last  = (round(rel_points[-1][0], 1), round(rel_points[-1][1], 1))
-                    if first == last:
-                        rel_points.pop()
-
-            if len(rel_points) >= 3:
-                result.append(Drawing(
-                    name=name, polygon_mode='free',
-                    origin_x=origin_x, origin_y=origin_y,
-                    rel_points=rel_points,
-                ))
+        handler = _POLYGON_HANDLERS.get(pmode)
+        if handler:
+            drawing = handler(ob, name, origin_x, origin_y)
+            if drawing:
+                result.append(drawing)
 
     return result
+
+
 
 
 def parse_bullseye(coalition_block: str, theatre: str) -> str | None:

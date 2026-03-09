@@ -147,9 +147,11 @@ registry:
   - callsign: TEXACO
     altitude_ft: 19000
     speed_kts: 370
+    orbit_direction: ccw
   - callsign: SHELL
     altitude_ft: 24000
     speed_kts: 400
+    orbit_direction: ccw
     ar_track: AR394      # optional — not extracted from .miz
     altitude: FL240      # optional human-readable altitude string
 ```
@@ -159,6 +161,11 @@ registry:
 | `callsign` | string | Tanker group / callsign — matches `refuel.tanker_id` |
 | `altitude_ft` | integer | Refueling altitude in feet (from DCS orbit params) |
 | `speed_kts` | integer | Refueling speed in knots (from DCS orbit params) |
+| `orbit_anchor_coords` | coord string | Orbit anchor point DMS coordinates |
+| `orbit_heading_deg` | integer | Hot-leg heading in degrees true |
+| `orbit_leg_nm` | number | Hot-leg length in NM |
+| `orbit_width_nm` | number | Track width (turn diameter) in NM |
+| `orbit_direction` | string | Orbit direction: `cw` (clockwise) or `ccw` (counterclockwise).  Default is `ccw` |
 | `ar_track` | string | AR track identifier (optional, manual) |
 | `altitude` | string | Human-readable altitude string e.g. `FL240` (optional, manual) |
 
@@ -422,6 +429,93 @@ carriers:
 |-------|------|-------------|
 | `id` | string | Carrier id (must match a key in `registry.carriers`) |
 
+### `shared_steerpoints:` (list)
+
+Merged steerpoints shared across multiple flights.  When two or more
+flights have a **special waypoint** (IP, EP, or MARSHAL) of the **same type**
+within **750 ft in 3D space** and with **compatible names** (both unnamed, or
+both carrying the same name), they are collapsed into a single shared steerpoint.
+
+Each shared steerpoint is defined once here with a unique ID, and individual
+flights reference it via `shared_steerpoint_id` in their `steer_points` list
+instead of duplicating coordinate data.
+
+```yaml
+shared_steerpoints:
+  - id: SSP-1
+    type: ip
+    name: WEST
+    coords: N35°24'25" E038°07'30"
+    altitude_ft: 15000
+    flights:
+      - VIPER-1
+      - VIPER-2
+  - id: SSP-2
+    type: ep
+    coords: N35°30'00" E038°15'00"
+    flights:
+      - VIPER-1
+      - VIPER-2
+      - JEDI-1
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique shared steerpoint identifier (e.g. `SSP-1`) |
+| `type` | string | Special waypoint type: `ip` (Ingress Point), `ep` (Egress Point), `marshal` (Marshal Point) |
+| `name` | string | Optional sub-name (e.g. `WEST` from a waypoint named `IP WEST`) |
+| `coords` | coord string | Centroid position (average lat/lon of all merged points) |
+| `altitude_ft` | number | Centroid altitude in feet (average of merged points) |
+| `flights` | list of strings | Callsigns of all flights that pass through this shared point |
+
+### `support_flights:` (list)
+
+Dedicated section for AWACS, tanker, and other support flights — **completely
+separate** from the player/strike `missions` list.  Support flights are plotted
+on the map and listed in the ATO output independently.
+
+Each entry includes full orbit parameters with `direction` defaulting to `ccw`
+(counterclockwise) unless explicitly set to `cw`.
+
+```yaml
+support_flights:
+  - callsign: TEXACO
+    type: TANKER
+    aircraft_type: KC135
+    freq_mhz: 265.100
+    count: 1
+    orbit:
+      anchor_point: N35°24'25" E038°07'30"
+      altitude_ft: 25000
+      speed_kts: 370
+      leg_nm: 15.0
+      heading_deg: 90
+      width_nm: 10.0
+      direction: ccw
+    route:
+      - coords: N34°00'00" E036°00'00"
+      - coords: N35°24'25" E038°07'30"
+        name: ANCHOR
+        altitude_ft: 25000
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `callsign` | string | Flight group callsign |
+| `type` | string | Support type: `TANKER`, `AWACS` |
+| `aircraft_type` | string | Platform type (e.g. `KC135`, `E3A`) |
+| `freq_mhz` | number | Primary frequency in MHz |
+| `count` | number | Number of aircraft |
+| `orbit` | object | Orbit parameters (present when the flight has a DCS Orbit task) |
+| `orbit.anchor_point` | coord string | Orbit anchor / reference point |
+| `orbit.altitude_ft` | number | Orbit altitude in feet |
+| `orbit.speed_kts` | number | Orbit airspeed in knots |
+| `orbit.leg_nm` | number | Hot-leg length in NM |
+| `orbit.heading_deg` | number | Hot-leg heading in degrees true |
+| `orbit.width_nm` | number | Track width (turn diameter) in NM |
+| `orbit.direction` | string | Orbit direction: `cw` (clockwise) or `ccw` (counterclockwise).  Default is `ccw` |
+| `route` | list | Full route waypoints for map rendering (each entry has `coords`, optional `name`, optional `altitude_ft`) |
+
 ### `missions:` (list)
 
 One entry per tasked mission.  Missions drive the ATO card list, timeline bars,
@@ -543,21 +637,38 @@ aim_points:
 #### `steer_points:` (list)
 
 En-route waypoints plotted as hollow circles connected by dashed lines.
-Each steer point can be specified with inline coordinates or by referencing a named marker
-(airfield ICAO, carrier callsign, or marshal point name) via `name_ref`.
+Each steer point can be specified with inline coordinates, by referencing a named marker
+(airfield ICAO, carrier callsign, or marshal point name) via `name_ref`, or by
+referencing a shared steerpoint via `shared_steerpoint_id`.
+
+**Unnamed waypoints** (no `name` field) are route-shaping points only — they define the
+flight path on the map but do **not** render a label.  Only named waypoints get a visible
+label on the map.
 
 When `name_ref` is used the referenced location already has its own marker on the map
 (airfield, carrier, or marshal point symbol), so **no label is drawn** at that position.
 A small unlabelled hollow circle is still rendered at the waypoint so the route's exact
-passage through that location is clearly visible.  This prevents a duplicate named marker
-but keeps a visual indicator on the flight path.
+passage through that location is clearly visible.
+
+**Special waypoint detection by name:**
+Waypoint names are parsed to detect special types.  Supported types: **IP** (Ingress
+Point), **EP** (Egress Point), **MARSHAL** (Marshal Point).  Examples:
+- `"IP"` → creates an unnamed IP steerpoint
+- `"IP WEST"` → creates an IP steerpoint named `WEST`
+- `"EP NORTH"` → Egress Point named `NORTH`
+- `"MARSHAL ALPHA"` → Marshal Point named `ALPHA`
+
+**Shared steerpoint references:**
+When `shared_steerpoint_id` is set, the waypoint references a merged steerpoint defined
+in `ato.shared_steerpoints`.  The viewer resolves the position from the shared steerpoint
+and renders a small reference circle (similar to `name_ref` behaviour).
 
 ```yaml
 steer_points:
   - coords: N24°30'00" E056°00'00"
     name: SP1
-  - coords: N25°15'00" E056°05'00"
-    name: SP2
+  - coords: N25°15'00" E056°05'00"    # unnamed — route-shaping only, no map label
+  - shared_steerpoint_id: SSP-1        # references ato.shared_steerpoints
   - name_ref: ALPHA        # reference a marshal point by name
     name: MARSHAL ALPHA    # optional display label (defaults to the referenced name)
   - coords: N26°30'00" E056°20'00"
@@ -572,13 +683,15 @@ steer_points:
       width_nm:    20.0    # track width (turn diameter) in NM
       leg_nm:      49.9    # hot-leg length in NM
       heading_deg: 5       # hot-leg heading in degrees true
+      direction:   ccw     # orbit direction: 'cw' or 'ccw' (default: ccw)
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `coords` | coord string | Waypoint position (used when `name_ref` is not set) |
+| `coords` | coord string | Waypoint position (used when `name_ref` and `shared_steerpoint_id` are not set) |
 | `name_ref` | string | Name of an airfield (ICAO), carrier callsign or ID, or marshal point to use as the waypoint position.  A small unlabelled circle is drawn at the referenced location so the flight path's passage through it is visible; the named location's own marker provides the label |
-| `name` | string | Waypoint label shown on map |
+| `name` | string | Waypoint label shown on map.  If omitted, the waypoint is a route-shaping point with no visible label |
+| `shared_steerpoint_id` | string | References a shared steerpoint by ID from `ato.shared_steerpoints`.  When set, position is resolved from the shared steerpoint and coordinates are not duplicated |
 | `aim_point_id` | string | Optional — informational link to a registry aim point id.  Set by `miztoyaml.py` when a flight waypoint lies on an aim point; ignored by the viewer |
 | `orbit` | object | Optional — present when the waypoint has a DCS Orbit task (CAP station, tanker track).  The map renders a racetrack pattern using these parameters. |
 | `orbit.alt_ft` | number | Orbit altitude in feet |
@@ -586,6 +699,7 @@ steer_points:
 | `orbit.width_nm` | number | Track width (total, i.e. turn diameter) in NM; the map uses half this value as the turn radius |
 | `orbit.leg_nm` | number | Hot-leg length in NM |
 | `orbit.heading_deg` | number | Hot-leg heading in degrees true |
+| `orbit.direction` | string | Orbit direction: `cw` (clockwise) or `ccw` (counterclockwise).  Default is `ccw` |
 
 #### `control:`
 

@@ -31,6 +31,11 @@ const MARSHAL_HALF          = 8;   // half-diagonal of the diamond
 const MARSHAL_RING_R        = 11;  // orbit ring radius
 const MARSHAL_LABEL_OFFSET  = 14;
 
+// ── Shared steerpoint marker ───────────────────────────────────
+const SSP_RING_R           = 8;
+const SSP_DOT_R            = 3;
+const SSP_LABEL_OFFSET     = 12;
+
 const THREAT_CROSS_HALF    = 7;   // half-size of the × arms
 const THREAT_CROSS_STROKE  = 2.5;
 const THREAT_DOT_R         = 5;   // threat dot ring radius
@@ -56,7 +61,7 @@ function drawSharedMarkers(ctx, points, showPopup) {
     return kindGroups[kind];
   }
 
-  points.filter(p => ['bullseye', 'airfield', 'carrier', 'marshal'].includes(p.kind)).forEach(p => {
+  points.filter(p => ['bullseye', 'airfield', 'carrier', 'marshal', 'shared-steerpoint'].includes(p.kind)).forEach(p => {
     const mx = ctx.bx(p.lon).toFixed(1);
     const my = ctx.by(p.lat).toFixed(1);
     const g  = makeSvgEl('g', { transform: `translate(${mx},${my})` });
@@ -103,6 +108,15 @@ function drawSharedMarkers(ctx, points, showPopup) {
         'stroke-width': MARKER_RING_STROKE, 'stroke-dasharray': '3 2', opacity: 0.7,
       }));
       mapLabel(g, p.label, p.altitude || '', col, MARSHAL_LABEL_OFFSET);
+
+    } else if (p.kind === 'shared-steerpoint') {
+      const col = '#e0a030';
+      g.appendChild(makeSvgEl('circle', {
+        r: SSP_RING_R, fill: 'none', stroke: col,
+        'stroke-width': 1.5, 'stroke-dasharray': '4 2',
+      }));
+      g.appendChild(makeSvgEl('circle', { r: SSP_DOT_R, fill: col }));
+      mapLabel(g, p.label, p.sub || '', col, SSP_LABEL_OFFSET);
     }
 
     g.style.cursor = 'pointer';
