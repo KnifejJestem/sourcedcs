@@ -63,6 +63,7 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
         orbit_heading_deg: int | None = None
         orbit_leg_nm: float | None = None
         orbit_width_nm: float | None = None
+        orbit_direction: str = "ccw"  # Default counterclockwise
         for wp in f.waypoints:
             if wp.is_orbit:
                 alt_ft             = wp.orbit_alt_ft
@@ -71,6 +72,7 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
                 orbit_width_nm     = wp.orbit_width_nm
                 orbit_heading_deg  = wp.orbit_heading_deg
                 orbit_anchor_coords = dms(wp.lat, wp.lon)
+                orbit_direction    = "cw" if wp.orbit_cw else "ccw"
                 break
         entry: dict = {"callsign": f.name}
         if alt_ft is not None:
@@ -86,6 +88,7 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
             entry["orbit_leg_nm"] = orbit_leg_nm
         if orbit_width_nm is not None:
             entry["orbit_width_nm"] = orbit_width_nm
+        entry["orbit_direction"] = orbit_direction
         result.append(entry)
     return result or None
 
@@ -107,6 +110,63 @@ def build_control_agencies(flights: list[Flight]) -> dict | None:
             "platform":          platform,
             "primary_freq_mhz":  str(round(f.freq_mhz, 3)),
         }
+    return result or None
+
+
+def build_support_flights(flights: list[Flight]) -> list[dict] | None:
+    """
+    Build the ato.support_flights section for AWACS, tanker, and other
+    support flights — completely separate from player/strike missions.
+    """
+    result = []
+    for f in flights:
+        if not f.is_tanker and not f.is_awacs:
+            continue
+
+        ac_base  = f.aircraft_type.split('_')[0]
+        ac_type  = re.sub(r'[^A-Z0-9]', '', ac_base.upper())
+        flight_type = "TANKER" if f.is_tanker else "AWACS"
+
+        entry: dict = {
+            "callsign":      f.name,
+            "type":          flight_type,
+            "aircraft_type": ac_type,
+            "freq_mhz":     round(f.freq_mhz, 3),
+            "count":         len(f.units),
+        }
+
+        for wp in f.waypoints:
+            if wp.is_orbit:
+                orbit: dict = {
+                    "anchor_point": dms(wp.lat, wp.lon),
+                }
+                if wp.orbit_alt_ft is not None:
+                    orbit["altitude_ft"] = wp.orbit_alt_ft
+                if wp.orbit_speed_kts is not None:
+                    orbit["speed_kts"] = wp.orbit_speed_kts
+                if wp.orbit_leg_nm is not None:
+                    orbit["leg_nm"] = wp.orbit_leg_nm
+                if wp.orbit_heading_deg is not None:
+                    orbit["heading_deg"] = wp.orbit_heading_deg
+                if wp.orbit_width_nm is not None:
+                    orbit["width_nm"] = wp.orbit_width_nm
+                orbit["direction"] = "cw" if wp.orbit_cw else "ccw"
+                entry["orbit"] = orbit
+                break
+
+        route_wps = []
+        for wp in f.waypoints:
+            wp_entry: dict = {"coords": dms(wp.lat, wp.lon)}
+            if wp.name:
+                wp_entry["name"] = wp.name
+            if wp.alt_ft is not None:
+                wp_entry["altitude_ft"] = wp.alt_ft
+            route_wps.append(wp_entry)
+        if route_wps:
+            entry["route"] = route_wps
+
+        result.append(entry)
+
     return result or None
 
 
@@ -233,10 +293,15 @@ def build_doc(*, mission_name, mission_date, theatre,
 
     # Build missions — also mutates ref_pts to add marshal points found in routes.
     # AWACS and tanker flights are excluded from missions.
-    missions = build_missions(
+    missions_result = build_missions(
         flights, msn_start,
-        targets, carriers, airfields, ref_pts) or None
+        targets, carriers, airfields, ref_pts)
+    missions = missions_result[0] or None
+    shared_steerpoints = missions_result[1] or None
     msn_numbers = [m["mission_number"] for m in missions] if missions else []
+
+    # Build support flights (AWACS, tankers) — separate from player missions
+    support_flights = build_support_flights(flights)
 
     ato_airfields = [{"icao": icao, "role": "deploy"} for icao in airfields] or None
 
@@ -279,8 +344,10 @@ def build_doc(*, mission_name, mission_date, theatre,
                 "bullseye":  bullseye_key,
             },
             "airfields": ato_airfields,
-            "carriers":  build_carriers_ato(carriers) or None,
-            "missions":  missions,
+            "carriers":           build_carriers_ato(carriers) or None,
+            "shared_steerpoints": shared_steerpoints,
+            "support_flights":    support_flights,
+            "missions":           missions,
         },
 
         "aco": {
@@ -318,6 +385,8 @@ def build_doc(*, mission_name, mission_date, theatre,
             "missions":    len([f for f in flights if not f.is_tanker and not f.is_awacs]),
             "tankers":     len([f for f in flights if f.is_tanker]),
             "awacs":       len([f for f in flights if f.is_awacs]),
-            "airfields":   len(airfields),
+            "support_flights":    len([f for f in flights if f.is_tanker or f.is_awacs]),
+            "shared_steerpoints": len(shared_steerpoints) if shared_steerpoints else 0,
+            "airfields":          len(airfields),
         },
     }

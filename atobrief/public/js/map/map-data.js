@@ -241,28 +241,39 @@ function collectData(ato, aco) {
     );
 
     (m.steer_points || []).forEach((sp, i) => {
+      // Handle shared steerpoint references
+      const sspId = typeof sp === 'object' ? sp.shared_steerpoint_id : null;
+      if (sspId && sharedSteerpointMap[sspId]) {
+        const ssp = sharedSteerpointMap[sspId];
+        const p = { lat: ssp.lat, lon: ssp.lon };
+        route.pts.push({ ...p, kind: 'route-node' });
+        const sspTypeLabel = (ssp.type || '').toUpperCase();
+        points.push({
+          ...p, kind: 'steer-ref',
+          label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
+          sub: ssp.name ? `${sspTypeLabel} ${ssp.name}` : sspTypeLabel,
+          color, msnType: m.mission_type, mission: m,
+          altitude_ft: ssp.altitude_ft ?? null,
+        });
+        return;
+      }
+
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
       const raw     = typeof sp === 'string' ? sp : sp.coords;
-      const label   = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i + 1}`;
+      const hasName = typeof sp === 'object' && sp.name;
+      const label   = hasName ? sp.name : null;
       const apId    = typeof sp === 'object' ? sp.aim_point_id : null;
       const altFt   = (typeof sp === 'object' && sp.altitude_ft != null) ? sp.altitude_ft : null;
       const p       = (nameRef ? resolve(nameRef) : null) || parseCoord(raw);
       if (p) {
-        // Aim-point steer points use a thicker target-approach line on the route
         route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
-        // Suppress the steer-point label whenever a higher-priority marker already
-        // labels this location: name_ref → named-location marker, aim_point_id or
-        // coordinate-coincident aim point → aim-point diamond+label, or a
-        // coordinate-coincident named location (airfield/carrier/marshal).
-        // In all these cases push only a small unlabelled 'steer-ref' circle so the
-        // route passage remains visible without overlaying the other label.
         const colocatedWithAimPt   = aimPtCoordKeys.has(`${p.lat},${p.lon}`);
         const colocatedWithNamedLoc = namedLocCoordKeys.has(`${p.lat},${p.lon}`);
-        if (nameRef || apId || colocatedWithAimPt || colocatedWithNamedLoc) {
+        if (nameRef || apId || colocatedWithAimPt || colocatedWithNamedLoc || !hasName) {
           points.push({
             ...p, kind: 'steer-ref',
             label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-            sub: nameRef || label, color, msnType: m.mission_type, mission: m,
+            sub: nameRef || label || '', color, msnType: m.mission_type, mission: m,
             altitude_ft: altFt,
           });
         } else {
@@ -293,7 +304,7 @@ function collectData(ato, aco) {
               headingDeg: orb.heading_deg || 0,
               legLengthNm: orb.leg_nm || 10,
               widthNm: orb.width_nm || 5,
-              direction: orb.cw === false ? 'ccw' : 'cw',
+              direction: (orb.direction || 'ccw').toLowerCase(),
               speedKts: orb.speed_kts,
               missions: [msnNum].filter(Boolean),
             });
@@ -346,9 +357,66 @@ function collectData(ato, aco) {
       headingDeg: t.orbit_heading_deg || 0,
       legLengthNm: t.orbit_leg_nm || 10,
       widthNm: t.orbit_width_nm || 5,
-      direction: (typeof t.orbit_direction === 'string' ? t.orbit_direction : 'cw').toLowerCase(),
+      direction: (t.orbit_direction || 'ccw').toLowerCase(),
       speedKts: t.speed_kts,
     });
+  });
+
+  // ── Phase 4b: Shared steerpoints ──────────────────────────
+  const sharedSteerpointMap = {};
+  (ato.shared_steerpoints || []).forEach(ssp => {
+    if (!ssp.id || !ssp.coords) return;
+    const p = parseCoord(ssp.coords);
+    if (!p) return;
+    sharedSteerpointMap[ssp.id] = { ...ssp, ...p };
+    const typeLabel = (ssp.type || '').toUpperCase();
+    const nameLabel = ssp.name ? `${typeLabel} ${ssp.name}` : typeLabel;
+    const flightsLabel = (ssp.flights || []).join(', ');
+    points.push({
+      ...p, kind: 'shared-steerpoint',
+      label: nameLabel,
+      sub: flightsLabel,
+      specialType: ssp.type,
+      flights: ssp.flights || [],
+      altitude_ft: ssp.altitude_ft ?? null,
+      sspId: ssp.id,
+    });
+  });
+
+  // ── Phase 4c: Support flights ─────────────────────────────
+  (ato.support_flights || []).forEach(sf => {
+    const callsign = sf.callsign || '?';
+    const sfKey = `SUPPORT-${callsign}`;
+    const color = typeColor(sf.type);
+    const route = { msnKey: sfKey, callsign, msnNum: '', color, pts: [] };
+
+    (sf.route || []).forEach(wp => {
+      const p = parseCoord(wp.coords);
+      if (p) route.pts.push({ ...p, kind: 'route-node' });
+    });
+    if (route.pts.length >= 2) routes.push(route);
+
+    if (sf.orbit && sf.orbit.anchor_point) {
+      const anchorPt = parseCoord(sf.orbit.anchor_point);
+      if (anchorPt) {
+        const orb = sf.orbit;
+        airspaces.push({
+          kind: 'airspace',
+          name: callsign,
+          type: sf.type === 'TANKER' ? 'REFUEL' : 'ORBIT',
+          altLower: orb.altitude_ft != null ? Math.round(orb.altitude_ft / 100) * 100 + 'ft' : null,
+          altUpper: null,
+          lat: anchorPt.lat, lon: anchorPt.lon,
+          shape: 'anchor',
+          anchorPt,
+          headingDeg: orb.heading_deg || 0,
+          legLengthNm: orb.leg_nm || 10,
+          widthNm: orb.width_nm || 5,
+          direction: (orb.direction || 'ccw').toLowerCase(),
+          speedKts: orb.speed_kts,
+        });
+      }
+    }
   });
 
   // ── Phase 5: ACO airspace measures ────────────────────────
