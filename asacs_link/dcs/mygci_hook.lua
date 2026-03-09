@@ -1,6 +1,11 @@
 -- ============================================================
 -- MyGCI Hook Loader
 -- Place at: %DCS_SAVED_GAMES%/Scripts/Hooks/mygci_hook.lua
+--
+-- This hook handles mission metadata and player events.
+-- Real-time unit telemetry is provided separately by
+-- mygci_export.lua, which must be loaded from Export.lua:
+--   %DCS_SAVED_GAMES%/Scripts/Export.lua
 -- ============================================================
 
 net.log('[MyGCI] GameGUI loading...')

@@ -6,18 +6,37 @@ WebSocket clients at 2 Hz.
 
 ---
 
+## How DCS data is collected
+
+This server uses two complementary DCS scripting methods:
+
+**1. Export.lua system** (`mygci_export.lua`) — real-time unit telemetry  
+DCS calls `Export.lua` every simulation frame. The export script uses
+`LoGetWorldObjects()` to obtain live position, coalition, category, and
+identity data for all units and sends them via UDP to this server.
+This is the standard method used by tools like Tacview and DCS-BIOS.
+
+**2. Server Hooks** (`mygci_hook.lua` + `myatc.lua`) — event monitoring  
+Hook scripts in `Saved Games\DCS\Scripts\Hooks\` receive game events such
+as mission load, simulation stop, and player connect/disconnect/slot-change.
+Hook scripts run in the DCS GUI thread and have access to `net`, `DCS`, and
+`lfs` APIs — but **not** mission-scripting APIs like `world.searchObjects`.
+
+---
+
 ## Directory Structure
 
 ```
-gci-server/
-├── server.js       — main server (HTTP auth + WebSocket + UDP listener)
-├── config.js       — passwords, ports, realism rules
-├── filter.js       — coalition filtering logic
-├── state.js        — in-memory unit/mission state
+asacs_link/
+├── server.js           — main server (HTTP auth + WebSocket + UDP listener)
+├── config.js           — passwords, ports, realism rules
+├── filter.js           — coalition filtering logic
+├── state.js            — in-memory unit/mission state
 ├── package.json
 └── dcs/
-    ├── myatc.lua          — DCS Lua export hook (runs inside DCS)
-    └── mygci_hook.lua     — DCS hook loader (goes in Scripts/Hooks/)
+    ├── mygci_export.lua   — Export.lua script: unit telemetry via LoGetWorldObjects()
+    ├── myatc.lua          — Hook script: mission metadata + player events
+    └── mygci_hook.lua     — Hook loader (placed in Scripts/Hooks/)
 ```
 
 ---
@@ -27,7 +46,7 @@ gci-server/
 ### 1. Install & run the server
 
 ```bash
-cd gci-server
+cd asacs_link
 npm install
 npm start
 ```
@@ -39,12 +58,27 @@ Edit `config.js` to change passwords and ports before deployment.
 Copy files to your DCS Saved Games folder (usually `C:\Users\<you>\Saved Games\DCS`):
 
 ```
-Scripts/Hooks/mygci_hook.lua          ← hook loader
-Mods/services/MyGCI/lua/myatc.lua     ← export hook
+Scripts/Export.lua                        ← add dofile() line (see below)
+Scripts/mygci_export.lua                  ← unit telemetry via Export.lua
+Scripts/Hooks/mygci_hook.lua              ← hook loader for events
+Mods/services/MyGCI/lua/myatc.lua         ← hook script for events
 ```
 
-The hook sends UDP packets to `127.0.0.1:7788` by default.
-If the server runs on a different machine, edit `SERVER_HOST` in `myatc.lua`.
+#### Export.lua integration
+
+Create `Scripts/Export.lua` if it does not exist, then add this line:
+
+```lua
+-- Note: lfs.writedir() returns a Windows path (DCS runs on Windows only)
+dofile(lfs.writedir()..'Scripts\\mygci_export.lua')
+```
+
+If you already have an `Export.lua` (e.g., from Tacview or DCS-BIOS), append
+the `dofile` line at the bottom — multiple export scripts can coexist.
+
+Both scripts send UDP packets to `127.0.0.1:7788` by default.
+If the server runs on a different machine, edit `SERVER_HOST` in both
+`mygci_export.lua` and `myatc.lua`.
 
 ---
 
