@@ -8,11 +8,56 @@
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createSocket } from 'dgram';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
+import { join, extname } from 'path';
+import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import config from './config.js';
 import { filterUnitsForCoalition } from './filter.js';
 import { StateStore } from './state.js';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const PUBLIC_DIR = join(__dirname, 'public');
+
+// MIME types for static file serving
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.js':   'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png':  'image/png',
+  '.ico':  'image/x-icon',
+  '.svg':  'image/svg+xml',
+};
+
+function serveStatic(req, res) {
+  // Only allow GET/HEAD for static files
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+
+  let urlPath = req.url.split('?')[0];
+  if (urlPath === '/') urlPath = '/index.html';
+
+  // Prevent path traversal
+  const filePath = join(PUBLIC_DIR, urlPath);
+  if (!filePath.startsWith(PUBLIC_DIR)) {
+    res.writeHead(403); res.end(); return true;
+  }
+
+  let stat;
+  try { stat = statSync(filePath); } catch (err) {
+    if (err.code !== 'ENOENT') console.warn('[Static]', err.code, filePath);
+    return false;
+  }
+  if (!stat.isFile()) return false;
+
+  const ext  = extname(filePath).toLowerCase();
+  const mime = MIME[ext] || 'application/octet-stream';
+  const data = readFileSync(filePath);
+  res.writeHead(200, { 'Content-Type': mime, 'Content-Length': data.length });
+  if (req.method === 'HEAD') { res.end(); return true; }
+  res.end(data);
+  return true;
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +103,9 @@ const httpServer = createServer((req, res) => {
     }));
     return;
   }
+
+  // Static files (dashboard web UI)
+  if (serveStatic(req, res)) return;
 
   res.writeHead(404);
   res.end();

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASACS LINK — GCI Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23050a08'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='monospace' font-size='11' font-weight='bold' fill='%2339ff7a'%3EGCI%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<!-- ── Login Screen ─────────────────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-title">ASACS LINK</div>
+    <div class="login-subtitle">GCI TACTICAL DISPLAY</div>
+
+    <label class="login-label" for="passwordInput">COALITION PASSWORD</label>
+    <input
+      class="login-input"
+      type="password"
+      id="passwordInput"
+      placeholder="enter password"
+      autocomplete="current-password"
+    >
+
+    <button class="login-btn" onclick="submitLogin()">AUTHENTICATE</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- ── App ──────────────────────────────────────────────────── -->
+<div id="app">
+
+  <header>
+    <div class="hdr-title">ASACS LINK</div>
+    <div class="hdr-sep"></div>
+    <div class="hdr-meta" id="hdrMeta">GCI TACTICAL DISPLAY</div>
+    <div class="hdr-right">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-label" id="statusLabel">OFFLINE</span>
+      <div class="coalition-badge" id="coalitionBadge">—</div>
+      <button class="logout-btn" onclick="logout()">LOGOUT ⏻</button>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat-item">
+      <span class="stat-lbl">TRACKS</span>
+      <span class="stat-val hl" id="statTracks">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-lbl">LAST UPDATE</span>
+      <span class="stat-val" id="statLastUpdate">—</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-lbl">RATE</span>
+      <span class="stat-val" id="statRate">2 Hz</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-lbl">MISSION TIME</span>
+      <span class="stat-val" id="statMissionTime">—</span>
+    </div>
+  </div>
+
+  <!-- Mission strip: shown once mission data arrives -->
+  <div class="mission-strip" id="missionStrip">
+    <span><span class="mission-key">MISSION</span><span id="msnName">—</span></span>
+    <span><span class="mission-key">THEATRE</span><span id="msnTheatre">—</span></span>
+    <span><span class="mission-key">DATE</span><span id="msnDate">—</span></span>
+    <span><span class="mission-key">BULL BLUE</span><span id="msnBullBlue">—</span></span>
+    <span><span class="mission-key">BULL RED</span><span id="msnBullRed">—</span></span>
+  </div>
+
+  <div class="main-scroll">
+
+    <div class="section-hdr">
+      <span class="section-title">RAW TRACKS</span>
+      <div class="section-line"></div>
+      <span class="section-count" id="trackCount">0 units</span>
+    </div>
+
+    <div class="unit-table-wrap">
+      <table class="unit-table">
+        <thead>
+          <tr>
+            <th>REL</th>
+            <th>ID</th>
+            <th>TYPE</th>
+            <th>CAT</th>
+            <th>COALITION</th>
+            <th>LAT</th>
+            <th>LON</th>
+            <th>ALT (m)</th>
+            <th>SPD (m/s)</th>
+            <th>HDG°</th>
+            <th>SQUAWK</th>
+            <th>IFF</th>
+            <th>GROUP</th>
+            <th>PILOT</th>
+          </tr>
+        </thead>
+        <tbody id="unitTableBody">
+          <tr><td colspan="14" class="empty-state">Waiting for data…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /main-scroll -->
+</div><!-- /app -->
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
