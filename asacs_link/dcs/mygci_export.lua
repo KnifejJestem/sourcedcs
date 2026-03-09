@@ -119,11 +119,17 @@ local function extract_units()
             local pilot = obj.Pilot
             if pilot == "" then pilot = nil end
 
+            -- Heading is provided in radians; convert to degrees true (0–360).
+            local hdg_rad = obj.Heading or 0
+            local hdg_deg = math.deg(hdg_rad)
+            if hdg_deg < 0 then hdg_deg = hdg_deg + 360 end
+
             units[#units + 1] = {
                 id        = id,
                 lat       = lat,
                 lon       = lon,
                 alt       = alt,
+                hdg       = math.floor(hdg_deg), -- degrees true, from obj.Heading
                 coalition = obj.CoalitionID or 0,
                 category  = category,
                 typeName  = obj.Name or "Unknown",
@@ -132,11 +138,8 @@ local function extract_units()
                 unitName  = obj.UnitName  or "",
                 groupName = obj.GroupName or "",
                 pilotName = pilot,
-                -- Speed and heading are not available directly from
-                -- LoGetWorldObjects. Use LoGetObjectById for richer data
-                -- if needed, at the cost of additional per-frame queries.
-                spd = 0, -- not available from LoGetWorldObjects
-                hdg = 0, -- not available from LoGetWorldObjects
+                -- Ground speed is not exposed by LoGetWorldObjects.
+                spd = 0,
             }
         end
     end
@@ -156,7 +159,7 @@ function LuaExportStop()
     log("MyGCI Export stopped")
 end
 
-function LuaExportAfterEachFrame()
+function LuaExportAfterNextFrame()
     local now = LoGetModelTime()
     if now - last_update >= UPDATE_RATE then
         last_update = now
