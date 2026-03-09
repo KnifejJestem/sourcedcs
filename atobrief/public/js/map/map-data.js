@@ -247,10 +247,11 @@ function collectData(ato, aco) {
         const ssp = sharedSteerpointMap[sspId];
         const p = { lat: ssp.lat, lon: ssp.lon };
         route.pts.push({ ...p, kind: 'route-node' });
+        const sspTypeLabel = (ssp.type || '').toUpperCase();
         points.push({
           ...p, kind: 'steer-ref',
           label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-          sub: ssp.name ? `${(ssp.type || '').toUpperCase()} ${ssp.name}` : (ssp.type || '').toUpperCase(),
+          sub: ssp.name ? `${sspTypeLabel} ${ssp.name}` : sspTypeLabel,
           color, msnType: m.mission_type, mission: m,
           altitude_ft: ssp.altitude_ft ?? null,
         });

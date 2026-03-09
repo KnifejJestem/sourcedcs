@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections import defaultdict
 
 from .models import Carrier, Flight, Waypoint
 from .projection import dms
@@ -154,13 +155,13 @@ def _parse_dms_approx(coord_str: str) -> tuple[float | None, float | None]:
     Parse a DMS coordinate string into approximate decimal degrees.
     Good enough for centroid calculations.
     """
-    parts = re.findall(r'([NSEW])(\d+)\D+(\d+)\D+(\d+)', coord_str)
+    parts = re.findall(r'([NSEW])(\d+)\D+(\d+)\D+(\d+(?:\.\d+)?)', coord_str)
     if len(parts) < 2:
         return None, None
     lat_dir, lat_d, lat_m, lat_s = parts[0]
     lon_dir, lon_d, lon_m, lon_s = parts[1]
-    lat = int(lat_d) + int(lat_m) / 60 + int(lat_s) / 3600
-    lon = int(lon_d) + int(lon_m) / 60 + int(lon_s) / 3600
+    lat = int(lat_d) + int(lat_m) / 60 + float(lat_s) / 3600
+    lon = int(lon_d) + int(lon_m) / 60 + float(lon_s) / 3600
     if lat_dir == 'S': lat = -lat
     if lon_dir == 'W': lon = -lon
     return lat, lon
@@ -308,8 +309,6 @@ def merge_shared_steerpoints(
     2. Within 750 ft of each other in 3D space
     3. Names are compatible (both unnamed, or same name)
     """
-    from collections import defaultdict
-
     specials: list[tuple[str, int, dict]] = []
     for flight_name, sps in flight_steerpoints.items():
         for i, sp in enumerate(sps):
