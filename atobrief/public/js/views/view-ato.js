@@ -110,6 +110,11 @@ function renderIntelStrip(gc, ato) {
   var timesBtn = el('button', 'editor-btn', '✎ TIMES');
   timesBtn.addEventListener('click', openTimesEditor);
   row.appendChild(timesBtn);
+
+  // Shared steerpoints edit button (visible in edit mode)
+  var sspBtn = el('button', 'editor-btn', '✎ SHARED PTS');
+  sspBtn.addEventListener('click', openSharedSteerpointsEditor);
+  row.appendChild(sspBtn);
 }
 
 // ═════════════════════════════════════════════════════════════

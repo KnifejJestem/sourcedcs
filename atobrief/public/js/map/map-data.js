@@ -26,7 +26,6 @@ function collectData(ato, aco) {
   // Resolution order in routes: namedLocs lookup → coord parse.
   //   Airfields  keyed by ICAO (e.g. 'OMAM')
   //   Carriers   keyed by callsign (e.g. 'ROUGH RIDER')
-  //   Marshal pts keyed by name (e.g. 'ALPHA')
   const namedLocs = {};
 
   // Separate map for carrier recovery positions (keyed by carrier id / callsign).
@@ -55,16 +54,9 @@ function collectData(ato, aco) {
       }
     }
   });
-  (ato.marshal_points || []).forEach(mp => {
-    if (mp.name && mp.coords) {
-      const p = parseCoord(mp.coords);
-      if (p) namedLocs[mp.name.trim().toUpperCase()] = p;
-    }
-  });
-
   // Resolve a location string: named lookup first, then coord parse.
   // resolve() is defined here, after namedLocs is fully populated in Phase 1,
-  // so all named markers (airfields, carriers, marshal points) are available
+  // so all named markers (airfields, carriers) are available
   // when it is called during Phase 3 mission processing.
   const resolve = str => {
     if (!str) return null;
@@ -167,20 +159,6 @@ function collectData(ato, aco) {
     }
   });
 
-  // Marshal points
-  (ato.marshal_points || []).forEach(mp => {
-    if (!mp.coords) return;
-    const p = parseCoord(mp.coords);
-    if (!p) return;
-    points.push({
-      ...p, kind: 'marshal',
-      label: mp.name || 'MARSHAL',
-      altitude: mp.altitude || null,
-      time_on_station: mp.time_on_station || null,
-      time_off_station: mp.time_off_station || null,
-    });
-  });
-
   // Threats (SAM / EWR / etc.)
   (ato.targets || []).forEach(tgt => {
     if (!tgt.coords) return;
@@ -237,8 +215,8 @@ function collectData(ato, aco) {
     //    (thicker dashed line) and shown as diamond target markers instead of
     //    hollow steer circles.  If a steer point has an 'orbit' block, also
     //    push an anchor airspace so the racetrack pattern is drawn on the map.
-    //    When name_ref is used the referenced location (airfield, carrier, marshal
-    //    point) already has its own named marker on the map.  A 'steer-ref' point
+    //    When name_ref is used the referenced location (airfield, carrier)
+    //    already has its own named marker on the map.  A 'steer-ref' point
     //    is pushed so a small unlabelled hollow circle appears at the waypoint,
     //    making the route's exact passage through that location visible without
     //    duplicating the named-location label.
@@ -246,7 +224,7 @@ function collectData(ato, aco) {
     //    points which share a coordinate with an aim point (even without an explicit
     //    aim_point_id link) are also rendered as unlabelled 'steer-ref' markers —
     //    the aim-point diamond+label takes priority.
-    //    Also collect named-location (airfield, carrier, marshal point) coord keys:
+    //    Also collect named-location (airfield, carrier) coord keys:
     //    if a steer point shares a coordinate with one of these reference points
     //    (without using name_ref), the named-location marker takes priority.
     const aimPtCoordKeys = new Set();

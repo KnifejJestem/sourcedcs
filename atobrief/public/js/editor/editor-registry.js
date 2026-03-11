@@ -71,7 +71,7 @@ var REGISTRY_CATEGORIES = {
     isList: true,
     fields: [
       { key: 'name',     label: 'Name',     placeholder: 'e.g. COYOTE' },
-      { key: 'type',     label: 'Type',     type: 'select', options: [{ value: '', label: '— select type —' }, 'bullseye', 'marshal'] },
+      { key: 'type',     label: 'Type',     type: 'select', options: [{ value: '', label: '— select type —' }, 'bullseye'] },
       { key: 'coords',   label: 'Coordinates', placeholder: "N26°51'19\" E056°21'37\"", coordPick: true },
       { key: 'altitude', label: 'Altitude', placeholder: 'FL250' },
       { key: 'time_on_station',  label: 'Time On Station',  placeholder: '2030' },

@@ -55,7 +55,29 @@ function deleteMission(index) {
   var m = ato.missions[index];
   if (!confirm('Delete mission ' + (m.callsign || '#' + index) + '?')) return;
 
+  // Collect shared steerpoint IDs referenced by this mission
+  var referencedSspIds = new Set();
+  (m.steer_points || []).forEach(function (sp) {
+    if (sp && sp.shared_steerpoint_id) referencedSspIds.add(sp.shared_steerpoint_id);
+  });
+
   ato.missions.splice(index, 1);
+
+  // Clean up shared steerpoints: remove this flight's callsign from their
+  // flights lists. Remove any shared steerpoints that have no remaining flights.
+  if (referencedSspIds.size > 0 && Array.isArray(ato.shared_steerpoints)) {
+    var callsign = m.callsign;
+    ato.shared_steerpoints = ato.shared_steerpoints.filter(function (ssp) {
+      if (!referencedSspIds.has(ssp.id)) return true;
+      // Remove the deleted flight from this SSP's flights list
+      if (callsign && Array.isArray(ssp.flights)) {
+        ssp.flights = ssp.flights.filter(function (f) { return f !== callsign; });
+      }
+      // Keep SSP only if other flights still reference it
+      return !ssp.flights || ssp.flights.length > 0;
+    });
+  }
+
   editorReRender();
 }
 
@@ -189,7 +211,14 @@ function _buildRefuelSection(body, m, f) {
 
 function _buildSteerPointsSection(body, m) {
   editorSectionTitle(body, 'STEER POINTS');
+  // Preserve the full steer_points array including shared_steerpoint_id references.
+  // Regular steer points are represented as { name, coords, orbit? }.
+  // Shared steerpoint refs are { shared_steerpoint_id: '...' } — kept as-is.
   var steerPts = (m.steer_points || []).map(function (sp) {
+    if (sp && sp.shared_steerpoint_id) {
+      // Preserve shared steerpoint reference unchanged
+      return { shared_steerpoint_id: sp.shared_steerpoint_id };
+    }
     var point = { name: sp.name || '', coords: sp.coords || '' };
     if (sp.orbit) point.orbit = Object.assign({}, sp.orbit);
     return point;
@@ -318,8 +347,11 @@ function _saveMissionFromForm(onSave) {
     m.refuel.not_later_than    = f.ref_nlt.value || undefined;
   }
 
-  // Steer points (require both name and coords)
-  var steerPts = (body._steerPoints || []).filter(function (sp) { return sp.name && sp.coords; });
+  // Steer points: keep shared steerpoint refs as-is; filter regular pts by name+coords.
+  var steerPts = (body._steerPoints || []).filter(function (sp) {
+    if (sp && sp.shared_steerpoint_id) return true; // always keep SSP refs
+    return sp.name && sp.coords;
+  });
   m.steer_points = steerPts.length ? steerPts : undefined;
 
   onSave(m);
