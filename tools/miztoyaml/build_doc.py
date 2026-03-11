@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from .dtc import build_comms_from_dtc
+from .log import log
 from .models import Carrier, Flight
 from .build_missions import (
     AIRDROME_IDS, CVN_NAMES,
@@ -185,7 +186,7 @@ def build_flight_comms(flights: list[Flight], dtcs: dict[str, dict]) -> list[dic
     for f in flights:
         if f.dtc_cartridge:
             if f.dtc_cartridge not in dtcs:
-                print(f"[!] Flight '{f.name}': DTC '{f.dtc_cartridge}' not found in archive — skipping comms")
+                log.warning("Flight '%s': DTC '%s' not found in archive — skipping comms", f.name, f.dtc_cartridge)
                 continue
             uhf, vhf = build_comms_from_dtc(dtcs[f.dtc_cartridge])
             entries.append({
@@ -271,7 +272,7 @@ def build_doc(*, mission_name, mission_date, theatre,
     }
     local_offset_hours = _THEATRE_OFFSET.get(theatre)
     if local_offset_hours is None and theatre:
-        print(f"[!] Unknown theatre '{theatre}' — local_offset_hours will be None")
+        log.warning("Unknown theatre '%s' — local_offset_hours will be None", theatre)
 
     # Compute Zulu start time from local start time and theatre offset
     ingame_start_zulu = None
@@ -279,7 +280,7 @@ def build_doc(*, mission_name, mission_date, theatre,
         local_mins = int(ingame_start_local[:2]) * 60 + int(ingame_start_local[2:])
         zulu_mins  = (local_mins - local_offset_hours * 60) % 1440
         ingame_start_zulu = f"{zulu_mins // 60:02d}{zulu_mins % 60:02d}"
-        print(f"[+] ingame_start_local={ingame_start_local}L → ingame_start_time={ingame_start_zulu}Z")
+        log.info("ingame_start_local=%sL → ingame_start_time=%sZ", ingame_start_local, ingame_start_zulu)
 
     msn_start = 1000 + int(hashlib.md5(mission_name.encode()).hexdigest()[:4], 16) % 8000
 

@@ -216,6 +216,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=7000
+      - LOG_LEVEL=${LOG_LEVEL:-warn}
       - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - DISCORD_URL=${DISCORD_URL}
@@ -245,6 +246,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
+      - LOG_LEVEL=${LOG_LEVEL:-warn}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - ATOBRIEF_CLIENT_ID=${ATOBRIEF_CLIENT_ID}
       - ATOBRIEF_CLIENT_SECRET=${ATOBRIEF_CLIENT_SECRET}
@@ -263,6 +265,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-warn}
       - ASACS_PASSWORD_BLUE=${ASACS_PASSWORD_BLUE}
       - ASACS_PASSWORD_RED=${ASACS_PASSWORD_RED}
       - ASACS_PASSWORD_NEUTRAL=${ASACS_PASSWORD_NEUTRAL}

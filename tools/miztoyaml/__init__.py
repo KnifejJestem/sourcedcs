@@ -2,6 +2,7 @@
 miztoyaml — DCS .miz → ATO brief package YAML
 
 Package structure:
+    log            – centralized logging (quiet / debug / verbose)
     lua            – brace-balanced Lua table helpers
     projection     – DCS Cartesian → WGS84 using TM constants
     sam            – SAM system definitions + unit classification
@@ -17,5 +18,6 @@ Package structure:
 """
 
 from .extract import extract, main
+from .log import setup_logging
 
-__all__ = ["extract", "main"]
+__all__ = ["extract", "main", "setup_logging"]
