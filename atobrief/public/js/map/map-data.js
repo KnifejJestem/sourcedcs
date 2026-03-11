@@ -198,6 +198,27 @@ function collectData(ato, aco) {
     });
   });
 
+  // ── Phase 3a: Shared steerpoints (must precede Phase 3 so missions can reference them) ──
+  const sharedSteerpointMap = {};
+  (ato.shared_steerpoints || []).forEach(ssp => {
+    if (!ssp.id || !ssp.coords) return;
+    const p = parseCoord(ssp.coords);
+    if (!p) return;
+    sharedSteerpointMap[ssp.id] = { ...ssp, ...p };
+    const typeLabel = (ssp.type || '').toUpperCase();
+    const nameLabel = ssp.name ? `${typeLabel} ${ssp.name}` : typeLabel;
+    const flightsLabel = (ssp.flights || []).join(', ');
+    points.push({
+      ...p, kind: 'shared-steerpoint',
+      label: nameLabel,
+      sub: flightsLabel,
+      specialType: ssp.type,
+      flights: ssp.flights || [],
+      altitude_ft: ssp.altitude_ft ?? null,
+      sspId: ssp.id,
+    });
+  });
+
   // ── Phase 3: Per-mission routes + mission-linked markers ───
   missions.forEach(m => {
     const color    = typeColor(m.mission_type);
@@ -362,28 +383,7 @@ function collectData(ato, aco) {
     });
   });
 
-  // ── Phase 4b: Shared steerpoints ──────────────────────────
-  const sharedSteerpointMap = {};
-  (ato.shared_steerpoints || []).forEach(ssp => {
-    if (!ssp.id || !ssp.coords) return;
-    const p = parseCoord(ssp.coords);
-    if (!p) return;
-    sharedSteerpointMap[ssp.id] = { ...ssp, ...p };
-    const typeLabel = (ssp.type || '').toUpperCase();
-    const nameLabel = ssp.name ? `${typeLabel} ${ssp.name}` : typeLabel;
-    const flightsLabel = (ssp.flights || []).join(', ');
-    points.push({
-      ...p, kind: 'shared-steerpoint',
-      label: nameLabel,
-      sub: flightsLabel,
-      specialType: ssp.type,
-      flights: ssp.flights || [],
-      altitude_ft: ssp.altitude_ft ?? null,
-      sspId: ssp.id,
-    });
-  });
-
-  // ── Phase 4c: Support flights ─────────────────────────────
+  // ── Phase 4b: Support flights ─────────────────────────────
   (ato.support_flights || []).forEach(sf => {
     const callsign = sf.callsign || '?';
     const sfKey = `SUPPORT-${callsign}`;
