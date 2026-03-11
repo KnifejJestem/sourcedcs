@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+from .log import log
 from .models import Drawing, Group
 from .projection import dcs_to_latlon, dms
 from .sam import identify_system
@@ -57,7 +58,7 @@ def build_targets(groups: list[Group]) -> dict:
             }
             if g.alt_ft is not None:
                 targets[key]["elevation"] = f"{g.alt_ft}ft"
-            print(f"  TGT  {key}: {g.name}")
+            log.info("  TGT  %s: %s", key, g.name)
             continue
 
         sys = identify_system([u.type for u in g.units])
@@ -76,8 +77,8 @@ def build_targets(groups: list[Group]) -> dict:
         }
         if g.alt_ft is not None:
             targets[key]["elevation"] = f"{g.alt_ft}ft"
-        print(f"  {key}: {g.name} → {sys.name}  "
-              f"[{len(aim_pts)} aim pts]  {dms(g.lat, g.lon)}")
+        log.info("  %s: %s → %s  [%d aim pts]  %s",
+                 key, g.name, sys.name, len(aim_pts), dms(g.lat, g.lon))
 
     return targets
 
@@ -182,7 +183,7 @@ def build_acms(drawings: list[Drawing], theatre: str) -> list[dict]:
             result = handler(d, theatre, acm)
             if result:
                 acms.append(result)
-                print(f"  ACM-{n:03d}: {d.name}  ({d.polygon_mode})")
+                log.info("  ACM-%03d: %s  (%s)", n, d.name, d.polygon_mode)
                 n += 1
 
     return acms
