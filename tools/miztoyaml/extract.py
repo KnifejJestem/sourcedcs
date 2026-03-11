@@ -195,5 +195,5 @@ def main():
     with open(out, "w", encoding="utf-8") as f:
         yaml.dump(doc, f, allow_unicode=True, sort_keys=False,
                   default_flow_style=False, width=120)
-    log.info("Written to %s", out)
+    # Final success message always shown regardless of log level
     print(f"\n[OK] {out}")
