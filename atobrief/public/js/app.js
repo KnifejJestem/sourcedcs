@@ -468,7 +468,7 @@ function loadPackage_obj(data) {
     });
   }
 
-  // ── Resolve registry reference_points: bullseye + marshal_points ─
+  // ── Resolve registry reference_points: bullseye ─
   if (pkg.registry?.reference_points && pkg.ato) {
     const refPts = pkg.registry.reference_points;
     // Support both list (new) and dict (legacy) formats
@@ -484,20 +484,6 @@ function loadPackage_obj(data) {
         gc.bullseye = { name: ref.name, coords: ref.coords };
       }
     }
-
-    // Always rebuild marshal_points from registry so edits are reflected
-    pkg.ato.marshal_points = [];
-    refList.forEach(rp => {
-      if (rp.type === 'marshal') {
-        pkg.ato.marshal_points.push({
-          name: rp.name,
-          coords: rp.coords,
-          altitude: rp.altitude,
-          time_on_station: rp.time_on_station || null,
-          time_off_station: rp.time_off_station || null,
-        });
-      }
-    });
   }
 
   // ── Resolve registry control_agencies into global_control + mission control ─

@@ -249,6 +249,20 @@
   margin-bottom: 4px;
 }
 
+/* Shared steerpoint reference badge in steer-points list */
+.ef-ssp-badge {
+  flex: 1;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: #7ec8e3;
+  padding: 2px 6px;
+  border: 1px dashed #7ec8e380;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .ef-preset-row {
   display: flex;
   gap: 6px;

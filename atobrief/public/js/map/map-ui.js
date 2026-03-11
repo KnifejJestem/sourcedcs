@@ -12,15 +12,15 @@
 
 // Human-readable heading for each point kind.
 const KIND_LABELS = {
-  steer:        'WAYPOINT',
-  'steer-ref':  'WAYPOINT',
-  target:       'AIM POINT',
-  threat:       'THREAT',
-  bullseye:     'BULLSEYE',
-  airfield:     'AIRFIELD',
-  carrier:      'CARRIER',
-  airspace:     'AIRSPACE',
-  marshal:      'MARSHAL POINT',
+  steer:             'WAYPOINT',
+  'steer-ref':       'WAYPOINT',
+  target:            'AIM POINT',
+  threat:            'THREAT',
+  bullseye:          'BULLSEYE',
+  airfield:          'AIRFIELD',
+  carrier:           'CARRIER',
+  airspace:          'AIRSPACE',
+  'shared-steerpoint': 'SHARED STEER PT',
 };
 
 // ── Per-kind row builders ─────────────────────────────────
@@ -113,11 +113,11 @@ function buildPopupRows(p) {
   if (p.kind === 'airfield') return buildAirfieldRows(p);
   if (p.kind === 'carrier')  return buildCarrierRows(p);
   if (p.kind === 'airspace') return buildAirspaceRows(p);
-  if (p.kind === 'marshal') {
+  if (p.kind === 'shared-steerpoint') {
     const rows = [['NAME', p.label]];
-    if (p.altitude) rows.push(['ALTITUDE', p.altitude]);
-    if (p.time_on_station) rows.push(['ON STATION', fmtTime(p.time_on_station)]);
-    if (p.time_off_station) rows.push(['OFF STATION', fmtTime(p.time_off_station)]);
+    if (p.specialType) rows.push(['TYPE', p.specialType.toUpperCase()]);
+    if (p.altitude_ft != null) rows.push(['ALTITUDE', `${Math.round(p.altitude_ft).toLocaleString()} FT`]);
+    if (p.flights && p.flights.length) rows.push(['FLIGHTS', p.flights.join(', ')]);
     return rows;
   }
   return [];
@@ -405,7 +405,7 @@ function createSidebar(opts) {
     { check: opts.points.some(p => p.kind === 'carrier'),  color: opts.C.cv,      label: 'CARRIER (EST)', kind: 'carrier'  },
     { check: opts.points.some(p => p.kind === 'threat'),   color: opts.threatCol, label: 'THREAT',        kind: 'threat'   },
     { check: hasEngZones,                                   color: opts.threatCol, label: 'ENG ZONE',      kind: 'engzone'  },
-    { check: opts.points.some(p => p.kind === 'marshal'),  color: '#7ec8e3',      label: 'MARSHAL PT',    kind: 'marshal'  },
+    { check: opts.points.some(p => p.kind === 'shared-steerpoint'), color: '#7ec8e3', label: 'SHARED PT', kind: 'shared-steerpoint' },
   ];
   markerTypes.forEach(({ check, color, label, kind }) => {
     if (!check) return;

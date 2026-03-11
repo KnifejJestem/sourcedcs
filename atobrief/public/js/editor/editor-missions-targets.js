@@ -82,6 +82,33 @@ function _editTarget(targets, index, msnTitle, onSave) {
 function _renderSteerPointsList(container, steerPts) {
   container.innerHTML = '';
   steerPts.forEach(function (sp, i) {
+    // Shared steerpoint reference — render as a read-only row with a delete button.
+    if (sp && sp.shared_steerpoint_id) {
+      var ato = STATE.pkg && STATE.pkg.ato;
+      var sspList = (ato && ato.shared_steerpoints) || [];
+      var ssp = sspList.find(function (s) { return s.id === sp.shared_steerpoint_id; });
+      var sspLabel = ssp
+        ? [((ssp.type || '').toUpperCase()), ssp.name].filter(Boolean).join(' ') || ssp.id
+        : sp.shared_steerpoint_id;
+
+      var row = el('div', 'ef-ap-row');
+      var badge = el('span', 'ef-ssp-badge', '◈ ' + sspLabel);
+      badge.title = 'Shared steer point (managed in SHARED PTS editor)';
+      row.appendChild(badge);
+
+      var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '\u2715');
+      delBtn.title = 'Remove shared steerpoint reference from this mission';
+      (function (idx) {
+        delBtn.addEventListener('click', function () {
+          steerPts.splice(idx, 1);
+          _renderSteerPointsList(container, steerPts);
+        });
+      })(i);
+      row.appendChild(delBtn);
+      container.appendChild(row);
+      return;
+    }
+
     var row = el('div', 'ef-ap-row');
 
     var nameInput = el('input', 'ef-input ef-input-sm');
