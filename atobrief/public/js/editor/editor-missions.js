@@ -214,13 +214,23 @@ function _buildSteerPointsSection(body, m) {
   // Preserve the full steer_points array including shared_steerpoint_id references.
   // Regular steer points are represented as { name, coords, orbit? }.
   // Shared steerpoint refs are { shared_steerpoint_id: '...' } — kept as-is.
+  // Extra informational properties (aim_point_id, altitude_ft, name_ref, _x, _y, etc.)
+  // are not editable in the UI but must be round-tripped so that saving the form does
+  // not silently strip data produced by miztoyaml or manually added by the user.
   var steerPts = (m.steer_points || []).map(function (sp) {
     if (sp && sp.shared_steerpoint_id) {
       // Preserve shared steerpoint reference unchanged
       return { shared_steerpoint_id: sp.shared_steerpoint_id };
     }
-    var point = { name: sp.name || '', coords: sp.coords || '' };
-    if (sp.orbit) point.orbit = Object.assign({}, sp.orbit);
+    // Copy all properties so non-editable fields (aim_point_id, altitude_ft, name_ref,
+    // _x, _y, special_type, …) survive the round-trip through the editor.
+    var point = Object.assign({}, sp, {
+      name:   sp.name   || '',
+      coords: sp.coords || '',
+    });
+    if (sp.orbit) {
+      point.orbit = Object.assign({}, sp.orbit);
+    }
     return point;
   });
   body._steerPoints = steerPts;
@@ -347,10 +357,13 @@ function _saveMissionFromForm(onSave) {
     m.refuel.not_later_than    = f.ref_nlt.value || undefined;
   }
 
-  // Steer points: keep shared steerpoint refs as-is; filter regular pts by name+coords.
+  // Steer points: keep shared steerpoint refs as-is; keep regular pts that have
+  // coordinates (named or unnamed).  Unnamed steerpoints (no name, has coords) are
+  // valid route-shaping waypoints and must not be discarded.  Completely empty
+  // placeholder rows (added by the UI but never filled in) are filtered out.
   var steerPts = (body._steerPoints || []).filter(function (sp) {
     if (sp && sp.shared_steerpoint_id) return true; // always keep SSP refs
-    return sp.name && sp.coords;
+    return sp.coords || sp.name_ref;                // coords or named-location ref required
   });
   m.steer_points = steerPts.length ? steerPts : undefined;
 
