@@ -1,0 +1,1460 @@
+schema_version: '1.0'
+header:
+  operation: INHERENT RESOLVE BEANSTALK 1.2
+  ato_date: '2014-10-03'
+  classification: CLASSIFIED
+registry:
+  callsigns:
+    SHADOW:
+      type: F16C
+      role: CAP flight lead
+    HAT:
+      type: FA18C
+      role: CAP flight lead
+    TEXACO:
+      type: KC135
+      role: TANKER
+    SHELL:
+      type: KC135MPRS
+      role: TANKER
+    KNIGHT:
+      type: F16C
+      role: CAP flight lead
+    RIDER:
+      type: F16C
+      role: CAP flight lead
+    BOLO1:
+      type: F15ESE
+      role: STRIKE flight lead
+  airfields:
+    LTAG:
+      name: Incirlik AB
+      coords: N36°59'33" E35°24'12"
+  carriers:
+    CVN-1:
+      name: USS HARRY S. TRUMAN
+      callsign: Naval-1-1
+      deploy_coords: N36°10'52" E34°15'56"
+      recovery_coords: N35°28'38" E32°52'45"
+  tankers:
+  - callsign: TEXACO
+    altitude_ft: 23000
+    altitude: FL230
+    speed_kts: 390
+    orbit_anchor_coords: N37°33'35" E38°14'34"
+    orbit_heading_deg: 306
+    orbit_leg_nm: 40.0
+    orbit_width_nm: 20.0
+    orbit_direction: ccw
+  - callsign: SHELL
+    altitude_ft: 20000
+    altitude: FL200
+    speed_kts: 370
+    orbit_anchor_coords: N37°33'32" E38°14'31"
+    orbit_heading_deg: 306
+    orbit_leg_nm: 40.0
+    orbit_width_nm: 20.0
+    orbit_direction: ccw
+  targets:
+    SAM-1:
+      name: EFTA07 (SA-3 Neva / S-125)
+      type: SAM
+      coords: N36°09'23" E37°16'55"
+      engagement_range_nm: 15
+      max_alt_ft: 45000
+      aim_points:
+      - id: SAM-1-RD1
+        name: Radar 1
+        coords: N36°09'23" E37°16'55"
+      - id: SAM-1-LN1
+        name: Launcher 1
+        coords: N36°09'21" E37°16'57"
+      - id: SAM-1-LN2
+        name: Launcher 2
+        coords: N36°09'22" E37°16'53"
+      - id: SAM-1-LN3
+        name: Launcher 3
+        coords: N36°09'24" E37°16'57"
+      - id: SAM-1-LN4
+        name: Launcher 4
+        coords: N36°09'25" E37°16'54"
+      - id: SAM-1-RD2
+        name: Radar 2
+        coords: N36°09'24" E37°16'52"
+      elevation: 1214ft
+    SAM-2:
+      name: EFTA07 (SA-3 Neva / S-125)
+      type: SAM
+      coords: N36°13'28" E37°04'22"
+      engagement_range_nm: 15
+      max_alt_ft: 45000
+      aim_points:
+      - id: SAM-2-RD1
+        name: Radar 1
+        coords: N36°13'28" E37°04'22"
+      - id: SAM-2-LN1
+        name: Launcher 1
+        coords: N36°13'27" E37°04'23"
+      - id: SAM-2-LN2
+        name: Launcher 2
+        coords: N36°13'27" E37°04'21"
+      - id: SAM-2-LN3
+        name: Launcher 3
+        coords: N36°13'28" E37°04'24"
+      - id: SAM-2-LN4
+        name: Launcher 4
+        coords: N36°13'27" E37°04'21"
+      - id: SAM-2-RD2
+        name: Radar 2
+        coords: N36°13'29" E37°04'19"
+      elevation: 1433ft
+    SAM-3:
+      name: EFTA07 (SA-2 Guideline / S-75)
+      type: SAM
+      coords: N36°14'37" E37°18'59"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      aim_points:
+      - id: SAM-3-RD1
+        name: Radar 1
+        coords: N36°14'37" E37°18'59"
+      - id: SAM-3-LN1
+        name: Launcher 1
+        coords: N36°14'40" E37°18'57"
+      - id: SAM-3-LN2
+        name: Launcher 2
+        coords: N36°14'37" E37°19'03"
+      - id: SAM-3-LN3
+        name: Launcher 3
+        coords: N36°14'37" E37°18'55"
+      - id: SAM-3-LN4
+        name: Launcher 4
+        coords: N36°14'34" E37°18'57"
+      - id: SAM-3-LN5
+        name: Launcher 5
+        coords: N36°14'34" E37°19'01"
+      - id: SAM-3-LN6
+        name: Launcher 6
+        coords: N36°14'40" E37°19'01"
+      - id: SAM-3-RD2
+        name: Radar 2
+        coords: N36°14'35" E37°19'05"
+      elevation: 1572ft
+    SAM-4:
+      name: Aleppo SA 2 (SA-2 Guideline / S-75)
+      type: SAM
+      coords: N36°04'16" E37°20'27"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      aim_points:
+      - id: SAM-4-RD1
+        name: Radar 1
+        coords: N36°04'16" E37°20'27"
+      - id: SAM-4-LN1
+        name: Launcher 1
+        coords: N36°04'19" E37°20'22"
+      - id: SAM-4-LN2
+        name: Launcher 2
+        coords: N36°04'18" E37°20'33"
+      - id: SAM-4-LN3
+        name: Launcher 3
+        coords: N36°04'15" E37°20'22"
+      - id: SAM-4-LN4
+        name: Launcher 4
+        coords: N36°04'12" E37°20'23"
+      - id: SAM-4-LN5
+        name: Launcher 5
+        coords: N36°04'13" E37°20'32"
+      - id: SAM-4-LN6
+        name: Launcher 6
+        coords: N36°04'21" E37°20'29"
+      - id: SAM-4-RD2
+        name: Radar 2
+        coords: N36°04'14" E37°20'32"
+      elevation: 1657ft
+    SAM-5:
+      name: Aleppo SA 2 (SA-2 Guideline / S-75)
+      type: SAM
+      coords: N36°04'17" E37°09'55"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      aim_points:
+      - id: SAM-5-RD1
+        name: Radar 1
+        coords: N36°04'17" E37°09'55"
+      - id: SAM-5-LN1
+        name: Launcher 1
+        coords: N36°04'20" E37°09'50"
+      - id: SAM-5-LN2
+        name: Launcher 2
+        coords: N36°04'19" E37°10'01"
+      - id: SAM-5-LN3
+        name: Launcher 3
+        coords: N36°04'16" E37°09'49"
+      - id: SAM-5-LN4
+        name: Launcher 4
+        coords: N36°04'13" E37°09'51"
+      - id: SAM-5-LN5
+        name: Launcher 5
+        coords: N36°04'13" E37°10'00"
+      - id: SAM-5-LN6
+        name: Launcher 6
+        coords: N36°04'21" E37°09'57"
+      - id: SAM-5-RD2
+        name: Radar 2
+        coords: N36°04'15" E37°10'02"
+      elevation: 1366ft
+    SAM-6:
+      name: Aleppo SA 2 2 (SA-2 Guideline / S-75)
+      type: SAM
+      coords: N36°08'08" E37°06'11"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      aim_points:
+      - id: SAM-6-RD1
+        name: Radar 1
+        coords: N36°08'08" E37°06'11"
+      - id: SAM-6-LN1
+        name: Launcher 1
+        coords: N36°08'11" E37°06'05"
+      - id: SAM-6-LN2
+        name: Launcher 2
+        coords: N36°08'10" E37°06'16"
+      - id: SAM-6-LN3
+        name: Launcher 3
+        coords: N36°08'07" E37°06'05"
+      - id: SAM-6-LN4
+        name: Launcher 4
+        coords: N36°08'04" E37°06'06"
+      - id: SAM-6-LN5
+        name: Launcher 5
+        coords: N36°08'04" E37°06'15"
+      - id: SAM-6-LN6
+        name: Launcher 6
+        coords: N36°08'12" E37°06'12"
+      - id: SAM-6-RD2
+        name: Radar 2
+        coords: N36°08'06" E37°06'17"
+      elevation: 1321ft
+    SAM-7:
+      name: Aleppo SA 2 2 (SA-2 Guideline / S-75)
+      type: SAM
+      coords: N36°17'58" E37°09'40"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      aim_points:
+      - id: SAM-7-RD1
+        name: Radar 1
+        coords: N36°17'58" E37°09'40"
+      - id: SAM-7-LN1
+        name: Launcher 1
+        coords: N36°18'02" E37°09'35"
+      - id: SAM-7-LN2
+        name: Launcher 2
+        coords: N36°18'00" E37°09'46"
+      - id: SAM-7-LN3
+        name: Launcher 3
+        coords: N36°17'55" E37°09'32"
+      - id: SAM-7-LN4
+        name: Launcher 4
+        coords: N36°17'55" E37°09'36"
+      - id: SAM-7-LN5
+        name: Launcher 5
+        coords: N36°17'55" E37°09'45"
+      - id: SAM-7-LN6
+        name: Launcher 6
+        coords: N36°18'03" E37°09'42"
+      - id: SAM-7-RD2
+        name: Radar 2
+        coords: N36°17'56" E37°09'47"
+      elevation: 1583ft
+    SAM-8:
+      name: Aleppo SA-3 2 (SA-3 Neva / S-125)
+      type: SAM
+      coords: N36°11'22" E37°26'55"
+      engagement_range_nm: 15
+      max_alt_ft: 45000
+      aim_points:
+      - id: SAM-8-RD1
+        name: Radar 1
+        coords: N36°11'22" E37°26'55"
+      - id: SAM-8-LN1
+        name: Launcher 1
+        coords: N36°11'20" E37°26'57"
+      - id: SAM-8-LN2
+        name: Launcher 2
+        coords: N36°11'21" E37°26'53"
+      - id: SAM-8-LN3
+        name: Launcher 3
+        coords: N36°11'23" E37°26'58"
+      - id: SAM-8-LN4
+        name: Launcher 4
+        coords: N36°11'24" E37°26'54"
+      - id: SAM-8-RD2
+        name: Radar 2
+        coords: N36°11'23" E37°26'52"
+      elevation: 1149ft
+    SAM-9:
+      name: Aleppo SA 2 1 (SA-2 Guideline / S-75)
+      type: SAM
+      coords: N36°09'43" E37°24'13"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      aim_points:
+      - id: SAM-9-RD1
+        name: Radar 1
+        coords: N36°09'43" E37°24'13"
+      - id: SAM-9-LN1
+        name: Launcher 1
+        coords: N36°09'46" E37°24'08"
+      - id: SAM-9-LN2
+        name: Launcher 2
+        coords: N36°09'45" E37°24'19"
+      - id: SAM-9-LN3
+        name: Launcher 3
+        coords: N36°09'42" E37°24'07"
+      - id: SAM-9-LN4
+        name: Launcher 4
+        coords: N36°09'39" E37°24'09"
+      - id: SAM-9-LN5
+        name: Launcher 5
+        coords: N36°09'40" E37°24'18"
+      - id: SAM-9-LN6
+        name: Launcher 6
+        coords: N36°09'48" E37°24'15"
+      - id: SAM-9-RD2
+        name: Radar 2
+        coords: N36°09'41" E37°24'18"
+      elevation: 1128ft
+    SAM-10:
+      name: Aleppo SA-3 3 (SA-3 Neva / S-125)
+      type: SAM
+      coords: N35°59'59" E37°24'03"
+      engagement_range_nm: 15
+      max_alt_ft: 45000
+      aim_points:
+      - id: SAM-10-RD1
+        name: Radar 1
+        coords: N35°59'59" E37°24'03"
+      - id: SAM-10-LN1
+        name: Launcher 1
+        coords: N35°59'58" E37°24'05"
+      - id: SAM-10-LN2
+        name: Launcher 2
+        coords: N35°59'58" E37°24'01"
+      - id: SAM-10-LN3
+        name: Launcher 3
+        coords: N36°00'00" E37°24'06"
+      - id: SAM-10-LN4
+        name: Launcher 4
+        coords: N36°00'01" E37°24'02"
+      - id: SAM-10-RD2
+        name: Radar 2
+        coords: N36°00'00" E37°24'00"
+      elevation: 1489ft
+    SAM-11:
+      name: Aleppo SA 2 2 (SA-2 Guideline / S-75)
+      type: SAM
+      coords: N35°58'25" E37°17'16"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      aim_points:
+      - id: SAM-11-RD1
+        name: Radar 1
+        coords: N35°58'25" E37°17'16"
+      - id: SAM-11-LN1
+        name: Launcher 1
+        coords: N35°58'28" E37°17'11"
+      - id: SAM-11-LN2
+        name: Launcher 2
+        coords: N35°58'27" E37°17'22"
+      - id: SAM-11-LN3
+        name: Launcher 3
+        coords: N35°58'24" E37°17'10"
+      - id: SAM-11-LN4
+        name: Launcher 4
+        coords: N35°58'21" E37°17'12"
+      - id: SAM-11-LN5
+        name: Launcher 5
+        coords: N35°58'22" E37°17'20"
+      - id: SAM-11-LN6
+        name: Launcher 6
+        coords: N35°58'30" E37°17'17"
+      - id: SAM-11-RD2
+        name: Radar 2
+        coords: N35°58'23" E37°17'23"
+      elevation: 1592ft
+    SAM-12:
+      name: Aleppo SA 2 2 (SA-6 Gainful / Kub)
+      type: SAM
+      coords: N36°33'55" E38°34'29"
+      engagement_range_nm: 15
+      max_alt_ft: 40000
+      aim_points:
+      - id: SAM-12-RD1
+        name: Radar 1
+        coords: N36°33'55" E38°34'29"
+      - id: SAM-12-LN1
+        name: Launcher 1
+        coords: N36°33'56" E38°34'39"
+      - id: SAM-12-LN2
+        name: Launcher 2
+        coords: N36°33'55" E38°34'17"
+      - id: SAM-12-LN3
+        name: Launcher 3
+        coords: N36°33'53" E38°34'30"
+      - id: SAM-12-LN4
+        name: Launcher 4
+        coords: N36°34'03" E38°34'25"
+      elevation: 1437ft
+    SAM-13:
+      name: Kharab Ishk SA (SA-6 Gainful / Kub)
+      type: SAM
+      coords: N36°15'59" E38°55'38"
+      engagement_range_nm: 15
+      max_alt_ft: 40000
+      aim_points:
+      - id: SAM-13-RD1
+        name: Radar 1
+        coords: N36°15'59" E38°55'38"
+      - id: SAM-13-LN1
+        name: Launcher 1
+        coords: N36°16'05" E38°55'38"
+      - id: SAM-13-LN2
+        name: Launcher 2
+        coords: N36°16'00" E38°55'32"
+      - id: SAM-13-LN3
+        name: Launcher 3
+        coords: N36°16'00" E38°55'35"
+      - id: SAM-13-LN4
+        name: Launcher 4
+        coords: N36°16'02" E38°55'36"
+      elevation: 981ft
+    SAM-14:
+      name: Tabqa SA (SA-2 Guideline / S-75)
+      type: SAM
+      coords: N35°47'25" E38°38'04"
+      engagement_range_nm: 28
+      max_alt_ft: 60000
+      aim_points:
+      - id: SAM-14-RD1
+        name: Radar 1
+        coords: N35°47'25" E38°38'04"
+      - id: SAM-14-LN1
+        name: Launcher 1
+        coords: N35°47'26" E38°38'02"
+      - id: SAM-14-LN2
+        name: Launcher 2
+        coords: N35°47'27" E38°38'07"
+      - id: SAM-14-LN3
+        name: Launcher 3
+        coords: N35°47'23" E38°38'01"
+      - id: SAM-14-LN4
+        name: Launcher 4
+        coords: N35°47'22" E38°38'04"
+      - id: SAM-14-LN5
+        name: Launcher 5
+        coords: N35°47'23" E38°38'07"
+      - id: SAM-14-LN6
+        name: Launcher 6
+        coords: N35°47'28" E38°38'05"
+      - id: SAM-14-RD2
+        name: Radar 2
+        coords: N35°47'24" E38°38'09"
+      elevation: 1054ft
+    SAM-15:
+      name: Tal Siman SÀ (SA-6 Gainful / Kub)
+      type: SAM
+      coords: N35°15'04" E40°11'12"
+      engagement_range_nm: 15
+      max_alt_ft: 40000
+      aim_points:
+      - id: SAM-15-RD1
+        name: Radar 1
+        coords: N35°15'04" E40°11'12"
+      - id: SAM-15-LN1
+        name: Launcher 1
+        coords: N35°15'04" E40°11'16"
+      - id: SAM-15-LN2
+        name: Launcher 2
+        coords: N35°15'04" E40°11'08"
+      - id: SAM-15-LN3
+        name: Launcher 3
+        coords: N35°15'00" E40°11'12"
+      - id: SAM-15-LN4
+        name: Launcher 4
+        coords: N35°15'07" E40°11'12"
+      elevation: 663ft
+    SAM-16:
+      name: Zor SA (SA-6 Gainful / Kub)
+      type: SAM
+      coords: N35°23'10" E40°15'15"
+      engagement_range_nm: 15
+      max_alt_ft: 40000
+      aim_points:
+      - id: SAM-16-RD1
+        name: Radar 1
+        coords: N35°23'10" E40°15'15"
+      - id: SAM-16-LN1
+        name: Launcher 1
+        coords: N35°23'10" E40°15'19"
+      - id: SAM-16-LN2
+        name: Launcher 2
+        coords: N35°23'10" E40°15'11"
+      - id: SAM-16-LN3
+        name: Launcher 3
+        coords: N35°23'07" E40°15'15"
+      - id: SAM-16-LN4
+        name: Launcher 4
+        coords: N35°23'13" E40°15'15"
+      elevation: 737ft
+    SAM-17:
+      name: Zor SA (SA-6 Gainful / Kub)
+      type: SAM
+      coords: N35°25'19" E40°10'23"
+      engagement_range_nm: 15
+      max_alt_ft: 40000
+      aim_points:
+      - id: SAM-17-RD1
+        name: Radar 1
+        coords: N35°25'19" E40°10'23"
+      - id: SAM-17-LN1
+        name: Launcher 1
+        coords: N35°25'19" E40°10'27"
+      - id: SAM-17-LN2
+        name: Launcher 2
+        coords: N35°25'19" E40°10'19"
+      - id: SAM-17-LN3
+        name: Launcher 3
+        coords: N35°25'15" E40°10'23"
+      - id: SAM-17-LN4
+        name: Launcher 4
+        coords: N35°25'22" E40°10'23"
+      elevation: 734ft
+    SAM-18:
+      name: Zor SA (SA-6 Gainful / Kub)
+      type: SAM
+      coords: N35°23'28" E40°03'43"
+      engagement_range_nm: 15
+      max_alt_ft: 40000
+      aim_points:
+      - id: SAM-18-RD1
+        name: Radar 1
+        coords: N35°23'28" E40°03'43"
+      - id: SAM-18-LN1
+        name: Launcher 1
+        coords: N35°23'28" E40°03'47"
+      - id: SAM-18-LN2
+        name: Launcher 2
+        coords: N35°23'28" E40°03'39"
+      - id: SAM-18-LN3
+        name: Launcher 3
+        coords: N35°23'24" E40°03'43"
+      - id: SAM-18-LN4
+        name: Launcher 4
+        coords: N35°23'31" E40°03'43"
+      elevation: 786ft
+    SAM-19:
+      name: EW Zor 1 (SA-6 Gainful / Kub)
+      type: SAM
+      coords: N36°06'09" E37°55'27"
+      engagement_range_nm: 15
+      max_alt_ft: 40000
+      aim_points:
+      - id: SAM-19-RD1
+        name: Radar 1
+        coords: N36°06'09" E37°55'27"
+      - id: SAM-19-LN1
+        name: Launcher 1
+        coords: N36°06'09" E37°55'32"
+      - id: SAM-19-LN2
+        name: Launcher 2
+        coords: N36°06'09" E37°55'23"
+      - id: SAM-19-LN3
+        name: Launcher 3
+        coords: N36°06'05" E37°55'28"
+      - id: SAM-19-LN4
+        name: Launcher 4
+        coords: N36°06'12" E37°55'27"
+      elevation: 1135ft
+    SAM-20:
+      name: Jirah SA (SA-5 Gammon / S-200)
+      type: SAM
+      coords: N33°43'48" E39°20'54"
+      engagement_range_nm: 100
+      max_alt_ft: 80000
+      aim_points:
+      - id: SAM-20-RD1
+        name: Radar 1
+        coords: N33°43'48" E39°20'54"
+      - id: SAM-20-RD2
+        name: Radar 2
+        coords: N33°43'47" E39°20'52"
+      - id: SAM-20-RD3
+        name: Radar 3
+        coords: N33°43'47" E39°20'56"
+      - id: SAM-20-LN1
+        name: Launcher 1
+        coords: N33°43'46" E39°20'50"
+      - id: SAM-20-LN2
+        name: Launcher 2
+        coords: N33°43'46" E39°20'58"
+      - id: SAM-20-LN3
+        name: Launcher 3
+        coords: N33°43'49" E39°20'49"
+      - id: SAM-20-LN4
+        name: Launcher 4
+        coords: N33°43'49" E39°20'59"
+      - id: SAM-20-LN5
+        name: Launcher 5
+        coords: N33°43'52" E39°20'50"
+      - id: SAM-20-LN6
+        name: Launcher 6
+        coords: N33°43'52" E39°20'58"
+      elevation: 2205ft
+    SAM-21:
+      name: Tabqa SA-2 3 (SA-6 Gainful / Kub)
+      type: SAM
+      coords: N35°46'34" E38°34'02"
+      engagement_range_nm: 15
+      max_alt_ft: 40000
+      aim_points:
+      - id: SAM-21-RD1
+        name: Radar 1
+        coords: N35°46'34" E38°34'02"
+      - id: SAM-21-LN1
+        name: Launcher 1
+        coords: N35°46'34" E38°34'05"
+      - id: SAM-21-LN2
+        name: Launcher 2
+        coords: N35°46'33" E38°34'00"
+      - id: SAM-21-LN3
+        name: Launcher 3
+        coords: N35°46'32" E38°34'04"
+      - id: SAM-21-LN4
+        name: Launcher 4
+        coords: N35°46'35" E38°34'01"
+      elevation: 1099ft
+  reference_points:
+  - name: BULLSEYE
+    type: bullseye
+    coords: N35°52'21" E38°33'59"
+  - name: MARSHAL
+    type: marshal
+    coords: N37°29'20" E38°28'38"
+    altitude: FL250
+  control_agencies:
+    DARKSTAR:
+      type: AWACS
+      callsign: DARKSTAR
+      platform: E-3A
+      primary_freq_mhz: '251.0'
+  frequencies:
+  - freq_mhz: 120.4
+    callsign: null
+    role: null
+  - freq_mhz: 121.0
+    callsign: null
+    role: null
+  - freq_mhz: 122.0
+    callsign: null
+    role: null
+  - freq_mhz: 122.1
+    callsign: null
+    role: null
+  - freq_mhz: 123.3
+    callsign: null
+    role: null
+  - freq_mhz: 124.0
+    callsign: null
+    role: null
+  - freq_mhz: 125.0
+    callsign: null
+    role: null
+  - freq_mhz: 126.0
+    callsign: null
+    role: null
+  - freq_mhz: 127.0
+    callsign: null
+    role: null
+  - freq_mhz: 128.0
+    callsign: null
+    role: null
+  - freq_mhz: 129.0
+    callsign: null
+    role: null
+  - freq_mhz: 130.0
+    callsign: null
+    role: null
+  - freq_mhz: 131.0
+    callsign: null
+    role: null
+  - freq_mhz: 132.0
+    callsign: null
+    role: null
+  - freq_mhz: 133.0
+    callsign: null
+    role: null
+  - freq_mhz: 134.0
+    callsign: null
+    role: null
+  - freq_mhz: 135.0
+    callsign: null
+    role: null
+  - freq_mhz: 136.0
+    callsign: null
+    role: null
+  - freq_mhz: 137.0
+    callsign: null
+    role: null
+  - freq_mhz: 138.0
+    callsign: null
+    role: null
+  - freq_mhz: 139.0
+    callsign: null
+    role: null
+  - freq_mhz: 140.0
+    callsign: null
+    role: null
+  - freq_mhz: 141.0
+    callsign: null
+    role: null
+  - freq_mhz: 243.0
+    callsign: null
+    role: null
+  - freq_mhz: 250.0
+    callsign: null
+    role: null
+  - freq_mhz: 251.0
+    callsign: null
+    role: null
+  - freq_mhz: 253.0
+    callsign: null
+    role: null
+  - freq_mhz: 255.0
+    callsign: null
+    role: null
+  - freq_mhz: 257.0
+    callsign: null
+    role: null
+  - freq_mhz: 259.0
+    callsign: null
+    role: null
+  - freq_mhz: 260.0
+    callsign: null
+    role: null
+  - freq_mhz: 261.0
+    callsign: null
+    role: null
+  - freq_mhz: 262.0
+    callsign: null
+    role: null
+  - freq_mhz: 263.0
+    callsign: null
+    role: null
+  - freq_mhz: 264.0
+    callsign: null
+    role: null
+  - freq_mhz: 266.0
+    callsign: null
+    role: null
+  - freq_mhz: 267.0
+    callsign: null
+    role: null
+  - freq_mhz: 268.0
+    callsign: null
+    role: null
+  - freq_mhz: 269.0
+    callsign: null
+    role: null
+  - freq_mhz: 270.0
+    callsign: null
+    role: null
+  - freq_mhz: 282.5
+    callsign: null
+    role: null
+  - freq_mhz: 305.0
+    callsign: null
+    role: null
+  - freq_mhz: 334.775
+    callsign: null
+    role: null
+  - freq_mhz: 340.775
+    callsign: null
+    role: null
+  - freq_mhz: 360.1
+    callsign: null
+    role: null
+ato:
+  irl_date: null
+  irl_time_zulu: null
+  ingame_start_time: '0300'
+  ingame_start_local: '0600'
+  local_offset_hours: 3
+  ae_flags:
+  - IRL
+  - INGAME
+  global_control:
+    agency_id: DARKSTAR
+    bullseye: BULLSEYE
+  airfields:
+  - icao: LTAG
+    role: deploy
+  carriers:
+  - id: CVN-1
+  shared_steerpoints:
+  - id: SSP-1
+    type: marshal
+    coords: N37°29'20" E38°28'38"
+    flights:
+    - BOLO1
+    - HAT
+    - KNIGHT
+    - RIDER
+    - SHADOW
+  - id: SSP-2
+    type: ip
+    coords: N37°02'51" E38°28'47"
+    flights:
+    - KNIGHT
+    - RIDER
+    - SHADOW
+    altitude_ft: 25000
+  - id: SSP-3
+    type: ep
+    coords: N36°55'36" E38°15'50"
+    flights:
+    - KNIGHT
+    - RIDER
+    - SHADOW
+    altitude_ft: 25000
+  support_flights:
+  - callsign: DARKSTAR
+    type: AWACS
+    aircraft_type: E3A
+    freq_mhz: 251.0
+    count: 1
+    orbit:
+      anchor_point: N35°59'56" E35°35'13"
+      altitude_ft: 30000
+      speed_kts: 400
+      leg_nm: 10.0
+      heading_deg: 0
+      width_nm: 20.0
+      direction: ccw
+    route:
+    - coords: N36°59'41" E35°25'14"
+      altitude_ft: 174
+    - coords: N35°59'56" E35°35'13"
+      altitude_ft: 30000
+  - callsign: TEXACO
+    type: TANKER
+    aircraft_type: KC135
+    freq_mhz: 998.0
+    count: 1
+    orbit:
+      anchor_point: N37°33'35" E38°14'34"
+      altitude_ft: 23000
+      speed_kts: 390
+      leg_nm: 40.0
+      heading_deg: 306
+      width_nm: 20.0
+      direction: ccw
+    route:
+    - coords: N37°00'13" E35°26'05"
+      altitude_ft: 194
+    - coords: N37°33'35" E38°14'34"
+      altitude_ft: 23000
+  - callsign: SHELL
+    type: TANKER
+    aircraft_type: KC135MPRS
+    freq_mhz: 999.0
+    count: 1
+    orbit:
+      anchor_point: N37°33'32" E38°14'31"
+      altitude_ft: 20000
+      speed_kts: 370
+      leg_nm: 40.0
+      heading_deg: 306
+      width_nm: 20.0
+      direction: ccw
+    route:
+    - coords: N37°00'30" E35°26'32"
+      altitude_ft: 230
+    - coords: N37°33'32" E38°14'31"
+      altitude_ft: 20000
+  missions:
+  - mission_number: MSN4808
+    callsign: SHADOW
+    mission_type: CAP
+    unit: null
+    home_base_icao: LTAG
+    deploy_location_icao: LTAG
+    aar_location_icao: LTAG
+    takeoff_time: null
+    recovery_time: null
+    aircraft:
+      count: 2
+      type: F16C
+      loadout: '000'
+    targets:
+    - location: Aleppo SA 2 2
+      target_id: SAM-12
+      altitude: 1437FT
+      tos: null
+      toffs: null
+      aim_points:
+      - aim_point_id: SAM-12-RD1
+    - location: Kharab Ishk SA
+      target_id: SAM-13
+      altitude: 981FT
+      tos: null
+      toffs: null
+      aim_points:
+      - aim_point_id: SAM-13-RD1
+    - location: EW Zor 1
+      target_id: SAM-19
+      altitude: 1135FT
+      tos: null
+      toffs: null
+      aim_points:
+      - aim_point_id: SAM-19-RD1
+    control:
+      agency_id: null
+    refuel: null
+    steer_points:
+    - coords: N37°09'59" E35°41'52"
+      name: TOSIE
+      altitude_ft: 12000
+    - shared_steerpoint_id: SSP-1
+    - shared_steerpoint_id: SSP-2
+    - coords: N36°33'55" E38°34'29"
+      altitude_ft: 1437
+      aim_point_id: SAM-12-RD1
+    - coords: N36°15'59" E38°55'38"
+      altitude_ft: 981
+      aim_point_id: SAM-13-RD1
+    - coords: N36°06'09" E37°55'27"
+      altitude_ft: 1135
+      aim_point_id: SAM-19-RD1
+    - shared_steerpoint_id: SSP-3
+    - coords: N36°45'55" E35°25'49"
+      name: OSLUP
+      altitude_ft: 10000
+    dtc_cartridge: BEANSTALK_F16
+  - mission_number: MSN4809
+    callsign: HAT
+    mission_type: CAP
+    unit: null
+    home_base_icao: CVN-1
+    deploy_location_icao: CVN-1
+    aar_location_icao: CVN-1
+    takeoff_time: null
+    recovery_time: null
+    aircraft:
+      count: 4
+      type: FA18C
+      loadout: 000+2X38
+    targets: null
+    control:
+      agency_id: null
+    refuel: null
+    steer_points:
+    - coords: N36°46'38" E34°50'07"
+      altitude_ft: 28000
+    - coords: N37°15'57" E35°27'55"
+      name: OGBON
+      altitude_ft: 30000
+    - shared_steerpoint_id: SSP-1
+    - coords: N37°02'50" E38°28'50"
+      name: IP
+      altitude_ft: 30000
+    - coords: N35°45'17" E38°33'53"
+      altitude_ft: 1099
+    - coords: N36°55'36" E38°15'50"
+      name: EP
+      altitude_ft: 32000
+    - coords: N36°57'10" E36°28'41"
+      name: MILBA
+      altitude_ft: 34000
+    dtc_cartridge: BEANSTALK_F18
+  - mission_number: MSN4810
+    callsign: KNIGHT
+    mission_type: CAP
+    unit: null
+    home_base_icao: LTAG
+    deploy_location_icao: LTAG
+    aar_location_icao: LTAG
+    takeoff_time: null
+    recovery_time: null
+    aircraft:
+      count: 2
+      type: F16C
+      loadout: '000'
+    targets:
+    - location: Tabqa SA-2 3
+      target_id: SAM-21
+      altitude: 1099FT
+      tos: null
+      toffs: null
+      aim_points:
+      - aim_point_id: SAM-21-RD1
+    - location: Tabqa SA
+      target_id: SAM-14
+      altitude: 1053FT
+      tos: null
+      toffs: null
+      aim_points:
+      - aim_point_id: SAM-14-RD1
+    control:
+      agency_id: null
+    refuel: null
+    steer_points:
+    - coords: N37°10'03" E35°41'48"
+      name: TOSIE
+      altitude_ft: 12000
+    - shared_steerpoint_id: SSP-1
+    - shared_steerpoint_id: SSP-2
+    - coords: N35°46'34" E38°34'02"
+      altitude_ft: 1099
+      aim_point_id: SAM-21-RD1
+    - coords: N35°47'25" E38°38'04"
+      altitude_ft: 1053
+      aim_point_id: SAM-14-RD1
+    - shared_steerpoint_id: SSP-3
+    - coords: N36°45'56" E35°25'50"
+      name: OSLUP
+      altitude_ft: 10000
+    dtc_cartridge: BEANSTALK_F16
+  - mission_number: MSN4811
+    callsign: RIDER
+    mission_type: CAP
+    unit: null
+    home_base_icao: LTAG
+    deploy_location_icao: LTAG
+    aar_location_icao: LTAG
+    takeoff_time: null
+    recovery_time: null
+    aircraft:
+      count: 2
+      type: F16C
+      loadout: '000'
+    targets: null
+    control:
+      agency_id: null
+    refuel: null
+    steer_points:
+    - coords: N37°09'55" E35°41'50"
+      name: TOSIE
+      altitude_ft: 12000
+    - shared_steerpoint_id: SSP-1
+    - shared_steerpoint_id: SSP-2
+    - coords: N35°45'17" E38°33'53"
+      altitude_ft: 1099
+    - shared_steerpoint_id: SSP-3
+    - coords: N36°45'56" E35°25'50"
+      name: OSLUP
+      altitude_ft: 10000
+    dtc_cartridge: BEANSTALK_F16
+  - mission_number: MSN4812
+    callsign: BOLO1
+    mission_type: STRIKE
+    unit: null
+    home_base_icao: LTAG
+    deploy_location_icao: LTAG
+    aar_location_icao: LTAG
+    takeoff_time: null
+    recovery_time: null
+    aircraft:
+      count: 2
+      type: F15ESE
+      loadout: '000'
+    targets: null
+    control:
+      agency_id: null
+    refuel: null
+    steer_points:
+    - coords: N37°09'58" E35°41'52"
+      name: TOSIE
+      altitude_ft: 12000
+    - shared_steerpoint_id: SSP-1
+    - coords: N36°45'56" E35°25'50"
+      name: OSLUP
+      altitude_ft: 10000
+    dtc_cartridge: null
+aco:
+  id: ACO-2014-10
+  timezone: UTC
+  distributing_agency: AUTO-EXTRACTED
+  acms:
+  - id: ACM-001
+    name: NFZ DAMASCUS
+    alt_lower: SFC
+    alt_upper: FL999
+    type: ROZ
+    geometry:
+      boundary:
+      - N33°06'39" E35°40'05"
+      - N34°39'06" E36°52'31"
+      - N34°55'19" E38°54'59"
+      - N33°45'03" E38°29'32"
+      - N32°59'42" E37°54'16"
+      - N32°26'19" E36°48'45"
+      - N32°48'55" E35°39'59"
+  - id: ACM-002
+    name: CCZ
+    alt_lower: SFC
+    alt_upper: FL999
+    type: ROZ
+    geometry:
+      center: N36°10'52" E34°16'10"
+      radius_nm: 49.9
+  - id: ACM-003
+    name: LTAG MTMA
+    alt_lower: SFC
+    alt_upper: FL999
+    type: ROZ
+    geometry:
+      center: N37°00'08" E35°25'35"
+      radius_nm: 49.9
+spins:
+  version: '1.0'
+  sections:
+  - title: C1 — COMMAND & CONTROL
+    entries:
+    - heading: C1.1 — Tactical Control
+    - label: PRIMARY AWACS
+      value: DARKSTAR / 305.000 MHz
+    - label: SECONDARY AWACS
+      value: MAGIC / 264.000 MHz
+    - heading: C1.2 — Airspace Control
+    - value: SCT, via LTAG MTMA and CVN-75
+    - heading: C1.3 — Package Lead
+    - label: PACKAGE LEAD
+      value: HAT11
+  - title: C3 — IFF / SIF
+    note: Squawk assigned Mode 3 code. Mode 4 mandatory.
+    table:
+      headers:
+      - MSN
+      - MODE
+      - CODE
+      rows:
+      - - '8023'
+        - '3'
+        - '4701'
+      - - '8024'
+        - '3'
+        - '4711'
+      - - '8025'
+        - '3'
+        - '4721'
+  - title: C4 — RULES OF ENGAGEMENT
+    entries:
+    - heading: C4.1 — PID
+    - value: PID required prior to weapons release on air contacts unless hostile act is demonstrated.
+    - value: PID on surface targets not designated by ATO required
+    - label: PID SOURCES
+      value: NCTR / radar profile, Correlated track from CRC/AWACS, Visual ID (VID)
+    - bullet: Unidentified aircraft departing known mixed-use or adversary-controlled bases are automatically hostile
+    - heading: C4.2 — BVR
+    - bullet: Weapons free against aircraft declared HOSTILE or demonstrating hostile act
+    - bullet: Aircraft operating third-party deconfliction agreements require higher authority clearance unless self-defence
+    - heading: C4.3 — SFC ATTACK
+    - bullet: Weapons release authorized only on assigned ATO targets
+    - bullet: Collateral damage estimate 3 delegated; higher requires CAOC approval
+    - heading: C4.4 — Civilian Traffic
+    - value: NO FACTOR
+    note: BVR weapons authorised only after PID or declaration by controlling agency.
+  - title: C5 — EXECUTION
+    entries:
+    - heading: C5.8023 — SHADOW (DEAD)
+    - label: OBJECTIVE
+      value: Effective destruction of Designated Track Radar's
+    - bullet: Reactive SEAD permitted against emitting threat systems tracking package aircraft
+    - heading: C5.8023 — KNIGHT (DEAD)
+    - label: OBJECTIVE
+      value: Degrade ___ Radar effectives with Maximum Effort.
+    - bullet: Reactive SEAD permitted against emitting threat systems tracking package aircraft
+    - heading: C5.8023 — RIDER (DEAD)
+    - label: OBJECTIVE
+      value: Degrade ___ Radar effectives with Maximum Effort.
+    - bullet: Reactive SEAD permitted against emitting threat systems tracking package aircraft
+    - heading: C5.6012 — HAT (STRIKE)
+    - label: OBJECTIVE
+      value: Deny adversary air interference within package airspace.
+    - label: ORBIT
+      value: N35°05.098 E035°44.098 AG27 090 10nm
+    - value: 'Priority of effort:'
+    - bullet: 1. Aircraft targeting MSN 6011 aircraft
+    - bullet: 2. Aircraft supporting TS-024 Engagement
+    - bullet: 3. All other hostile air contacts
+    - heading: C5.6013 — BOLO (ESCORT)
+    - label: OBJECTIVE
+      value: Deny adversary air interference on MSN 6014
+    - label: TARGETING RANGE
+      value: 65NM
+  - title: C7 — LOST COMMS
+    entries:
+    - heading: C7.1 — Loss of AWACS
+    - bullet: Default to package commander control
+    - bullet: Abort mission if communication cannot be restored within 5 minutes
+    - heading: C7.2 — Loss of Package Comms
+    - bullet: Continue mission if task and ROE remain clear
+    - bullet: Abort in case of degraded situation awareness
+    - heading: C7.3 — Loss of Intraflight Comms
+    - bullet: Continue assigned task
+    - bullet: Reestablish communication post target if feasible
+    - bullet: Abort mission if communication cannot be reestablished
+  - title: C8 — ABORT CRITERIA
+    entries:
+    - bullet: Target PID cannot be confirmed
+    - bullet: Collateral damage risk exceeds authorization
+    - bullet: Fuel state prevents safe recovery
+    - bullet: Supporting mission unsuccessful and threat unacceptable
+    - bullet: Major technical faults
+  - title: C9 — SEARCH AND RESCUE
+    entries:
+    - value: NOT SIMULATED
+  - title: C10 — AUTHENTICATION
+    entries:
+    - label: AUTHENTICATION
+      value: Daily authentication table per COMSEC
+  - title: C11 — SAFETY
+    entries:
+    - label: MINIMUM SEPARATION
+      value: 3NM / 1000ft between coalition aircraft outside tactical formation
+comms:
+  wing_lead: null
+  flights:
+  - group: SHADOW
+    callsign: SHADOW
+    dtc_cartridge: BEANSTALK_F16
+    uhf_presets:
+      1: 305.0
+      2: 264.0
+      3: 360.1
+      4: 340.775
+      5: 282.5
+      6: 250.0
+      7: 270.0
+      8: 257.0
+      9: 255.0
+      10: 262.0
+      11: 259.0
+      12: 268.0
+      13: 269.0
+      14: 260.0
+      15: 263.0
+      16: 261.0
+      17: 267.0
+      18: 251.0
+      19: 253.0
+      20: 266.0
+    vhf_presets:
+      1: 124.0
+      2: 135.0
+      3: 136.0
+      4: 127.0
+      5: 125.0
+      6: 121.0
+      7: 141.0
+      8: 128.0
+      9: 126.0
+      10: 133.0
+      11: 130.0
+      12: 139.0
+      13: 140.0
+      14: 131.0
+      15: 134.0
+      16: 132.0
+      17: 138.0
+      18: 122.0
+      19: 124.0
+      20: 137.0
+  - group: HAT
+    callsign: HAT
+    dtc_cartridge: BEANSTALK_F18
+    uhf_presets:
+      1: 305.0
+      2: 264.0
+      3: 360.1
+      4: 340.775
+      5: 282.5
+      6: 250.0
+      7: 270.0
+      8: 257.0
+      9: 255.0
+      10: 262.0
+      11: 259.0
+      12: 268.0
+      13: 269.0
+      14: 260.0
+      15: 263.0
+      16: 261.0
+      17: 267.0
+      18: 251.0
+      19: 253.0
+      20: 266.0
+    vhf_presets:
+      1: 120.4
+  - group: KNIGHT
+    callsign: KNIGHT
+    dtc_cartridge: BEANSTALK_F16
+    uhf_presets:
+      1: 305.0
+      2: 264.0
+      3: 360.1
+      4: 340.775
+      5: 282.5
+      6: 250.0
+      7: 270.0
+      8: 257.0
+      9: 255.0
+      10: 262.0
+      11: 259.0
+      12: 268.0
+      13: 269.0
+      14: 260.0
+      15: 263.0
+      16: 261.0
+      17: 267.0
+      18: 251.0
+      19: 253.0
+      20: 266.0
+    vhf_presets:
+      1: 124.0
+      2: 135.0
+      3: 136.0
+      4: 127.0
+      5: 125.0
+      6: 121.0
+      7: 141.0
+      8: 128.0
+      9: 126.0
+      10: 133.0
+      11: 130.0
+      12: 139.0
+      13: 140.0
+      14: 131.0
+      15: 134.0
+      16: 132.0
+      17: 138.0
+      18: 122.0
+      19: 124.0
+      20: 137.0
+  - group: RIDER
+    callsign: RIDER
+    dtc_cartridge: BEANSTALK_F16
+    uhf_presets:
+      1: 305.0
+      2: 264.0
+      3: 360.1
+      4: 340.775
+      5: 282.5
+      6: 250.0
+      7: 270.0
+      8: 257.0
+      9: 255.0
+      10: 262.0
+      11: 259.0
+      12: 268.0
+      13: 269.0
+      14: 260.0
+      15: 263.0
+      16: 261.0
+      17: 267.0
+      18: 251.0
+      19: 253.0
+      20: 266.0
+    vhf_presets:
+      1: 124.0
+      2: 135.0
+      3: 136.0
+      4: 127.0
+      5: 125.0
+      6: 121.0
+      7: 141.0
+      8: 128.0
+      9: 126.0
+      10: 133.0
+      11: 130.0
+      12: 139.0
+      13: 140.0
+      14: 131.0
+      15: 134.0
+      16: 132.0
+      17: 138.0
+      18: 122.0
+      19: 124.0
+      20: 137.0
+  - group: BOLO1
+    callsign: BOLO1
+    dtc_cartridge: null
+    uhf_presets:
+      1: 243.0
+      2: 264.0
+      3: 360.1
+      4: 334.775
+      5: 282.5
+      6: 250.0
+      7: 270.0
+      8: 257.0
+      9: 255.0
+      10: 262.0
+      11: 259.0
+      12: 268.0
+      13: 269.0
+      14: 260.0
+      15: 263.0
+      16: 261.0
+      17: 267.0
+      18: 251.0
+      19: 253.0
+      20: 266.0
+    vhf_presets:
+      1: 133.0
+      3: 122.1
+      4: 123.3
+      7: 130.0
+      9: 139.0
+      10: 140.0
+      11: 134.0
+      12: 132.0
+      13: 131.0
+      14: 129.0
+      15: 138.0
+      16: 121.0
+      17: 126.0
+      18: 125.0
+      19: 128.0
+      20: 122.0
+weather:
+  issued: '2014-10-03'
+  valid_from: 0000Z
+  valid_to: 2359Z
+  metars:
+  - METAR XXXX 030000Z 23603KT 9999 FEW164 15/00 Q1013 NOSIG
+  tafs: null
+  mission_wx:
+  - mission_ref: MSN4808
+    notes: No significant weather impact.
+  - mission_ref: MSN4809
+    notes: No significant weather impact.
+  - mission_ref: MSN4810
+    notes: No significant weather impact.
+  - mission_ref: MSN4811
+    notes: No significant weather impact.
+  - mission_ref: MSN4812
+    notes: No significant weather impact.
+_meta:
+  source: inherent resolve beanstalk 1.2
+  theatre: Syria
+  targets: 21
+  acm_zones: 3
+  missions: 5
+  tankers: 2
+  awacs: 1
+  support_flights: 3
+  shared_steerpoints: 3
+  airfields: 1

@@ -2,8 +2,8 @@
 
 ### C1.1 — Tactical Control
 
-PRIMARY AWACS: DARKSTAR / 265.100 MHz
-SECONDARY AWACS: MAGIC / 334.150 MHz
+PRIMARY AWACS: DARKSTAR / 305.000 MHz
+SECONDARY AWACS: MAGIC / 264.000 MHz
 
 ### C1.2 — Airspace Control
 
@@ -11,11 +11,8 @@ SCT, via LTAG MTMA and CVN-75
 
 ### C1.3 — Package Lead
 
-PACKAGE LEAD: SHADOW11
+PACKAGE LEAD: HAT11
 
-### C1.4 — Strike Lead
-
-STRIKE LEAD: SHADOW11
 
 ## C3 — IFF / SIF
 
@@ -35,7 +32,7 @@ PID required prior to weapons release on air contacts unless hostile act is demo
 PID on surface targets not designated by ATO required
 
 PID SOURCES: NCTR / radar profile, Correlated track from CRC/AWACS, Visual ID (VID)
-- Unidentified aircraft departing known mixed-use or adversary-controlled bases are NOT automatically hostile
+- Unidentified aircraft departing known mixed-use or adversary-controlled bases are automatically hostile
 
 ### C4.2 — BVR
 
@@ -57,10 +54,20 @@ NO FACTOR
 
 ### C5.8023 — SHADOW (DEAD)
 
+OBJECTIVE: Effective destruction of Designated Track Radar's
+- Reactive SEAD permitted against emitting threat systems tracking package aircraft
+
+### C5.8023 — KNIGHT (DEAD)
+
 OBJECTIVE: Degrade ___ Radar effectives with Maximum Effort.
 - Reactive SEAD permitted against emitting threat systems tracking package aircraft
 
-### C5.6012 — HAT (OCA-FTR)
+### C5.8023 — RIDER (DEAD)
+
+OBJECTIVE: Degrade ___ Radar effectives with Maximum Effort.
+- Reactive SEAD permitted against emitting threat systems tracking package aircraft
+
+### C5.6012 — HAT (STRIKE)
 
 OBJECTIVE: Deny adversary air interference within package airspace.
 ORBIT: N35°05.098 E035°44.098 AG27 090 10nm
@@ -70,23 +77,10 @@ Priority of effort:
 - 2. Aircraft supporting TS-024 Engagement
 - 3. All other hostile air contacts
 
-### C5.6013 — COWBOY (ESCORT)
+### C5.6013 — BOLO (ESCORT)
 
 OBJECTIVE: Deny adversary air interference on MSN 6014
 TARGETING RANGE: 65NM
-
-### C5.6014 — BOLO (DEAD)
-
-PRIMARY OBJECTIVE: Destruction of TS-024R
-SECONDARY OBJECTIVE: Destruction of TS-024S
-
-### C5.9001 — SHELL (GAS)
-
-TACAN: 37X
-
-### C5.9002 — ARCO (GAS)
-
-TACAN: 38X
 
 ## C7 — LOST COMMS
 
@@ -124,4 +118,4 @@ AUTHENTICATION: Daily authentication table per COMSEC
 
 ## C11 — SAFETY
 
-MINIMUM SEPARATION: 5NM / 2000ft between coalition aircraft outside tactical formation
+MINIMUM SEPARATION: 3NM / 1000ft between coalition aircraft outside tactical formation
