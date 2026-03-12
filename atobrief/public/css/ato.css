@@ -48,7 +48,7 @@
 /* Tanker strip */
 .tankers-row {
   flex-shrink: 0;
-  height: 86px;
+  height: 120px;
   display: flex;
   align-items: stretch;
   overflow-x: auto;
@@ -150,7 +150,7 @@
 /* Mission cards */
 .cards-row {
   flex-shrink: 0;
-  height: 172px;
+  height: 220px;
   display: flex;
   align-items: stretch;
   overflow-x: auto;
