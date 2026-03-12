@@ -337,22 +337,27 @@ function renderMissionCards(missions) {
  * Collect all time values from a mission for range calculation.
  */
 function collectMissionTimes(m) {
-  var t0 = m.targets && m.targets[0];
-  return [
-    toMins(t0 ? t0.not_earlier_than : null),
-    toMins(t0 ? t0.not_later_than   : null),
-    toMins(t0 ? t0.tot_net : null),
-    toMins(t0 ? t0.tot_nlt : null),
-    toMins(t0 ? t0.tos     : null),
-    toMins(t0 ? t0.toffs   : null),
+  var times = [];
+  (m.targets || []).forEach(function (t) {
+    times.push(
+      toMins(t.not_earlier_than),
+      toMins(t.not_later_than),
+      toMins(t.tot_net),
+      toMins(t.tot_nlt),
+      toMins(t.tos),
+      toMins(t.toffs)
+    );
+  });
+  times.push(
     toMins(m.refuel ? m.refuel.not_earlier_than : null),
     toMins(m.refuel ? m.refuel.not_later_than   : null),
     toMins(m.takeoff_time),
     toMins(m.marshal_time),
     toMins(m.recovery_time),
     toMins(m.vul_start),
-    toMins(m.vul_end),
-  ];
+    toMins(m.vul_end)
+  );
+  return times;
 }
 
 /**
@@ -540,52 +545,59 @@ function addVulnerabilityBar(track, m, range) {
  * Add TOT / TOS / legacy mission window bars.
  */
 function addMissionBars(track, m, missionIdx, range) {
-  var target = m.targets && m.targets[0];
-  var hasTOT = target && (target.tot_net || target.tot_nlt);
-  var hasTOS = target && (target.tos || target.toffs);
-  var color  = typeColor(m.mission_type);
-  var span   = range.max - range.min;
+  var targets    = m.targets || [];
+  var color      = typeColor(m.mission_type);
+  var span       = range.max - range.min;
+  var labelShown = false;
 
-  if (hasTOT || hasTOS) {
-    if (hasTOS) {
+  targets.forEach(function (target) {
+    var hasTOT = target && (target.tot_net || target.tot_nlt);
+    var hasTOS = target && (target.tos || target.toffs);
+
+    if (hasTOT || hasTOS) {
+      if (hasTOS) {
+        addBarIfValid(track, missionIdx, {
+          startTime: target.tos,
+          endTime:   target.toffs,
+          cssClass:  'tos',
+          color:     color,
+          title:     m.callsign + ' TOS · ' + fmtTime(target.tos)
+                   + ' – TOFFS ' + fmtTime(target.toffs),
+          label:     labelShown ? '' : (m.callsign || ''),
+          range:     range,
+          span:      span,
+        });
+        labelShown = true;
+      }
+      if (hasTOT) {
+        addBarIfValid(track, missionIdx, {
+          startTime: target.tot_net,
+          endTime:   target.tot_nlt,
+          cssClass:  'tot',
+          color:     color,
+          title:     m.callsign + ' TOT · ' + fmtTime(target.tot_net)
+                   + ' – ' + fmtTime(target.tot_nlt),
+          label:     labelShown ? '' : (m.callsign || ''),
+          range:     range,
+          span:      span,
+        });
+        labelShown = true;
+      }
+    } else if (target) {
       addBarIfValid(track, missionIdx, {
-        startTime: target.tos,
-        endTime:   target.toffs,
-        cssClass:  'tos',
+        startTime: target.not_earlier_than,
+        endTime:   target.not_later_than,
+        cssClass:  '',
         color:     color,
-        title:     m.callsign + ' TOS · ' + fmtTime(target.tos)
-                 + ' – TOFFS ' + fmtTime(target.toffs),
-        label:     m.callsign || '',
+        title:     m.callsign + ' · ' + fmtTime(target.not_earlier_than)
+                 + ' – ' + fmtTime(target.not_later_than),
+        label:     labelShown ? '' : (m.callsign || ''),
         range:     range,
         span:      span,
       });
+      labelShown = true;
     }
-    if (hasTOT) {
-      addBarIfValid(track, missionIdx, {
-        startTime: target.tot_net,
-        endTime:   target.tot_nlt,
-        cssClass:  'tot',
-        color:     color,
-        title:     m.callsign + ' TOT · ' + fmtTime(target.tot_net)
-                 + ' – ' + fmtTime(target.tot_nlt),
-        label:     hasTOS ? '' : (m.callsign || ''),
-        range:     range,
-        span:      span,
-      });
-    }
-  } else if (target) {
-    addBarIfValid(track, missionIdx, {
-      startTime: target.not_earlier_than,
-      endTime:   target.not_later_than,
-      cssClass:  '',
-      color:     color,
-      title:     m.callsign + ' · ' + fmtTime(target.not_earlier_than)
-               + ' – ' + fmtTime(target.not_later_than),
-      label:     m.callsign || '',
-      range:     range,
-      span:      span,
-    });
-  }
+  });
 }
 
 /**
