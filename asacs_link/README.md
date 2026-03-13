@@ -60,7 +60,7 @@ ASACS_VERBOSE=true npm start
 With verbose mode the server logs every UDP units packet received from DCS,
 the unit count stored in state, and the filtered count sent to each coalition.
 On the DCS side, set `VERBOSE = true` at the top of `mygci_export.lua` (it is
-`true` by default) to log `LoGetWorldObjects()` results and per-frame send
+`false` by default) to log `LoGetWorldObjects()` results and per-frame send
 activity to the DCS log file.  In the browser, open the developer console
 (F12) to see per-message diagnostics from the client-side JavaScript.
 
@@ -87,7 +87,10 @@ dofile(lfs.writedir()..'Scripts\\mygci_export.lua')
 ```
 
 If you already have an `Export.lua` (e.g., from Tacview or DCS-BIOS), append
-the `dofile` line at the bottom — multiple export scripts can coexist.
+the `dofile` line at the bottom.  `mygci_export.lua` uses **callback chaining**:
+it saves any previously-defined `LuaExportStart`, `LuaExportStop`, and
+`LuaExportAfterNextFrame` callbacks and calls them alongside its own, so it
+coexists correctly with Tacview and other export scripts without conflicts.
 
 Both scripts send UDP packets to `127.0.0.1:7788` by default.
 If the server runs on a different machine, edit `SERVER_HOST` in both

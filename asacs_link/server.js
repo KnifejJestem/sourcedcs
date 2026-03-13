@@ -71,6 +71,11 @@ function serveStatic(req, res) {
 
 const state = new StateStore();
 
+// Last raw UDP packet received from DCS — stored before any processing so that
+// GET /api/raw can surface it for pipeline diagnostics.
+let _lastRawPkt   = null;
+let _lastRawPktTs = null;
+
 // ─── HTTP + WebSocket Server ──────────────────────────────────────────────────
 
 const httpServer = createServer((req, res) => {
@@ -109,6 +114,26 @@ const httpServer = createServer((req, res) => {
       mission: state.getMissionName(),
       uptime: process.uptime(),
     }));
+    return;
+  }
+
+  // Raw diagnostic dump — bypasses all coalition filtering and auth.
+  // Used to verify the DCS → UDP → state pipeline independently of the
+  // WebSocket realism layer.  Do not expose this to untrusted networks.
+  if (req.method === 'GET' && req.url === '/api/raw') {
+    const units = [...state.getAllUnits().values()].map(({ _lastSeen, ...u }) => u);
+    const lastPkt = _lastRawPkt ? {
+      ts:        _lastRawPktTs,
+      ageMs:     Date.now() - _lastRawPktTs,
+      type:      _lastRawPkt.type,
+      unitCount: Array.isArray(_lastRawPkt.units) ? _lastRawPkt.units.length : null,
+      units:     _lastRawPkt.units ?? null,
+    } : null;
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+    });
+    res.end(JSON.stringify({ storeCount: state.unitCount(), units, lastPkt }));
     return;
   }
 
@@ -257,6 +282,9 @@ function handleDcsPacket(packet) {
   switch (packet.type) {
     case 'units': {
       const incomingCount = Array.isArray(packet.units) ? packet.units.length : 0;
+      // Snapshot the raw packet before any processing for /api/raw diagnostics
+      _lastRawPkt   = packet;
+      _lastRawPktTs = Date.now();
       logv(`[UDP] Received units packet: ${incomingCount} unit(s) from DCS`);
       if (incomingCount === 0) {
         logv('[UDP] WARNING: units packet contained 0 units — DCS may have no world objects');

@@ -13,8 +13,13 @@
 --     dofile(lfs.writedir()..'Scripts\\mygci_export.lua')
 --   Note: backslashes are correct — DCS runs on Windows only.
 --
---   DCS calls Export.lua every simulation frame so this script
---   receives real-time telemetry data via LoGetWorldObjects().
+--   This script uses callback chaining, so it coexists correctly with
+--   Tacview, DCS-BIOS, and other Export.lua scripts. Load it LAST
+--   (append the dofile() line at the end of Export.lua) so that it
+--   can capture and chain any previously-defined callbacks.
+--   It uses LoGetWorldObjects() to enumerate all world objects and
+--   LoGetObjectById() for per-unit data (speed, heading) — the correct
+--   Export.lua APIs per https://wiki.hoggitworld.com/view/DCS_export
 -- ============================================================
 
 local SERVER_HOST = "127.0.0.1"
@@ -45,7 +50,8 @@ end
 
 -- ─── Tiny JSON encoder ─────────────────────────────────────────────────────
 
-local function json_encode(val)
+-- encode_array forces a Lua table to encode as a JSON array even when empty.
+local function json_encode(val, force_array)
     local t = type(val)
     if t == "nil" then return "null"
     elseif t == "boolean" then return val and "true" or "false"
@@ -53,9 +59,23 @@ local function json_encode(val)
         if val ~= val then return "null" end  -- NaN: only NaN is not equal to itself
         return tostring(val)
     elseif t == "string" then
-        return '"' .. val:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n'):gsub('\r', '\\r'):gsub('\t', '\\t') .. '"'
+        -- Escape all ASCII control characters (0x00–0x1F) to produce valid JSON
+        return '"' .. val:gsub('[\\"]', function(c)
+                return '\\' .. c
+            end):gsub('%c', function(c)
+                local b = string.byte(c)
+                if b == 8  then return '\\b'
+                elseif b == 9  then return '\\t'
+                elseif b == 10 then return '\\n'
+                elseif b == 12 then return '\\f'
+                elseif b == 13 then return '\\r'
+                else return string.format('\\u%04x', b)
+                end
+            end) .. '"'
     elseif t == "table" then
-        local is_array = #val > 0
+        -- A table is treated as a JSON array if it is non-empty with integer
+        -- keys starting at 1 (Lua sequence), OR if force_array is true.
+        local is_array = force_array or #val > 0
         if is_array then
             local parts = {}
             for _, v in ipairs(val) do
@@ -71,6 +91,17 @@ local function json_encode(val)
         end
     end
     return "null"
+end
+
+local function send_units_json(units)
+    -- Build the packet manually so that the units field is always a JSON
+    -- array (even when empty), which the server expects.
+    local units_json = json_encode(units, true)  -- force_array=true
+    local packet_str = '{"type":"units","units":' .. units_json .. '}'
+    local ok, err = udp:sendto(packet_str, SERVER_HOST, SERVER_PORT)
+    if not ok then
+        log("UDP send error: " .. tostring(err))
+    end
 end
 
 local function send_json(data)
@@ -99,8 +130,9 @@ local function get_category(obj_type)
 end
 
 -- ─── Unit extraction via Export.lua API ───────────────────────────────────
--- LoGetWorldObjects() is the correct Export.lua API for iterating all
--- world objects. It does NOT require mission scripting context.
+-- LoGetWorldObjects() enumerates all active world objects.
+-- LoGetObjectById(id) returns enriched per-unit data including velocity.
+-- Both are documented at https://wiki.hoggitworld.com/view/DCS_export
 
 -- Squawk codes are 4-digit octal (0000–7777 = 0–4095 decimal).
 -- DCS does not expose the raw transponder code via Export.lua, so we
@@ -139,17 +171,38 @@ local function extract_units()
             local pilot = obj.Pilot
             if pilot == "" then pilot = nil end
 
-            -- Heading is provided in radians; convert to degrees true (0–360).
+            -- Heading: provided in radians by LoGetWorldObjects; convert to degrees true (0–360).
             local hdg_rad = obj.Heading or 0
             local hdg_deg = math.deg(hdg_rad)
             if hdg_deg < 0 then hdg_deg = hdg_deg + 360 end
+
+            -- Speed: LoGetWorldObjects does not include velocity.
+            -- LoGetObjectById(id) returns a Velocity table with x/y/z components
+            -- in the DCS world frame (metres per second). Ground speed is the
+            -- horizontal magnitude: sqrt(vx^2 + vz^2).
+            local spd = 0
+            local detail = LoGetObjectById(id)
+            if detail then
+                local vel = detail.Velocity
+                if vel then
+                    -- vx and vz are horizontal; vy is vertical
+                    spd = math.floor(math.sqrt((vel.x or 0)^2 + (vel.z or 0)^2) + 0.5)
+                end
+                -- LoGetObjectById may also provide a more accurate Heading
+                if detail.Heading then
+                    hdg_rad = detail.Heading
+                    hdg_deg = math.deg(hdg_rad)
+                    if hdg_deg < 0 then hdg_deg = hdg_deg + 360 end
+                end
+            end
 
             units[#units + 1] = {
                 id        = id,
                 lat       = lat,
                 lon       = lon,
                 alt       = alt,
-                hdg       = math.floor(hdg_deg), -- degrees true, from obj.Heading
+                hdg       = math.floor(hdg_deg),
+                spd       = spd,
                 coalition = obj.CoalitionID or 0,
                 category  = category,
                 typeName  = obj.Name or "Unknown",
@@ -158,8 +211,6 @@ local function extract_units()
                 unitName  = obj.UnitName  or "",
                 groupName = obj.GroupName or "",
                 pilotName = pilot,
-                -- Ground speed is not exposed by LoGetWorldObjects.
-                spd = 0,
             }
         else
             skipped_no_lla = skipped_no_lla + 1
@@ -171,26 +222,52 @@ local function extract_units()
 end
 
 -- ─── Export.lua Callbacks ──────────────────────────────────────────────────
--- DCS calls these automatically every simulation frame when the script
--- is loaded via Export.lua. No manual registration is needed.
+-- DCS calls LuaExport* callbacks automatically every simulation frame when
+-- the script is loaded via Export.lua. No manual registration is needed.
+--
+-- Callback chaining: preserve any previously-defined callbacks (e.g. from
+-- Tacview or DCS-BIOS) so that multiple export scripts coexist correctly.
+
+local _prev_LuaExportStart         = LuaExportStart
+local _prev_LuaExportStop          = LuaExportStop
+local _prev_LuaExportAfterNextFrame = LuaExportAfterNextFrame
 
 function LuaExportStart()
+    if _prev_LuaExportStart then
+        local ok, err = pcall(_prev_LuaExportStart)
+        if not ok then log("Chained LuaExportStart error: " .. tostring(err)) end
+    end
+    last_update = 0  -- reset rate-limit timer for clean start
     log("MyGCI Export started — sending to " .. SERVER_HOST .. ":" .. SERVER_PORT)
 end
 
 function LuaExportStop()
+    if _prev_LuaExportStop then
+        local ok, err = pcall(_prev_LuaExportStop)
+        if not ok then log("Chained LuaExportStop error: " .. tostring(err)) end
+    end
     send_json({ type = "sim_stop" })
+    last_update = 0  -- reset so next session starts immediately
     log("MyGCI Export stopped")
 end
 
 function LuaExportAfterNextFrame()
-    local now = LoGetModelTime()
+    -- Chain previous callback (e.g. Tacview) before running ours
+    if _prev_LuaExportAfterNextFrame then
+        local ok, err = pcall(_prev_LuaExportAfterNextFrame)
+        if not ok then log("Chained LuaExportAfterNextFrame error: " .. tostring(err)) end
+    end
+
+    -- Guard: LoGetModelTime may return nil before the sim is fully running
+    local now_ok, now = pcall(LoGetModelTime)
+    if not now_ok or type(now) ~= "number" then return end
+
     if now - last_update >= UPDATE_RATE then
         last_update = now
         local ok, units = pcall(extract_units)
         if ok and units then
             logv("Sending " .. #units .. " unit(s) via UDP to " .. SERVER_HOST .. ":" .. SERVER_PORT)
-            local sent_ok, send_err = pcall(send_json, { type = "units", units = units })
+            local sent_ok, send_err = pcall(send_units_json, units)
             if not sent_ok then
                 log("ERROR sending units packet: " .. tostring(send_err))
             end

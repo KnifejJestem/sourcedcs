@@ -108,6 +108,41 @@
       </table>
     </div>
 
+    <!-- Raw DCS dump — polls /api/raw every 2 s, bypasses all filtering -->
+    <div class="section-hdr raw-section-hdr">
+      <span class="section-title raw-title">RAW DCS DUMP</span>
+      <div class="section-line"></div>
+      <span class="raw-badge">UNFILTERED</span>
+      <span class="section-count" id="rawCount">—</span>
+    </div>
+
+    <div class="raw-meta" id="rawMeta">Polling /api/raw…</div>
+
+    <div class="unit-table-wrap">
+      <table class="unit-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>UNIT NAME</th>
+            <th>TYPE</th>
+            <th>CAT</th>
+            <th>COAL ID</th>
+            <th>LAT</th>
+            <th>LON</th>
+            <th>ALT (m)</th>
+            <th>SPD (m/s)</th>
+            <th>HDG°</th>
+            <th>SQUAWK</th>
+            <th>GROUP</th>
+            <th>PILOT</th>
+          </tr>
+        </thead>
+        <tbody id="rawTableBody">
+          <tr><td colspan="13" class="empty-state">Polling…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
   </div><!-- /main-scroll -->
 </div><!-- /app -->
 

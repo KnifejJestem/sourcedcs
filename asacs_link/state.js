@@ -31,6 +31,10 @@ export class StateStore {
     const now = Date.now();
     const seenIds = new Set();
 
+    // Guard: units must be an array. If DCS sends a malformed packet
+    // (e.g. empty object {} instead of empty array []), skip gracefully.
+    if (!Array.isArray(units)) return;
+
     for (const unit of units) {
       if (unit.id == null) continue;
 
