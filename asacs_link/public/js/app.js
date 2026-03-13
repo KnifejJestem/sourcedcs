@@ -102,6 +102,7 @@ function logout() {
   sessionStorage.removeItem(KEY_COALITION);
   if (_ws) { _ws.close(); _ws = null; }
   clearInterval(_clockInterval);
+  stopRawPoll();
   _units   = [];
   _mission = null;
   $('app').classList.remove('visible');
@@ -124,6 +125,9 @@ function initApp(token, coalition) {
 
   // Clock: update mission elapsed time every second
   _clockInterval = setInterval(tickClock, 1000);
+
+  // Raw DCS dump: poll /api/raw every 2 s, independent of WebSocket
+  startRawPoll();
 }
 
 // ── WebSocket ─────────────────────────────────────────────────
@@ -327,4 +331,70 @@ function esc(v) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// ── Raw DCS dump (polls /api/raw, bypasses all filtering) ────
+let _rawPollInterval = null;
+
+function startRawPoll() {
+  fetchRaw();
+  _rawPollInterval = setInterval(fetchRaw, 2000);
+}
+
+function stopRawPoll() {
+  clearInterval(_rawPollInterval);
+  _rawPollInterval = null;
+}
+
+async function fetchRaw() {
+  try {
+    const res = await fetch('/api/raw');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderRaw(data);
+  } catch (ex) {
+    console.warn('[ASACS] /api/raw fetch error:', ex);
+  }
+}
+
+function renderRaw(data) {
+  const meta  = $('rawMeta');
+  const tbody = $('rawTableBody');
+  const count = $('rawCount');
+
+  const units = data.units || [];
+  count.textContent = `${units.length} unit${units.length !== 1 ? 's' : ''} in store`;
+
+  if (data.lastPkt) {
+    const ageSec   = (data.lastPkt.ageMs / 1000).toFixed(1);
+    const pktUnits = data.lastPkt.unitCount ?? '?';
+    meta.textContent =
+      `Last UDP packet: ${ageSec}s ago · packet contained ${pktUnits} unit(s)`;
+  } else {
+    meta.textContent = 'No UDP packet received from DCS yet';
+  }
+
+  if (units.length === 0) {
+    tbody.innerHTML =
+      '<tr><td colspan="13" class="empty-state">NO RAW DATA FROM DCS</td></tr>';
+    return;
+  }
+
+  const rows = units.map(u => `<tr>
+    <td>${esc(u.id)}</td>
+    <td>${esc(u.unitName || '—')}</td>
+    <td>${esc(u.typeName || u.type || '—')}</td>
+    <td>${esc(u.category || '—')}</td>
+    <td>${esc(u.coalition)}</td>
+    <td>${fmtCoord(u.lat)}</td>
+    <td>${fmtCoord(u.lon)}</td>
+    <td>${u.alt != null ? u.alt : '—'}</td>
+    <td>${u.spd != null ? u.spd : '—'}</td>
+    <td>${u.hdg != null ? u.hdg : '—'}</td>
+    <td>${u.squawk != null ? u.squawk : '—'}</td>
+    <td>${esc(u.groupName || '—')}</td>
+    <td>${esc(u.pilotName || '—')}</td>
+  </tr>`);
+
+  tbody.innerHTML = rows.join('');
 }

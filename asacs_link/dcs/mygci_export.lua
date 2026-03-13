@@ -14,8 +14,9 @@
 --   Note: backslashes are correct — DCS runs on Windows only.
 --
 --   This script uses callback chaining, so it coexists correctly with
---   Tacview, DCS-BIOS, and other Export.lua scripts. Simply append the
---   dofile() line at the end of any existing Export.lua.
+--   Tacview, DCS-BIOS, and other Export.lua scripts. Load it LAST
+--   (append the dofile() line at the end of Export.lua) so that it
+--   can capture and chain any previously-defined callbacks.
 --   It uses LoGetWorldObjects() to enumerate all world objects and
 --   LoGetObjectById() for per-unit data (speed, heading) — the correct
 --   Export.lua APIs per https://wiki.hoggitworld.com/view/DCS_export
