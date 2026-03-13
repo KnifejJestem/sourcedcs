@@ -71,7 +71,7 @@ Edit `config.js` to change passwords and ports before deployment.
 Copy files to your DCS Saved Games folder (usually `C:\Users\<you>\Saved Games\DCS`):
 
 ```
-Scripts/Export.lua                        ← add dofile() line (see below)
+Scripts/Export.lua                        ← copy dcs/Export.lua, or append its dofile() line
 Scripts/mygci_export.lua                  ← unit telemetry via Export.lua
 Scripts/Hooks/mygci_hook.lua              ← hook loader for events
 Mods/services/MyGCI/lua/myatc.lua         ← hook script for events
@@ -79,18 +79,40 @@ Mods/services/MyGCI/lua/myatc.lua         ← hook script for events
 
 #### Export.lua integration
 
-Create `Scripts/Export.lua` if it does not exist, then add this line:
+A ready-to-use `Export.lua` is provided in the `dcs/` folder.  If you have no
+existing `Export.lua`, copy it directly:
 
-```lua
--- Note: lfs.writedir() returns a Windows path (DCS runs on Windows only)
-dofile(lfs.writedir()..'Scripts\\mygci_export.lua')
+```
+dcs\Export.lua  →  %DCS_SAVED_GAMES%\Scripts\Export.lua
 ```
 
 If you already have an `Export.lua` (e.g., from Tacview or DCS-BIOS), append
-the `dofile` line at the bottom.  `mygci_export.lua` uses **callback chaining**:
-it saves any previously-defined `LuaExportStart`, `LuaExportStop`, and
-`LuaExportAfterNextFrame` callbacks and calls them alongside its own, so it
-coexists correctly with Tacview and other export scripts without conflicts.
+only the `dofile` line at the **bottom** of your existing file:
+
+```lua
+-- lfs.writedir() returns the DCS Saved Games path — it is a standard DCS
+-- global and IS required here to build the correct absolute file path.
+dofile(lfs.writedir()..'Scripts\\mygci_export.lua')
+```
+
+`mygci_export.lua` uses **callback chaining**: it saves any previously-defined
+`LuaExportStart`, `LuaExportStop`, and `LuaExportAfterNextFrame` callbacks and
+calls them alongside its own, so it coexists correctly with Tacview and other
+export scripts without conflicts.
+
+#### Verifying Export.lua is working
+
+When `mygci_export.lua` loads correctly it immediately sends a UDP ping to the
+server.  Open the **RAW DCS DUMP** panel in the dashboard:
+
+- **Export script: LOADED** — `Export.lua` found and ran `mygci_export.lua` ✅
+- **Export script: NOT LOADED** — `Export.lua` is missing or the `dofile` line
+  is absent.  Check `%DCS_SAVED_GAMES%\Logs\dcs.log` — a successful load
+  prints `[MyGCI] MyGCI Export script loaded`.
+
+You can also confirm in `dcs.log`: if you see the hook lines
+(`[MyGCI] GameGUI loading…`) but **no** `MyGCI Export script loaded` line,
+`mygci_export.lua` is not being loaded from `Export.lua`.
 
 Both scripts send UDP packets to `127.0.0.1:7788` by default.
 If the server runs on a different machine, edit `SERVER_HOST` in both

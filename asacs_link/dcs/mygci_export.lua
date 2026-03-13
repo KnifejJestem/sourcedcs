@@ -277,4 +277,8 @@ function LuaExportAfterNextFrame()
     end
 end
 
+-- Send an immediate UDP packet so the server dashboard can confirm that
+-- Export.lua has loaded this script, even before the first mission starts.
+-- Check /api/raw on the server: "Export script: loaded" confirms this line ran.
+send_json({ type = "export_loaded" })
 log("MyGCI Export script loaded — awaiting LuaExportStart()")

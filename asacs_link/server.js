@@ -76,6 +76,16 @@ const state = new StateStore();
 let _lastRawPkt   = null;
 let _lastRawPktTs = null;
 
+// Separate tracker for units packets (from mygci_export.lua via Export.lua).
+// Kept distinct from the general _lastRawPkt so /api/raw can tell the user
+// whether the Export.lua system is sending data independently of other packets.
+let _lastUnitsPkt   = null;
+let _lastUnitsPktTs = null;
+
+// Tracks when mygci_export.lua sent its startup ping, confirming that
+// Export.lua loaded the script.  null means no ping received yet.
+let _exportLoadedTs = null;
+
 // ─── HTTP + WebSocket Server ──────────────────────────────────────────────────
 
 const httpServer = createServer((req, res) => {
@@ -127,13 +137,24 @@ const httpServer = createServer((req, res) => {
       ageMs:     Date.now() - _lastRawPktTs,
       type:      _lastRawPkt.type,
       unitCount: Array.isArray(_lastRawPkt.units) ? _lastRawPkt.units.length : null,
-      units:     _lastRawPkt.units ?? null,
+    } : null;
+    const lastUnitsPkt = _lastUnitsPkt ? {
+      ts:        _lastUnitsPktTs,
+      ageMs:     Date.now() - _lastUnitsPktTs,
+      unitCount: Array.isArray(_lastUnitsPkt.units) ? _lastUnitsPkt.units.length : 0,
     } : null;
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
     });
-    res.end(JSON.stringify({ storeCount: state.unitCount(), units, lastPkt }));
+    res.end(JSON.stringify({
+      storeCount: state.unitCount(),
+      units,
+      lastPkt,
+      lastUnitsPkt,
+      exportLoadedTs: _exportLoadedTs,
+      exportLoadedAgeMs: _exportLoadedTs ? Date.now() - _exportLoadedTs : null,
+    }));
     return;
   }
 
@@ -279,12 +300,19 @@ udp.bind(config.udpPort, config.udpHost, () => {
 });
 
 function handleDcsPacket(packet) {
+  // Capture every incoming packet for /api/raw diagnostics, regardless of type.
+  // This lets users confirm whether ANY DCS system (hook or export) is sending
+  // UDP data, even when no unit telemetry has arrived yet.
+  _lastRawPkt   = packet;
+  _lastRawPktTs = Date.now();
+
   switch (packet.type) {
     case 'units': {
       const incomingCount = Array.isArray(packet.units) ? packet.units.length : 0;
-      // Snapshot the raw packet before any processing for /api/raw diagnostics
-      _lastRawPkt   = packet;
-      _lastRawPktTs = Date.now();
+      // Also track units packets separately so /api/raw can distinguish
+      // hook packets (mission/player events) from export packets (units).
+      _lastUnitsPkt   = packet;
+      _lastUnitsPktTs = Date.now();
       logv(`[UDP] Received units packet: ${incomingCount} unit(s) from DCS`);
       if (incomingCount === 0) {
         logv('[UDP] WARNING: units packet contained 0 units — DCS may have no world objects');
@@ -317,6 +345,10 @@ function handleDcsPacket(packet) {
       for (const { ws, coalition } of clients.values()) {
         if (coalition === 'admin') send(ws, packet);
       }
+      break;
+    case 'export_loaded':
+      _exportLoadedTs = Date.now();
+      console.log('[DCS] mygci_export.lua confirmed loaded via Export.lua');
       break;
     default:
       logv(`[DCS] Unknown packet type: "${packet.type}"`);
