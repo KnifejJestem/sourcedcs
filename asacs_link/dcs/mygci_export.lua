@@ -17,6 +17,11 @@
 --   Tacview, DCS-BIOS, and other Export.lua scripts. Load it LAST
 --   (append the dofile() line at the end of Export.lua) so that it
 --   can capture and chain any previously-defined callbacks.
+--
+-- Periodic telemetry uses LuaExportActivityNextEvent(t), the same
+-- timer-scheduled callback that Tacview uses. It receives the current
+-- sim time and returns the next desired call time (t + UPDATE_RATE),
+-- making it more reliable than LuaExportAfterNextFrame.
 --   It uses LoGetWorldObjects() to enumerate all world objects and
 --   LoGetObjectById() for per-unit data (speed, heading) — the correct
 --   Export.lua APIs per https://wiki.hoggitworld.com/view/DCS_export
@@ -30,9 +35,7 @@ local socket = require("socket")
 local udp    = socket.udp()
 udp:settimeout(0)
 
-local last_update = 0
-
--- Verbose logging: set VERBOSE = true to enable per-frame diagnostic output.
+-- Verbose logging: set VERBOSE = true to enable per-call diagnostic output.
 -- When tracks are missing, flip this to true and check the DCS log file
 -- (%DCS_SAVED_GAMES%/Logs/dcs.log) for [MyGCI][VERBOSE] lines.
 -- Leave false in production to avoid log spam.
@@ -222,22 +225,21 @@ local function extract_units()
 end
 
 -- ─── Export.lua Callbacks ──────────────────────────────────────────────────
--- DCS calls LuaExport* callbacks automatically every simulation frame when
--- the script is loaded via Export.lua. No manual registration is needed.
+-- DCS calls LuaExport* callbacks automatically when the script is loaded
+-- via Export.lua. No manual registration is needed.
 --
 -- Callback chaining: preserve any previously-defined callbacks (e.g. from
 -- Tacview or DCS-BIOS) so that multiple export scripts coexist correctly.
 
-local _prev_LuaExportStart         = LuaExportStart
-local _prev_LuaExportStop          = LuaExportStop
-local _prev_LuaExportAfterNextFrame = LuaExportAfterNextFrame
+local _prev_LuaExportStart              = LuaExportStart
+local _prev_LuaExportStop               = LuaExportStop
+local _prev_LuaExportActivityNextEvent  = LuaExportActivityNextEvent
 
 function LuaExportStart()
     if _prev_LuaExportStart then
         local ok, err = pcall(_prev_LuaExportStart)
         if not ok then log("Chained LuaExportStart error: " .. tostring(err)) end
     end
-    last_update = 0  -- reset rate-limit timer for clean start
     log("MyGCI Export started — sending to " .. SERVER_HOST .. ":" .. SERVER_PORT)
 end
 
@@ -247,34 +249,37 @@ function LuaExportStop()
         if not ok then log("Chained LuaExportStop error: " .. tostring(err)) end
     end
     send_json({ type = "sim_stop" })
-    last_update = 0  -- reset so next session starts immediately
     log("MyGCI Export stopped")
 end
 
-function LuaExportAfterNextFrame()
-    -- Chain previous callback (e.g. Tacview) before running ours
-    if _prev_LuaExportAfterNextFrame then
-        local ok, err = pcall(_prev_LuaExportAfterNextFrame)
-        if not ok then log("Chained LuaExportAfterNextFrame error: " .. tostring(err)) end
-    end
+-- LuaExportActivityNextEvent(t) is a timer-scheduled callback: DCS passes the
+-- current sim time and the function returns when it next wants to be called.
+-- This is more reliable than LuaExportAfterNextFrame and is the same mechanism
+-- used by Tacview. Chaining preserves the previous script's schedule by taking
+-- the earlier of the two desired next-call times.
+function LuaExportActivityNextEvent(t)
+    local tNext = t + UPDATE_RATE
 
-    -- Guard: LoGetModelTime may return nil before the sim is fully running
-    local now_ok, now = pcall(LoGetModelTime)
-    if not now_ok or type(now) ~= "number" then return end
-
-    if now - last_update >= UPDATE_RATE then
-        last_update = now
-        local ok, units = pcall(extract_units)
-        if ok and units then
-            logv("Sending " .. #units .. " unit(s) via UDP to " .. SERVER_HOST .. ":" .. SERVER_PORT)
-            local sent_ok, send_err = pcall(send_units_json, units)
-            if not sent_ok then
-                log("ERROR sending units packet: " .. tostring(send_err))
-            end
-        else
-            log("ERROR in extract_units: " .. tostring(units))
+    -- Chain previous callback and honour its requested schedule too
+    if _prev_LuaExportActivityNextEvent then
+        local ok, prevNext = pcall(_prev_LuaExportActivityNextEvent, t)
+        if ok and type(prevNext) == "number" and prevNext < tNext then
+            tNext = prevNext
         end
     end
+
+    local ok, units = pcall(extract_units)
+    if ok and units then
+        logv("Sending " .. #units .. " unit(s) via UDP to " .. SERVER_HOST .. ":" .. SERVER_PORT)
+        local sent_ok, send_err = pcall(send_units_json, units)
+        if not sent_ok then
+            log("ERROR sending units packet: " .. tostring(send_err))
+        end
+    else
+        log("ERROR in extract_units: " .. tostring(units))
+    end
+
+    return tNext
 end
 
 -- Send an immediate UDP packet so the server dashboard can confirm that

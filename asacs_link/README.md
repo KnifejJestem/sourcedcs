@@ -12,8 +12,9 @@ This server uses two complementary DCS scripting methods:
 
 **1. Export.lua system** (`mygci_export.lua`) — real-time unit telemetry  
 DCS calls `Export.lua` every simulation frame. The export script uses
-`LoGetWorldObjects()` to obtain live position, coalition, category, and
-identity data for all units and sends them via UDP to this server.
+`LuaExportActivityNextEvent(t)` (the same timer-scheduled callback that Tacview
+uses) to run at 2 Hz, calling `LoGetWorldObjects()` to obtain live position,
+coalition, category, and identity data for all units and sending them via UDP.
 This is the standard method used by tools like Tacview and DCS-BIOS.
 
 **2. Server Hooks** (`mygci_hook.lua` + `myatc.lua`) — event monitoring  
@@ -60,7 +61,7 @@ ASACS_VERBOSE=true npm start
 With verbose mode the server logs every UDP units packet received from DCS,
 the unit count stored in state, and the filtered count sent to each coalition.
 On the DCS side, set `VERBOSE = true` at the top of `mygci_export.lua` (it is
-`false` by default) to log `LoGetWorldObjects()` results and per-frame send
+`false` by default) to log `LoGetWorldObjects()` results and per-call send
 activity to the DCS log file.  In the browser, open the developer console
 (F12) to see per-message diagnostics from the client-side JavaScript.
 
@@ -96,7 +97,7 @@ dofile(lfs.writedir()..'Scripts\\mygci_export.lua')
 ```
 
 `mygci_export.lua` uses **callback chaining**: it saves any previously-defined
-`LuaExportStart`, `LuaExportStop`, and `LuaExportAfterNextFrame` callbacks and
+`LuaExportStart`, `LuaExportStop`, and `LuaExportActivityNextEvent` callbacks and
 calls them alongside its own, so it coexists correctly with Tacview and other
 export scripts without conflicts.
 
