@@ -10,9 +10,16 @@ const config = {
   // WebSocket / HTTP port (clients connect here)
   wsPort: parseInt(process.env.PORT || '3000', 10),
 
-  // UDP port (DCS Lua hook sends data here)
-  udpHost: process.env.ASACS_UDP_HOST || '0.0.0.0',
-  udpPort: 7788,
+  // Path to the DCS Saved Games folder where the DCS scripts write their output files.
+  // Set ASACS_DCS_FILES_PATH to e.g. 'C:\\Users\\you\\Saved Games\\DCS\\'
+  // (include the trailing backslash).  The server polls four files from this directory:
+  //   mygci_units.json   — unit telemetry (written by mygci_export.lua at 2 Hz)
+  //   mygci_status.json  — export status events (written by mygci_export.lua)
+  //   mygci_mission.json — mission metadata (written by mygci_events.lua on mission load)
+  //   mygci_event.json   — player events (written by mygci_events.lua)
+  // Must be accessible from the machine running this server (use a network share
+  // or Docker volume if needed).
+  dcsFilesPath: process.env.ASACS_DCS_FILES_PATH || '',
 
   // Coalition passwords — override via env vars before deployment
   passwords: {

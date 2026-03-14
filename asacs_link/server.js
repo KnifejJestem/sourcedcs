@@ -1,14 +1,13 @@
 /**
  * DCS GCI Server
- * Receives unit data from DCS Lua hook via UDP,
+ * Reads unit data from files written by the DCS Export.lua script,
  * filters by coalition/realism rules, and distributes
  * to authenticated WebSocket clients at 2 Hz.
  */
 
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { createSocket } from 'dgram';
-import { readFileSync, existsSync, statSync } from 'fs';
+import { readFileSync, statSync } from 'fs';
 import { join, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
@@ -71,10 +70,20 @@ function serveStatic(req, res) {
 
 const state = new StateStore();
 
-// Last raw UDP packet received from DCS — stored before any processing so that
+// Last raw file packet read from DCS — stored before any processing so that
 // GET /api/raw can surface it for pipeline diagnostics.
 let _lastRawPkt   = null;
 let _lastRawPktTs = null;
+
+// Separate tracker for units packets (from mygci_export.lua via file polling).
+// Kept distinct from the general _lastRawPkt so /api/raw can tell the user
+// whether the Export.lua system is sending data independently of other packets.
+let _lastUnitsPkt   = null;
+let _lastUnitsPktTs = null;
+
+// Tracks when mygci_export.lua wrote its startup status file, confirming that
+// Export.lua loaded the script.  null means no status file seen yet.
+let _exportLoadedTs = null;
 
 // ─── HTTP + WebSocket Server ──────────────────────────────────────────────────
 
@@ -118,7 +127,7 @@ const httpServer = createServer((req, res) => {
   }
 
   // Raw diagnostic dump — bypasses all coalition filtering and auth.
-  // Used to verify the DCS → UDP → state pipeline independently of the
+  // Used to verify the DCS → file → state pipeline independently of the
   // WebSocket realism layer.  Do not expose this to untrusted networks.
   if (req.method === 'GET' && req.url === '/api/raw') {
     const units = [...state.getAllUnits().values()].map(({ _lastSeen, ...u }) => u);
@@ -127,13 +136,24 @@ const httpServer = createServer((req, res) => {
       ageMs:     Date.now() - _lastRawPktTs,
       type:      _lastRawPkt.type,
       unitCount: Array.isArray(_lastRawPkt.units) ? _lastRawPkt.units.length : null,
-      units:     _lastRawPkt.units ?? null,
+    } : null;
+    const lastUnitsPkt = _lastUnitsPkt ? {
+      ts:        _lastUnitsPktTs,
+      ageMs:     Date.now() - _lastUnitsPktTs,
+      unitCount: Array.isArray(_lastUnitsPkt.units) ? _lastUnitsPkt.units.length : 0,
     } : null;
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
     });
-    res.end(JSON.stringify({ storeCount: state.unitCount(), units, lastPkt }));
+    res.end(JSON.stringify({
+      storeCount: state.unitCount(),
+      units,
+      lastPkt,
+      lastUnitsPkt,
+      exportLoadedTs: _exportLoadedTs,
+      exportLoadedAgeMs: _exportLoadedTs ? Date.now() - _exportLoadedTs : null,
+    }));
     return;
   }
 
@@ -228,6 +248,9 @@ function send(ws, data) {
 let _broadcastTick = 0;
 
 setInterval(() => {
+  // Poll DCS files first so the broadcast uses the freshest state.
+  pollDcsFiles();
+
   if (clients.size === 0) return;
 
   const allUnits = state.getAllUnits();
@@ -257,40 +280,108 @@ setInterval(() => {
   }
 }, 500); // 2 Hz
 
-// ─── UDP Listener (DCS → Server) ─────────────────────────────────────────────
+// ─── File Poller (DCS → Server) ──────────────────────────────────────────────
+// mygci_export.lua writes unit data and status events to files in the DCS
+// Saved Games folder (configured via ASACS_DCS_FILES_PATH).  We poll those
+// files on the broadcast interval rather than relying on a UDP socket, which
+// is broken on DCS dedicated servers due to an incompatible lua-socket.dll.
+// mygci_events.lua (the hook script) writes mission and player-event files.
 
-const udp = createSocket('udp4');
+const UNITS_FILE   = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_units.json')   : null;
+const STATUS_FILE  = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_status.json')  : null;
+const MISSION_FILE = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_mission.json') : null;
+const EVENT_FILE   = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_event.json')   : null;
 
-udp.on('message', (msg) => {
+// Track last-seen state so we only process changes.
+let _lastUnitsMtime         = 0;    // mtime of units file at last successful read
+let _lastStatusFileContent  = '';   // raw content of status file at last successful read
+let _lastMissionFileContent = '';   // raw content of mission file (from mygci_events.lua hook)
+let _lastEventFileContent   = '';   // raw content of event file (from mygci_events.lua hook)
+
+if (!config.dcsFilesPath) {
+  console.warn('[FilePoller] ASACS_DCS_FILES_PATH is not set — DCS file polling disabled.');
+  console.warn('[FilePoller] Set ASACS_DCS_FILES_PATH to the DCS Saved Games path, e.g.:');
+  console.warn('[FilePoller]   ASACS_DCS_FILES_PATH="C:\\\\Users\\\\you\\\\Saved Games\\\\DCS\\\\" npm start');
+} else {
+  console.log(`[FilePoller] Watching for DCS data in: ${config.dcsFilesPath}`);
+}
+
+function pollDcsFiles() {
+  if (!UNITS_FILE) return;  // all four paths are null when dcsFilesPath is unset
+
+  // ── Units file (mygci_export.lua, 2 Hz) ──────────────────────────────────
+  // Reread only when the file's mtime has advanced (i.e. Lua wrote a new snapshot).
   try {
-    const packet = JSON.parse(msg.toString('utf8'));
-    handleDcsPacket(packet);
+    const stat = statSync(UNITS_FILE);
+    if (stat.mtimeMs > _lastUnitsMtime) {
+      _lastUnitsMtime = stat.mtimeMs;
+      const content = readFileSync(UNITS_FILE, 'utf8');
+      const packet  = JSON.parse(content);
+      handleDcsPacket(packet);
+    }
   } catch (err) {
-    console.warn('[UDP] Bad packet:', err.message);
+    if (err.code !== 'ENOENT') logv('[FilePoller] units file error:', err.message);
   }
-});
 
-udp.on('error', (err) => {
-  console.error('[UDP] Error:', err.message);
-});
+  // ── Status file (mygci_export.lua: export_loaded, sim_stop) ──────────────
+  // Compare raw content; the file is small (one event object) and changes
+  // infrequently (on load and sim_stop), so string comparison is fine.
+  try {
+    const content = readFileSync(STATUS_FILE, 'utf8');
+    if (content !== _lastStatusFileContent) {
+      _lastStatusFileContent = content;
+      const packet = JSON.parse(content);
+      handleDcsPacket(packet);
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') logv('[FilePoller] status file error:', err.message);
+  }
 
-udp.bind(config.udpPort, config.udpHost, () => {
-  console.log(`[UDP] Listening for DCS data on ${config.udpHost}:${config.udpPort}`);
-});
+  // ── Mission file (mygci_events.lua hook: written on onMissionLoadEnd) ────────
+  try {
+    const content = readFileSync(MISSION_FILE, 'utf8');
+    if (content !== _lastMissionFileContent) {
+      _lastMissionFileContent = content;
+      const packet = JSON.parse(content);
+      handleDcsPacket(packet);
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') logv('[FilePoller] mission file error:', err.message);
+  }
+
+  // ── Event file (mygci_events.lua hook: player events + sim_stop fallback) ────
+  try {
+    const content = readFileSync(EVENT_FILE, 'utf8');
+    if (content !== _lastEventFileContent) {
+      _lastEventFileContent = content;
+      const packet = JSON.parse(content);
+      handleDcsPacket(packet);
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') logv('[FilePoller] event file error:', err.message);
+  }
+}
 
 function handleDcsPacket(packet) {
+  // Capture every incoming packet for /api/raw diagnostics, regardless of type.
+  // This lets users confirm whether ANY DCS system (hook or export) is sending
+  // file data, even when no unit telemetry has arrived yet.
+  _lastRawPkt   = packet;
+  _lastRawPktTs = Date.now();
+
   switch (packet.type) {
     case 'units': {
       const incomingCount = Array.isArray(packet.units) ? packet.units.length : 0;
-      // Snapshot the raw packet before any processing for /api/raw diagnostics
-      _lastRawPkt   = packet;
-      _lastRawPktTs = Date.now();
-      logv(`[UDP] Received units packet: ${incomingCount} unit(s) from DCS`);
+      // Also track units packets separately so /api/raw can distinguish
+      // hook packets (mission/player events) from export packets (units).
+      _lastUnitsPkt   = packet;
+      _lastUnitsPktTs = Date.now();
+      logv(`[FilePoller] Received units file: ${incomingCount} unit(s) from DCS`);
       if (incomingCount === 0) {
-        logv('[UDP] WARNING: units packet contained 0 units — DCS may have no world objects');
+        logv('[FilePoller] WARNING: units file contained 0 units — DCS may have no world objects');
       }
       state.updateUnits(packet.units);
-      logv(`[UDP] State updated: ${state.unitCount()} unit(s) now in store`);
+      logv(`[FilePoller] State updated: ${state.unitCount()} unit(s) now in store`);
       break;
     }
     case 'mission':
@@ -317,6 +408,10 @@ function handleDcsPacket(packet) {
       for (const { ws, coalition } of clients.values()) {
         if (coalition === 'admin') send(ws, packet);
       }
+      break;
+    case 'export_loaded':
+      _exportLoadedTs = Date.now();
+      console.log('[DCS] mygci_export.lua confirmed loaded via Export.lua');
       break;
     default:
       logv(`[DCS] Unknown packet type: "${packet.type}"`);

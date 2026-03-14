@@ -17,34 +17,72 @@
 --   Tacview, DCS-BIOS, and other Export.lua scripts. Load it LAST
 --   (append the dofile() line at the end of Export.lua) so that it
 --   can capture and chain any previously-defined callbacks.
+--
+-- Periodic telemetry uses LuaExportActivityNextEvent(t), the same
+-- timer-scheduled callback that Tacview uses. It receives the current
+-- sim time and returns the next desired call time (t + UPDATE_RATE),
+-- making it more reliable than LuaExportAfterNextFrame.
 --   It uses LoGetWorldObjects() to enumerate all world objects and
 --   LoGetObjectById() for per-unit data (speed, heading) — the correct
 --   Export.lua APIs per https://wiki.hoggitworld.com/view/DCS_export
+--
+-- Output is written to files in the DCS Saved Games folder:
+--   mygci_units.json  — current unit snapshot (updated at UPDATE_RATE)
+--   mygci_status.json — status events (export_loaded, sim_stop)
+-- Files are written atomically: first to a .tmp file, then renamed,
+-- so the server never reads a partially-written file.
+-- Logging uses log.write('MYGCI.EXPORT', ...) — search dcs.log for MYGCI.EXPORT.
 -- ============================================================
 
-local SERVER_HOST = "127.0.0.1"
-local SERVER_PORT = 7788
 local UPDATE_RATE = 0.5   -- seconds between unit exports (2 Hz)
 
-local socket = require("socket")
-local udp    = socket.udp()
-udp:settimeout(0)
+-- lfs is pre-loaded by DCS in the Export.lua environment, but we require it
+-- explicitly here so the dependency is declared and the local is always set.
+local lfs = require('lfs')
 
-local last_update = 0
+-- Output files are written to the DCS Saved Games directory.
+-- lfs.writedir() returns e.g. C:\Users\you\Saved Games\DCS\
+local OUTPUT_PATH = lfs.writedir() .. "mygci_units.json"
+local OUTPUT_TMP  = lfs.writedir() .. "mygci_units.tmp"
+local STATUS_PATH = lfs.writedir() .. "mygci_status.json"
+local STATUS_TMP  = lfs.writedir() .. "mygci_status.tmp"
 
--- Verbose logging: set VERBOSE = true to enable per-frame diagnostic output.
+-- Verbose logging: set VERBOSE = true to enable per-call diagnostic output.
 -- When tracks are missing, flip this to true and check the DCS log file
--- (%DCS_SAVED_GAMES%/Logs/dcs.log) for [MyGCI][VERBOSE] lines.
+-- (%DCS_SAVED_GAMES%/Logs/dcs.log) for MYGCI.EXPORT lines.
 -- Leave false in production to avoid log spam.
 local VERBOSE = false
 
+-- Capture the DCS global logging object before we shadow 'log' with a
+-- local function below.  log.write(source, level, msg) writes to dcs.log.
+local dcslog = log
+
 local function log(msg)
-    io.write("[MyGCI] " .. tostring(msg) .. "\n")
+    dcslog.write('MYGCI.EXPORT', dcslog.INFO, tostring(msg))
 end
 
 local function logv(msg)
     if VERBOSE then
-        io.write("[MyGCI][VERBOSE] " .. tostring(msg) .. "\n")
+        dcslog.write('MYGCI.EXPORT', dcslog.DEBUG, tostring(msg))
+    end
+end
+
+-- ─── Atomic file writer ────────────────────────────────────────────────────
+-- Writes content to a .tmp file then renames it to the final path.
+-- On Windows, os.rename() atomically replaces the destination, so the
+-- server never reads a partially-written file.
+
+local function write_file_atomic(path, tmp_path, content)
+    local f = io.open(tmp_path, "w")
+    if not f then
+        log("ERROR: cannot open " .. tmp_path .. " for writing")
+        return
+    end
+    f:write(content)
+    f:close()
+    local ok, err = os.rename(tmp_path, path)
+    if not ok then
+        log("ERROR: cannot rename " .. tmp_path .. " to " .. path .. ": " .. tostring(err))
     end
 end
 
@@ -93,22 +131,16 @@ local function json_encode(val, force_array)
     return "null"
 end
 
-local function send_units_json(units)
-    -- Build the packet manually so that the units field is always a JSON
-    -- array (even when empty), which the server expects.
+local function write_units_json(units)
+    -- Build the JSON manually so that the units field is always an array
+    -- (even when empty), matching the format the server expects.
     local units_json = json_encode(units, true)  -- force_array=true
-    local packet_str = '{"type":"units","units":' .. units_json .. '}'
-    local ok, err = udp:sendto(packet_str, SERVER_HOST, SERVER_PORT)
-    if not ok then
-        log("UDP send error: " .. tostring(err))
-    end
+    local content = '{"type":"units","units":' .. units_json .. '}'
+    write_file_atomic(OUTPUT_PATH, OUTPUT_TMP, content)
 end
 
-local function send_json(data)
-    local ok, err = udp:sendto(json_encode(data), SERVER_HOST, SERVER_PORT)
-    if not ok then
-        log("UDP send error: " .. tostring(err))
-    end
+local function write_status(data)
+    write_file_atomic(STATUS_PATH, STATUS_TMP, json_encode(data))
 end
 
 -- ─── Category mapping ──────────────────────────────────────────────────────
@@ -222,23 +254,22 @@ local function extract_units()
 end
 
 -- ─── Export.lua Callbacks ──────────────────────────────────────────────────
--- DCS calls LuaExport* callbacks automatically every simulation frame when
--- the script is loaded via Export.lua. No manual registration is needed.
+-- DCS calls LuaExport* callbacks automatically when the script is loaded
+-- via Export.lua. No manual registration is needed.
 --
 -- Callback chaining: preserve any previously-defined callbacks (e.g. from
 -- Tacview or DCS-BIOS) so that multiple export scripts coexist correctly.
 
-local _prev_LuaExportStart         = LuaExportStart
-local _prev_LuaExportStop          = LuaExportStop
-local _prev_LuaExportAfterNextFrame = LuaExportAfterNextFrame
+local _prev_LuaExportStart              = LuaExportStart
+local _prev_LuaExportStop               = LuaExportStop
+local _prev_LuaExportActivityNextEvent  = LuaExportActivityNextEvent
 
 function LuaExportStart()
     if _prev_LuaExportStart then
         local ok, err = pcall(_prev_LuaExportStart)
         if not ok then log("Chained LuaExportStart error: " .. tostring(err)) end
     end
-    last_update = 0  -- reset rate-limit timer for clean start
-    log("MyGCI Export started — sending to " .. SERVER_HOST .. ":" .. SERVER_PORT)
+    log("MyGCI Export started — writing to " .. OUTPUT_PATH)
 end
 
 function LuaExportStop()
@@ -246,35 +277,42 @@ function LuaExportStop()
         local ok, err = pcall(_prev_LuaExportStop)
         if not ok then log("Chained LuaExportStop error: " .. tostring(err)) end
     end
-    send_json({ type = "sim_stop" })
-    last_update = 0  -- reset so next session starts immediately
+    write_status({ type = "sim_stop" })
     log("MyGCI Export stopped")
 end
 
-function LuaExportAfterNextFrame()
-    -- Chain previous callback (e.g. Tacview) before running ours
-    if _prev_LuaExportAfterNextFrame then
-        local ok, err = pcall(_prev_LuaExportAfterNextFrame)
-        if not ok then log("Chained LuaExportAfterNextFrame error: " .. tostring(err)) end
-    end
+-- LuaExportActivityNextEvent(t) is a timer-scheduled callback: DCS passes the
+-- current sim time and the function returns when it next wants to be called.
+-- This is more reliable than LuaExportAfterNextFrame and is the same mechanism
+-- used by Tacview. Chaining preserves the previous script's schedule by taking
+-- the earlier of the two desired next-call times.
+function LuaExportActivityNextEvent(t)
+    local tNext = t + UPDATE_RATE
 
-    -- Guard: LoGetModelTime may return nil before the sim is fully running
-    local now_ok, now = pcall(LoGetModelTime)
-    if not now_ok or type(now) ~= "number" then return end
-
-    if now - last_update >= UPDATE_RATE then
-        last_update = now
-        local ok, units = pcall(extract_units)
-        if ok and units then
-            logv("Sending " .. #units .. " unit(s) via UDP to " .. SERVER_HOST .. ":" .. SERVER_PORT)
-            local sent_ok, send_err = pcall(send_units_json, units)
-            if not sent_ok then
-                log("ERROR sending units packet: " .. tostring(send_err))
-            end
-        else
-            log("ERROR in extract_units: " .. tostring(units))
+    -- Chain previous callback and honour its requested schedule too
+    if _prev_LuaExportActivityNextEvent then
+        local ok, prevNext = pcall(_prev_LuaExportActivityNextEvent, t)
+        if ok and type(prevNext) == "number" and prevNext < tNext then
+            tNext = prevNext
         end
     end
+
+    local ok, units = pcall(extract_units)
+    if ok and units then
+        logv("Writing " .. #units .. " unit(s) to " .. OUTPUT_PATH)
+        local sent_ok, send_err = pcall(write_units_json, units)
+        if not sent_ok then
+            log("ERROR writing units file: " .. tostring(send_err))
+        end
+    else
+        log("ERROR in extract_units: " .. tostring(units))
+    end
+
+    return tNext
 end
 
+-- Write a status file so the server can confirm that Export.lua has loaded
+-- this script, even before the first mission starts.
+-- Check /api/raw on the server: "Export script: loaded" confirms this line ran.
+write_status({ type = "export_loaded" })
 log("MyGCI Export script loaded — awaiting LuaExportStart()")
