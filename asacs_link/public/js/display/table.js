@@ -59,8 +59,7 @@ const AsacsTable = (() => {
       const iff  = u.iffResolved == null ? '—' : (u.iffResolved ? 'YES' : 'NO');
       const iffC = u.iffResolved ? 'rel-friendly' : (u.iffResolved === false ? 'rel-hostile' : '');
 
-      // Show live IFF status from transponder if available
-      const iffStatus = (u._sim && u._sim.iffStatus) ? ` (${u._sim.iffStatus})` : '';
+      const iffStatus = u._sim?.iffStatus ? ` (${u._sim.iffStatus})` : '';
 
       return `<tr>
         <td class="${rc}">${rel.toUpperCase() || '—'}</td>

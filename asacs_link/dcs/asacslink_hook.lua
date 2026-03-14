@@ -17,7 +17,7 @@ local lfs = require('lfs')
 log.write('ASACSLINK.HOOK', log.INFO, 'GameGUI loading...')
 
 do
-    local mod_path = lfs.writedir() .. 'Mods\\services\\AsacsLink\\'
+    local mod_path = lfs.writedir() .. 'Mods\\services\\asacslink\\'
     local events_file = mod_path .. 'lua\\asacslink_events.lua'
     local f = io.open(events_file, 'r')
     if f then

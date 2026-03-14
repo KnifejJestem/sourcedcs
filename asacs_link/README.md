@@ -128,7 +128,7 @@ Copy files to your DCS Saved Games folder (`C:\Users\<you>\Saved Games\DCS`):
 Scripts/Export.lua                              ← copy dcs/Export.lua, or append dofile line
 Scripts/asacslink_export.lua                    ← unit telemetry via Export.lua
 Scripts/Hooks/asacslink_hook.lua                ← hook loader for events
-Mods/services/AsacsLink/lua/asacslink_events.lua  ← hook script for events
+Mods/services/asacslink/lua/asacslink_events.lua  ← hook script for events
 ```
 
 If you already have `Export.lua`, append only the `dofile` line at the bottom:

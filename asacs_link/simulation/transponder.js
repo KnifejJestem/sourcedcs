@@ -101,7 +101,7 @@ export class TransponderReceiver {
   getIff(name) {
     const entry = this._data.get(name);
     if (!entry) return null;
-    const { _ts, ...iff } = entry; // eslint-disable-line no-unused-vars
+    const { _ts, ...iff } = entry;
     return iff;
   }
 

@@ -2,7 +2,7 @@
 -- DCS GCI Hook Events  |  asacslink_events.lua
 -- Handles mission-level and player events via the DCS hook API.
 -- Place this file at:
---   %DCS_SAVED_GAMES%/Mods/services/AsacsLink/lua/asacslink_events.lua
+--   %DCS_SAVED_GAMES%/Mods/services/asacslink/lua/asacslink_events.lua
 -- The hook loader goes to:
 --   %DCS_SAVED_GAMES%/Scripts/Hooks/asacslink_hook.lua
 --

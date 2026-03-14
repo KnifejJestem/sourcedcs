@@ -52,14 +52,15 @@ const AsacsMap = (() => {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    // If no token is provided, show a placeholder instead of a blank map.
-    if (!token) {
+    // Check for mapboxgl library first, before token check.
+    if (typeof mapboxgl === 'undefined') {
+      console.error('[AsacsMap] mapboxgl is not loaded — check CDN link in index.html');
       _showNoToken(container);
       return;
     }
 
-    if (typeof mapboxgl === 'undefined') {
-      console.error('[AsacsMap] mapboxgl is not loaded — check CDN link in index.html');
+    // If no token is provided, show a placeholder instead of a blank map.
+    if (!token) {
       _showNoToken(container);
       return;
     }
