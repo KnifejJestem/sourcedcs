@@ -1,23 +1,23 @@
 -- ============================================================
--- DCS GCI Hook Events  |  mygci_events.lua
+-- DCS GCI Hook Events  |  asacslink_events.lua
 -- Handles mission-level and player events via the DCS hook API.
 -- Place this file at:
---   %DCS_SAVED_GAMES%/Mods/services/MyGCI/lua/mygci_events.lua
+--   %DCS_SAVED_GAMES%/Mods/services/AsacsLink/lua/asacslink_events.lua
 -- The hook loader goes to:
---   %DCS_SAVED_GAMES%/Scripts/Hooks/mygci_hook.lua
+--   %DCS_SAVED_GAMES%/Scripts/Hooks/asacslink_hook.lua
 --
 -- NOTE: Real-time unit data (positions, telemetry) is handled by
--- the Export.lua script (mygci_export.lua), NOT here.
+-- the Export.lua script (asacslink_export.lua), NOT here.
 -- world.searchObjects() is a mission-scripting API and is NOT
 -- available in the hook environment — use LoGetWorldObjects()
 -- in Export.lua instead.
 --
 -- Output files (written to DCS Saved Games folder):
---   mygci_mission.json — mission metadata on mission load
---   mygci_event.json   — player events (connect/disconnect/slot)
+--   asacslink_mission.json — mission metadata on mission load
+--   asacslink_event.json   — player events (connect/disconnect/slot)
 -- Files are written atomically via a .tmp rename to prevent
 -- the server from reading a partially-written file.
--- Logging uses log.write('MYGCI.HOOK', ...) — search dcs.log for MYGCI.HOOK.
+-- Logging uses log.write('ASACSLINK.HOOK', ...) — search dcs.log for ASACSLINK.HOOK.
 -- ============================================================
 
 -- lfs is available in the hook environment but we require it explicitly
@@ -28,14 +28,14 @@ local lfs = require('lfs')
 local dcslog = log
 
 local function log(msg)
-    dcslog.write('MYGCI.HOOK', dcslog.INFO, tostring(msg))
+    dcslog.write('ASACSLINK.HOOK', dcslog.INFO, tostring(msg))
 end
 
--- File paths for atomic output (same Saved Games folder used by mygci_export.lua)
-local MISSION_PATH = lfs.writedir() .. "mygci_mission.json"
-local MISSION_TMP  = lfs.writedir() .. "mygci_mission.tmp"
-local EVENT_PATH   = lfs.writedir() .. "mygci_event.json"
-local EVENT_TMP    = lfs.writedir() .. "mygci_event.tmp"
+-- File paths for atomic output (same Saved Games folder used by asacslink_export.lua)
+local MISSION_PATH = lfs.writedir() .. "asacslink_mission.json"
+local MISSION_TMP  = lfs.writedir() .. "asacslink_mission.tmp"
+local EVENT_PATH   = lfs.writedir() .. "asacslink_event.json"
+local EVENT_TMP    = lfs.writedir() .. "asacslink_event.tmp"
 
 -- ─── Atomic file writer ────────────────────────────────────────────────────
 -- Writes content to a .tmp file then renames it to the final path.
@@ -137,7 +137,7 @@ end
 -- ─── DCS Hook Callbacks ────────────────────────────────────────────────────
 -- These are registered via DCS.setUserCallbacks() and run in the
 -- hook (GUI) thread. They handle events, NOT unit polling.
--- Unit telemetry is sent by mygci_export.lua via Export.lua callbacks.
+-- Unit telemetry is sent by asacslink_export.lua via Export.lua callbacks.
 
 local callbacks = {}
 
@@ -150,7 +150,7 @@ function callbacks.onMissionLoadEnd()
 end
 
 function callbacks.onSimulationStop()
-    -- sim_stop is also written by mygci_export.lua LuaExportStop(),
+    -- sim_stop is also written by asacslink_export.lua LuaExportStop(),
     -- but we write it here too for robustness in case Export is not installed.
     write_event({ type = "sim_stop" })
     log("Simulation stopped")
@@ -185,4 +185,4 @@ function callbacks.onPlayerChangeSlot(id)
 end
 
 DCS.setUserCallbacks(callbacks)
-log("MyGCI hook events loaded — writing to " .. MISSION_PATH)
+log("AsacsLink hook events loaded — writing to " .. MISSION_PATH)

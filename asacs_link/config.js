@@ -13,13 +13,24 @@ const config = {
   // Path to the DCS Saved Games folder where the DCS scripts write their output files.
   // Set ASACS_DCS_FILES_PATH to e.g. 'C:\\Users\\you\\Saved Games\\DCS\\'
   // (include the trailing backslash).  The server polls four files from this directory:
-  //   mygci_units.json   — unit telemetry (written by mygci_export.lua at 2 Hz)
-  //   mygci_status.json  — export status events (written by mygci_export.lua)
-  //   mygci_mission.json — mission metadata (written by mygci_events.lua on mission load)
-  //   mygci_event.json   — player events (written by mygci_events.lua)
+  //   asacslink_units.json   — unit telemetry (written by asacslink_export.lua at 2 Hz)
+  //   asacslink_status.json  — export status events (written by asacslink_export.lua)
+  //   asacslink_mission.json — mission metadata (written by asacslink_events.lua on mission load)
+  //   asacslink_event.json   — player events (written by asacslink_events.lua)
   // Must be accessible from the machine running this server (use a network share
   // or Docker volume if needed).
   dcsFilesPath: process.env.ASACS_DCS_FILES_PATH || '',
+
+  // UDP port for SRS / compatible transponder IFF feed.
+  // Clients broadcast JSON packets here; the server reads Mode 3 + status fields
+  // and attaches them to matching units (matched by pilot name) in the simulation engine.
+  // Set ASACS_TRANSPONDER_PORT to override (e.g. if another service uses 10712).
+  transponderPort: parseInt(process.env.ASACS_TRANSPONDER_PORT || '10712', 10),
+
+  // Mapbox GL JS public token for the map display.
+  // Set MAPBOX_TOKEN in the environment before starting the server.
+  // If left empty the map falls back to a plain background with no tile layer.
+  mapboxToken: process.env.MAPBOX_TOKEN || '',
 
   // Coalition passwords — override via env vars before deployment
   passwords: {

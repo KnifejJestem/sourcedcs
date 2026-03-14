@@ -1,16 +1,16 @@
 -- ============================================================
--- DCS GCI Export Script  |  mygci_export.lua
+-- DCS GCI Export Script  |  asacslink_export.lua
 -- Uses the Export.lua system (LuaExport* callbacks + LoGet* APIs)
 -- for real-time unit telemetry — this is the correct DCS method.
 --
 -- Installation:
 --   Copy this file to:
---     %DCS_SAVED_GAMES%/Scripts/mygci_export.lua
+--     %DCS_SAVED_GAMES%/Scripts/asacslink_export.lua
 --
 --   Then add the following line to
 --     %DCS_SAVED_GAMES%/Scripts/Export.lua
 --   (create the file if it does not exist):
---     dofile(lfs.writedir()..'Scripts\\mygci_export.lua')
+--     dofile(lfs.writedir()..'Scripts\\asacslink_export.lua')
 --   Note: backslashes are correct — DCS runs on Windows only.
 --
 --   This script uses callback chaining, so it coexists correctly with
@@ -27,11 +27,11 @@
 --   Export.lua APIs per https://wiki.hoggitworld.com/view/DCS_export
 --
 -- Output is written to files in the DCS Saved Games folder:
---   mygci_units.json  — current unit snapshot (updated at UPDATE_RATE)
---   mygci_status.json — status events (export_loaded, sim_stop)
+--   asacslink_units.json  — current unit snapshot (updated at UPDATE_RATE)
+--   asacslink_status.json — status events (export_loaded, sim_stop)
 -- Files are written atomically: first to a .tmp file, then renamed,
 -- so the server never reads a partially-written file.
--- Logging uses log.write('MYGCI.EXPORT', ...) — search dcs.log for MYGCI.EXPORT.
+-- Logging uses log.write('ASACSLINK.EXPORT', ...) — search dcs.log for ASACSLINK.EXPORT.
 -- ============================================================
 
 local UPDATE_RATE = 0.5   -- seconds between unit exports (2 Hz)
@@ -42,14 +42,14 @@ local lfs = require('lfs')
 
 -- Output files are written to the DCS Saved Games directory.
 -- lfs.writedir() returns e.g. C:\Users\you\Saved Games\DCS\
-local OUTPUT_PATH = lfs.writedir() .. "mygci_units.json"
-local OUTPUT_TMP  = lfs.writedir() .. "mygci_units.tmp"
-local STATUS_PATH = lfs.writedir() .. "mygci_status.json"
-local STATUS_TMP  = lfs.writedir() .. "mygci_status.tmp"
+local OUTPUT_PATH = lfs.writedir() .. "asacslink_units.json"
+local OUTPUT_TMP  = lfs.writedir() .. "asacslink_units.tmp"
+local STATUS_PATH = lfs.writedir() .. "asacslink_status.json"
+local STATUS_TMP  = lfs.writedir() .. "asacslink_status.tmp"
 
 -- Verbose logging: set VERBOSE = true to enable per-call diagnostic output.
 -- When tracks are missing, flip this to true and check the DCS log file
--- (%DCS_SAVED_GAMES%/Logs/dcs.log) for MYGCI.EXPORT lines.
+-- (%DCS_SAVED_GAMES%/Logs/dcs.log) for ASACSLINK.EXPORT lines.
 -- Leave false in production to avoid log spam.
 local VERBOSE = false
 
@@ -58,12 +58,12 @@ local VERBOSE = false
 local dcslog = log
 
 local function log(msg)
-    dcslog.write('MYGCI.EXPORT', dcslog.INFO, tostring(msg))
+    dcslog.write('ASACSLINK.EXPORT', dcslog.INFO, tostring(msg))
 end
 
 local function logv(msg)
     if VERBOSE then
-        dcslog.write('MYGCI.EXPORT', dcslog.DEBUG, tostring(msg))
+        dcslog.write('ASACSLINK.EXPORT', dcslog.DEBUG, tostring(msg))
     end
 end
 
@@ -269,7 +269,7 @@ function LuaExportStart()
         local ok, err = pcall(_prev_LuaExportStart)
         if not ok then log("Chained LuaExportStart error: " .. tostring(err)) end
     end
-    log("MyGCI Export started — writing to " .. OUTPUT_PATH)
+    log("AsacsLink Export started — writing to " .. OUTPUT_PATH)
 end
 
 function LuaExportStop()
@@ -278,7 +278,7 @@ function LuaExportStop()
         if not ok then log("Chained LuaExportStop error: " .. tostring(err)) end
     end
     write_status({ type = "sim_stop" })
-    log("MyGCI Export stopped")
+    log("AsacsLink Export stopped")
 end
 
 -- LuaExportActivityNextEvent(t) is a timer-scheduled callback: DCS passes the
@@ -315,4 +315,4 @@ end
 -- this script, even before the first mission starts.
 -- Check /api/raw on the server: "Export script: loaded" confirms this line ran.
 write_status({ type = "export_loaded" })
-log("MyGCI Export script loaded — awaiting LuaExportStart()")
+log("AsacsLink Export script loaded — awaiting LuaExportStart()")

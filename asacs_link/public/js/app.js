@@ -1,6 +1,6 @@
 /* ════════════════════════════════════════════════════════════
    ASACS LINK — GCI Dashboard client
-   Handles: login → auth → WebSocket → raw data display
+   Handles: login → auth → WebSocket → simulation data → display
 ════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -9,17 +9,17 @@
 const KEY_COALITION = 'asacs-coalition';
 
 // ── State ────────────────────────────────────────────────────
-let _ws          = null;
-let _coalition   = null;
-let _units       = [];
-let _mission     = null;
+let _ws           = null;
+let _coalition    = null;
+let _units        = [];
+let _mission      = null;
 let _lastUpdateTs = null;
 let _clockInterval = null;
 
-// ── DOM refs ─────────────────────────────────────────────────
+// ── DOM helpers ───────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
-// ── Helpers ──────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 function toast(msg, ms) {
   const el = $('toast');
   el.textContent = msg;
@@ -28,21 +28,9 @@ function toast(msg, ms) {
   toast._t = setTimeout(() => el.classList.remove('show'), ms || 2500);
 }
 
-function fmtCoord(v, digits) {
-  if (v == null) return '—';
-  return Number(v).toFixed(digits || 4);
-}
-
 function fmtBullseye(obj) {
   if (!obj || (obj.x == null && obj.y == null)) return '—';
-  return `${fmtCoord(obj.x, 0)} / ${fmtCoord(obj.y, 0)}`;
-}
-
-function coalitionName(id) {
-  if (id === 0) return 'NEUTRAL';
-  if (id === 1) return 'RED';
-  if (id === 2) return 'BLUE';
-  return String(id);
+  return `${Number(obj.x).toFixed(0)} / ${Number(obj.y).toFixed(0)}`;
 }
 
 function padZ(n) { return String(n).padStart(2, '0'); }
@@ -55,13 +43,8 @@ function fmtZulu(secs) {
   return `${padZ(h)}:${padZ(m)}:${padZ(s)}Z`;
 }
 
-function relClass(rel) {
-  if (!rel) return '';
-  return 'rel-' + rel.toLowerCase();
-}
-
-// ── Login ────────────────────────────────────────────────────
-document.getElementById('passwordInput').addEventListener('keydown', e => {
+// ── Login ──────────────────────────────────────────────────────
+$('passwordInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') submitLogin();
 });
 
@@ -86,14 +69,13 @@ async function submitLogin() {
     }
 
     const { token, coalition } = await res.json();
-    // Clear the password field immediately — we only need the one-time token
     $('passwordInput').value = '';
     sessionStorage.setItem(KEY_COALITION, coalition);
     $('login-screen').style.display = 'none';
     $('app').classList.add('visible');
     initApp(token, coalition);
 
-  } catch (ex) {
+  } catch {
     err.textContent = 'SERVER UNREACHABLE';
   }
 }
@@ -112,25 +94,38 @@ function logout() {
   setStatus('offline');
 }
 
-// ── App init ─────────────────────────────────────────────────
-function initApp(token, coalition) {
+// ── App init ──────────────────────────────────────────────────
+async function initApp(token, coalition) {
   _coalition = coalition;
 
-  // Coalition badge
   const badge = $('coalitionBadge');
   badge.textContent = coalition.toUpperCase();
   badge.className   = 'coalition-badge ' + coalition.toLowerCase();
 
+  // Fetch public config (Mapbox token) then init the map
+  let mapboxToken = '';
+  try {
+    const cfgRes = await fetch('/api/config');
+    if (cfgRes.ok) {
+      const cfg = await cfgRes.json();
+      mapboxToken = cfg.mapboxToken || '';
+    }
+  } catch { /* map will show no-token message */ }
+
+  // Initialise display modules
+  AsacsMode.onModeChange(mode => {
+    if (mode === 'mfd') AsacsMap.resize();
+  });
+  AsacsMode.init();
+  AsacsMap.init(mapboxToken, 'map-container');
+
   connectWs(token);
 
-  // Clock: update mission elapsed time every second
   _clockInterval = setInterval(tickClock, 1000);
-
-  // Raw DCS dump: poll /api/raw every 2 s, independent of WebSocket
   startRawPoll();
 }
 
-// ── WebSocket ─────────────────────────────────────────────────
+// ── WebSocket ──────────────────────────────────────────────────
 function connectWs(token) {
   setStatus('connecting');
 
@@ -146,72 +141,66 @@ function connectWs(token) {
 
   ws.addEventListener('message', e => {
     let msg;
-    try { msg = JSON.parse(e.data); } catch { console.warn('[ASACS] Failed to parse message:', e.data); return; }
+    try { msg = JSON.parse(e.data); } catch { console.warn('[ASACS] Failed to parse WS message'); return; }
     handleMessage(msg);
   });
 
   ws.addEventListener('close', ev => {
-    console.debug(`[ASACS] WebSocket closed: code=${ev.code} reason=${ev.reason}`);
+    console.debug(`[ASACS] WebSocket closed: code=${ev.code}`);
     setStatus('offline');
     if (ev.code !== 4001 && ev.code !== 1000) {
       toast('CONNECTION LOST — RECONNECTING IN 5s');
-      setTimeout(() => {
-        // Re-authenticate before reconnecting
-        reauth();
-      }, 5000);
+      setTimeout(reauth, 5000);
     }
   });
 
-  ws.addEventListener('error', (err) => {
-    console.error('[ASACS] WebSocket error:', err);
+  ws.addEventListener('error', () => {
     setStatus('error');
   });
 }
 
 async function reauth() {
-  // Show login screen so the user can re-enter credentials.
-  // We intentionally do not cache or reuse the password.
   logout();
   toast('SESSION EXPIRED — PLEASE LOG IN AGAIN', 4000);
 }
 
-// ── Message handling ──────────────────────────────────────────
+// ── Message handling ───────────────────────────────────────────
+// Units here are already processed by the simulation engine (server-side)
+// and filtered by the coalition filter before being sent to this client.
 function handleMessage(msg) {
-  console.debug('[ASACS] Message received:', msg.type, msg);
   switch (msg.type) {
     case 'snapshot':
     case 'update':
-      console.debug(`[ASACS] ${msg.type}: ${(msg.units || []).length} unit(s), ts=${msg.ts}`);
-      _units       = msg.units || [];
+      _units        = msg.units || [];
       _lastUpdateTs = msg.ts || Date.now();
-      renderUnits();
+      AsacsTable.renderUnits(_units);
+      AsacsMap.updateUnits(_units);
       updateStats();
       break;
 
     case 'mission':
-      console.debug('[ASACS] Mission data received:', msg.data);
       _mission = msg.data || null;
       renderMission();
+      AsacsMap.updateMission(_mission);
       updateStats();
       break;
 
     case 'sim_stop':
-      console.debug('[ASACS] sim_stop received — clearing state');
       _units   = [];
       _mission = null;
-      renderUnits();
+      AsacsTable.renderUnits(_units);
+      AsacsMap.updateUnits(_units);
       renderMission();
       updateStats();
       toast('SIMULATION STOPPED');
       break;
 
     default:
-      // Forward unknown types to console only
-      console.debug('[ASACS] Unknown message type:', msg);
+      console.debug('[ASACS] Unknown message type:', msg.type);
   }
 }
 
-// ── Status indicator ──────────────────────────────────────────
+// ── Status indicator ───────────────────────────────────────────
 function setStatus(state) {
   const dot   = $('statusDot');
   const label = $('statusLabel');
@@ -233,7 +222,7 @@ function setStatus(state) {
   }
 }
 
-// ── Stats bar ─────────────────────────────────────────────────
+// ── Stats bar ──────────────────────────────────────────────────
 function updateStats() {
   $('statTracks').textContent = _units.length;
   $('statLastUpdate').textContent = _lastUpdateTs
@@ -247,12 +236,10 @@ function tickClock() {
     $('statMissionTime').textContent = '—';
     return;
   }
-  // DCS simulation time is not available from the server alone;
-  // display the mission start time as reference
   $('statMissionTime').textContent = fmtZulu(_mission.startTime);
 }
 
-// ── Mission strip ─────────────────────────────────────────────
+// ── Mission strip ──────────────────────────────────────────────
 function renderMission() {
   const strip = $('missionStrip');
   if (!_mission) {
@@ -276,64 +263,7 @@ function renderMission() {
   $('hdrMeta').textContent = (_mission.name || '') + (_mission.theatre ? '  ·  ' + _mission.theatre : '');
 }
 
-// ── Unit table ────────────────────────────────────────────────
-function renderUnits() {
-  const tbody = $('unitTableBody');
-
-  if (!_units || _units.length === 0) {
-    console.debug('[ASACS] renderUnits: no tracks to display');
-    tbody.innerHTML = '<tr><td colspan="14" class="empty-state">NO TRACKS</td></tr>';
-    return;
-  }
-
-  console.debug(`[ASACS] renderUnits: rendering ${_units.length} track(s)`);
-
-  // Sort: friendly first, then hostile, then neutral; within group by id
-  const order = { friendly: 0, admin: 0, hostile: 1, neutral: 2 };
-  const sorted = [..._units].sort((a, b) => {
-    const ra = order[a._rel] ?? 3;
-    const rb = order[b._rel] ?? 3;
-    if (ra !== rb) return ra - rb;
-    return (a.id || 0) - (b.id || 0);
-  });
-
-  const rows = sorted.map(u => {
-    const rel  = u._rel || '';
-    const rc   = relClass(rel);
-    const iff  = u.iffResolved == null ? '—' : (u.iffResolved ? 'YES' : 'NO');
-    const iffC = u.iffResolved ? 'rel-friendly' : (u.iffResolved === false ? 'rel-hostile' : '');
-
-    return `<tr>
-      <td class="${rc}">${rel.toUpperCase() || '—'}</td>
-      <td>${esc(u.id)}</td>
-      <td>${esc(u.typeName || u.type || '—')}</td>
-      <td>${esc(u.category || '—')}</td>
-      <td>${esc(coalitionName(u.coalition))}</td>
-      <td>${fmtCoord(u.lat)}</td>
-      <td>${fmtCoord(u.lon)}</td>
-      <td>${u.alt != null ? u.alt : '—'}</td>
-      <td>${u.spd != null ? u.spd : '—'}</td>
-      <td>${u.hdg != null ? u.hdg : '—'}</td>
-      <td>${u.squawk != null ? u.squawk : '—'}</td>
-      <td class="${iffC}">${iff}</td>
-      <td>${esc(u.groupName || '—')}</td>
-      <td>${esc(u.pilotName || '—')}</td>
-    </tr>`;
-  });
-
-  tbody.innerHTML = rows.join('');
-}
-
-function esc(v) {
-  if (v == null) return '—';
-  return String(v)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-// ── Raw DCS dump (polls /api/raw, bypasses all filtering) ────
+// ── Raw DCS dump (polls /api/raw) ──────────────────────────────
 let _rawPollInterval = null;
 
 function startRawPoll() {
@@ -347,70 +277,12 @@ function stopRawPoll() {
 }
 
 async function fetchRaw() {
+  // Only poll when in PROF mode — raw panel is not shown in MFD mode
+  if (AsacsMode.getMode() !== 'prof') return;
   try {
     const res = await fetch('/api/raw');
     if (!res.ok) return;
     const data = await res.json();
-    renderRaw(data);
-  } catch (ex) {
-    console.warn('[ASACS] /api/raw fetch error:', ex);
-  }
-}
-
-function renderRaw(data) {
-  const exportStatus = $('rawExportStatus');
-  const meta  = $('rawMeta');
-  const tbody = $('rawTableBody');
-  const count = $('rawCount');
-
-  const units = data.units || [];
-  count.textContent = `${units.length} unit${units.length !== 1 ? 's' : ''} in store`;
-
-  // Row 1: Export.lua script status (did mygci_export.lua load at all?)
-  if (data.exportLoadedTs) {
-    const ageSec = (data.exportLoadedAgeMs / 1000).toFixed(0);
-    exportStatus.textContent = `Export script: LOADED (confirmed ${ageSec}s ago via status file)`;
-    exportStatus.style.color = '';
-  } else {
-    exportStatus.textContent =
-      'Export script: NOT LOADED — add dofile(lfs.writedir().."Scripts\\mygci_export.lua") to Export.lua';
-    exportStatus.style.color = 'var(--red, #f55)';
-  }
-
-  // Row 2: Last units packet (unit telemetry from mygci_export.lua)
-  if (data.lastUnitsPkt) {
-    const ageSec = (data.lastUnitsPkt.ageMs / 1000).toFixed(1);
-    meta.textContent =
-      `Last units file: ${ageSec}s ago · ${data.lastUnitsPkt.unitCount} unit(s)`;
-  } else if (data.lastPkt) {
-    const ageSec = (data.lastPkt.ageMs / 1000).toFixed(1);
-    meta.textContent =
-      `Last file read: ${ageSec}s ago (type="${data.lastPkt.type}") — no units file yet`;
-  } else {
-    meta.textContent = 'No data file read from DCS yet';
-  }
-
-  if (units.length === 0) {
-    tbody.innerHTML =
-      '<tr><td colspan="13" class="empty-state">NO RAW DATA FROM DCS</td></tr>';
-    return;
-  }
-
-  const rows = units.map(u => `<tr>
-    <td>${esc(u.id)}</td>
-    <td>${esc(u.unitName || '—')}</td>
-    <td>${esc(u.typeName || u.type || '—')}</td>
-    <td>${esc(u.category || '—')}</td>
-    <td>${esc(u.coalition)}</td>
-    <td>${fmtCoord(u.lat)}</td>
-    <td>${fmtCoord(u.lon)}</td>
-    <td>${u.alt != null ? u.alt : '—'}</td>
-    <td>${u.spd != null ? u.spd : '—'}</td>
-    <td>${u.hdg != null ? u.hdg : '—'}</td>
-    <td>${u.squawk != null ? u.squawk : '—'}</td>
-    <td>${esc(u.groupName || '—')}</td>
-    <td>${esc(u.pilotName || '—')}</td>
-  </tr>`);
-
-  tbody.innerHTML = rows.join('');
+    AsacsTable.renderRaw(data);
+  } catch { /* silent */ }
 }

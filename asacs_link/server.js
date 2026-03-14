@@ -14,6 +14,8 @@ import { randomUUID } from 'crypto';
 import config from './config.js';
 import { filterUnitsForCoalition } from './filter.js';
 import { StateStore } from './state.js';
+import { SimulationEngine } from './simulation/engine.js';
+import { TransponderReceiver } from './simulation/transponder.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PUBLIC_DIR = join(__dirname, 'public');
@@ -70,18 +72,31 @@ function serveStatic(req, res) {
 
 const state = new StateStore();
 
+// ─── Transponder Receiver ─────────────────────────────────────────────────────
+// Listens for SRS-compatible IFF packets on UDP port 10712.
+// The simulation engine reads this data to annotate units with live squawk codes.
+
+const transponder = new TransponderReceiver(config.transponderPort);
+transponder.start();
+
+// ─── Simulation Engine ────────────────────────────────────────────────────────
+// The single hand-off point between raw DCS data and the display layer.
+// Raw units from StateStore pass through here before coalition filtering.
+
+const simEngine = new SimulationEngine(transponder);
+
 // Last raw file packet read from DCS — stored before any processing so that
 // GET /api/raw can surface it for pipeline diagnostics.
 let _lastRawPkt   = null;
 let _lastRawPktTs = null;
 
-// Separate tracker for units packets (from mygci_export.lua via file polling).
+// Separate tracker for units packets (from asacslink_export.lua via file polling).
 // Kept distinct from the general _lastRawPkt so /api/raw can tell the user
 // whether the Export.lua system is sending data independently of other packets.
 let _lastUnitsPkt   = null;
 let _lastUnitsPktTs = null;
 
-// Tracks when mygci_export.lua wrote its startup status file, confirming that
+// Tracks when asacslink_export.lua wrote its startup status file, confirming that
 // Export.lua loaded the script.  null means no status file seen yet.
 let _exportLoadedTs = null;
 
@@ -110,6 +125,14 @@ const httpServer = createServer((req, res) => {
         res.end(JSON.stringify({ error: 'Bad request' }));
       }
     });
+    return;
+  }
+
+  // Client configuration — serves public, non-secret settings to the frontend.
+  // The Mapbox token is a public (publishable) key; it is safe to expose here.
+  if (req.method === 'GET' && req.url === '/api/config') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ mapboxToken: config.mapboxToken }));
     return;
   }
 
@@ -222,7 +245,9 @@ wss.on('connection', (ws, req) => {
 
   // Send a snapshot of current units immediately
   const rawUnitCount = state.unitCount();
-  const snapshot = filterUnitsForCoalition(state.getAllUnits(), coalition);
+  const processedSnapshot = simEngine.process(state.getAllUnits());
+  const processedSnapshotMap = new Map(processedSnapshot.map(u => [u.id, u]));
+  const snapshot = filterUnitsForCoalition(processedSnapshotMap, coalition);
   logv(`[WS] Snapshot for ${clientId} (${coalition}): ${rawUnitCount} raw units → ${snapshot.length} after filter`);
   send(ws, { type: 'snapshot', units: snapshot, ts: Date.now() });
 
@@ -257,12 +282,18 @@ setInterval(() => {
   const ts = Date.now();
   _broadcastTick++;
 
-  // Cache filtered views per coalition to avoid recomputing for each client
+  // Run simulation engine: raw units → processed units (IFF attachment,
+  // future: altitude conversion, magnetic heading, LOS, etc.)
+  const processedUnits = simEngine.process(allUnits);
+
+  // Cache filtered views per coalition to avoid recomputing for each client.
+  // filterUnitsForCoalition now receives a Map built from processed units.
+  const processedMap = new Map(processedUnits.map(u => [u.id, u]));
   const coalitionCache = new Map();
 
   for (const { ws, coalition } of clients.values()) {
     if (!coalitionCache.has(coalition)) {
-      coalitionCache.set(coalition, filterUnitsForCoalition(allUnits, coalition));
+      coalitionCache.set(coalition, filterUnitsForCoalition(processedMap, coalition));
     }
     send(ws, {
       type: 'update',
@@ -281,22 +312,22 @@ setInterval(() => {
 }, 500); // 2 Hz
 
 // ─── File Poller (DCS → Server) ──────────────────────────────────────────────
-// mygci_export.lua writes unit data and status events to files in the DCS
+// asacslink_export.lua writes unit data and status events to files in the DCS
 // Saved Games folder (configured via ASACS_DCS_FILES_PATH).  We poll those
 // files on the broadcast interval rather than relying on a UDP socket, which
 // is broken on DCS dedicated servers due to an incompatible lua-socket.dll.
-// mygci_events.lua (the hook script) writes mission and player-event files.
+// asacslink_events.lua (the hook script) writes mission and player-event files.
 
-const UNITS_FILE   = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_units.json')   : null;
-const STATUS_FILE  = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_status.json')  : null;
-const MISSION_FILE = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_mission.json') : null;
-const EVENT_FILE   = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_event.json')   : null;
+const UNITS_FILE   = config.dcsFilesPath ? join(config.dcsFilesPath, 'asacslink_units.json')   : null;
+const STATUS_FILE  = config.dcsFilesPath ? join(config.dcsFilesPath, 'asacslink_status.json')  : null;
+const MISSION_FILE = config.dcsFilesPath ? join(config.dcsFilesPath, 'asacslink_mission.json') : null;
+const EVENT_FILE   = config.dcsFilesPath ? join(config.dcsFilesPath, 'asacslink_event.json')   : null;
 
 // Track last-seen state so we only process changes.
 let _lastUnitsMtime         = 0;    // mtime of units file at last successful read
 let _lastStatusFileContent  = '';   // raw content of status file at last successful read
-let _lastMissionFileContent = '';   // raw content of mission file (from mygci_events.lua hook)
-let _lastEventFileContent   = '';   // raw content of event file (from mygci_events.lua hook)
+let _lastMissionFileContent = '';   // raw content of mission file (from asacslink_events.lua hook)
+let _lastEventFileContent   = '';   // raw content of event file (from asacslink_events.lua hook)
 
 if (!config.dcsFilesPath) {
   console.warn('[FilePoller] ASACS_DCS_FILES_PATH is not set — DCS file polling disabled.');
@@ -309,7 +340,7 @@ if (!config.dcsFilesPath) {
 function pollDcsFiles() {
   if (!UNITS_FILE) return;  // all four paths are null when dcsFilesPath is unset
 
-  // ── Units file (mygci_export.lua, 2 Hz) ──────────────────────────────────
+  // ── Units file (asacslink_export.lua, 2 Hz) ──────────────────────────────────
   // Reread only when the file's mtime has advanced (i.e. Lua wrote a new snapshot).
   try {
     const stat = statSync(UNITS_FILE);
@@ -323,7 +354,7 @@ function pollDcsFiles() {
     if (err.code !== 'ENOENT') logv('[FilePoller] units file error:', err.message);
   }
 
-  // ── Status file (mygci_export.lua: export_loaded, sim_stop) ──────────────
+  // ── Status file (asacslink_export.lua: export_loaded, sim_stop) ──────────────
   // Compare raw content; the file is small (one event object) and changes
   // infrequently (on load and sim_stop), so string comparison is fine.
   try {
@@ -337,7 +368,7 @@ function pollDcsFiles() {
     if (err.code !== 'ENOENT') logv('[FilePoller] status file error:', err.message);
   }
 
-  // ── Mission file (mygci_events.lua hook: written on onMissionLoadEnd) ────────
+  // ── Mission file (asacslink_events.lua hook: written on onMissionLoadEnd) ────────
   try {
     const content = readFileSync(MISSION_FILE, 'utf8');
     if (content !== _lastMissionFileContent) {
@@ -349,7 +380,7 @@ function pollDcsFiles() {
     if (err.code !== 'ENOENT') logv('[FilePoller] mission file error:', err.message);
   }
 
-  // ── Event file (mygci_events.lua hook: player events + sim_stop fallback) ────
+  // ── Event file (asacslink_events.lua hook: player events + sim_stop fallback) ────
   try {
     const content = readFileSync(EVENT_FILE, 'utf8');
     if (content !== _lastEventFileContent) {
@@ -411,7 +442,7 @@ function handleDcsPacket(packet) {
       break;
     case 'export_loaded':
       _exportLoadedTs = Date.now();
-      console.log('[DCS] mygci_export.lua confirmed loaded via Export.lua');
+      console.log('[DCS] asacslink_export.lua confirmed loaded via Export.lua');
       break;
     default:
       logv(`[DCS] Unknown packet type: "${packet.type}"`);
