@@ -32,12 +32,52 @@
 /** Number of valid 4-digit octal squawk codes (0000–7777 = 0–4095 decimal). */
 const SQUAWK_MODULO = 4096;
 
+/**
+ * DCS unit category strings that represent ground-based units.
+ * These are filtered out of the display picture — only aircraft and ships
+ * are tracked by the GCI radar picture.
+ */
+const GROUND_CATEGORIES = new Set([
+  'ground units',
+  'ground',
+  'structures',
+  'static',
+]);
+
+/**
+ * Compute the great-circle distance in metres between two lat/lon positions
+ * using the Haversine formula.  Accurate to within ~0.3% for tactical ranges.
+ *
+ * @param {number} lat1  Degrees north
+ * @param {number} lon1  Degrees east
+ * @param {number} lat2  Degrees north
+ * @param {number} lon2  Degrees east
+ * @returns {number}  Distance in metres
+ */
+function _haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6_371_000; // Earth mean radius in metres
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export class SimulationEngine {
   /**
    * @param {import('./transponder.js').TransponderReceiver} transponder
    */
   constructor(transponder) {
     this._transponder = transponder;
+
+    /**
+     * Previous position snapshot keyed by unit ID.
+     * Used to derive groundspeed from successive position fixes.
+     * @type {Map<number|string, {lat: number, lon: number, ts: number}>}
+     */
+    this._prevPositions = new Map();
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -49,13 +89,23 @@ export class SimulationEngine {
    * raw unit with additional simulation fields attached under a `_sim` key so
    * that the display layer can distinguish DCS data from derived data.
    *
+   * Ground units and structures are excluded: the GCI radar picture only
+   * shows airborne contacts and ships.
+   *
    * @param {Map<number|string, object>} rawUnits  From StateStore.getAllUnits()
    * @returns {object[]}  Processed units ready for coalition filtering + broadcast
    */
   process(rawUnits) {
     const result = [];
+    const activeIds = new Set();
 
     for (const unit of rawUnits.values()) {
+      // Filter out ground units and structures — only aircraft and ships
+      // are part of the GCI radar picture.
+      const cat = (unit.category || '').toLowerCase().trim();
+      if (GROUND_CATEGORIES.has(cat)) continue;
+
+      activeIds.add(unit.id);
       const processed = { ...unit, _sim: {} };
 
       this._assignSquawk(processed);
@@ -67,6 +117,11 @@ export class SimulationEngine {
       // Future: this._simulateTransponderFrequency(processed);
 
       result.push(processed);
+    }
+
+    // Purge position history for units no longer in the picture
+    for (const id of this._prevPositions.keys()) {
+      if (!activeIds.has(id)) this._prevPositions.delete(id);
     }
 
     return result;
@@ -123,7 +178,15 @@ export class SimulationEngine {
   /**
    * Step 3 — Speed outputs: Ground Speed (GS) and Calibrated Airspeed (CAS).
    *
-   * GS is derived directly from the DCS speed field (m/s → knots).
+   * DCS does not reliably expose groundspeed, so GS is derived from successive
+   * position fixes using the Haversine formula:
+   *
+   *   GS = distance(prev_pos, cur_pos) / time_elapsed
+   *
+   * On the first fix for a unit there is no previous position, so GS is null
+   * until the next tick.  If position data is unavailable the raw DCS speed
+   * field is used as a fallback (m/s → knots).
+   *
    * CAS is a stub — proper CAS requires atmospheric data (temperature,
    * QNH/pressure altitude).  For now CAS = GS as a placeholder.
    *
@@ -131,14 +194,37 @@ export class SimulationEngine {
    * directly without unit conversion.
    */
   _computeSpeeds(unit) {
-    if (unit.spd == null) {
-      unit._sim.gs  = null;
-      unit._sim.cas = null;
-      return;
+    const now = Date.now();
+
+    if (unit.lat != null && unit.lon != null) {
+      const prev = this._prevPositions.get(unit.id);
+
+      if (prev) {
+        const dtSec = (now - prev.ts) / 1000;
+        if (dtSec >= 0.1) {
+          // Minimum 100 ms between fixes to avoid division-by-near-zero
+          const distM = _haversineMeters(prev.lat, prev.lon, unit.lat, unit.lon);
+          const knots = (distM / dtSec) * 1.94384; // m/s → knots
+          unit._sim.gs  = Math.round(knots);
+          unit._sim.cas = Math.round(knots); // Stub: CAS = GS until atmosphere simulation is wired in
+        }
+      }
+
+      // Update position history for the next tick
+      this._prevPositions.set(unit.id, { lat: unit.lat, lon: unit.lon, ts: now });
     }
-    const knots      = unit.spd * 1.94384; // m/s → knots
-    unit._sim.gs     = Math.round(knots);
-    unit._sim.cas    = Math.round(knots);  // Stub: CAS = GS until atmosphere simulation is wired in
+
+    // Fall back to raw DCS speed when no position-derived GS is available
+    if (unit._sim.gs == null) {
+      if (unit.spd != null) {
+        const knots     = unit.spd * 1.94384;
+        unit._sim.gs    = Math.round(knots);
+        unit._sim.cas   = Math.round(knots);
+      } else {
+        unit._sim.gs  = null;
+        unit._sim.cas = null;
+      }
+    }
   }
 
   /**

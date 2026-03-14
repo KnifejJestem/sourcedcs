@@ -114,7 +114,8 @@ async function initApp(token, coalition) {
 
   // Initialise display modules
   AsacsMode.onModeChange(mode => {
-    if (mode === 'mfd') AsacsMap.resize();
+    // Both PROF and MFD show the map — resize after switching from TABLE
+    if (mode === 'prof' || mode === 'mfd') AsacsMap.resize();
   });
   AsacsMode.init();
   AsacsMap.init(mapboxToken, 'map-container');
@@ -280,8 +281,8 @@ function stopRawPoll() {
 }
 
 async function fetchRaw() {
-  // Only poll when in PROF mode — raw panel is not shown in MFD mode
-  if (AsacsMode.getMode() !== 'prof') return;
+  // Only poll when in TABLE mode — raw panel is not shown in map modes
+  if (AsacsMode.getMode() !== 'table') return;
   try {
     const res = await fetch('/api/raw');
     if (!res.ok) return;

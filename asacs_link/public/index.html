@@ -42,12 +42,13 @@
     <div class="hdr-sep"></div>
     <div class="hdr-meta" id="hdrMeta">GCI TACTICAL DISPLAY</div>
     <div class="hdr-right">
-      <!-- Display mode toggle: PROF (table) / MFD (map) -->
+      <!-- Display mode toggle: PROF (tactical dark) / MFD (satellite) / TABLE (debug) -->
       <div class="hdr-toggle-group">
         <span class="hdr-toggle-label">DISPLAY</span>
         <div class="theme-toggle">
-          <button class="mode-btn active" data-mode="prof" onclick="AsacsMode.setMode('prof')">PROF</button>
-          <button class="mode-btn"        data-mode="mfd"  onclick="AsacsMode.setMode('mfd')">MFD</button>
+          <button class="mode-btn active" data-mode="prof"  onclick="AsacsMode.setMode('prof')">PROF</button>
+          <button class="mode-btn"        data-mode="mfd"   onclick="AsacsMode.setMode('mfd')">MFD</button>
+          <button class="mode-btn"        data-mode="table" onclick="AsacsMode.setMode('table')">TABLE</button>
         </div>
       </div>
       <div class="hdr-sep"></div>
@@ -86,8 +87,13 @@
     <span><span class="mission-key">BULL RED</span><span id="msnBullRed">—</span></span>
   </div>
 
-  <!-- ── PROF view (table / text) ──────────────────────────── -->
-  <div id="view-prof" class="view-container">
+  <!-- ── Map view — PROF (tactical dark) and MFD (satellite) ── -->
+  <div id="view-map" class="view-container">
+    <div id="map-container"></div>
+  </div>
+
+  <!-- ── TABLE view — debug / diagnostic data tables ────────── -->
+  <div id="view-table" class="view-container hidden">
 
     <div class="main-scroll">
 
@@ -161,12 +167,7 @@
       </div>
 
     </div><!-- /main-scroll -->
-  </div><!-- /view-prof -->
-
-  <!-- ── MFD view (Mapbox GL JS map) ───────────────────────── -->
-  <div id="view-mfd" class="view-container hidden">
-    <div id="map-container"></div>
-  </div>
+  </div><!-- /view-table -->
 
 </div><!-- /app -->
 

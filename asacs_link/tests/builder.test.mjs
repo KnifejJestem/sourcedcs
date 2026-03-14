@@ -34,7 +34,10 @@ describe('buildBlips', () => {
     assert.equal(fc.features.length, 1);
     const f = fc.features[0];
     assert.equal(f.geometry.type, 'Point');
-    assert.deepEqual(f.geometry.coordinates, [38.0, 35.0]);
+    // Coordinates are [lon, lat, alt] — alt defaults to 0 when absent
+    assert.equal(f.geometry.coordinates[0], 38.0);
+    assert.equal(f.geometry.coordinates[1], 35.0);
+    assert.equal(f.geometry.coordinates[2], 0);
     assert.equal(f.properties.colour,    '#4fc3f7', 'blue force should use blue colour');
     assert.equal(f.properties.isPrimary, 1,         'primary contact should have isPrimary=1');
   });
