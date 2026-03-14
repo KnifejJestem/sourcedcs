@@ -1,31 +1,31 @@
 /* ════════════════════════════════════════════════════════════
-   display/mode.js — PROF / MFD / TABLE mode switcher
+   display/mode.js — MAP / TABLE view switcher
 
-   PROF and MFD are both map-centric views with different visual
-   styles (analogous to light / dark mode):
-     PROF  — dark tactical overlay, standard map
-     MFD   — satellite imagery base, tactical overlay
+   Controls which top-level view is visible:
+     MAP   — the Mapbox tactical map (default)
+     TABLE — debug/diagnostic view: raw data tables
 
-   TABLE — debug/diagnostic view: raw data table
-           useful for verifying the DCS → server data pipeline
+   UI theme (PROF light / MFD dark) and map base layer
+   (CHART vector / TERRAIN satellite) are controlled
+   independently by AsacsTheme and AsacsMapType in theme.js.
 
    Exposes a single global: AsacsMode
 ════════════════════════════════════════════════════════════ */
 'use strict';
 
 const AsacsMode = (() => {
-  const MODES = ['prof', 'mfd', 'table'];
-  const KEY   = 'asacs-display-mode';
+  const MODES = ['map', 'table'];
+  const KEY   = 'asacs-view-mode';
 
-  let _current  = sessionStorage.getItem(KEY) || 'prof';
+  let _current  = sessionStorage.getItem(KEY) || 'map';
   let _onChange = null;
 
   function _applyMode(mode) {
-    document.querySelectorAll('.mode-btn').forEach(btn => {
+    document.querySelectorAll('[data-mode]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === mode);
     });
 
-    // Map container: visible for prof + mfd; hidden for table
+    // Map container: visible for map mode; hidden for table
     const mapEl   = document.getElementById('view-map');
     const tableEl = document.getElementById('view-table');
 
@@ -34,11 +34,6 @@ const AsacsMode = (() => {
 
     sessionStorage.setItem(KEY, mode);
     if (_onChange) _onChange(mode);
-
-    // Tell the map which visual style to use
-    if (mode !== 'table' && typeof AsacsMap !== 'undefined') {
-      AsacsMap.setDisplayMode(mode);
-    }
   }
 
   function setMode(mode) {

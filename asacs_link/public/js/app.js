@@ -114,10 +114,12 @@ async function initApp(token, coalition) {
 
   // Initialise display modules
   AsacsMode.onModeChange(mode => {
-    // Both PROF and MFD show the map — resize after switching from TABLE
-    if (mode === 'prof' || mode === 'mfd') AsacsMap.resize();
+    // Map view is visible when not in table mode — resize after switching
+    if (mode !== 'table') AsacsMap.resize();
   });
   AsacsMode.init();
+  AsacsTheme.init();
+  AsacsMapType.init();
   AsacsSettings.init();
   AsacsMap.init(mapboxToken, 'map-container');
 

@@ -1,22 +1,25 @@
 /* ════════════════════════════════════════════════════════════
-   display/map.js — Tactical map (PROF / MFD display modes)
+   display/map.js — Tactical map (CHART / TERRAIN display modes)
 
-   Renders live contacts using five GeoJSON sources / layers:
+   Renders live contacts using six GeoJSON sources / layers:
 
      contacts         → circle  — friendly / neutral blips
      contacts-hostile → symbol  — hostile / bandit triangles (▲)
      contact-heads    → line    — heading tick (~20 screen px)
      contact-trails   → line    — position history trail
+     contact-leaders  → line    — leader line from unit to dragged label
      contact-labels   → symbol  — callsign / FL / knots tag
 
    FeatureCollections are produced by AsacsBuilder (builder.js).
    Heading ticks are rebuilt only when zoom changes (they depend
-   on zoom level); blips/trails/labels rebuild when data changes.
-   Drag/pan does not trigger unnecessary source updates.
+   on zoom level); blips/trails/labels/leader-lines rebuild when
+   data changes.  Drag/pan does not trigger unnecessary source updates.
 
    Draggable labels: click and drag any label to declutter the
-   display.  Offsets are stored per unit ID and applied when
-   building the labels FeatureCollection.
+   display.  Offsets are stored as [deltaLon, deltaLat] relative to
+   the unit position, so the label tracks the unit as it moves and
+   a leader line is drawn from the unit to the displaced label.
+   Double-click resets the label to its default position.
 
    Exposes a single global: AsacsMap
 ════════════════════════════════════════════════════════════ */
@@ -47,22 +50,23 @@ const AsacsMap = (() => {
   const HISTORY_MAX = 30;
 
   // Track current display mode explicitly to avoid fragile URL inspection
-  let _displayMode = 'prof';
+  let _displayMode = 'chart';
 
   // Drag-label state
   let _dragLabel  = null;  // { id: String, startLngLat: {lng, lat} }
 
-  // Mapbox source / layer IDs
   const SRC_BLIPS   = 'contacts';
   const SRC_HOSTILE = 'contacts-hostile';
   const SRC_HEADS   = 'contact-heads';
   const SRC_TRAILS  = 'contact-trails';
+  const SRC_LEADERS = 'contact-leaders';
   const SRC_LABELS  = 'contact-labels';
 
   const LAYER_TRAILS   = 'contact-trails-layer';
   const LAYER_BLIPS    = 'contacts-layer';
   const LAYER_HOSTILE  = 'contacts-hostile-layer';
   const LAYER_HEADS    = 'contact-heads-layer';
+  const LAYER_LEADERS  = 'contact-leaders-layer';
   const LAYER_LABELS   = 'contact-labels-layer';
 
   // Hostile / bandit declaration values
@@ -151,15 +155,21 @@ const AsacsMap = (() => {
   }
 
   /**
-   * Change the Mapbox base-map style (PROF / MFD visual modes).
+   * Change the Mapbox base-map style (CHART / TERRAIN map modes).
+   * Also accepts legacy aliases 'prof' (→ chart) and 'mfd' (→ terrain).
    * All custom sources and layers are re-added after the style loads.
-   * @param {'prof'|'mfd'} mode
+   *
+   * Safe to call before the map has fully loaded — the call is a no-op
+   * in that case; _onLoad() picks up the stored preference via AsacsMapType.get().
+   * @param {'chart'|'terrain'|'prof'|'mfd'} type
    */
-  function setDisplayMode(mode) {
-    if (!_map || !_ready) return;
-    if (mode === _displayMode) return; // already on the right style
+  function setDisplayMode(type) {
+    // Normalise to canonical names; accept legacy prof/mfd aliases
+    const mode = (type === 'terrain' || type === 'mfd') ? 'terrain' : 'chart';
+    if (!_map) return; // Map not initialised yet; _onLoad() will handle this
+    if (mode === _displayMode && _ready) return; // Already on the right loaded style
 
-    const style = mode === 'mfd'
+    const style = mode === 'terrain'
       ? 'mapbox://styles/mapbox/satellite-streets-v12'
       : 'mapbox://styles/mapbox/dark-v11';
 
@@ -251,15 +261,17 @@ const AsacsMap = (() => {
         else friendly.push(u);
       }
 
-      const blipSrc  = _map.getSource(SRC_BLIPS);
-      const hostSrc  = _map.getSource(SRC_HOSTILE);
-      const trailSrc = _map.getSource(SRC_TRAILS);
-      const lblSrc   = _map.getSource(SRC_LABELS);
+      const blipSrc   = _map.getSource(SRC_BLIPS);
+      const hostSrc   = _map.getSource(SRC_HOSTILE);
+      const trailSrc  = _map.getSource(SRC_TRAILS);
+      const leaderSrc = _map.getSource(SRC_LEADERS);
+      const lblSrc    = _map.getSource(SRC_LABELS);
 
-      if (blipSrc)  blipSrc.setData(AsacsBuilder.buildBlips(friendly));
-      if (hostSrc)  hostSrc.setData(AsacsBuilder.buildBlips(hostile));
-      if (trailSrc) trailSrc.setData(AsacsBuilder.buildTrails(_units, _history));
-      if (lblSrc)   lblSrc.setData(AsacsBuilder.buildLabels(_units, _labelOffsets));
+      if (blipSrc)   blipSrc.setData(AsacsBuilder.buildBlips(friendly));
+      if (hostSrc)   hostSrc.setData(AsacsBuilder.buildBlips(hostile));
+      if (trailSrc)  trailSrc.setData(AsacsBuilder.buildTrails(_units, _history));
+      if (leaderSrc) leaderSrc.setData(AsacsBuilder.buildLeaderLines(_units, _labelOffsets));
+      if (lblSrc)    lblSrc.setData(AsacsBuilder.buildLabels(_units, _labelOffsets));
 
       // Heading ticks depend on zoom → mark as dirty too when data changes
       _zoomDirty = true;
@@ -278,13 +290,23 @@ const AsacsMap = (() => {
 
   function _onLoad() {
     _ready = true;
-    _initSources();
-    _initLayers();
     _initLabelDrag();
     // Apply any persisted settings (pitch, bearing, layer visibility etc.)
     if (typeof AsacsSettings !== 'undefined') {
       applySettings(AsacsSettings.get());
     }
+    // If the stored map-type preference differs from the style that just loaded,
+    // swap to the correct style (setDisplayMode re-inits sources/layers after load).
+    const storedType = typeof AsacsMapType !== 'undefined' ? AsacsMapType.get() : 'chart';
+    if (storedType !== _displayMode) {
+      setDisplayMode(storedType);
+      return; // style.load handler will call _initSources/_initLayers/_scheduleRender
+    }
+    // Already on the right style — init sources/layers and render.
+    // addSrc/addLayer are idempotent so this is safe even if a concurrent
+    // setDisplayMode style.load handler already ran (e.g. style swap mid-load).
+    _initSources();
+    _initLayers();
     _dataDirty = true;
     _zoomDirty = true;
     _scheduleRender();
@@ -310,6 +332,7 @@ const AsacsMap = (() => {
     addSrc(SRC_HOSTILE, { type: 'geojson', data: empty });
     addSrc(SRC_HEADS,   { type: 'geojson', data: empty });
     addSrc(SRC_TRAILS,  { type: 'geojson', data: empty });
+    addSrc(SRC_LEADERS, { type: 'geojson', data: empty });
     addSrc(SRC_LABELS,  { type: 'geojson', data: empty });
   }
 
@@ -330,7 +353,20 @@ const AsacsMap = (() => {
       },
     });
 
-    // 2. Friendly / neutral blips (circles)
+    // 2. Leader lines — faint dashed lines from unit to displaced labels
+    addLayer({
+      id:     LAYER_LEADERS,
+      type:   'line',
+      source: SRC_LEADERS,
+      paint: {
+        'line-color':      ['get', 'colour'],
+        'line-width':      1,
+        'line-opacity':    0.45,
+        'line-dasharray':  [2, 3],
+      },
+    });
+
+    // 3. Friendly / neutral blips (circles)
     addLayer({
       id:     LAYER_BLIPS,
       type:   'circle',
@@ -345,7 +381,7 @@ const AsacsMap = (() => {
       },
     });
 
-    // 3. Hostile / bandit triangles (▲)
+    // 4. Hostile / bandit triangles (▲)
     //    Uses COLOUR_BANDIT (red) for confirmed enemy, COLOUR_HOSTILE (orange) for bogey.
     //    Both constants are exported from builder.js and available via window.AsacsBuilder.
     const colBandit  = (typeof AsacsBuilder !== 'undefined' && AsacsBuilder.COLOUR_BANDIT)  || '#ff4444';
@@ -372,7 +408,7 @@ const AsacsMap = (() => {
       },
     });
 
-    // 4. Heading ticks — drawn after blips
+    // 5. Heading ticks — drawn after blips
     addLayer({
       id:     LAYER_HEADS,
       type:   'line',
@@ -384,7 +420,7 @@ const AsacsMap = (() => {
       },
     });
 
-    // 5. Data tags — allow overlap; units can be dragged for decluttering
+    // 6. Data tags — allow overlap; units can be dragged for decluttering
     addLayer({
       id:     LAYER_LABELS,
       type:   'symbol',
@@ -410,6 +446,9 @@ const AsacsMap = (() => {
 
   /**
    * Allow users to click and drag data-tag labels to declutter the display.
+   * Offsets are stored as [deltaLon, deltaLat] relative to the unit position
+   * so the label tracks the unit as it moves.  A leader line is drawn from
+   * the unit to the displaced label by buildLeaderLines() in builder.js.
    * Pressing Escape or double-clicking the label resets its position.
    */
   function _initLabelDrag() {
@@ -424,10 +463,12 @@ const AsacsMap = (() => {
 
       e.preventDefault();
 
+      const id = String(feature.properties.id);
       _dragLabel = {
-        id:          feature.properties.id,
+        id,
         startLngLat: e.lngLat,
-        // TODO: save startOffset here if undo/redo is ever needed
+        // Accumulate from any previous drag so repeat drags add to the offset
+        baseDelta: _labelOffsets.get(id) || [0, 0],
       };
 
       _map.dragPan.disable();
@@ -435,7 +476,12 @@ const AsacsMap = (() => {
 
       const onMove = (moveEvt) => {
         if (!_dragLabel) return;
-        _labelOffsets.set(_dragLabel.id, [moveEvt.lngLat.lng, moveEvt.lngLat.lat]);
+        const dLng = moveEvt.lngLat.lng - _dragLabel.startLngLat.lng;
+        const dLat = moveEvt.lngLat.lat - _dragLabel.startLngLat.lat;
+        _labelOffsets.set(_dragLabel.id, [
+          _dragLabel.baseDelta[0] + dLng,
+          _dragLabel.baseDelta[1] + dLat,
+        ]);
         _dataDirty = true;
         _scheduleRender();
       };
@@ -489,8 +535,9 @@ const AsacsMap = (() => {
     // Layer visibility
     const trailVis = cfg.showTrails ? 'visible' : 'none';
     const labelVis = cfg.showLabels ? 'visible' : 'none';
-    if (_map.getLayer(LAYER_TRAILS)) _map.setLayoutProperty(LAYER_TRAILS, 'visibility', trailVis);
-    if (_map.getLayer(LAYER_LABELS)) _map.setLayoutProperty(LAYER_LABELS, 'visibility', labelVis);
+    if (_map.getLayer(LAYER_TRAILS))  _map.setLayoutProperty(LAYER_TRAILS,  'visibility', trailVis);
+    if (_map.getLayer(LAYER_LEADERS)) _map.setLayoutProperty(LAYER_LEADERS, 'visibility', labelVis);
+    if (_map.getLayer(LAYER_LABELS))  _map.setLayoutProperty(LAYER_LABELS,  'visibility', labelVis);
 
     // Label size
     if (cfg.labelSize && _map.getLayer(LAYER_LABELS)) {

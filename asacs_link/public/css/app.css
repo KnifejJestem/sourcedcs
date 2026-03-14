@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Orbitron:wght@700;900&display=swap');
 
 /* ═══════════════════════════════════════════════════════════
-   THEME TOKENS  —  dark MFD / military green
+   THEME TOKENS  —  dark MFD / military green  (default)
 ═══════════════════════════════════════════════════════════ */
 :root {
   --bg:          #050a08;
@@ -21,6 +21,35 @@
   --shadow:      0 1px 6px rgba(0,0,0,.5);
   --shadow-md:   0 4px 20px rgba(0,0,0,.6);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   PROF THEME  —  light paper / professional
+   Activated by AsacsTheme.set('prof') → html.prof class
+═══════════════════════════════════════════════════════════ */
+:root.prof {
+  --bg:          #f4f3f0;
+  --bg2:         #edecea;
+  --bg3:         #e5e4e0;
+  --bg-card:     #ffffff;
+  --border:      #c8c5bf;
+  --border-strong:#9a9690;
+  --text:        #1a1917;
+  --text-2:      #4a4845;
+  --text-3:      #7a7875;
+  --accent:      #0a6e3a;
+  --red:         #9b1c1c;
+  --amber:       #7c5000;
+  --blue:        #1a3a6b;
+  --shadow:      0 1px 3px rgba(0,0,0,.10);
+  --shadow-md:   0 4px 12px rgba(0,0,0,.12);
+}
+
+/* Scanline FX are MFD-only — suppress in PROF mode */
+:root.prof .scanline                    { display: none !important; }
+:root.prof body::before,
+:root.prof body::after                  { content: none; }
+:root.prof .login-title                 { text-shadow: none; }
+:root.prof .login-box                   { box-shadow: var(--shadow-md); }
 
 /* ═══════════════════════════════════════════════════════════
    SCANLINE FX

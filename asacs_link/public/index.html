@@ -9,6 +9,17 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <link rel="stylesheet" href="css/app.css">
+  <!-- Apply stored UI theme before first paint to avoid flash of wrong theme.
+       Key must stay in sync with AsacsTheme KEY constant in theme.js. -->
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem('asacs-ui-theme') === 'prof') {
+          document.documentElement.classList.add('prof');
+        }
+      } catch (e) { /* sessionStorage may be unavailable in some contexts */ }
+    })();
+  </script>
 </head>
 <body>
 
@@ -42,12 +53,28 @@
     <div class="hdr-sep"></div>
     <div class="hdr-meta" id="hdrMeta">GCI TACTICAL DISPLAY</div>
     <div class="hdr-right">
-      <!-- Display mode toggle: PROF (tactical dark) / MFD (satellite) / TABLE (debug) -->
+      <!-- UI style: MFD (dark military green) / PROF (light paper) -->
       <div class="hdr-toggle-group">
-        <span class="hdr-toggle-label">DISPLAY</span>
+        <span class="hdr-toggle-label">STYLE</span>
         <div class="theme-toggle">
-          <button class="mode-btn active" data-mode="prof"  onclick="AsacsMode.setMode('prof')">PROF</button>
-          <button class="mode-btn"        data-mode="mfd"   onclick="AsacsMode.setMode('mfd')">MFD</button>
+          <button class="mode-btn active" data-theme="mfd"  onclick="AsacsTheme.set('mfd')">MFD</button>
+          <button class="mode-btn"        data-theme="prof" onclick="AsacsTheme.set('prof')">PROF</button>
+        </div>
+      </div>
+      <!-- Map base layer: CHART (dark vector) / TERRAIN (satellite) -->
+      <div class="hdr-toggle-group">
+        <span class="hdr-toggle-label">MAP</span>
+        <div class="theme-toggle">
+          <button class="mode-btn active" data-maptype="chart"   onclick="AsacsMapType.set('chart')">CHART</button>
+          <button class="mode-btn"        data-maptype="terrain" onclick="AsacsMapType.set('terrain')">TERRAIN</button>
+        </div>
+      </div>
+      <div class="hdr-sep"></div>
+      <!-- View mode: MAP (default) / TABLE (debug) -->
+      <div class="hdr-toggle-group">
+        <span class="hdr-toggle-label">VIEW</span>
+        <div class="theme-toggle">
+          <button class="mode-btn active" data-mode="map"   onclick="AsacsMode.setMode('map')">MAP</button>
           <button class="mode-btn"        data-mode="table" onclick="AsacsMode.setMode('table')">TABLE</button>
         </div>
       </div>
@@ -88,7 +115,7 @@
     <span><span class="mission-key">BULL RED</span><span id="msnBullRed">—</span></span>
   </div>
 
-  <!-- ── Map view — PROF (tactical dark) and MFD (satellite) ── -->
+  <!-- ── Map view — CHART (dark vector) and TERRAIN (satellite) ── -->
   <div id="view-map" class="view-container">
     <div id="map-container"></div>
   </div>
@@ -234,6 +261,7 @@
 
 <!-- Display modules load first so app.js can reference their globals -->
 <script src="js/display/mode.js"></script>
+<script src="js/display/theme.js"></script>
 <script src="js/display/settings.js"></script>
 <script src="js/display/table.js"></script>
 <!-- builder.js is an ES module; it sets window.AsacsBuilder when it executes.

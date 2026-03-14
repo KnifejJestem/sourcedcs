@@ -3,6 +3,8 @@
  *
  * Extended tests for builder.js covering:
  *   - buildLabels() label-offset (draggable label) feature
+ *     (offsets are now relative [deltaLon, deltaLat] from the unit position)
+ *   - buildLeaderLines() leader-line feature
  *   - exported colour constants (COLOUR_BANDIT, COLOUR_HOSTILE)
  *   - 3D altitude coordinates in buildBlips()
  */
@@ -11,7 +13,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildBlips, buildLabels, COLOUR_BANDIT, COLOUR_HOSTILE,
+  buildBlips, buildLabels, buildLeaderLines, COLOUR_BANDIT, COLOUR_HOSTILE,
 } from '../public/js/display/builder.js';
 
 describe('buildLabels with offsets', () => {
@@ -28,18 +30,40 @@ describe('buildLabels with offsets', () => {
     assert.equal(lat, 35.0);
   });
 
-  it('uses overridden position when an offset is stored for the unit', () => {
+  it('applies delta offset — label at unit + [dLon, dLat]', () => {
     const contacts = [{
       id: 2, lat: 35.0, lon: 38.0,
       coalition: 2, contactType: 'track',
       pilotName: 'HAWK 2',
       alt: 6096, gs: 350,
     }];
-    const offsets = new Map([['2', [40.0, 37.0]]]);
+    // delta of +2° lon, +2° lat → label should be at [40.0, 37.0]
+    const offsets = new Map([['2', [2.0, 2.0]]]);
     const fc = buildLabels(contacts, offsets);
     const [lon, lat] = fc.features[0].geometry.coordinates;
-    assert.equal(lon, 40.0, 'lon should use the overridden value');
-    assert.equal(lat, 37.0, 'lat should use the overridden value');
+    assert.equal(lon, 40.0, 'lon should be unit.lon + delta.lon');
+    assert.equal(lat, 37.0, 'lat should be unit.lat + delta.lat');
+  });
+
+  it('sets hasOffset=1 in properties when a delta is present', () => {
+    const contacts = [{
+      id: 2, lat: 35.0, lon: 38.0,
+      coalition: 2, contactType: 'track',
+      pilotName: 'HAWK 2',
+    }];
+    const offsets = new Map([['2', [1.0, 0.5]]]);
+    const fc = buildLabels(contacts, offsets);
+    assert.equal(fc.features[0].properties.hasOffset, 1);
+  });
+
+  it('sets hasOffset=0 in properties when no delta is present', () => {
+    const contacts = [{
+      id: 3, lat: 35.0, lon: 38.0,
+      coalition: 2, contactType: 'track',
+      pilotName: 'HAWK 3',
+    }];
+    const fc = buildLabels(contacts, new Map());
+    assert.equal(fc.features[0].properties.hasOffset, 0);
   });
 
   it('unit position unchanged when offset map does not contain the unit id', () => {
@@ -49,7 +73,7 @@ describe('buildLabels with offsets', () => {
       pilotName: 'HAWK 3',
       alt: 6096, gs: 350,
     }];
-    const offsets = new Map([['999', [40.0, 37.0]]]); // different ID
+    const offsets = new Map([['999', [2.0, 2.0]]]); // different ID
     const fc = buildLabels(contacts, offsets);
     const [lon, lat] = fc.features[0].geometry.coordinates;
     assert.equal(lon, 38.0);
@@ -67,6 +91,76 @@ describe('buildLabels with offsets', () => {
     const [lon, lat] = fc.features[0].geometry.coordinates;
     assert.equal(lon, 38.0);
     assert.equal(lat, 35.0);
+  });
+});
+
+describe('buildLeaderLines', () => {
+  it('returns an empty FeatureCollection when offsets map is empty', () => {
+    const contacts = [{ id: 1, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' }];
+    const fc = buildLeaderLines(contacts, new Map());
+    assert.equal(fc.type, 'FeatureCollection');
+    assert.equal(fc.features.length, 0);
+  });
+
+  it('returns an empty FeatureCollection when offsets parameter is omitted', () => {
+    const contacts = [{ id: 1, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' }];
+    const fc = buildLeaderLines(contacts);
+    assert.equal(fc.features.length, 0);
+  });
+
+  it('produces a line from unit position to label position when offset exists', () => {
+    const contacts = [{
+      id: 1, lat: 35.0, lon: 38.0,
+      coalition: 2, contactType: 'track',
+      alt: 6096,
+    }];
+    const offsets = new Map([['1', [2.0, 2.0]]]);
+    const fc = buildLeaderLines(contacts, offsets);
+    assert.equal(fc.features.length, 1);
+    const coords = fc.features[0].geometry.coordinates;
+    assert.equal(coords.length, 2, 'LineString should have 2 coordinate pairs');
+    // Start: unit position
+    assert.equal(coords[0][0], 38.0, 'start lon should be unit.lon');
+    assert.equal(coords[0][1], 35.0, 'start lat should be unit.lat');
+    // End: unit position + delta
+    assert.equal(coords[1][0], 40.0, 'end lon should be unit.lon + delta.lon');
+    assert.equal(coords[1][1], 37.0, 'end lat should be unit.lat + delta.lat');
+  });
+
+  it('does not produce a line for units not in the offset map', () => {
+    const contacts = [
+      { id: 1, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' },
+      { id: 2, lat: 36.0, lon: 39.0, coalition: 2, contactType: 'track' },
+    ];
+    const offsets = new Map([['1', [1.0, 1.0]]]); // only unit 1
+    const fc = buildLeaderLines(contacts, offsets);
+    assert.equal(fc.features.length, 1);
+    assert.equal(fc.features[0].properties.id, '1');
+  });
+
+  it('carries coalition colour in feature properties', () => {
+    const contacts = [{ id: 1, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' }];
+    const offsets = new Map([['1', [1.0, 0.5]]]);
+    const fc = buildLeaderLines(contacts, offsets);
+    assert.match(fc.features[0].properties.colour, /^#[0-9a-fA-F]{6}$/);
+  });
+
+  it('uses unit altitude as z-coordinate in both line endpoints', () => {
+    const contacts = [{ id: 1, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track', alt: 6096 }];
+    const offsets = new Map([['1', [1.0, 0.5]]]);
+    const fc = buildLeaderLines(contacts, offsets);
+    const coords = fc.features[0].geometry.coordinates;
+    assert.equal(coords[0][2], 6096);
+    assert.equal(coords[1][2], 6096);
+  });
+
+  it('defaults z-coordinate to 0 when unit has no alt', () => {
+    const contacts = [{ id: 1, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' }];
+    const offsets = new Map([['1', [0.5, 0.5]]]);
+    const fc = buildLeaderLines(contacts, offsets);
+    const coords = fc.features[0].geometry.coordinates;
+    assert.equal(coords[0][2], 0);
+    assert.equal(coords[1][2], 0);
   });
 });
 

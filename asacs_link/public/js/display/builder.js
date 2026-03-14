@@ -203,12 +203,13 @@ function buildTrails(contacts, history) {
  * empty label string; the symbol layer should omit empty labels.
  *
  * If an `offsets` map is provided, any unit ID present in it will have
- * its label placed at the overridden [lon, lat] position (draggable
- * decluttering).  Pass an empty Map or omit the argument for default
- * positioning (label at the unit's own position).
+ * its label placed at a position offset from the unit by [deltaLon, deltaLat]
+ * degrees.  The label therefore moves with the unit, preserving the relative
+ * declutter offset even as the unit moves.  Pass an empty Map or omit the
+ * argument for default positioning (label placed at the unit's own position).
  *
  * @param {object[]} contacts  Coalition-filtered unit array
- * @param {Map<string, [number,number]>} [offsets]  Label position overrides keyed by String(id)
+ * @param {Map<string, [number,number]>} [offsets]  Per-unit delta offsets [dLon, dLat] keyed by String(id)
  * @returns {object}  GeoJSON FeatureCollection
  */
 function buildLabels(contacts, offsets) {
@@ -229,17 +230,61 @@ function buildLabels(contacts, offsets) {
       label = [callsign, altLine, spdLine].filter(Boolean).join('\n');
     }
 
-    // Use overridden label position if the user has dragged this label
-    const override = offsets && offsets.get(String(c.id));
-    const lon = override ? override[0] : c.lon;
-    const lat = override ? override[1] : c.lat;
+    // Apply relative delta offset when the user has dragged this label
+    const delta = offsets && offsets.get(String(c.id));
+    const lon = delta ? c.lon + delta[0] : c.lon;
+    const lat = delta ? c.lat + delta[1] : c.lat;
 
     features.push({
       type:     'Feature',
       geometry: { type: 'Point', coordinates: [lon, lat, c.alt ?? 0] },
       properties: {
-        id:    String(c.id),
+        id:        String(c.id),
         label,
+        hasOffset: delta ? 1 : 0,
+      },
+    });
+  }
+
+  return { type: 'FeatureCollection', features };
+}
+
+/**
+ * Build the leader-line FeatureCollection (line layer).
+ *
+ * For every contact that has a dragged label (i.e. an entry in `offsets`),
+ * produces a short LineString from the unit's actual position to the label's
+ * geographic position (unit position + delta).  Contacts with no offset
+ * produce no feature, keeping the layer empty until the operator declutters.
+ *
+ * @param {object[]} contacts  Coalition-filtered unit array
+ * @param {Map<string, [number,number]>} offsets  Per-unit delta offsets [dLon, dLat]
+ * @returns {object}  GeoJSON FeatureCollection
+ */
+function buildLeaderLines(contacts, offsets) {
+  const features = [];
+
+  if (!offsets || !offsets.size) return { type: 'FeatureCollection', features };
+
+  for (const c of contacts) {
+    if (c.lat == null || c.lon == null) continue;
+
+    const delta = offsets.get(String(c.id));
+    if (!delta) continue;
+
+    const alt = c.alt ?? 0;
+    features.push({
+      type:     'Feature',
+      geometry: {
+        type:        'LineString',
+        coordinates: [
+          [c.lon,            c.lat,            alt],
+          [c.lon + delta[0], c.lat + delta[1], alt],
+        ],
+      },
+      properties: {
+        id:     String(c.id),
+        colour: _coalitionColour(c.coalition),
       },
     });
   }
@@ -253,13 +298,13 @@ function buildLabels(contacts, offsets) {
 // This runs when the file is loaded as <script type="module">.
 if (typeof window !== 'undefined') {
   window.AsacsBuilder = {
-    buildBlips, buildHeadingTicks, buildTrails, buildLabels, HISTORY_MAX,
-    COLOUR_BANDIT, COLOUR_HOSTILE,
+    buildBlips, buildHeadingTicks, buildTrails, buildLabels, buildLeaderLines,
+    HISTORY_MAX, COLOUR_BANDIT, COLOUR_HOSTILE,
   };
 }
 
 // Node.js / ESM: named exports for the test runner.
 export {
-  buildBlips, buildHeadingTicks, buildTrails, buildLabels, HISTORY_MAX,
-  COLOUR_BANDIT, COLOUR_HOSTILE,
+  buildBlips, buildHeadingTicks, buildTrails, buildLabels, buildLeaderLines,
+  HISTORY_MAX, COLOUR_BANDIT, COLOUR_HOSTILE,
 };
