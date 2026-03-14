@@ -31,9 +31,14 @@
 --   mygci_status.json — status events (export_loaded, sim_stop)
 -- Files are written atomically: first to a .tmp file, then renamed,
 -- so the server never reads a partially-written file.
+-- Logging uses log.write('MYGCI.EXPORT', ...) — search dcs.log for MYGCI.EXPORT.
 -- ============================================================
 
 local UPDATE_RATE = 0.5   -- seconds between unit exports (2 Hz)
+
+-- lfs is pre-loaded by DCS in the Export.lua environment, but we require it
+-- explicitly here so the dependency is declared and the local is always set.
+local lfs = require('lfs')
 
 -- Output files are written to the DCS Saved Games directory.
 -- lfs.writedir() returns e.g. C:\Users\you\Saved Games\DCS\
@@ -44,17 +49,21 @@ local STATUS_TMP  = lfs.writedir() .. "mygci_status.tmp"
 
 -- Verbose logging: set VERBOSE = true to enable per-call diagnostic output.
 -- When tracks are missing, flip this to true and check the DCS log file
--- (%DCS_SAVED_GAMES%/Logs/dcs.log) for [MyGCI][VERBOSE] lines.
+-- (%DCS_SAVED_GAMES%/Logs/dcs.log) for MYGCI.EXPORT lines.
 -- Leave false in production to avoid log spam.
 local VERBOSE = false
 
+-- Capture the DCS global logging object before we shadow 'log' with a
+-- local function below.  log.write(source, level, msg) writes to dcs.log.
+local dcslog = log
+
 local function log(msg)
-    io.write("[MyGCI] " .. tostring(msg) .. "\n")
+    dcslog.write('MYGCI.EXPORT', dcslog.INFO, tostring(msg))
 end
 
 local function logv(msg)
     if VERBOSE then
-        io.write("[MyGCI][VERBOSE] " .. tostring(msg) .. "\n")
+        dcslog.write('MYGCI.EXPORT', dcslog.DEBUG, tostring(msg))
     end
 end
 

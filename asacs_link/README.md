@@ -25,6 +25,9 @@ Hook scripts in `Saved Games\DCS\Scripts\Hooks\` receive game events such
 as mission load, simulation stop, and player connect/disconnect/slot-change.
 Hook scripts run in the DCS GUI thread and have access to `net`, `DCS`, and
 `lfs` APIs — but **not** mission-scripting APIs like `world.searchObjects`.
+Like `mygci_export.lua`, `myatc.lua` uses file I/O rather than UDP (same
+`lua-socket.dll` incompatibility) — it writes mission data and player events
+to files that the server polls alongside the unit telemetry.
 
 ---
 
@@ -32,7 +35,7 @@ Hook scripts run in the DCS GUI thread and have access to `net`, `DCS`, and
 
 ```
 asacs_link/
-├── server.js           — main server (HTTP auth + WebSocket + UDP listener)
+├── server.js           — main server (HTTP auth + WebSocket + file poller)
 ├── config.js           — passwords, ports, realism rules
 ├── filter.js           — coalition filtering logic
 ├── state.js            — in-memory unit/mission state
@@ -55,7 +58,7 @@ npm install
 npm start
 ```
 
-The server reads DCS data from files written by `mygci_export.lua`.  Tell it
+The server reads DCS data from files written by `mygci_export.lua` and `myatc.lua`.  Tell it
 where the DCS Saved Games folder is by setting `ASACS_DCS_FILES_PATH`:
 
 ```bash
@@ -130,12 +133,14 @@ You can also confirm in `dcs.log`: if you see the hook lines
 (`[MyGCI] GameGUI loading…`) but **no** `MyGCI Export script loaded` line,
 `mygci_export.lua` is not being loaded from `Export.lua`.
 
-The server reads two files from the path set in `ASACS_DCS_FILES_PATH`:
+The server reads four files from the path set in `ASACS_DCS_FILES_PATH`:
 
 | File | Written by | Contains |
 |---|---|---|
 | `mygci_units.json` | `mygci_export.lua` every 0.5 s | Full unit snapshot |
 | `mygci_status.json` | `mygci_export.lua` on load / stop | Status event (`export_loaded`, `sim_stop`) |
+| `mygci_mission.json` | `myatc.lua` on mission load | Mission metadata (name, theatre, date, bullseye) |
+| `mygci_event.json` | `myatc.lua` on player events | Player connect/disconnect/slot-change, `sim_stop` fallback |
 
 ---
 

@@ -11,19 +11,49 @@
 -- world.searchObjects() is a mission-scripting API and is NOT
 -- available in the hook environment — use LoGetWorldObjects()
 -- in Export.lua instead.
+--
+-- Output files (written to DCS Saved Games folder):
+--   mygci_mission.json — mission metadata on mission load
+--   mygci_event.json   — player events (connect/disconnect/slot)
+-- Files are written atomically via a .tmp rename to prevent
+-- the server from reading a partially-written file.
+-- Logging uses log.write('MYGCI.HOOK', ...) — search dcs.log for MYGCI.HOOK.
 -- ============================================================
 
-local SERVER_HOST = "127.0.0.1"
-local SERVER_PORT = 7788
+-- lfs is available in the hook environment but we require it explicitly
+-- so the dependency is declared and the local is always defined.
+local lfs = require('lfs')
 
--- ─── Socket setup ──────────────────────────────────────────────────────────
-
-local socket = require("socket")
-local udp = socket.udp()
-udp:settimeout(0)
+-- Capture the DCS log global before we define a local 'log' function.
+local dcslog = log
 
 local function log(msg)
-    net.log("[MyGCI] " .. tostring(msg))
+    dcslog.write('MYGCI.HOOK', dcslog.INFO, tostring(msg))
+end
+
+-- File paths for atomic output (same Saved Games folder used by mygci_export.lua)
+local MISSION_PATH = lfs.writedir() .. "mygci_mission.json"
+local MISSION_TMP  = lfs.writedir() .. "mygci_mission.tmp"
+local EVENT_PATH   = lfs.writedir() .. "mygci_event.json"
+local EVENT_TMP    = lfs.writedir() .. "mygci_event.tmp"
+
+-- ─── Atomic file writer ────────────────────────────────────────────────────
+-- Writes content to a .tmp file then renames it to the final path.
+-- On Windows, os.rename() atomically replaces the destination so the
+-- server never reads a partially-written file.
+
+local function write_file_atomic(path, tmp_path, content)
+    local f = io.open(tmp_path, "w")
+    if not f then
+        log("ERROR: cannot open " .. tmp_path .. " for writing")
+        return
+    end
+    f:write(content)
+    f:close()
+    local ok, err = os.rename(tmp_path, path)
+    if not ok then
+        log("ERROR: cannot rename " .. tmp_path .. " to " .. path .. ": " .. tostring(err))
+    end
 end
 
 -- ─── Tiny JSON encoder ─────────────────────────────────────────────────────
@@ -58,11 +88,12 @@ local function json_encode(val)
     return "null"
 end
 
-local function send_json(data)
-    local ok, err = udp:sendto(json_encode(data), SERVER_HOST, SERVER_PORT)
-    if not ok then
-        log("UDP send error: " .. tostring(err))
-    end
+local function write_mission(data)
+    write_file_atomic(MISSION_PATH, MISSION_TMP, json_encode(data))
+end
+
+local function write_event(data)
+    write_file_atomic(EVENT_PATH, EVENT_TMP, json_encode(data))
 end
 
 -- ─── Mission data extraction ───────────────────────────────────────────────
@@ -101,22 +132,22 @@ local callbacks = {}
 function callbacks.onMissionLoadEnd()
     local ok, mission = pcall(extract_mission)
     if ok and mission then
-        send_json({ type = "mission", data = mission })
+        write_mission({ type = "mission", data = mission })
     end
     log("Mission loaded, GCI active")
 end
 
 function callbacks.onSimulationStop()
-    -- sim_stop is also sent by mygci_export.lua LuaExportStop(),
-    -- but we send it here too for robustness in case Export is not installed.
-    send_json({ type = "sim_stop" })
+    -- sim_stop is also written by mygci_export.lua LuaExportStop(),
+    -- but we write it here too for robustness in case Export is not installed.
+    write_event({ type = "sim_stop" })
     log("Simulation stopped")
 end
 
 function callbacks.onPlayerConnect(id)
     local info = net.get_player_info(id)
     if info then
-        send_json({
+        write_event({
             type   = "player_connect",
             id     = id,
             name   = info.name,
@@ -126,13 +157,13 @@ function callbacks.onPlayerConnect(id)
 end
 
 function callbacks.onPlayerDisconnect(id, err_code)
-    send_json({ type = "player_disconnect", id = id })
+    write_event({ type = "player_disconnect", id = id })
 end
 
 function callbacks.onPlayerChangeSlot(id)
     local info = net.get_player_info(id)
     if info then
-        send_json({
+        write_event({
             type = "slot_change",
             id   = id,
             slot = info.slot or "",
@@ -142,4 +173,4 @@ function callbacks.onPlayerChangeSlot(id)
 end
 
 DCS.setUserCallbacks(callbacks)
-log("MyGCI hook loaded — sending to " .. SERVER_HOST .. ":" .. SERVER_PORT)
+log("MyGCI hook loaded — writing to " .. MISSION_PATH)

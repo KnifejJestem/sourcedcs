@@ -8,6 +8,10 @@
 --   %DCS_SAVED_GAMES%/Scripts/Export.lua
 -- ============================================================
 
+-- lfs is pre-loaded by DCS for hook scripts, but we require it
+-- explicitly so the dependency is clear.
+local lfs = require('lfs')
+
 net.log('[MyGCI] GameGUI loading...')
 
 do
