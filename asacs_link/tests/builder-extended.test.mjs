@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildBlips, buildLabels, buildLeaderLines, COLOUR_BANDIT, COLOUR_HOSTILE,
+  bearingDeg, distNm,
 } from '../public/js/display/builder.js';
 
 describe('buildLabels with offsets', () => {
@@ -211,5 +212,81 @@ describe('buildBlips 3D coordinates', () => {
     const contacts = [{ id: 4, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' }];
     const fc = buildBlips(contacts);
     assert.equal(fc.features[0].properties.declaration, '');
+  });
+});
+
+// ── bearingDeg ────────────────────────────────────────────────
+
+describe('bearingDeg', () => {
+  it('due north: bearing = 0°', () => {
+    // Moving north: lat increases, lon unchanged
+    const b = bearingDeg(0, 0, 1, 0);
+    assert.ok(Math.abs(b - 0) < 0.01 || Math.abs(b - 360) < 0.01,
+      `expected ~0°, got ${b}`);
+  });
+
+  it('due east: bearing = 90°', () => {
+    const b = bearingDeg(0, 0, 0, 1);
+    assert.ok(Math.abs(b - 90) < 0.01, `expected ~90°, got ${b}`);
+  });
+
+  it('due south: bearing = 180°', () => {
+    const b = bearingDeg(1, 0, 0, 0);
+    assert.ok(Math.abs(b - 180) < 0.01, `expected ~180°, got ${b}`);
+  });
+
+  it('due west: bearing = 270°', () => {
+    const b = bearingDeg(0, 1, 0, 0);
+    assert.ok(Math.abs(b - 270) < 0.01, `expected ~270°, got ${b}`);
+  });
+
+  it('always returns a value in [0, 360)', () => {
+    const cases = [
+      [35, 38, 36, 37],
+      [35, 38, 34, 39],
+      [35, 38, 34, 37],
+      [35, 38, 36, 39],
+    ];
+    for (const [lat1, lon1, lat2, lon2] of cases) {
+      const b = bearingDeg(lat1, lon1, lat2, lon2);
+      assert.ok(b >= 0 && b < 360, `bearing ${b} outside [0,360) for ${[lat1,lon1,lat2,lon2]}`);
+    }
+  });
+
+  it('reciprocal bearing differs by 180°', () => {
+    const b1 = bearingDeg(35, 38, 36, 39);
+    const b2 = bearingDeg(36, 39, 35, 38);
+    const diff = Math.abs((b1 - b2 + 360) % 360 - 180);
+    assert.ok(diff < 1, `reciprocal bearing difference ${diff}° exceeds 1°`);
+  });
+});
+
+// ── distNm ────────────────────────────────────────────────────
+
+describe('distNm', () => {
+  it('same point returns 0 NM', () => {
+    assert.ok(distNm(35, 38, 35, 38) < 1e-9);
+  });
+
+  it('1° of latitude ≈ 60 NM at the equator', () => {
+    // Exact value varies slightly with Earth-radius model; allow ±1 NM
+    const d = distNm(0, 0, 1, 0);
+    assert.ok(Math.abs(d - 60) < 1, `expected ~60 NM, got ${d.toFixed(2)}`);
+  });
+
+  it('distance is symmetric (A→B equals B→A)', () => {
+    const d1 = distNm(35, 38, 36, 39);
+    const d2 = distNm(36, 39, 35, 38);
+    assert.ok(Math.abs(d1 - d2) < 1e-9, `d(A→B)=${d1} ≠ d(B→A)=${d2}`);
+  });
+
+  it('larger separation gives greater distance', () => {
+    const dSmall = distNm(35, 38, 35.1, 38.1);
+    const dLarge = distNm(35, 38, 36.0, 39.0);
+    assert.ok(dLarge > dSmall, 'larger angular separation should give greater NM');
+  });
+
+  it('returns a positive value for distinct points', () => {
+    assert.ok(distNm(35, 38, 36, 39) > 0);
   });
 });

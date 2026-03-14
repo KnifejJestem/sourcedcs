@@ -11,8 +11,14 @@
      buildTrails(contacts, history)    → Line    (history trail)
      buildLabels(contacts)             → Point   (data tag)
 
+   Also exports two geometry utility functions used by the
+   measuring-line feature in map.js:
+
+     bearingDeg(lat1, lon1, lat2, lon2) → great-circle bearing  0–360°
+     distNm(lat1, lon1, lat2, lon2)     → great-circle distance in NM
+
    Designed with no DOM or Mapbox dependencies so that all
-   four functions can be imported and unit-tested in Node.js.
+   functions can be imported and unit-tested in Node.js.
 
    Exposed as:
      • Named ES module exports  — for the Node.js test runner
@@ -52,6 +58,9 @@ const FEET_PER_METER = 3.28084;
 /** Knots per metre-per-second (exact). */
 const KNOTS_PER_MPS = 1.94384;
 
+/** Metres per nautical mile (exact by definition). */
+const METERS_PER_NM = 1852;
+
 // ── Private helpers ───────────────────────────────────────────
 
 /** Map a DCS coalition ID to a display colour string. */
@@ -78,6 +87,47 @@ function _project(lat, lon, hdgDeg, distM) {
   const dLat = (distM * Math.cos(hdgRad)) / METERS_PER_DEG_LAT;
   const dLon = (distM * Math.sin(hdgRad)) / (METERS_PER_DEG_LAT * Math.cos(latRad));
   return [lon + dLon, lat + dLat];
+}
+
+/**
+ * Calculate the great-circle initial bearing from point 1 to point 2.
+ * Returns degrees in the range 0–360 (0 = north, 90 = east).
+ *
+ * @param {number} lat1  Start latitude in degrees
+ * @param {number} lon1  Start longitude in degrees
+ * @param {number} lat2  End latitude in degrees
+ * @param {number} lon2  End longitude in degrees
+ * @returns {number}  Bearing 0–360°
+ */
+function bearingDeg(lat1, lon1, lat2, lon2) {
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const x  = Math.sin(Δλ) * Math.cos(φ2);
+  const y  = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(x, y) * 180 / Math.PI + 360) % 360;
+}
+
+/**
+ * Calculate the great-circle distance between two lat/lon positions
+ * in nautical miles.  Uses the Haversine formula.
+ * Earth radius = 6 371 000 m; 1 NM = 1 852 m (exact).
+ *
+ * @param {number} lat1  Start latitude in degrees
+ * @param {number} lon1  Start longitude in degrees
+ * @param {number} lat2  End latitude in degrees
+ * @param {number} lon2  End longitude in degrees
+ * @returns {number}  Distance in nautical miles
+ */
+function distNm(lat1, lon1, lat2, lon2) {
+  const R  = 6_371_000;
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const a  = Math.sin(Δφ / 2) ** 2 +
+             Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) / METERS_PER_NM;
 }
 
 // ── Builder functions ─────────────────────────────────────────
@@ -299,6 +349,7 @@ function buildLeaderLines(contacts, offsets) {
 if (typeof window !== 'undefined') {
   window.AsacsBuilder = {
     buildBlips, buildHeadingTicks, buildTrails, buildLabels, buildLeaderLines,
+    bearingDeg, distNm,
     HISTORY_MAX, COLOUR_BANDIT, COLOUR_HOSTILE,
   };
 }
@@ -306,5 +357,6 @@ if (typeof window !== 'undefined') {
 // Node.js / ESM: named exports for the test runner.
 export {
   buildBlips, buildHeadingTicks, buildTrails, buildLabels, buildLeaderLines,
+  bearingDeg, distNm,
   HISTORY_MAX, COLOUR_BANDIT, COLOUR_HOSTILE,
 };
