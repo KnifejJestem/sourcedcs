@@ -20,12 +20,12 @@ file in the DCS Saved Games folder.  The Node.js server polls that file every
 broken on DCS dedicated servers (`lua-socket.dll` incompatibility), file I/O is
 used instead — it is equally low-latency at 2 Hz and requires no extra ports.
 
-**2. Server Hooks** (`mygci_hook.lua` + `myatc.lua`) — event monitoring  
+**2. Server Hooks** (`mygci_hook.lua` + `mygci_events.lua`) — event monitoring  
 Hook scripts in `Saved Games\DCS\Scripts\Hooks\` receive game events such
 as mission load, simulation stop, and player connect/disconnect/slot-change.
 Hook scripts run in the DCS GUI thread and have access to `net`, `DCS`, and
 `lfs` APIs — but **not** mission-scripting APIs like `world.searchObjects`.
-Like `mygci_export.lua`, `myatc.lua` uses file I/O rather than UDP (same
+Like `mygci_export.lua`, `mygci_events.lua` uses file I/O rather than UDP (same
 `lua-socket.dll` incompatibility) — it writes mission data and player events
 to files that the server polls alongside the unit telemetry.
 
@@ -42,7 +42,7 @@ asacs_link/
 ├── package.json
 └── dcs/
     ├── mygci_export.lua   — Export.lua script: unit telemetry via LoGetWorldObjects()
-    ├── myatc.lua          — Hook script: mission metadata + player events
+    ├── mygci_events.lua   — Hook script: mission metadata + player events
     └── mygci_hook.lua     — Hook loader (placed in Scripts/Hooks/)
 ```
 
@@ -58,7 +58,7 @@ npm install
 npm start
 ```
 
-The server reads DCS data from files written by `mygci_export.lua` and `myatc.lua`.  Tell it
+The server reads DCS data from files written by `mygci_export.lua` and `mygci_events.lua`.  Tell it
 where the DCS Saved Games folder is by setting `ASACS_DCS_FILES_PATH`:
 
 ```bash
@@ -92,7 +92,7 @@ Copy files to your DCS Saved Games folder (usually `C:\Users\<you>\Saved Games\D
 Scripts/Export.lua                        ← copy dcs/Export.lua, or append its dofile() line
 Scripts/mygci_export.lua                  ← unit telemetry via Export.lua
 Scripts/Hooks/mygci_hook.lua              ← hook loader for events
-Mods/services/MyGCI/lua/myatc.lua         ← hook script for events
+Mods/services/MyGCI/lua/mygci_events.lua  ← hook script for events
 ```
 
 #### Export.lua integration
@@ -139,8 +139,8 @@ The server reads four files from the path set in `ASACS_DCS_FILES_PATH`:
 |---|---|---|
 | `mygci_units.json` | `mygci_export.lua` every 0.5 s | Full unit snapshot |
 | `mygci_status.json` | `mygci_export.lua` on load / stop | Status event (`export_loaded`, `sim_stop`) |
-| `mygci_mission.json` | `myatc.lua` on mission load | Mission metadata (name, theatre, date, bullseye) |
-| `mygci_event.json` | `myatc.lua` on player events | Player connect/disconnect/slot-change, `sim_stop` fallback |
+| `mygci_mission.json` | `mygci_events.lua` on mission load | Mission metadata (name, theatre, date, bullseye) |
+| `mygci_event.json` | `mygci_events.lua` on player events | Player connect/disconnect/slot-change, `sim_stop` fallback |
 
 ---
 

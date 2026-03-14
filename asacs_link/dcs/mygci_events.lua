@@ -1,8 +1,8 @@
 -- ============================================================
--- DCS GCI Hook  |  myatc.lua
+-- DCS GCI Hook Events  |  mygci_events.lua
 -- Handles mission-level and player events via the DCS hook API.
 -- Place this file at:
---   %DCS_SAVED_GAMES%/Mods/services/MyGCI/lua/myatc.lua
+--   %DCS_SAVED_GAMES%/Mods/services/MyGCI/lua/mygci_events.lua
 -- The hook loader goes to:
 --   %DCS_SAVED_GAMES%/Scripts/Hooks/mygci_hook.lua
 --
@@ -68,7 +68,19 @@ local function json_encode(val)
         if val ~= val then return "null" end  -- NaN guard
         return tostring(val)
     elseif t == "string" then
-        return '"' .. val:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n'):gsub('\r', '\\r'):gsub('\t', '\\t') .. '"'
+        -- Escape backslash + double-quote first, then all remaining control chars
+        return '"' .. val:gsub('[\\"]', function(c)
+                return '\\' .. c
+            end):gsub('%c', function(c)
+                local b = string.byte(c)
+                if b == 8  then return '\\b'
+                elseif b == 9  then return '\\t'
+                elseif b == 10 then return '\\n'
+                elseif b == 12 then return '\\f'
+                elseif b == 13 then return '\\r'
+                else return string.format('\\u%04x', b)
+                end
+            end) .. '"'
     elseif t == "table" then
         local is_array = #val > 0
         if is_array then
@@ -173,4 +185,4 @@ function callbacks.onPlayerChangeSlot(id)
 end
 
 DCS.setUserCallbacks(callbacks)
-log("MyGCI hook loaded — writing to " .. MISSION_PATH)
+log("MyGCI hook events loaded — writing to " .. MISSION_PATH)

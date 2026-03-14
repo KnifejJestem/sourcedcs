@@ -285,6 +285,7 @@ setInterval(() => {
 // Saved Games folder (configured via ASACS_DCS_FILES_PATH).  We poll those
 // files on the broadcast interval rather than relying on a UDP socket, which
 // is broken on DCS dedicated servers due to an incompatible lua-socket.dll.
+// mygci_events.lua (the hook script) writes mission and player-event files.
 
 const UNITS_FILE   = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_units.json')   : null;
 const STATUS_FILE  = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_status.json')  : null;
@@ -294,8 +295,8 @@ const EVENT_FILE   = config.dcsFilesPath ? join(config.dcsFilesPath, 'mygci_even
 // Track last-seen state so we only process changes.
 let _lastUnitsMtime         = 0;    // mtime of units file at last successful read
 let _lastStatusFileContent  = '';   // raw content of status file at last successful read
-let _lastMissionFileContent = '';   // raw content of mission file (from myatc.lua hook)
-let _lastEventFileContent   = '';   // raw content of event file (from myatc.lua hook)
+let _lastMissionFileContent = '';   // raw content of mission file (from mygci_events.lua hook)
+let _lastEventFileContent   = '';   // raw content of event file (from mygci_events.lua hook)
 
 if (!config.dcsFilesPath) {
   console.warn('[FilePoller] ASACS_DCS_FILES_PATH is not set — DCS file polling disabled.');
@@ -306,7 +307,7 @@ if (!config.dcsFilesPath) {
 }
 
 function pollDcsFiles() {
-  if (!UNITS_FILE || !STATUS_FILE) return;
+  if (!UNITS_FILE) return;  // all four paths are null when dcsFilesPath is unset
 
   // ── Units file (mygci_export.lua, 2 Hz) ──────────────────────────────────
   // Reread only when the file's mtime has advanced (i.e. Lua wrote a new snapshot).
@@ -336,7 +337,7 @@ function pollDcsFiles() {
     if (err.code !== 'ENOENT') logv('[FilePoller] status file error:', err.message);
   }
 
-  // ── Mission file (myatc.lua hook: written on onMissionLoadEnd) ────────────
+  // ── Mission file (mygci_events.lua hook: written on onMissionLoadEnd) ────────
   try {
     const content = readFileSync(MISSION_FILE, 'utf8');
     if (content !== _lastMissionFileContent) {
@@ -348,7 +349,7 @@ function pollDcsFiles() {
     if (err.code !== 'ENOENT') logv('[FilePoller] mission file error:', err.message);
   }
 
-  // ── Event file (myatc.lua hook: player events + sim_stop fallback) ────────
+  // ── Event file (mygci_events.lua hook: player events + sim_stop fallback) ────
   try {
     const content = readFileSync(EVENT_FILE, 'utf8');
     if (content !== _lastEventFileContent) {
