@@ -166,12 +166,6 @@ end
 -- LoGetObjectById(id) returns enriched per-unit data including velocity.
 -- Both are documented at https://wiki.hoggitworld.com/view/DCS_export
 
--- Squawk codes are 4-digit octal (0000–7777 = 0–4095 decimal).
--- DCS does not expose the raw transponder code via Export.lua, so we
--- derive a stable pseudo-squawk from the unit ID using modulo 4096
--- (the number of valid 4-digit octal codes, 0–7777 octal = 0–4095 decimal).
-local SQUAWK_MODULO = 4096
-
 local function extract_units()
     local objects = LoGetWorldObjects()
     if not objects then
@@ -194,10 +188,6 @@ local function extract_units()
             local alt = math.floor(lla.Alt or 0)
 
             local category = get_category(obj.Type)
-
-            -- Pseudo-squawk derived from unit ID
-            -- (DCS does not expose raw transponder code via Export.lua)
-            local squawk = id % SQUAWK_MODULO
 
             -- Pilot field is non-empty string for player-controlled units
             local pilot = obj.Pilot
@@ -239,7 +229,6 @@ local function extract_units()
                 category  = category,
                 typeName  = obj.Name or "Unknown",
                 type      = obj.Name or "Unknown",
-                squawk    = squawk,
                 unitName  = obj.UnitName  or "",
                 groupName = obj.GroupName or "",
                 pilotName = pilot,
