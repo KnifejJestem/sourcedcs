@@ -1,253 +1,166 @@
-# ATO BRIEF
+# SOURCE DCS
 
-A tactical briefing application for presenting Air Tasking Orders (ATOs), Airspace Control Orders (ACOs), SPINS, COMMS, and Weather data. Supports live editing, YAML import/export, an interactive SVG map, and real-time presenter/presentee synchronisation.
+Open-source tooling and infrastructure for the SOURCE virtual aviation squadron. This monorepo contains the squadron website, a tactical briefing application, a DCS datalink/GCI server, and a Python converter that turns raw DCS mission files into brief packages.
 
-## Quick Start
+---
+
+## Repository Layout
+
+```
+sourcedcs-web/    Squadron website — Node.js / Express
+atobrief/         Tactical briefing app — Node.js / Express + Socket.IO
+asacs_link/       DCS GCI datalink server — Node.js / Express + WebSocket
+tools/miztoyaml/  .miz → YAML converter — Python 3
+infra/            Docker Compose production stack (Nginx, MariaDB, Casdoor, MediaWiki)
+docs/             Reference documentation
+```
+
+---
+
+## Components
+
+### sourcedcs-web — Squadron Website
+
+Public-facing squadron website. Handles roster display, event scheduling, gallery, squadron/wing pages, join applications, and Casdoor SSO login.
+
+**Quick start**
 
 ```bash
+cd sourcedcs-web
 npm install
-node server.js          # → http://localhost:3000
+npm start          # → http://localhost:7000
 ```
 
-Load a YAML package via the upload screen (drag-drop or file picker) or by joining a presenter's session.
+See [`sourcedcs-web/CASDOOR_SETUP.md`](sourcedcs-web/CASDOOR_SETUP.md) for authentication configuration.
 
 ---
 
-## Architecture Overview
+### atobrief — Tactical Briefing Application
 
+Browser-based briefing tool for presenting Air Tasking Orders (ATOs), Airspace Control Orders (ACOs), SPINS, COMMS, and Weather data. Features live editing, YAML import/export, an interactive SVG map, and real-time presenter/presentee synchronisation over Socket.IO.
+
+**Quick start**
+
+```bash
+cd atobrief
+npm install
+npm start          # → http://localhost:4000
 ```
-public/
-├── index.html                      Single-page shell
-├── css/                            Styling (theme tokens, layout, views, editor)
-└── js/
-    ├── app.js                      Global state (STATE), utilities, YAML loading, registry resolution
-    ├── session.js                  Socket.io presenter/presentee sync
-    ├── loadout.js                  Weapon loadout code parser & renderer
-    ├── geo-data.js                 Country outlines (Natural Earth CDN) + city DB
-    ├── views/
-    │   ├── view-helpers.js         Shared doc-rendering helpers (tables, headers, KV rows)
-    │   ├── view-ato.js             ATO: intel strip, mission cards, Gantt timeline, detail panel
-    │   ├── view-aco.js             ACO: airspace control measure table
-    │   ├── view-spins.js           SPINS: flexible section-based operational procedures
-    │   ├── view-comms.js           COMMS: UHF/VHF preset frequency tables
-    │   └── view-weather.js         Weather: METAR/TAF parsers, decoded display, mission notes
-    ├── map/
-    │   ├── map-main.js             Entry point (renderMAP), SVG element factories
-    │   ├── map-state.js            Pan/zoom viewport state (MAP_VP)
-    │   ├── map-data.js             Coordinate collection from ATO + ACO data
-    │   ├── map-interact.js         Mouse/touch drag, scroll zoom, coord picker integration
-    │   ├── map-render.js           Main draw loop, viewport transform, measurement tool
-    │   ├── map-ui.js               Popups, coord formatting, sidebar legend
-    │   ├── map-draw-layers.js      Country outlines, city dots/labels
-    │   ├── map-draw-zones.js       Airspace shapes (anchor, circle, polygon), engagement zones
-    │   ├── map-draw-routes.js      Flight paths / steer-point lines
-    │   └── map-draw-markers.js     Airfields, carriers, targets, marshal points, steer points
-    └── editor/
-        ├── editor-core.js          Editor state (EDITOR), dialog framework, form helpers, export
-        ├── editor-registry.js      CRUD for registry categories (airfields, carriers, targets…)
-        ├── editor-missions.js      Mission add/edit/delete with registry dropdowns
-        └── editor-sections.js      Times, ACO, SPINS, COMMS, Weather section editors
-server.js                           Express + Socket.io server, session management
-data/                               Data files
-├── weaponsdata.json                CLSID → weapon name lookup table
-├── spins.md                        Sample SPINS markdown (## and ### headings)
-└── weather.txt                     Additional METAR/TAF strings for weather tab
-```
+
+Load a YAML package via the upload screen (drag-drop or file picker) or join an active presenter's session with a session ID and password.
+
+**Tabs**
+
+| Tab | Content |
+|-----|---------|
+| ATO | Mission cards, intel strip, Gantt timeline |
+| ACO | Airspace control measure table |
+| SPINS | Flexible section-based operational procedures |
+| COMMS | UHF / VHF preset frequency grids |
+| WX | Decoded METAR / TAF + mission weather notes |
+| MAP | Interactive SVG map — routes, airspace, targets, marshal points |
+
+**Themes** — toggle between **Pro** (light, professional) and **Movie** (dark CRT green).
+
+**YAML format** — see [`docs/atobrief/yaml-format.md`](docs/atobrief/yaml-format.md).
 
 ---
 
-## Core Data Flows
+### asacs_link — DCS GCI Datalink Server
 
-### 1. Package Load → Render
+Reads live unit telemetry written by a DCS `Export.lua` script, applies coalition-based realism filtering, and streams position data to WebSocket clients at 2 Hz. Includes a web-based GCI dashboard.
 
-```
-User loads YAML file (drag-drop / file picker)
-  │
-  ▼
-app.js: loadPackage(yamlText)
-  │  parse YAML → plain JS object
-  ▼
-app.js: loadPackage_obj(data)
-  │  1. Copy sections into STATE.pkg (ato, aco, spins, comms, weather, registry, header)
-  │  2. Propagate header fields (operation, ato_date) into each section
-  │  3. Resolve registry references:
-  │     ├── registry.airfields   → ato.missions[].deploy_coords, home_base_coords…
-  │     ├── registry.carriers    → ato.missions[].deploy_coords, recovery_coords…
-  │     ├── registry.tankers     → ato.missions[].refuel.tanker_callsign, ar_track…
-  │     ├── registry.targets     → ato.targets[], mission.target.aim_points[]
-  │     ├── registry.ref_points  → ato.marshal_points[]
-  │     └── registry.control     → ato.global_control, mission.control._agency
-  │  4. Compute ingame time (local → zulu or vice versa)
-  │
-  ▼
-Render each section (all run on the same STATE.pkg):
-  ├── renderATO(pkg.ato)        → Intel strip + mission cards + Gantt timeline
-  ├── renderACO(pkg.aco)        → ACM table
-  ├── renderSPINS(pkg.spins)    → Flexible doc sections
-  ├── renderCOMMS(pkg.comms)    → UHF/VHF preset grids
-  ├── renderWEATHER(pkg.weather) → METAR/TAF decoded + mission notes
-  └── renderMAP(pkg.ato)        → SVG map (reads STATE.pkg.aco internally)
+**Quick start**
+
+```bash
+cd asacs_link
+npm install
+ASACS_DCS_FILES_PATH="/path/to/DCS/SavedGames/" npm start   # → http://localhost:3000
 ```
 
-### 2. Edit → Save → Re-render
+Copy the Lua files from `asacs_link/dcs/` to your DCS Saved Games folder:
 
 ```
-User enables Edit Mode (toggleEditMode)
-  │
-  ▼
-User clicks an edit button (✎) on any view
-  │
-  ▼
-editor-*.js: openEditorDialog(title, buildFn, onSave)
-  │  1. buildFn(body) creates form fields in the editor overlay
-  │  2. User fills in fields
-  │  3. User clicks SAVE → onSave() callback fires
-  │     ├── Read form values
-  │     ├── Write back to STATE.pkg
-  │     └── Call editorReRender()
-  │
-  ▼
-editor-core.js: editorReRender()
-  │  1. _syncHeaders() — propagate operation/ato_day across all sections
-  │  2. editorCleanPkg(STATE.pkg) — deep-clone stripping _ prefixed fields
-  │  3. loadPackage_obj(source) — re-resolve registry + re-render all views
-  │  4. Restore current tab and selected mission
-  │  5. Broadcast to presentees (if presenter is connected)
+Scripts/mygci_export.lua              ← unit telemetry via Export.lua
+Scripts/Hooks/mygci_hook.lua          ← hook loader
+Mods/services/MyGCI/lua/mygci_events.lua  ← mission metadata + player events
 ```
 
-### 3. Map Coordinate Picker
+See [`asacs_link/README.md`](asacs_link/README.md) for the full setup guide, WebSocket protocol, and realism model.
 
-```
-User clicks 📍 next to a coordinate field
-  │
-  ▼
-editor-core.js: _startCoordPick(targetInput)
-  │  1. Hide editor overlay (preserve form state)
-  │  2. Switch to MAP tab
-  │  3. Set EDITOR._coordPickCb callback
-  │
-  ▼
-map-render.js: on click (with distance < 5px from mousedown)
-  │  ├── If clicking on existing marker → use marker's lat/lon
-  │  └── If clicking on empty space → use SVG→geo coordinate transform
-  │
-  ▼
-EDITOR._coordPickCb(lat, lon)
-  │  1. Write formatted coordinate into the target input
-  │  2. Restore editor overlay and previous tab
+---
+
+### tools/miztoyaml — DCS .miz to YAML Converter
+
+Python 3 command-line tool that extracts flights, waypoints, airspace drawings, SAM sites, weather, and loadout data from a DCS `.miz` file and outputs a ready-to-load ATO brief YAML package.
+
+**Requirements**
+
+```bash
+pip install pyyaml
 ```
 
-### 4. Presenter / Presentee Sync
+**Usage**
 
-```
-Presenter                          Server                        Presentee
-─────────                          ──────                        ─────────
-joinSession(id, 'presenter', pw)
-        ─── join ──────────────▶   validate password
-                                   store session
-                                   send current state
-        ◀── session-state ──────                      ◀── session-state ──
+```bash
+# Basic — outputs mission.yaml in the current directory
+python3 -m tools.miztoyaml mission.miz
 
-loadPackage(yaml)
-        ─── package-loaded ────▶   broadcast to room
-                                         ─── package-loaded ──▶ loadPackage(yaml)
+# Choose coalition and output file
+python3 -m tools.miztoyaml mission.miz --coalition red --output brief.yaml
 
-editorReRender() (for edits)
-        ─── package-loaded ────▶   broadcast to room
-                                         ─── package-loaded ──▶ loadPackage(yaml)
+# Verbose logging
+python3 -m tools.miztoyaml mission.miz --verbose
 ```
 
-Tab navigation, theme, and display-mode changes are **local to each client** and
-are not broadcast to the room.  Each presenter and presentee navigates
-independently.
+**Tests**
 
-### 5. Export
-
-```
-User clicks EXPORT button
-  │
-  ▼
-editor-core.js: exportPackageYaml()
-  │  1. Prompt for file name
-  │  2. editorCleanPkg(STATE.pkg) — strip internal fields
-  │  3. jsyaml.dump() → YAML text
-  │  4. Create Blob → download link → trigger click
+```bash
+python3 -m pytest tools/tests/ -v
 ```
 
 ---
 
-## Key Modules
+## Infrastructure
 
-### `STATE` (app.js)
+The production stack is in `infra/` and runs with Docker Compose.
 
-Global application state. All views read from `STATE.pkg` and `STATE.display`.
+**Services**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `pkg` | Object | The loaded YAML package (ato, aco, spins, comms, weather, registry, header) |
-| `selectedIdx` | number | Currently selected mission index (-1 = none) |
-| `currentTab` | string | Active tab name (ato, aco, spins, comms, weather, map) |
-| `theme` | string | Visual theme: `'pro'` (light) or `'movie'` (CRT green) |
-| `display.timeMode` | string | `'Z'` (Zulu) or `'L'` (local + offset) |
-| `display.coordMode` | string | `'dm'`, `'dms'`, or `'mgrs'` |
-| `mapUI.tx` / `mapUI.ty` / `mapUI.sc` | number | Map pan/zoom state (content-group transform); preserved across tab switches |
-| `mapUI.highlighted` | string\|null | Route filter: `null` = all visible, `'__none__'` = none, key = solo flight |
-| `mapUI.engVisible` | boolean | Engagement-zone overlay visibility |
-| `mapUI.airVisible` | boolean | Airspace overlay visibility |
-| `mapUI.measureMode` | string | Measurement tool state: `'off'` / `'waitA'` / `'waitB'` / `'fixed'` |
-| `mapUI.mapMode` | string | Background tile style: `'chart'` / `'tactical'` / `'elevation'` / `'satellite'` |
-| `mapUI.hiddenLegend` | Object | Per-legend-item visibility: key → `true` when hidden |
+| Service | Description |
+|---------|-------------|
+| nginx | Reverse proxy + SSL termination (Let's Encrypt via Certbot) |
+| main-website | `sourcedcs-web` container |
+| atobrief | `atobrief` container |
+| asacs-link | `asacs_link` container |
+| casdoor | SSO identity provider (OAuth 2.0 / JWT) |
+| mediawiki | Squadron wiki |
+| mariadb | Shared database (MediaWiki + Casdoor) |
 
-### `EDITOR` (editor-core.js)
+**Deploy**
 
-Editor state. Tracks whether edit mode is active and holds the current dialog's save callback.
+```bash
+cp .env.example infra/.env
+# Edit infra/.env — set domains, passwords, Casdoor credentials, Discord tokens
+cd infra
+docker compose up -d
+```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `active` | boolean | Edit mode on/off |
-| `_onSave` | Function | Current dialog's save callback (set by `openEditorDialog`) |
-| `_coordPickCb` | Function | Map coordinate picker callback (set by `_startCoordPick`) |
-
-### Registry Resolution (app.js → `loadPackage_obj`)
-
-The registry is the single source of truth for shared entities. During package loading, registry entries are resolved into mission fields:
-
-| Registry Category | Resolved Into |
-|-------------------|---------------|
-| `airfields` | Mission deploy/home/recovery coords and names |
-| `carriers` | Mission deploy/recovery coords from carrier positions |
-| `tankers` | Mission refuel callsign, AR track, altitude |
-| `targets` | `ato.targets[]` array, mission aim points with threat data |
-| `reference_points` | `ato.marshal_points[]` array |
-| `control_agencies` | `ato.global_control._agency`, mission `control._agency` |
+See `.env.example` for a full list of environment variables.
 
 ---
 
-## Styling
+## Documentation
 
-Two themes controlled by a `data-theme` attribute on `<html>`:
-
-- **Pro** — Light background, dark text, professional briefing style
-- **Movie** — Dark green CRT aesthetic with scanlines, vignette, and neon accents
-
-CSS is split into modular files imported via `css/app.css`:
-`base.css` (themes) → `layout.css` (shell) → `ato.css` / `docs.css` / `map.css` / `weather.css` / `loadout.css` / `editor.css`
+| Document | Description |
+|----------|-------------|
+| [`docs/atobrief/yaml-format.md`](docs/atobrief/yaml-format.md) | ATO brief YAML package schema reference |
+| [`docs/atobrief/weather-txt.md`](docs/atobrief/weather-txt.md) | `weather.txt` supplemental METAR/TAF format |
+| [`asacs_link/README.md`](asacs_link/README.md) | ASACS Link setup, WebSocket protocol, unit object reference |
+| [`sourcedcs-web/CASDOOR_SETUP.md`](sourcedcs-web/CASDOOR_SETUP.md) | Casdoor SSO configuration guide |
 
 ---
 
-## YAML Format
+## License
 
-See [`docs/yaml-format.md`](docs/atobrief/yaml-format.md) for the full schema reference.
-
-
-## TODO
-
-### Bugs
-- [x] **Decluttering** — each legend item is individually hideable via toggle buttons in the sidebar (click any legend entry to show/hide that marker type, airspace type, or mission-type routes)
-
-### Features
-- [x] **Website Icon** — SVG favicon added to `index.html`
-- [x] **Room Presence** — server tracks connected members per room and broadcasts presence counts; client displays a 👥 badge in the header showing total connected users
-- [x] **Higher Zoom** — increased maximum map zoom from 20× to 80×
-- [x] **Steerpoint Orbits** — orbit patterns (heading, leg length, width, direction) can be added/edited on any steer point via the ⟳ toggle in the mission editor; rendered as racetrack patterns on the map
-- [x] **Marshal Time** — time-on-station and time-off-station fields added to reference points (marshal type) in the registry editor, carried through to the map popup
+MIT
