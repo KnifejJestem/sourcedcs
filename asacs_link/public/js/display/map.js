@@ -301,9 +301,15 @@ const AsacsMap = (() => {
 
   // ── Geometry helpers ──────────────────────────────────────────
 
+  /** Approximate metres per degree of latitude (and longitude at the equator). */
+  const METERS_PER_DEG_LAT = 111_320;
+
+  /** Look-ahead window for velocity vectors, in seconds. */
+  const VECTOR_LOOKAHEAD_SECS = 30;
+
   /**
    * Project a lat/lon position forward by speedMs metres/s in direction hdgDeg
-   * over a 30-second look-ahead window.
+   * over VECTOR_LOOKAHEAD_SECS seconds.
    *
    * Uses a flat-earth approximation (accurate enough for tactical ranges).
    *
@@ -314,11 +320,11 @@ const AsacsMap = (() => {
    * @returns {[number, number]}  [lon, lat] GeoJSON coordinate
    */
   function _projectPos(lat, lon, hdgDeg, speedMs) {
-    const distM  = speedMs * 30;               // 30-second look-ahead distance (m)
+    const distM  = speedMs * VECTOR_LOOKAHEAD_SECS;
     const hdgRad = hdgDeg  * Math.PI / 180;
     const latRad = lat     * Math.PI / 180;
-    const dLat = (distM * Math.cos(hdgRad)) / 111_320;
-    const dLon = (distM * Math.sin(hdgRad)) / (111_320 * Math.cos(latRad));
+    const dLat = (distM * Math.cos(hdgRad)) / METERS_PER_DEG_LAT;
+    const dLon = (distM * Math.sin(hdgRad)) / (METERS_PER_DEG_LAT * Math.cos(latRad));
     return [lon + dLon, lat + dLat];
   }
 

@@ -89,7 +89,7 @@ function computeDeclaration(relationship, contactType) {
  */
 function computeAdminDeclaration(unitCoalition, contactType) {
   if (unitCoalition === COALITION_ID.blue)    return 'friendly';
-  if (unitCoalition === COALITION_ID.neutral)  return 'neutral';
+  if (unitCoalition === COALITION_ID.neutral) return 'neutral';
   if (unitCoalition === COALITION_ID.red)
     return contactType === 'track' ? 'bandit' : 'bogey';
   return 'bogey';

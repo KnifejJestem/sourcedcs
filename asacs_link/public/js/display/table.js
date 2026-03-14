@@ -74,7 +74,7 @@ const AsacsTable = (() => {
       const iffC  = u.iffResolved ? 'rel-friendly' : (u.iffResolved === false ? 'rel-hostile' : '');
       const iffStatus = u._sim?.iffStatus ? ` (${u._sim.iffStatus})` : '';
 
-      const gsVal  = u.gs  != null ? `${u.gs}kt`  : (u.spd != null ? `${Math.round(u.spd * 1.94384)}kt` : '—');
+      const gsVal  = u.gs  != null ? `${u.gs}kt`  : (u.spd != null ? `${Math.round(u.spd * 1.94384)}kt` : '—'); // 1.94384 = m/s → knots
       const casVal = u.cas != null ? `${u.cas}kt` : '—';
 
       return `<tr>
