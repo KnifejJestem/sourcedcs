@@ -59,6 +59,8 @@ export class SimulationEngine {
       const processed = { ...unit, _sim: {} };
 
       this._assignSquawk(processed);
+      this._classifyContact(processed);
+      this._computeSpeeds(processed);
       this._simulateIndicatedAltitude(processed);
       this._simulateMagneticHeading(processed);
       // Future: this._simulateLineOfSight(processed);
@@ -99,7 +101,48 @@ export class SimulationEngine {
   }
 
   /**
-   * Step 2 — Indicated Altitude (STUB).
+   * Step 2 — Contact classification.
+   *
+   * Classifies each unit as a 'track' (full data: position, altitude, heading,
+   * speed) or a 'primary' radar contact (position only — no further data).
+   *
+   * The actual simulation/sensor logic that decides what is visible will be
+   * implemented later.  For now the rule is simple: if the raw DCS data
+   * includes lat, lon, alt, hdg, and spd the unit becomes a track; otherwise
+   * it is treated as a primary radar contact.
+   */
+  _classifyContact(unit) {
+    const hasFullData =
+      unit.lat != null && unit.lon != null &&
+      unit.alt != null &&
+      unit.hdg != null &&
+      unit.spd != null;
+    unit._sim.contactType = hasFullData ? 'track' : 'primary';
+  }
+
+  /**
+   * Step 3 — Speed outputs: Ground Speed (GS) and Calibrated Airspeed (CAS).
+   *
+   * GS is derived directly from the DCS speed field (m/s → knots).
+   * CAS is a stub — proper CAS requires atmospheric data (temperature,
+   * QNH/pressure altitude).  For now CAS = GS as a placeholder.
+   *
+   * Both values are emitted in knots so the display layer can show them
+   * directly without unit conversion.
+   */
+  _computeSpeeds(unit) {
+    if (unit.spd == null) {
+      unit._sim.gs  = null;
+      unit._sim.cas = null;
+      return;
+    }
+    const knots      = unit.spd * 1.94384; // m/s → knots
+    unit._sim.gs     = Math.round(knots);
+    unit._sim.cas    = Math.round(knots);  // Stub: CAS = GS until atmosphere simulation is wired in
+  }
+
+  /**
+   * Step 4 — Indicated Altitude (STUB).
    *
    * TODO: Convert true altitude (ASL, metres) to indicated altitude using
    * local temperature and altimeter setting (Kollsman window / QNH).
@@ -114,7 +157,7 @@ export class SimulationEngine {
   }
 
   /**
-   * Step 3 — Magnetic Heading (STUB).
+   * Step 5 — Magnetic Heading (STUB).
    *
    * TODO: Convert true heading (degrees) to magnetic heading by applying
    * the local magnetic declination.  Use a WMM or simplified lookup table
