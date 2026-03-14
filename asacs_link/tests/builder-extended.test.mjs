@@ -1,8 +1,10 @@
 /**
- * tests/builder-labels-offset.test.mjs
+ * tests/builder-extended.test.mjs
  *
- * Tests for the label-offset feature in buildLabels():
- * verifies that dragged labels use the overridden position.
+ * Extended tests for builder.js covering:
+ *   - buildLabels() label-offset (draggable label) feature
+ *   - exported colour constants (COLOUR_BANDIT, COLOUR_HOSTILE)
+ *   - 3D altitude coordinates in buildBlips()
  */
 
 import { describe, it } from 'node:test';

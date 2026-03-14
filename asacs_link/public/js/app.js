@@ -118,6 +118,7 @@ async function initApp(token, coalition) {
     if (mode === 'prof' || mode === 'mfd') AsacsMap.resize();
   });
   AsacsMode.init();
+  AsacsSettings.init();
   AsacsMap.init(mapboxToken, 'map-container');
 
   connectWs(token);

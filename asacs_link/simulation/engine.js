@@ -201,8 +201,10 @@ export class SimulationEngine {
 
       if (prev) {
         const dtSec = (now - prev.ts) / 1000;
+        // 100 ms minimum between fixes: DCS exports at ~10 Hz so consecutive
+        // fixes are ≥100 ms apart under normal conditions.  This guard also
+        // prevents division-by-near-zero from clock jitter on the first tick.
         if (dtSec >= 0.1) {
-          // Minimum 100 ms between fixes to avoid division-by-near-zero
           const distM = _haversineMeters(prev.lat, prev.lon, unit.lat, unit.lon);
           const knots = (distM / dtSec) * 1.94384; // m/s → knots
           unit._sim.gs  = Math.round(knots);

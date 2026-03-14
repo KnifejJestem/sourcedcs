@@ -46,6 +46,9 @@ const AsacsMap = (() => {
   /** Maximum position entries kept per contact. Must match HISTORY_MAX in builder.js. */
   const HISTORY_MAX = 30;
 
+  // Track current display mode explicitly to avoid fragile URL inspection
+  let _displayMode = 'prof';
+
   // Drag-label state
   let _dragLabel  = null;  // { id: String, startLngLat: {lng, lat} }
 
@@ -154,14 +157,13 @@ const AsacsMap = (() => {
    */
   function setDisplayMode(mode) {
     if (!_map || !_ready) return;
+    if (mode === _displayMode) return; // already on the right style
+
     const style = mode === 'mfd'
       ? 'mapbox://styles/mapbox/satellite-streets-v12'
       : 'mapbox://styles/mapbox/dark-v11';
 
-    if (_map.getStyle().sprite && _map.getStyle().sprite.includes(mode === 'mfd' ? 'satellite' : 'dark')) {
-      return; // already on the right style
-    }
-
+    _displayMode = mode;
     _ready = false;
     _map.setStyle(style);
     _map.once('style.load', () => {
@@ -241,9 +243,13 @@ const AsacsMap = (() => {
     if (_dataDirty) {
       _dataDirty = false;
 
-      // Split units: friendly/neutral for circle layer, hostile/bandit for triangles
-      const friendly = _units.filter(u => !HOSTILE_DECLS.has(u.declaration));
-      const hostile  = _units.filter(u =>  HOSTILE_DECLS.has(u.declaration));
+      // Partition units in a single pass: friendly/neutral for circles, hostile/bandit for triangles
+      const friendly = [];
+      const hostile  = [];
+      for (const u of _units) {
+        if (HOSTILE_DECLS.has(u.declaration)) hostile.push(u);
+        else friendly.push(u);
+      }
 
       const blipSrc  = _map.getSource(SRC_BLIPS);
       const hostSrc  = _map.getSource(SRC_HOSTILE);
@@ -275,6 +281,10 @@ const AsacsMap = (() => {
     _initSources();
     _initLayers();
     _initLabelDrag();
+    // Apply any persisted settings (pitch, bearing, layer visibility etc.)
+    if (typeof AsacsSettings !== 'undefined') {
+      applySettings(AsacsSettings.get());
+    }
     _dataDirty = true;
     _zoomDirty = true;
     _scheduleRender();
@@ -336,8 +346,10 @@ const AsacsMap = (() => {
     });
 
     // 3. Hostile / bandit triangles (▲)
-    //    Bandit (confirmed) = red (#ff4444)
-    //    Bogey  (unidentified) = orange (#ffb020)
+    //    Uses COLOUR_BANDIT (red) for confirmed enemy, COLOUR_HOSTILE (orange) for bogey.
+    //    Both constants are exported from builder.js and available via window.AsacsBuilder.
+    const colBandit  = (typeof AsacsBuilder !== 'undefined' && AsacsBuilder.COLOUR_BANDIT)  || '#ff4444';
+    const colHostile = (typeof AsacsBuilder !== 'undefined' && AsacsBuilder.COLOUR_HOSTILE) || '#ffb020';
     addLayer({
       id:     LAYER_HOSTILE,
       type:   'symbol',
@@ -352,8 +364,8 @@ const AsacsMap = (() => {
       paint: {
         'text-color': [
           'case',
-          ['==', ['get', 'declaration'], 'bandit'], '#ff4444',
-          '#ffb020', // bogey / hostile default
+          ['==', ['get', 'declaration'], 'bandit'], colBandit,
+          colHostile,
         ],
         'text-halo-color': '#000000',
         'text-halo-width': 1,
@@ -413,9 +425,9 @@ const AsacsMap = (() => {
       e.preventDefault();
 
       _dragLabel = {
-        id:           feature.properties.id,
-        startLngLat:  e.lngLat,
-        startOffset:  _labelOffsets.get(feature.properties.id) || null,
+        id:          feature.properties.id,
+        startLngLat: e.lngLat,
+        // TODO: save startOffset here if undo/redo is ever needed
       };
 
       _map.dragPan.disable();
@@ -459,5 +471,32 @@ const AsacsMap = (() => {
     });
   }
 
-  return { init, updateUnits, updateMission, resize, setDisplayMode };
+  /**
+   * Apply operator settings from the settings panel.
+   * Called by AsacsSettings.apply() after the user confirms changes.
+   * @param {object} cfg  Settings object from AsacsSettings.get()
+   */
+  function applySettings(cfg) {
+    if (!_map) return;
+
+    // Camera
+    _map.easeTo({
+      pitch:   cfg.mapPitch   ?? 0,
+      bearing: cfg.mapBearing ?? 0,
+      duration: 400,
+    });
+
+    // Layer visibility
+    const trailVis = cfg.showTrails ? 'visible' : 'none';
+    const labelVis = cfg.showLabels ? 'visible' : 'none';
+    if (_map.getLayer(LAYER_TRAILS)) _map.setLayoutProperty(LAYER_TRAILS, 'visibility', trailVis);
+    if (_map.getLayer(LAYER_LABELS)) _map.setLayoutProperty(LAYER_LABELS, 'visibility', labelVis);
+
+    // Label size
+    if (cfg.labelSize && _map.getLayer(LAYER_LABELS)) {
+      _map.setLayoutProperty(LAYER_LABELS, 'text-size', cfg.labelSize);
+    }
+  }
+
+  return { init, updateUnits, updateMission, resize, setDisplayMode, applySettings };
 })();

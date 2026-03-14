@@ -33,10 +33,12 @@ const COLN_BLUE = 2;
 const COLN_RED  = 1;
 
 // ── Hostile marker colours ────────────────────────────────────
-// Bandit  = confirmed hostile with full track data → red triangle
-// Hostile = unidentified / position-only contact  → orange triangle
-const COLOUR_BANDIT  = '#ff4444'; // red — confirmed enemy
-const COLOUR_HOSTILE = '#ffb020'; // amber/orange — unidentified bogey
+// These colours are used for the ▲ triangle symbol layer in map.js.
+// DCS declaration values: 'bandit' = confirmed enemy; 'bogey' / 'hostile' = unidentified bogey.
+// Note: 'hostile' here refers to the *colour constant* for bogey/unidentified contacts,
+// not to the 'hostile' declaration string itself (which is a DCS IFF result).
+const COLOUR_BANDIT  = '#ff4444'; // red   — confirmed enemy (declaration === 'bandit')
+const COLOUR_HOSTILE = '#ffb020'; // amber — unidentified bogey / hostile (all other enemy declarations)
 
 /** Maximum position entries kept per contact in the history ring buffer. */
 const HISTORY_MAX = 30;
