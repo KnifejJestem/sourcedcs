@@ -1,8 +1,42 @@
-# DCS GCI Server
+# ASACS LINK — GCI Server
 
-Minimal Node.js server that reads unit data written by a DCS Export.lua script,
-applies realism-based coalition filtering, and distributes to
-WebSocket clients at 2 Hz.
+Node.js GCI server that reads DCS unit data, runs it through a simulation
+engine, applies coalition-based filtering, and distributes processed tracks to
+WebSocket clients at 2 Hz.  A built-in Mapbox GL JS map provides a live
+tactical display in MFD mode, alongside the traditional PROF table view.
+
+---
+
+## Architecture
+
+```
+DCS (Export.lua / Hooks)
+        │  file I/O (asacslink_*.json)
+        ▼
+  ┌─────────────┐
+  │  File Poller │  polls DCS Saved Games folder at 2 Hz
+  └──────┬──────┘
+         │
+         ▼
+  ┌──────────────┐       ┌──────────────────────┐
+  │  StateStore  │       │ TransponderReceiver   │
+  │  (raw units) │       │  UDP :10712 (IFF)    │
+  └──────┬───────┘       └──────────┬───────────┘
+         │                          │
+         └────────────┬─────────────┘
+                      ▼
+             ┌─────────────────┐
+             │ SimulationEngine │  ← extension point for alt/hdg/LOS simulation
+             └────────┬────────┘
+                      │ processed units
+                      ▼
+             ┌─────────────────┐
+             │  CoalitionFilter │  (filter.js)
+             └────────┬────────┘
+                      │ per-coalition view
+                      ▼
+             WebSocket clients
+```
 
 ---
 
@@ -10,24 +44,15 @@ WebSocket clients at 2 Hz.
 
 This server uses two complementary DCS scripting methods:
 
-**1. Export.lua system** (`mygci_export.lua`) — real-time unit telemetry  
-DCS calls `Export.lua` every simulation frame. The export script uses
-`LuaExportActivityNextEvent(t)` (the same timer-scheduled callback that Tacview
-uses) to run at 2 Hz, calling `LoGetWorldObjects()` to obtain live position,
-coalition, category, and identity data for all units and writing them to a JSON
-file in the DCS Saved Games folder.  The Node.js server polls that file every
-500 ms and broadcasts updates to connected clients.  Because UDP sockets are
-broken on DCS dedicated servers (`lua-socket.dll` incompatibility), file I/O is
-used instead — it is equally low-latency at 2 Hz and requires no extra ports.
+**1. Export.lua system** (`asacslink_export.lua`) — real-time unit telemetry  
+DCS calls `Export.lua` every simulation frame. The export script runs at 2 Hz
+via `LuaExportActivityNextEvent`, calls `LoGetWorldObjects()` to obtain live
+position/coalition/identity data, and writes a JSON snapshot to the DCS Saved
+Games folder.
 
-**2. Server Hooks** (`mygci_hook.lua` + `mygci_events.lua`) — event monitoring  
-Hook scripts in `Saved Games\DCS\Scripts\Hooks\` receive game events such
-as mission load, simulation stop, and player connect/disconnect/slot-change.
-Hook scripts run in the DCS GUI thread and have access to `net`, `DCS`, and
-`lfs` APIs — but **not** mission-scripting APIs like `world.searchObjects`.
-Like `mygci_export.lua`, `mygci_events.lua` uses file I/O rather than UDP (same
-`lua-socket.dll` incompatibility) — it writes mission data and player events
-to files that the server polls alongside the unit telemetry.
+**2. Server Hooks** (`asacslink_hook.lua` + `asacslink_events.lua`) — events  
+Hook scripts receive mission-load, sim-stop, and player events.  They write
+mission metadata and player events to separate JSON files.
 
 ---
 
@@ -35,15 +60,27 @@ to files that the server polls alongside the unit telemetry.
 
 ```
 asacs_link/
-├── server.js           — main server (HTTP auth + WebSocket + file poller)
-├── config.js           — passwords, ports, realism rules
-├── filter.js           — coalition filtering logic
-├── state.js            — in-memory unit/mission state
-├── package.json
+├── server.js                 — HTTP auth + WebSocket + file poller + routing
+├── config.js                 — passwords, ports, realism rules
+├── filter.js                 — coalition filtering logic
+├── state.js                  — in-memory unit/mission state
+├── simulation/
+│   ├── engine.js             — Simulation Engine (raw → processed data)
+│   └── transponder.js        — UDP IFF receiver (port 10712)
+├── public/
+│   ├── index.html
+│   ├── css/app.css
+│   └── js/
+│       ├── app.js            — auth, WebSocket, message routing
+│       └── display/
+│           ├── mode.js       — PROF / MFD mode switcher
+│           ├── table.js      — PROF mode table renderer
+│           └── map.js        — MFD mode Mapbox GL JS map
 └── dcs/
-    ├── mygci_export.lua   — Export.lua script: unit telemetry via LoGetWorldObjects()
-    ├── mygci_events.lua   — Hook script: mission metadata + player events
-    └── mygci_hook.lua     — Hook loader (placed in Scripts/Hooks/)
+    ├── Export.lua            — ready-to-use Export.lua (or append dofile line)
+    ├── asacslink_export.lua  — unit telemetry via LoGetWorldObjects()
+    ├── asacslink_events.lua  — hook script: mission metadata + player events
+    └── asacslink_hook.lua    — hook loader (placed in Scripts/Hooks/)
 ```
 
 ---
@@ -58,247 +95,157 @@ npm install
 npm start
 ```
 
-The server reads DCS data from files written by `mygci_export.lua` and `mygci_events.lua`.  Tell it
-where the DCS Saved Games folder is by setting `ASACS_DCS_FILES_PATH`:
+**Required:** Set `ASACS_DCS_FILES_PATH` to the DCS Saved Games folder:
 
 ```bash
 # Windows (PowerShell)
 $env:ASACS_DCS_FILES_PATH="C:\Users\you\Saved Games\DCS\"; npm start
 
-# Linux / macOS (if server runs on same host via Wine or a shared mount)
+# Linux / macOS
 ASACS_DCS_FILES_PATH="/mnt/dcs_saved_games/" npm start
 ```
 
-To enable detailed pipeline diagnostics (highly recommended when troubleshooting missing tracks):
+**Optional:** Enable the Mapbox tactical map (MFD mode) with a public token:
+
+```bash
+MAPBOX_TOKEN="pk.ey..." npm start
+```
+
+When `MAPBOX_TOKEN` is not set, MFD mode shows a "MAP UNAVAILABLE" message
+and PROF mode (table view) remains fully functional.
+
+**Optional:** Enable verbose diagnostics:
 
 ```bash
 ASACS_VERBOSE=true npm start
 ```
 
-With verbose mode the server logs every file read from DCS,
-the unit count stored in state, and the filtered count sent to each coalition.
-On the DCS side, set `VERBOSE = true` at the top of `mygci_export.lua` (it is
-`false` by default) to log `LoGetWorldObjects()` results and per-call write
-activity to the DCS log file.  In the browser, open the developer console
-(F12) to see per-message diagnostics from the client-side JavaScript.
-
-Edit `config.js` to change passwords and ports before deployment.
-
 ### 2. Install DCS files
 
-Copy files to your DCS Saved Games folder (usually `C:\Users\<you>\Saved Games\DCS`):
+Copy files to your DCS Saved Games folder (`C:\Users\<you>\Saved Games\DCS`):
 
 ```
-Scripts/Export.lua                        ← copy dcs/Export.lua, or append its dofile() line
-Scripts/mygci_export.lua                  ← unit telemetry via Export.lua
-Scripts/Hooks/mygci_hook.lua              ← hook loader for events
-Mods/services/MyGCI/lua/mygci_events.lua  ← hook script for events
+Scripts/Export.lua                              ← copy dcs/Export.lua, or append dofile line
+Scripts/asacslink_export.lua                    ← unit telemetry via Export.lua
+Scripts/Hooks/asacslink_hook.lua                ← hook loader for events
+Mods/services/asacslink/lua/asacslink_events.lua  ← hook script for events
 ```
 
-#### Export.lua integration
-
-A ready-to-use `Export.lua` is provided in the `dcs/` folder.  If you have no
-existing `Export.lua`, copy it directly:
-
-```
-dcs\Export.lua  →  %DCS_SAVED_GAMES%\Scripts\Export.lua
-```
-
-If you already have an `Export.lua` (e.g., from Tacview or DCS-BIOS), append
-only the `dofile` line at the **bottom** of your existing file:
+If you already have `Export.lua`, append only the `dofile` line at the bottom:
 
 ```lua
--- lfs.writedir() returns the DCS Saved Games path — it is a standard DCS
--- global and IS required here to build the correct absolute file path.
-dofile(lfs.writedir()..'Scripts\\mygci_export.lua')
+dofile(lfs.writedir()..'Scripts\\asacslink_export.lua')
 ```
 
-`mygci_export.lua` uses **callback chaining**: it saves any previously-defined
-`LuaExportStart`, `LuaExportStop`, and `LuaExportActivityNextEvent` callbacks and
-calls them alongside its own, so it coexists correctly with Tacview and other
-export scripts without conflicts.
+`asacslink_export.lua` uses **callback chaining** — it coexists with Tacview
+and DCS-BIOS without conflicts.
 
-#### Verifying Export.lua is working
+---
 
-When `mygci_export.lua` loads correctly it immediately writes `mygci_status.json`
-to the DCS Saved Games folder with `{"type":"export_loaded"}`.  Open the
-**RAW DCS DUMP** panel in the dashboard:
-
-- **Export script: LOADED** — `Export.lua` found and ran `mygci_export.lua` ✅
-- **Export script: NOT LOADED** — `Export.lua` is missing or the `dofile` line
-  is absent.  Check `%DCS_SAVED_GAMES%\Logs\dcs.log` — a successful load
-  prints `[MyGCI] MyGCI Export script loaded`.
-
-You can also confirm in `dcs.log`: if you see the hook lines
-(`[MyGCI] GameGUI loading…`) but **no** `MyGCI Export script loaded` line,
-`mygci_export.lua` is not being loaded from `Export.lua`.
-
-The server reads four files from the path set in `ASACS_DCS_FILES_PATH`:
+## DCS data files
 
 | File | Written by | Contains |
 |---|---|---|
-| `mygci_units.json` | `mygci_export.lua` every 0.5 s | Full unit snapshot |
-| `mygci_status.json` | `mygci_export.lua` on load / stop | Status event (`export_loaded`, `sim_stop`) |
-| `mygci_mission.json` | `mygci_events.lua` on mission load | Mission metadata (name, theatre, date, bullseye) |
-| `mygci_event.json` | `mygci_events.lua` on player events | Player connect/disconnect/slot-change, `sim_stop` fallback |
+| `asacslink_units.json`   | `asacslink_export.lua` every 0.5 s | Full unit snapshot |
+| `asacslink_status.json`  | `asacslink_export.lua` on load/stop | `export_loaded`, `sim_stop` |
+| `asacslink_mission.json` | `asacslink_events.lua` on mission load | Mission metadata |
+| `asacslink_event.json`   | `asacslink_events.lua` on player events | Connect/disconnect/slot |
+
+---
+
+## Transponder / IFF Feed (UDP :10712)
+
+Send SRS-compatible IFF packets to UDP port 10712 (configurable via
+`ASACS_TRANSPONDER_PORT`).  The simulation engine matches squawk codes by
+pilot name and attaches live Mode 3 to units before coalition filtering.
+
+Expected UDP payload format:
+
+```json
+{
+  "clients": [
+    { "name": "Maverick", "iff": { "mode3": 1234, "status": "active" } }
+  ]
+}
+```
+
+---
+
+## Display Modes
+
+| Mode | Toggle | Description |
+|---|---|---|
+| **PROF** | Header toggle | Text table view — all tracks, IFF, coords |
+| **MFD**  | Header toggle | Mapbox GL JS tactical map with unit markers |
+
+The mode selection is persisted per browser session.
+
+---
+
+## Simulation Engine (`simulation/engine.js`)
+
+The simulation engine is the hand-off point between raw DCS data and the
+display.  It currently:
+
+- Attaches live IFF data from the transponder receiver (matched by pilot name)
+
+It is structured for easy expansion.  Stub methods exist for:
+
+- **Indicated Altitude** — true ASL → indicated altitude using temperature + QNH
+- **Magnetic Heading** — true heading → magnetic (theatre declination)
+- Future: Line-of-Sight, transponder frequency simulation, mission time
 
 ---
 
 ## WebSocket Protocol
 
-### 1. Authenticate (HTTP POST)
+### Authenticate
 
 ```http
-POST http://localhost:3000/auth
-Content-Type: application/json
-
+POST /auth
 { "password": "blue_pass" }
+→ { "token": "<uuid>", "coalition": "blue" }
 ```
 
-Response:
-```json
-{ "token": "uuid-here", "coalition": "blue" }
-```
-
-### 2. Connect WebSocket
+### Connect
 
 ```
 ws://localhost:3000/?token=<uuid>
 ```
 
-The token is one-time use and expires in 30 seconds.
+### Message types (server → client)
 
----
+| Type | Description |
+|---|---|
+| `snapshot` | Full unit list on connect |
+| `update`   | Full unit list every 500 ms |
+| `mission`  | Mission metadata on connect + mission load |
+| `sim_stop` | DCS mission ended — clear all tracks |
 
-## Message Types (Server → Client)
+### Unit object (processed + filtered)
 
-### `snapshot` — sent immediately on connect
-Full current state of all visible units for your coalition.
-
-```json
-{
-  "type": "snapshot",
-  "ts": 1700000000000,
-  "units": [ ...unit objects... ]
-}
-```
-
-### `update` — sent every 500ms (2 Hz)
-Same format as snapshot. Clients should replace their unit list.
+Friendly units carry full datalink fields; hostile/neutral contacts have type
+scrubbed to `UNKNOWN`.  The `_sim` key carries simulation-derived fields:
 
 ```json
 {
-  "type": "update",
-  "ts": 1700000000000,
-  "units": [ ...unit objects... ]
+  "id": 12345, "coalition": 2,
+  "lat": 43.1234, "lon": 41.5678, "alt": 7500,
+  "spd": 220, "hdg": 270,
+  "type": "F-15C", "typeName": "F-15C", "category": "Airplane",
+  "squawk": 1234, "iffResolved": true,
+  "pilotName": "Maverick", "groupName": "Enfield 1",
+  "_rel": "friendly",
+  "_sim": { "iffStatus": "active", "indicatedAlt": null, "magHdg": null }
 }
 ```
-
-### `mission` — sent on connect and on mission load
-```json
-{
-  "type": "mission",
-  "data": {
-    "name": "Blue Flag - Caucasus",
-    "theatre": "Caucasus",
-    "startTime": 28800,
-    "date": { "year": 2024, "month": 6, "day": 15 },
-    "bullseye": {
-      "blue": { "x": 0, "y": 0 },
-      "red":  { "x": 0, "y": 0 }
-    }
-  }
-}
-```
-
-### `sim_stop`
-DCS mission ended. Clear all tracks.
-
----
-
-## Unit Object Fields
-
-### Friendly unit (full datalink)
-```json
-{
-  "id":          12345,
-  "coalition":   2,
-  "lat":         43.1234,
-  "lon":         41.5678,
-  "alt":         7500,
-  "spd":         220,
-  "hdg":         270,
-  "type":        "F-15C",
-  "typeName":    "F-15C",
-  "category":    "Airplane",
-  "squawk":      1234,
-  "iffResolved": true,
-  "pilotName":   "Maverick",
-  "groupName":   "Enfield 1",
-  "_rel":        "friendly"
-}
-```
-
-### Hostile radar contact (position/alt/squawk only)
-```json
-{
-  "id":          99999,
-  "coalition":   1,
-  "lat":         44.1234,
-  "lon":         42.5678,
-  "alt":         6000,
-  "type":        "UNKNOWN",
-  "typeName":    "UNKNOWN",
-  "category":    "Airplane",
-  "squawk":      7700,
-  "iffResolved": false,
-  "_rel":        "hostile"
-}
-```
-
----
-
-## Realism Model
-
-| Data field | Friendly | Hostile | Neutral |
-|---|---|---|---|
-| Position | ✅ | ✅ (radar) | ✅ (radar) |
-| Altitude | ✅ | ✅ (radar) | ✅ (radar) |
-| Speed | ✅ datalink | ❌ | ❌ |
-| Heading | ✅ datalink | ❌ | ❌ |
-| Type/Name | ✅ datalink | ❌ UNKNOWN | ❌ UNKNOWN |
-| Squawk | ✅ | ✅ Mode 3 | ✅ Mode 3 |
-| Pilot name | ✅ | ❌ | ❌ |
 
 ---
 
 ## Health Check
 
 ```
-GET http://localhost:3000/health
+GET /health → { "status": "ok", "clients": 3, "units": 47, ... }
+GET /api/config → { "mapboxToken": "pk.ey..." }
+GET /api/raw → unfiltered raw unit store (used by PROF raw dump panel)
 ```
-
-```json
-{
-  "status": "ok",
-  "clients": 3,
-  "units": 47,
-  "mission": "Blue Flag - Caucasus",
-  "uptime": 1234.5
-}
-```
-
----
-
-## Extending with Weather
-
-When you're ready to add weather, the DCS hook can extract it:
-
-```lua
-local weather = DCS.getCurrentMission().mission.weather
--- Fields: groundTurbulence, enable_fog, wind, turbulence,
---         season, type_weather, qnh, clouds, temperature, ...
-```
-
-Send it as a `weather` packet type — the server will forward it to all
-clients on connect (same as mission data).
