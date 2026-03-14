@@ -35,13 +35,25 @@ const AsacsTable = (() => {
     return 'rel-' + rel.toLowerCase();
   }
 
+  function declClass(decl) {
+    if (!decl) return '';
+    const map = {
+      friendly: 'rel-friendly',
+      neutral:  'rel-neutral',
+      bogey:    'rel-bogey',
+      bandit:   'rel-bandit',
+      hostile:  'rel-hostile',
+    };
+    return map[decl] || '';
+  }
+
   // ── Filtered unit table (WebSocket data) ──────────────────
   function renderUnits(units) {
     const tbody = document.getElementById('unitTableBody');
     if (!tbody) return;
 
     if (!units || units.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="14" class="empty-state">NO TRACKS</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="15" class="empty-state">NO TRACKS</td></tr>';
       return;
     }
 
@@ -54,28 +66,33 @@ const AsacsTable = (() => {
     });
 
     const rows = sorted.map(u => {
-      const rel  = u._rel || '';
-      const rc   = relClass(rel);
-      const iff  = u.iffResolved == null ? '—' : (u.iffResolved ? 'YES' : 'NO');
-      const iffC = u.iffResolved ? 'rel-friendly' : (u.iffResolved === false ? 'rel-hostile' : '');
-
+      const rel   = u._rel || '';
+      const decl  = u.declaration || '';
+      const rc    = relClass(rel);
+      const dc    = declClass(decl);
+      const iff   = u.iffResolved == null ? '—' : (u.iffResolved ? 'YES' : 'NO');
+      const iffC  = u.iffResolved ? 'rel-friendly' : (u.iffResolved === false ? 'rel-hostile' : '');
       const iffStatus = u._sim?.iffStatus ? ` (${u._sim.iffStatus})` : '';
+
+      const gsVal  = u.gs  != null ? `${u.gs}kt`  : (u.spd != null ? `${Math.round(u.spd * 1.94384)}kt` : '—'); // 1.94384 = m/s → knots
+      const casVal = u.cas != null ? `${u.cas}kt` : '—';
 
       return `<tr>
         <td class="${rc}">${rel.toUpperCase() || '—'}</td>
+        <td class="${dc}">${decl.toUpperCase() || '—'}</td>
         <td>${esc(u.id)}</td>
         <td>${esc(u.typeName || u.type || '—')}</td>
         <td>${esc(u.category || '—')}</td>
         <td>${esc(coalitionName(u.coalition))}</td>
         <td>${fmtCoord(u.lat)}</td>
         <td>${fmtCoord(u.lon)}</td>
-        <td>${u.alt != null ? u.alt : '—'}</td>
-        <td>${u.spd != null ? u.spd : '—'}</td>
-        <td>${u.hdg != null ? u.hdg : '—'}</td>
-        <td>${u.squawk != null ? u.squawk : '—'}</td>
+        <td>${u.alt != null ? Math.round(u.alt) : '—'}</td>
+        <td>${gsVal}</td>
+        <td>${casVal}</td>
+        <td>${u.hdg != null ? Math.round(u.hdg) : '—'}</td>
+        <td>${u.squawk != null ? String(u.squawk).padStart(4, '0') : '—'}</td>
         <td class="${iffC}">${iff}${esc(iffStatus)}</td>
-        <td>${esc(u.groupName || '—')}</td>
-        <td>${esc(u.pilotName || '—')}</td>
+        <td>${esc(u.pilotName || u.groupName || '—')}</td>
       </tr>`;
     });
 

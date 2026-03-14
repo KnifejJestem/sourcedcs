@@ -352,6 +352,10 @@ td.rel-hostile  { color: var(--red); }
 td.rel-neutral  { color: var(--text-2); }
 td.rel-admin    { color: var(--amber); }
 
+/* Declaration colour coding */
+td.rel-bogey    { color: #888888; }
+td.rel-bandit   { color: var(--amber); }
+
 /* ── Empty state ── */
 .empty-state {
   padding: 40px;

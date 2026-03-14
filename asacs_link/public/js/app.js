@@ -224,11 +224,14 @@ function setStatus(state) {
 
 // ── Stats bar ──────────────────────────────────────────────────
 function updateStats() {
-  $('statTracks').textContent = _units.length;
+  const nTracks  = _units.filter(u => u.contactType === 'track').length;
+  const nPrimary = _units.filter(u => u.contactType !== 'track').length;
+  $('statTracks').textContent = `${nTracks}T ${nPrimary}P`;
   $('statLastUpdate').textContent = _lastUpdateTs
     ? new Date(_lastUpdateTs).toISOString().slice(11, 19) + 'Z'
     : '—';
-  $('trackCount').textContent = `${_units.length} unit${_units.length !== 1 ? 's' : ''}`;
+  $('trackCount').textContent =
+    `${nTracks} track${nTracks !== 1 ? 's' : ''} · ${nPrimary} primary`;
 }
 
 function tickClock() {

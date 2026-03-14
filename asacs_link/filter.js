@@ -58,6 +58,44 @@ function getRelationship(unitCoalitionId, clientCoalition) {
 }
 
 /**
+ * Computes the tactical declaration for a unit.
+ *
+ * friendly → the unit is on our side (same coalition)
+ * neutral  → the unit belongs to a neutral party
+ * bandit   → confirmed hostile track (full radar data available)
+ * bogey    → unidentified contact (hostile coalition but primary contact only,
+ *             or relationship unknown)
+ *
+ * @param {string} relationship  'friendly'|'hostile'|'neutral'|'admin'
+ * @param {string} contactType   'track'|'primary'
+ * @returns {string}  declaration string
+ */
+function computeDeclaration(relationship, contactType) {
+  switch (relationship) {
+    case 'friendly': return 'friendly';
+    case 'neutral':  return 'neutral';
+    case 'hostile':
+      // A hostile with full track data (position, alt, heading, speed) is a
+      // confirmed bandit.  A position-only contact is an unidentified bogey.
+      return contactType === 'track' ? 'bandit' : 'bogey';
+    default: return 'bogey';
+  }
+}
+
+/**
+ * Compute declaration for an admin view based on unit coalition.
+ * Admin sees everything from a neutral God's-eye perspective, so declarations
+ * are assigned by coalition rather than by relationship.
+ */
+function computeAdminDeclaration(unitCoalition, contactType) {
+  if (unitCoalition === COALITION_ID.blue)    return 'friendly';
+  if (unitCoalition === COALITION_ID.neutral) return 'neutral';
+  if (unitCoalition === COALITION_ID.red)
+    return contactType === 'track' ? 'bandit' : 'bogey';
+  return 'bogey';
+}
+
+/**
  * Applies field-level scrubbing based on relationship rules.
  * Returns null if unit should be hidden entirely (future: radar coverage check).
  *
@@ -66,9 +104,18 @@ function getRelationship(unitCoalitionId, clientCoalition) {
  * @returns {object|null}
  */
 function scrubUnit(unit, relationship) {
-  // Admin sees raw data
+  const contactType = unit._sim?.contactType ?? 'primary';
+
+  // Admin sees raw data plus all simulation-derived fields.
   if (relationship === 'admin') {
-    return { ...unit, _rel: 'admin' };
+    return {
+      ...unit,
+      _rel:        'admin',
+      contactType,
+      declaration: computeAdminDeclaration(unit.coalition, contactType),
+      gs:          unit._sim?.gs  ?? null,
+      cas:         unit._sim?.cas ?? null,
+    };
   }
 
   const rules = config.realism[relationship];
@@ -78,6 +125,8 @@ function scrubUnit(unit, relationship) {
     id:         unit.id,
     coalition:  unit.coalition,  // always include coalition ID
     _rel:       relationship,    // hint to client for coloring
+    contactType,
+    declaration: computeDeclaration(relationship, contactType),
   };
 
   if (rules.showPosition) {
@@ -86,11 +135,13 @@ function scrubUnit(unit, relationship) {
   }
 
   if (rules.showAltitude) {
-    out.alt = unit.alt; // meters ASL
+    out.alt = unit.alt; // meters ASL (true altitude for now)
   }
 
   if (rules.showSpeed) {
-    out.spd = unit.spd; // m/s
+    out.spd = unit.spd; // m/s (raw DCS field, kept for PROF table back-compat)
+    out.gs  = unit._sim?.gs  ?? null; // knots
+    out.cas = unit._sim?.cas ?? null; // knots
   }
 
   if (rules.showHeading) {

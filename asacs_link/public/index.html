@@ -102,6 +102,7 @@
           <thead>
             <tr>
               <th>REL</th>
+              <th>DECL</th>
               <th>ID</th>
               <th>TYPE</th>
               <th>CAT</th>
@@ -109,16 +110,16 @@
               <th>LAT</th>
               <th>LON</th>
               <th>ALT (m)</th>
-              <th>SPD (m/s)</th>
+              <th>GS (kt)</th>
+              <th>CAS (kt)</th>
               <th>HDG°</th>
               <th>SQUAWK</th>
               <th>IFF</th>
-              <th>GROUP</th>
-              <th>PILOT</th>
+              <th>PILOT / GROUP</th>
             </tr>
           </thead>
           <tbody id="unitTableBody">
-            <tr><td colspan="14" class="empty-state">Waiting for data…</td></tr>
+            <tr><td colspan="15" class="empty-state">Waiting for data…</td></tr>
           </tbody>
         </table>
       </div>
@@ -174,6 +175,10 @@
 <!-- Display modules load first so app.js can reference their globals -->
 <script src="js/display/mode.js"></script>
 <script src="js/display/table.js"></script>
+<!-- builder.js is an ES module; it sets window.AsacsBuilder when it executes.
+     Modules are deferred, so it will always be loaded before any WebSocket
+     data arrives and AsacsMap.updateUnits() is first called. -->
+<script type="module" src="js/display/builder.js"></script>
 <script src="js/display/map.js"></script>
 <script src="js/app.js"></script>
 </body>
