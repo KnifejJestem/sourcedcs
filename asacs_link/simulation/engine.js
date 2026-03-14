@@ -29,6 +29,9 @@
  *   • Time                — mission-elapsed / Zulu time computations
  */
 
+/** Number of valid 4-digit octal squawk codes (0000–7777 = 0–4095 decimal). */
+const SQUAWK_MODULO = 4096;
+
 export class SimulationEngine {
   /**
    * @param {import('./transponder.js').TransponderReceiver} transponder
@@ -55,7 +58,7 @@ export class SimulationEngine {
     for (const unit of rawUnits.values()) {
       const processed = { ...unit, _sim: {} };
 
-      this._attachTransponderData(processed);
+      this._assignSquawk(processed);
       this._simulateIndicatedAltitude(processed);
       this._simulateMagneticHeading(processed);
       // Future: this._simulateLineOfSight(processed);
@@ -70,21 +73,29 @@ export class SimulationEngine {
   // ── Simulation steps ───────────────────────────────────────────────────────
 
   /**
-   * Step 1 — Transponder / IFF data.
+   * Step 1 — Squawk / transponder assignment.
    *
-   * Matches a unit to live transponder data received from the SRS UDP feed
-   * (port 10712) by pilot name.  On a match the IFF fields are merged directly
-   * onto the unit so downstream coalition filtering can use them.
+   * For player-controlled units the squawk comes exclusively from the SRS
+   * transponder feed (UDP port 10712).  If a pilot has no active SRS entry
+   * the squawk is left unset.
+   *
+   * For AI units (no pilotName) the simulation generates a stable squawk
+   * derived from the unit ID (id mod 4096) so every AI track carries a
+   * deterministic, unique-enough code without requiring external input.
    */
-  _attachTransponderData(unit) {
-    if (!unit.pilotName) return;
-
-    const iff = this._transponder.getIff(unit.pilotName);
-    if (!iff) return;
-
-    // Prefer live IFF mode3 over the derived pseudo-squawk when available.
-    if (iff.mode3 != null) unit.squawk     = iff.mode3;
-    if (iff.status != null) unit._sim.iffStatus = iff.status;
+  _assignSquawk(unit) {
+    if (unit.pilotName) {
+      // Player unit — source squawk exclusively from the SRS transponder feed.
+      const iff = this._transponder.getIff(unit.pilotName);
+      if (iff) {
+        if (iff.mode3  != null) unit.squawk         = iff.mode3;
+        if (iff.status != null) unit._sim.iffStatus = iff.status;
+      }
+      // No SRS entry → squawk remains unset; display layer treats it as absent.
+    } else {
+      // AI unit — generate a stable squawk from the unit ID.
+      unit.squawk = unit.id % SQUAWK_MODULO;
+    }
   }
 
   /**
