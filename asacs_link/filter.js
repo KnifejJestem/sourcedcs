@@ -115,6 +115,7 @@ function scrubUnit(unit, relationship) {
       declaration: computeAdminDeclaration(unit.coalition, contactType),
       gs:          unit._sim?.gs  ?? null,
       cas:         unit._sim?.cas ?? null,
+      vs:          unit._sim?.vs  ?? null,
     };
   }
 
@@ -142,6 +143,7 @@ function scrubUnit(unit, relationship) {
     out.spd = unit.spd; // m/s (raw DCS field, kept for PROF table back-compat)
     out.gs  = unit._sim?.gs  ?? null; // knots
     out.cas = unit._sim?.cas ?? null; // knots
+    out.vs  = unit._sim?.vs  ?? null; // 100 ft/min (positive = climbing)
   }
 
   if (rules.showHeading) {

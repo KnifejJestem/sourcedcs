@@ -38,7 +38,7 @@ describe('buildBlips', () => {
     assert.equal(f.geometry.coordinates[0], 38.0);
     assert.equal(f.geometry.coordinates[1], 35.0);
     assert.equal(f.geometry.coordinates[2], 0);
-    assert.equal(f.properties.colour,    '#4fc3f7', 'blue force should use blue colour');
+    assert.equal(f.properties.colour,    '#39ff7a', 'blue force should use green colour');
     assert.equal(f.properties.isPrimary, 1,         'primary contact should have isPrimary=1');
   });
 

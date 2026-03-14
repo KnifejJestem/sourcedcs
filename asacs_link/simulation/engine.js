@@ -33,15 +33,20 @@
 const SQUAWK_MODULO = 4096;
 
 /**
- * DCS unit category strings that represent ground-based units.
- * These are filtered out of the display picture — only aircraft and ships
- * are tracked by the GCI radar picture.
+ * DCS unit category strings that are excluded from the radar picture.
+ * Ground/structure categories have never been part of the GCI picture.
+ * Sea/ship categories are excluded for now — naval tracking is not yet
+ * implemented and ships would add noise to the radar display.
  */
-const GROUND_CATEGORIES = new Set([
+const EXCLUDED_CATEGORIES = new Set([
   'ground units',
   'ground',
   'structures',
   'static',
+  'ship',
+  'ships',
+  'sea',
+  'naval',
 ]);
 
 /**
@@ -100,10 +105,9 @@ export class SimulationEngine {
     const activeIds = new Set();
 
     for (const unit of rawUnits.values()) {
-      // Filter out ground units and structures — only aircraft and ships
-      // are part of the GCI radar picture.
+      // Filter out excluded unit categories (ground, structures, ships).
       const cat = (unit.category || '').toLowerCase().trim();
-      if (GROUND_CATEGORIES.has(cat)) continue;
+      if (EXCLUDED_CATEGORIES.has(cat)) continue;
 
       activeIds.add(unit.id);
       const processed = { ...unit, _sim: {} };
@@ -176,22 +180,27 @@ export class SimulationEngine {
   }
 
   /**
-   * Step 3 — Speed outputs: Ground Speed (GS) and Calibrated Airspeed (CAS).
+   * Step 3 — Speed outputs: Ground Speed (GS), Calibrated Airspeed (CAS),
+   * and Vertical Speed (VS).
    *
    * DCS does not reliably expose groundspeed, so GS is derived from successive
    * position fixes using the Haversine formula:
    *
    *   GS = distance(prev_pos, cur_pos) / time_elapsed
    *
-   * On the first fix for a unit there is no previous position, so GS is null
-   * until the next tick.  If position data is unavailable the raw DCS speed
-   * field is used as a fallback (m/s → knots).
+   * Vertical speed is derived from successive altitude fixes:
+   *
+   *   VS = (cur_alt − prev_alt) / time_elapsed  [m/s → 100 ft/min]
+   *
+   * On the first fix for a unit there is no previous position, so GS and VS
+   * are null until the next tick.  If position data is unavailable the raw DCS
+   * speed field is used as a GS fallback (m/s → knots).
    *
    * CAS is a stub — proper CAS requires atmospheric data (temperature,
    * QNH/pressure altitude).  For now CAS = GS as a placeholder.
    *
-   * Both values are emitted in knots so the display layer can show them
-   * directly without unit conversion.
+   * GS and CAS are emitted in knots.  VS is emitted in 100 ft/min units
+   * (e.g. 25 = 2 500 ft/min climb) — positive values indicate climbing.
    */
   _computeSpeeds(unit) {
     const now = Date.now();
@@ -205,15 +214,28 @@ export class SimulationEngine {
         // fixes are ≥100 ms apart under normal conditions.  This guard also
         // prevents division-by-near-zero from clock jitter on the first tick.
         if (dtSec >= 0.1) {
+          // Horizontal groundspeed
           const distM = _haversineMeters(prev.lat, prev.lon, unit.lat, unit.lon);
           const knots = (distM / dtSec) * 1.94384; // m/s → knots
           unit._sim.gs  = Math.round(knots);
           unit._sim.cas = Math.round(knots); // Stub: CAS = GS until atmosphere simulation is wired in
+
+          // Vertical speed (only when altitude is available in both snapshots)
+          if (prev.alt != null && unit.alt != null) {
+            const vsMps   = (unit.alt - prev.alt) / dtSec; // m/s vertical rate
+            const vsFtMin = vsMps * 3.28084 * 60;          // ft/min
+            unit._sim.vs  = Math.round(vsFtMin / 100);     // 100 ft/min units
+          }
         }
       }
 
-      // Update position history for the next tick
-      this._prevPositions.set(unit.id, { lat: unit.lat, lon: unit.lon, ts: now });
+      // Update position history for the next tick (include altitude for VS)
+      this._prevPositions.set(unit.id, {
+        lat: unit.lat,
+        lon: unit.lon,
+        alt: unit.alt ?? null,
+        ts:  now,
+      });
     }
 
     // Fall back to raw DCS speed when no position-derived GS is available

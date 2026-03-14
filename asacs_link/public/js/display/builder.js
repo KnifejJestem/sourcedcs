@@ -31,7 +31,7 @@
 // These are the canonical tactical colours for the map.
 // DCS coalition IDs: 0 = neutral, 1 = red, 2 = blue.
 const COALITION_COLOUR = {
-  blue:    '#4fc3f7',
+  blue:    '#39ff7a', // green — friendly forces
   red:     '#ef5350',
   unknown: '#aaaaaa',
 };
@@ -246,24 +246,35 @@ function buildTrails(contacts, history) {
  * Each contact with a valid position gets a Point feature.  The label
  * text is formatted as up to three newline-separated lines:
  *   1. Callsign  (pilotName → groupName → String(id))
- *   2. Altitude  (flight levels: Math.round(altM × 3.28084 / 100))
- *   3. Speed     (GS in knots, rounded to nearest integer)
+ *   2. Altitude | Vertical speed  e.g. "FL200 | ↑25" or "FL200 | ↓12"
+ *      (VS is in 100 ft/min units, ↑ = climbing, ↓ = descending)
+ *   3. GS | CAS  in knots, e.g. "350kt | 350kt"
  *
  * Primary radar contacts carry no useful annotation so they receive an
  * empty label string; the symbol layer should omit empty labels.
  *
- * If an `offsets` map is provided, any unit ID present in it will have
- * its label placed at a position offset from the unit by [deltaLon, deltaLat]
- * degrees.  The label therefore moves with the unit, preserving the relative
- * declutter offset even as the unit moves.  Pass an empty Map or omit the
- * argument for default positioning (label placed at the unit's own position).
+ * Label features include a `colour` property that matches the contact's
+ * coalition colour so the symbol layer can style text per coalition.
+ *
+ * The label anchor (geographic position) is computed as:
+ *   unit position + defaultOffset + (per-unit drag delta from offsets)
+ *
+ * `defaultOffset` is a [dLon, dLat] pair in degrees (typically derived
+ * from the current map zoom so the visual offset stays constant in screen
+ * pixels regardless of zoom level).  When omitted it defaults to [0, 0].
+ *
+ * `offsets` stores user-applied drag deltas on top of the default offset.
+ * `hasOffset=1` in the feature properties signals that a drag delta is
+ * active (used by leader-line rendering to indicate a decluttered label).
  *
  * @param {object[]} contacts  Coalition-filtered unit array
- * @param {Map<string, [number,number]>} [offsets]  Per-unit delta offsets [dLon, dLat] keyed by String(id)
+ * @param {Map<string, [number,number]>} [offsets]  Per-unit drag deltas [dLon, dLat]
+ * @param {[number, number]} [defaultOffset]  Base offset applied to all labels [dLon, dLat]
  * @returns {object}  GeoJSON FeatureCollection
  */
-function buildLabels(contacts, offsets) {
+function buildLabels(contacts, offsets, defaultOffset) {
   const features = [];
+  const defOff   = defaultOffset || [0, 0];
 
   for (const c of contacts) {
     if (c.lat == null || c.lon == null) continue;
@@ -271,19 +282,34 @@ function buildLabels(contacts, offsets) {
     let label = '';
     if (c.contactType !== 'primary') {
       const callsign = c.pilotName || c.groupName || String(c.id);
-      const altLine  = c.alt != null
-        ? `FL${Math.round(c.alt * FEET_PER_METER / 100)}`
-        : '';
-      const spdLine  = c.gs  != null
-        ? `${c.gs}kt`
-        : (c.spd != null ? `${Math.round(c.spd * KNOTS_PER_MPS)}kt` : '');
+
+      // Altitude + vertical-speed line
+      let altLine = '';
+      if (c.alt != null) {
+        const fl = `FL${Math.round(c.alt * FEET_PER_METER / 100)}`;
+        let vsStr = '';
+        if (c.vs != null) {
+          if      (c.vs > 0) vsStr = ` | ↑${c.vs}`;
+          else if (c.vs < 0) vsStr = ` | ↓${Math.abs(c.vs)}`;
+          else               vsStr = ` | 0`;
+        }
+        altLine = fl + vsStr;
+      }
+
+      // Speed line: GS | CAS (both in knots)
+      const gsKt  = c.gs  != null ? `${c.gs}kt`
+                  : c.spd != null ? `${Math.round(c.spd * KNOTS_PER_MPS)}kt`
+                  : null;
+      const casKt = c.cas != null ? `${c.cas}kt` : null;
+      const spdLine = [gsKt, casKt].filter(Boolean).join(' | ');
+
       label = [callsign, altLine, spdLine].filter(Boolean).join('\n');
     }
 
-    // Apply relative delta offset when the user has dragged this label
-    const delta = offsets && offsets.get(String(c.id));
-    const lon = delta ? c.lon + delta[0] : c.lon;
-    const lat = delta ? c.lat + delta[1] : c.lat;
+    // Apply defaultOffset + drag offset to position the label anchor
+    const drag = offsets && offsets.get(String(c.id));
+    const lon  = c.lon + defOff[0] + (drag ? drag[0] : 0);
+    const lat  = c.lat + defOff[1] + (drag ? drag[1] : 0);
 
     features.push({
       type:     'Feature',
@@ -291,7 +317,8 @@ function buildLabels(contacts, offsets) {
       properties: {
         id:        String(c.id),
         label,
-        hasOffset: delta ? 1 : 0,
+        colour:    _coalitionColour(c.coalition),
+        hasOffset: drag ? 1 : 0,
       },
     });
   }
@@ -302,25 +329,39 @@ function buildLabels(contacts, offsets) {
 /**
  * Build the leader-line FeatureCollection (line layer).
  *
- * For every contact that has a dragged label (i.e. an entry in `offsets`),
- * produces a short LineString from the unit's actual position to the label's
- * geographic position (unit position + delta).  Contacts with no offset
- * produce no feature, keeping the layer empty until the operator declutters.
+ * Produces a solid white LineString from the unit's actual position to
+ * the label anchor position for every contact whose total offset from
+ * the unit is non-zero.  The total offset is:
+ *
+ *   defaultOffset + (per-unit drag delta from dragOffsets, if any)
+ *
+ * When `defaultOffset` is [0, 0] (the default) and no drag delta is present,
+ * the offset is zero and no leader line is drawn (it would be invisible).
+ * Passing a non-zero `defaultOffset` (computed from the current zoom in the
+ * render loop so the line spans a constant screen-pixel distance) ensures a
+ * leader line is always visible for every contact.
+ *
+ * Lines are always white regardless of coalition colour, to maximise contrast
+ * against both dark and terrain map styles.
  *
  * @param {object[]} contacts  Coalition-filtered unit array
- * @param {Map<string, [number,number]>} offsets  Per-unit delta offsets [dLon, dLat]
+ * @param {Map<string, [number,number]>} [dragOffsets]  Per-unit drag deltas [dLon, dLat]
+ * @param {[number, number]} [defaultOffset]  Base offset applied to all labels [dLon, dLat]
  * @returns {object}  GeoJSON FeatureCollection
  */
-function buildLeaderLines(contacts, offsets) {
+function buildLeaderLines(contacts, dragOffsets, defaultOffset) {
   const features = [];
-
-  if (!offsets || !offsets.size) return { type: 'FeatureCollection', features };
+  const defOff   = defaultOffset || [0, 0];
 
   for (const c of contacts) {
     if (c.lat == null || c.lon == null) continue;
 
-    const delta = offsets.get(String(c.id));
-    if (!delta) continue;
+    const drag = dragOffsets && dragOffsets.get(String(c.id));
+    const dLon = defOff[0] + (drag ? drag[0] : 0);
+    const dLat = defOff[1] + (drag ? drag[1] : 0);
+
+    // Skip zero-offset contacts — a zero-length line is invisible and wasteful
+    if (Math.abs(dLon) < 1e-9 && Math.abs(dLat) < 1e-9) continue;
 
     const alt = c.alt ?? 0;
     features.push({
@@ -328,13 +369,13 @@ function buildLeaderLines(contacts, offsets) {
       geometry: {
         type:        'LineString',
         coordinates: [
-          [c.lon,            c.lat,            alt],
-          [c.lon + delta[0], c.lat + delta[1], alt],
+          [c.lon,        c.lat,        alt],
+          [c.lon + dLon, c.lat + dLat, alt],
         ],
       },
       properties: {
         id:     String(c.id),
-        colour: _coalitionColour(c.coalition),
+        colour: '#ffffff',
       },
     });
   }

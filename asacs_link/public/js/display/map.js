@@ -88,6 +88,11 @@ const AsacsMap = (() => {
   // Hostile / bandit declaration values
   const HOSTILE_DECLS = new Set(['bogey', 'bandit', 'hostile']);
 
+  // Mapbox Web Mercator metres-per-pixel constant at zoom 0 on the equator.
+  // Used to convert zoom level + latitude into a geographic degree offset
+  // that corresponds to a fixed screen-pixel distance.
+  const MPP_ZOOM0 = 156543.03392;
+
   // ── Public API ────────────────────────────────────────────────
 
   /**
@@ -121,6 +126,9 @@ const AsacsMap = (() => {
       pitch:              0,
       attributionControl: false,
     });
+
+    // Disable right-click-drag map rotation so right-click is free for measuring
+    _map.dragRotate.disable();
 
     _map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right');
     _map.addControl(new mapboxgl.ScaleControl(), 'bottom-left');
@@ -193,6 +201,7 @@ const AsacsMap = (() => {
     _ready = false;
     _map.setStyle(style);
     _map.once('style.load', () => {
+      _map.dragRotate.disable(); // re-disable after style reload resets handlers
       _ready = true;
       _initSources();
       _initLayers();
@@ -256,15 +265,32 @@ const AsacsMap = (() => {
 
   /**
    * Push pending FeatureCollection updates to the map sources.
-   * Only the sources that actually need refreshing are updated:
-   *   - blips / trails / labels: when _dataDirty
-   *   - heading ticks: when _zoomDirty or zoom has changed
+   *
+   * Sources are split into two groups:
+   *   • Zoom-independent (blips, trails): refreshed only when _dataDirty.
+   *   • Zoom-dependent (heading ticks, leader lines, labels): refreshed
+   *     whenever _zoomDirty, which is set on every data change AND on every
+   *     zoom event.  Leader lines and labels must rebuild on zoom because the
+   *     defaultLabelOffset (which keeps labels a constant screen-pixel
+   *     distance from their unit) is derived from the current zoom level.
    */
   function _doRender() {
     if (!_ready || !_map) return;
     if (typeof AsacsBuilder === 'undefined') return;
 
     const zoom = _map.getZoom();
+
+    // Compute the default label anchor offset in geographic degrees.
+    // Labels are placed ~15 screen pixels right and ~8 pixels above the unit.
+    // The offset is zoom-dependent: at higher zoom levels 1° covers fewer
+    // pixels, so we compute metres-per-pixel and convert to degrees.
+    const centerLat = _map.getCenter().lat;
+    const latRad    = centerLat * Math.PI / 180;
+    const mpp       = (MPP_ZOOM0 * Math.cos(latRad)) / Math.pow(2, zoom);
+    const defaultLabelOffset = [
+      (15 * mpp) / (111320 * Math.cos(latRad)), // dLon in degrees (15 px right)
+      (8  * mpp) / 111320,                       // dLat in degrees (8 px up)
+    ];
 
     if (_dataDirty) {
       _dataDirty = false;
@@ -277,19 +303,15 @@ const AsacsMap = (() => {
         else friendly.push(u);
       }
 
-      const blipSrc   = _map.getSource(SRC_BLIPS);
-      const hostSrc   = _map.getSource(SRC_HOSTILE);
-      const trailSrc  = _map.getSource(SRC_TRAILS);
-      const leaderSrc = _map.getSource(SRC_LEADERS);
-      const lblSrc    = _map.getSource(SRC_LABELS);
+      const blipSrc  = _map.getSource(SRC_BLIPS);
+      const hostSrc  = _map.getSource(SRC_HOSTILE);
+      const trailSrc = _map.getSource(SRC_TRAILS);
 
-      if (blipSrc)   blipSrc.setData(AsacsBuilder.buildBlips(friendly));
-      if (hostSrc)   hostSrc.setData(AsacsBuilder.buildBlips(hostile));
-      if (trailSrc)  trailSrc.setData(AsacsBuilder.buildTrails(_units, _history));
-      if (leaderSrc) leaderSrc.setData(AsacsBuilder.buildLeaderLines(_units, _labelOffsets));
-      if (lblSrc)    lblSrc.setData(AsacsBuilder.buildLabels(_units, _labelOffsets));
+      if (blipSrc)  blipSrc.setData(AsacsBuilder.buildBlips(friendly));
+      if (hostSrc)  hostSrc.setData(AsacsBuilder.buildBlips(hostile));
+      if (trailSrc) trailSrc.setData(AsacsBuilder.buildTrails(_units, _history));
 
-      // Heading ticks depend on zoom → mark as dirty too when data changes
+      // Labels and leader lines depend on zoom (defaultLabelOffset) — rebuild them too
       _zoomDirty = true;
     }
 
@@ -297,8 +319,13 @@ const AsacsMap = (() => {
       _zoomDirty = false;
       _lastZoom  = zoom;
 
-      const headSrc = _map.getSource(SRC_HEADS);
-      if (headSrc) headSrc.setData(AsacsBuilder.buildHeadingTicks(_units, zoom));
+      const headSrc   = _map.getSource(SRC_HEADS);
+      const leaderSrc = _map.getSource(SRC_LEADERS);
+      const lblSrc    = _map.getSource(SRC_LABELS);
+
+      if (headSrc)   headSrc.setData(AsacsBuilder.buildHeadingTicks(_units, zoom));
+      if (leaderSrc) leaderSrc.setData(AsacsBuilder.buildLeaderLines(_units, _labelOffsets, defaultLabelOffset));
+      if (lblSrc)    lblSrc.setData(AsacsBuilder.buildLabels(_units, _labelOffsets, defaultLabelOffset));
     }
   }
 
@@ -371,16 +398,16 @@ const AsacsMap = (() => {
       },
     });
 
-    // 2. Leader lines — faint dashed lines from unit to displaced labels
+    // 2. Leader lines — solid white lines from every unit to its label anchor.
+    //    Always visible (driven by defaultLabelOffset computed in _doRender).
     addLayer({
       id:     LAYER_LEADERS,
       type:   'line',
       source: SRC_LEADERS,
       paint: {
-        'line-color':      ['get', 'colour'],
-        'line-width':      1,
-        'line-opacity':    0.45,
-        'line-dasharray':  [2, 3],
+        'line-color':   '#ffffff',
+        'line-width':   1.2,
+        'line-opacity': 0.80,
       },
     });
 
@@ -451,7 +478,11 @@ const AsacsMap = (() => {
       },
     });
 
-    // 7. Data tags — allow overlap; units can be dragged for decluttering
+    // 7. Data tags — left-aligned, colour matches coalition, allow overlap.
+    //    text-anchor='left' means the leader line terminates exactly at the
+    //    left edge of the text.  A small text-offset pushes the text 0.3 em
+    //    right so there is a clean gap between the line tip and the first
+    //    character.  Units are draggable for decluttering.
     addLayer({
       id:     LAYER_LABELS,
       type:   'symbol',
@@ -460,13 +491,14 @@ const AsacsMap = (() => {
         'text-field':            ['get', 'label'],
         'text-font':             ['DIN Offc Pro Regular', 'Arial Unicode MS Regular'],
         'text-size':             10,
-        'text-offset':           [1, -1],
-        'text-anchor':           'bottom-left',
+        'text-offset':           [0.3, 0],
+        'text-anchor':           'left',
+        'text-justify':          'left',
         'text-allow-overlap':    true,
         'text-ignore-placement': true,
       },
       paint: {
-        'text-color':      '#ffffff',
+        'text-color':      ['get', 'colour'],
         'text-halo-color': '#000000',
         'text-halo-width': 1.5,
       },
