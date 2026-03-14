@@ -369,7 +369,7 @@ function renderRaw(data) {
   // Row 1: Export.lua script status (did mygci_export.lua load at all?)
   if (data.exportLoadedTs) {
     const ageSec = (data.exportLoadedAgeMs / 1000).toFixed(0);
-    exportStatus.textContent = `Export script: LOADED (confirmed ${ageSec}s ago via UDP ping)`;
+    exportStatus.textContent = `Export script: LOADED (confirmed ${ageSec}s ago via status file)`;
     exportStatus.style.color = '';
   } else {
     exportStatus.textContent =
@@ -381,13 +381,13 @@ function renderRaw(data) {
   if (data.lastUnitsPkt) {
     const ageSec = (data.lastUnitsPkt.ageMs / 1000).toFixed(1);
     meta.textContent =
-      `Last units packet: ${ageSec}s ago · ${data.lastUnitsPkt.unitCount} unit(s)`;
+      `Last units file: ${ageSec}s ago · ${data.lastUnitsPkt.unitCount} unit(s)`;
   } else if (data.lastPkt) {
     const ageSec = (data.lastPkt.ageMs / 1000).toFixed(1);
     meta.textContent =
-      `Last UDP packet: ${ageSec}s ago (type="${data.lastPkt.type}") — no units packet yet`;
+      `Last file read: ${ageSec}s ago (type="${data.lastPkt.type}") — no units file yet`;
   } else {
-    meta.textContent = 'No UDP packet received from DCS yet';
+    meta.textContent = 'No data file read from DCS yet';
   }
 
   if (units.length === 0) {

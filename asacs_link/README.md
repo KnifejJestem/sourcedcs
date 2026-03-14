@@ -1,6 +1,6 @@
 # DCS GCI Server
 
-Minimal Node.js server that receives unit data from DCS via UDP,
+Minimal Node.js server that reads unit data written by a DCS Export.lua script,
 applies realism-based coalition filtering, and distributes to
 WebSocket clients at 2 Hz.
 
@@ -14,8 +14,11 @@ This server uses two complementary DCS scripting methods:
 DCS calls `Export.lua` every simulation frame. The export script uses
 `LuaExportActivityNextEvent(t)` (the same timer-scheduled callback that Tacview
 uses) to run at 2 Hz, calling `LoGetWorldObjects()` to obtain live position,
-coalition, category, and identity data for all units and sending them via UDP.
-This is the standard method used by tools like Tacview and DCS-BIOS.
+coalition, category, and identity data for all units and writing them to a JSON
+file in the DCS Saved Games folder.  The Node.js server polls that file every
+500 ms and broadcasts updates to connected clients.  Because UDP sockets are
+broken on DCS dedicated servers (`lua-socket.dll` incompatibility), file I/O is
+used instead — it is equally low-latency at 2 Hz and requires no extra ports.
 
 **2. Server Hooks** (`mygci_hook.lua` + `myatc.lua`) — event monitoring  
 Hook scripts in `Saved Games\DCS\Scripts\Hooks\` receive game events such
@@ -52,16 +55,27 @@ npm install
 npm start
 ```
 
+The server reads DCS data from files written by `mygci_export.lua`.  Tell it
+where the DCS Saved Games folder is by setting `ASACS_DCS_FILES_PATH`:
+
+```bash
+# Windows (PowerShell)
+$env:ASACS_DCS_FILES_PATH="C:\Users\you\Saved Games\DCS\"; npm start
+
+# Linux / macOS (if server runs on same host via Wine or a shared mount)
+ASACS_DCS_FILES_PATH="/mnt/dcs_saved_games/" npm start
+```
+
 To enable detailed pipeline diagnostics (highly recommended when troubleshooting missing tracks):
 
 ```bash
 ASACS_VERBOSE=true npm start
 ```
 
-With verbose mode the server logs every UDP units packet received from DCS,
+With verbose mode the server logs every file read from DCS,
 the unit count stored in state, and the filtered count sent to each coalition.
 On the DCS side, set `VERBOSE = true` at the top of `mygci_export.lua` (it is
-`false` by default) to log `LoGetWorldObjects()` results and per-call send
+`false` by default) to log `LoGetWorldObjects()` results and per-call write
 activity to the DCS log file.  In the browser, open the developer console
 (F12) to see per-message diagnostics from the client-side JavaScript.
 
@@ -103,8 +117,9 @@ export scripts without conflicts.
 
 #### Verifying Export.lua is working
 
-When `mygci_export.lua` loads correctly it immediately sends a UDP ping to the
-server.  Open the **RAW DCS DUMP** panel in the dashboard:
+When `mygci_export.lua` loads correctly it immediately writes `mygci_status.json`
+to the DCS Saved Games folder with `{"type":"export_loaded"}`.  Open the
+**RAW DCS DUMP** panel in the dashboard:
 
 - **Export script: LOADED** — `Export.lua` found and ran `mygci_export.lua` ✅
 - **Export script: NOT LOADED** — `Export.lua` is missing or the `dofile` line
@@ -115,9 +130,12 @@ You can also confirm in `dcs.log`: if you see the hook lines
 (`[MyGCI] GameGUI loading…`) but **no** `MyGCI Export script loaded` line,
 `mygci_export.lua` is not being loaded from `Export.lua`.
 
-Both scripts send UDP packets to `127.0.0.1:7788` by default.
-If the server runs on a different machine, edit `SERVER_HOST` in both
-`mygci_export.lua` and `myatc.lua`.
+The server reads two files from the path set in `ASACS_DCS_FILES_PATH`:
+
+| File | Written by | Contains |
+|---|---|---|
+| `mygci_units.json` | `mygci_export.lua` every 0.5 s | Full unit snapshot |
+| `mygci_status.json` | `mygci_export.lua` on load / stop | Status event (`export_loaded`, `sim_stop`) |
 
 ---
 
