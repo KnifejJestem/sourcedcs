@@ -1,29 +1,36 @@
 /* ════════════════════════════════════════════════════════════
-   display/mode.js — PROF / MFD mode switcher
+   display/mode.js — MAP / TABLE view switcher
 
-   PROF mode: text-table view (traditional GCI display)
-   MFD  mode: map-centric view (Mapbox GL JS)
+   Controls which top-level view is visible:
+     MAP   — the Mapbox tactical map (default)
+     TABLE — debug/diagnostic view: raw data tables
+
+   UI theme (PROF light / MFD dark) and map base layer
+   (CHART vector / TERRAIN satellite) are controlled
+   independently by AsacsTheme and AsacsMapType in theme.js.
 
    Exposes a single global: AsacsMode
 ════════════════════════════════════════════════════════════ */
 'use strict';
 
 const AsacsMode = (() => {
-  const MODES   = ['prof', 'mfd'];
-  const KEY     = 'asacs-display-mode';
+  const MODES = ['map', 'table'];
+  const KEY   = 'asacs-view-mode';
 
-  let _current  = sessionStorage.getItem(KEY) || 'prof';
+  let _current  = sessionStorage.getItem(KEY) || 'map';
   let _onChange = null;
 
   function _applyMode(mode) {
-    document.querySelectorAll('.mode-btn').forEach(btn => {
+    document.querySelectorAll('[data-mode]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === mode);
     });
-    // Toggle top-level view containers
-    const profEl = document.getElementById('view-prof');
-    const mfdEl  = document.getElementById('view-mfd');
-    if (profEl) profEl.classList.toggle('hidden', mode !== 'prof');
-    if (mfdEl)  mfdEl.classList.toggle('hidden',  mode !== 'mfd');
+
+    // Map container: visible for map mode; hidden for table
+    const mapEl   = document.getElementById('view-map');
+    const tableEl = document.getElementById('view-table');
+
+    if (mapEl)   mapEl.classList.toggle('hidden',  mode === 'table');
+    if (tableEl) tableEl.classList.toggle('hidden', mode !== 'table');
 
     sessionStorage.setItem(KEY, mode);
     if (_onChange) _onChange(mode);

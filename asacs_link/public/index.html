@@ -9,6 +9,17 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <link rel="stylesheet" href="css/app.css">
+  <!-- Apply stored UI theme before first paint to avoid flash of wrong theme.
+       Key must stay in sync with AsacsTheme KEY constant in theme.js. -->
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem('asacs-ui-theme') === 'prof') {
+          document.documentElement.classList.add('prof');
+        }
+      } catch (e) { /* sessionStorage may be unavailable in some contexts */ }
+    })();
+  </script>
 </head>
 <body>
 
@@ -42,18 +53,36 @@
     <div class="hdr-sep"></div>
     <div class="hdr-meta" id="hdrMeta">GCI TACTICAL DISPLAY</div>
     <div class="hdr-right">
-      <!-- Display mode toggle: PROF (table) / MFD (map) -->
+      <!-- UI style: MFD (dark military green) / PROF (light paper) -->
       <div class="hdr-toggle-group">
-        <span class="hdr-toggle-label">DISPLAY</span>
+        <span class="hdr-toggle-label">STYLE</span>
         <div class="theme-toggle">
-          <button class="mode-btn active" data-mode="prof" onclick="AsacsMode.setMode('prof')">PROF</button>
-          <button class="mode-btn"        data-mode="mfd"  onclick="AsacsMode.setMode('mfd')">MFD</button>
+          <button class="mode-btn active" data-theme="mfd"  onclick="AsacsTheme.set('mfd')">MFD</button>
+          <button class="mode-btn"        data-theme="prof" onclick="AsacsTheme.set('prof')">PROF</button>
+        </div>
+      </div>
+      <!-- Map base layer: CHART (dark vector) / TERRAIN (satellite) -->
+      <div class="hdr-toggle-group">
+        <span class="hdr-toggle-label">MAP</span>
+        <div class="theme-toggle">
+          <button class="mode-btn active" data-maptype="chart"   onclick="AsacsMapType.set('chart')">CHART</button>
+          <button class="mode-btn"        data-maptype="terrain" onclick="AsacsMapType.set('terrain')">TERRAIN</button>
+        </div>
+      </div>
+      <div class="hdr-sep"></div>
+      <!-- View mode: MAP (default) / TABLE (debug) -->
+      <div class="hdr-toggle-group">
+        <span class="hdr-toggle-label">VIEW</span>
+        <div class="theme-toggle">
+          <button class="mode-btn active" data-mode="map"   onclick="AsacsMode.setMode('map')">MAP</button>
+          <button class="mode-btn"        data-mode="table" onclick="AsacsMode.setMode('table')">TABLE</button>
         </div>
       </div>
       <div class="hdr-sep"></div>
       <div class="status-dot" id="statusDot"></div>
       <span class="status-label" id="statusLabel">OFFLINE</span>
       <div class="coalition-badge" id="coalitionBadge">—</div>
+      <button class="settings-btn" onclick="AsacsSettings.open()" title="Settings">⚙ SETTINGS</button>
       <button class="logout-btn" onclick="logout()">LOGOUT ⏻</button>
     </div>
   </header>
@@ -86,8 +115,13 @@
     <span><span class="mission-key">BULL RED</span><span id="msnBullRed">—</span></span>
   </div>
 
-  <!-- ── PROF view (table / text) ──────────────────────────── -->
-  <div id="view-prof" class="view-container">
+  <!-- ── Map view — CHART (dark vector) and TERRAIN (satellite) ── -->
+  <div id="view-map" class="view-container">
+    <div id="map-container"></div>
+  </div>
+
+  <!-- ── TABLE view — debug / diagnostic data tables ────────── -->
+  <div id="view-table" class="view-container hidden">
 
     <div class="main-scroll">
 
@@ -161,11 +195,64 @@
       </div>
 
     </div><!-- /main-scroll -->
-  </div><!-- /view-prof -->
+  </div><!-- /view-table -->
 
-  <!-- ── MFD view (Mapbox GL JS map) ───────────────────────── -->
-  <div id="view-mfd" class="view-container hidden">
-    <div id="map-container"></div>
+  <!-- ── Settings Panel ────────────────────────────────────── -->
+  <div class="settings-overlay" id="settingsOverlay" onclick="AsacsSettings.onOverlayClick(event)">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <span class="settings-title">⚙ Settings</span>
+        <button class="settings-close" onclick="AsacsSettings.close()" title="Close">✕</button>
+      </div>
+      <div class="settings-body">
+
+        <div class="settings-group">
+          <div class="settings-group-label">Map</div>
+          <div class="settings-row">
+            <label for="settingMapPitch">Pitch (0–60°)</label>
+            <input type="range" id="settingMapPitch" min="0" max="60" step="5" value="0">
+          </div>
+          <div class="settings-row">
+            <label for="settingMapBearing">Bearing (°)</label>
+            <input type="range" id="settingMapBearing" min="0" max="359" step="1" value="0">
+          </div>
+          <div class="settings-row">
+            <label for="settingShowTrails">Show trails</label>
+            <select id="settingShowTrails">
+              <option value="1" selected>On</option>
+              <option value="0">Off</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <label for="settingShowLabels">Show labels</label>
+            <select id="settingShowLabels">
+              <option value="1" selected>On</option>
+              <option value="0">Off</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <label for="settingLabelSize">Label size (px)</label>
+            <input type="range" id="settingLabelSize" min="8" max="16" step="1" value="10">
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-label">Simulation</div>
+          <div class="settings-row">
+            <label for="settingUpdateRate">Update rate (Hz)</label>
+            <select id="settingUpdateRate">
+              <option value="1">1 Hz</option>
+              <option value="2" selected>2 Hz</option>
+              <option value="5">5 Hz</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+      <div class="settings-footer">
+        <button class="settings-apply-btn" onclick="AsacsSettings.apply()">APPLY</button>
+      </div>
+    </div>
   </div>
 
 </div><!-- /app -->
@@ -174,6 +261,8 @@
 
 <!-- Display modules load first so app.js can reference their globals -->
 <script src="js/display/mode.js"></script>
+<script src="js/display/theme.js"></script>
+<script src="js/display/settings.js"></script>
 <script src="js/display/table.js"></script>
 <!-- builder.js is an ES module; it sets window.AsacsBuilder when it executes.
      Modules are deferred, so it will always be loaded before any WebSocket

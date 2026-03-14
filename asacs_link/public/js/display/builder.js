@@ -32,6 +32,14 @@ const COALITION_COLOUR = {
 const COLN_BLUE = 2;
 const COLN_RED  = 1;
 
+// ── Hostile marker colours ────────────────────────────────────
+// These colours are used for the ▲ triangle symbol layer in map.js.
+// DCS declaration values: 'bandit' = confirmed enemy; 'bogey' / 'hostile' = unidentified bogey.
+// Note: 'hostile' here refers to the *colour constant* for bogey/unidentified contacts,
+// not to the 'hostile' declaration string itself (which is a DCS IFF result).
+const COLOUR_BANDIT  = '#ff4444'; // red   — confirmed enemy (declaration === 'bandit')
+const COLOUR_HOSTILE = '#ffb020'; // amber — unidentified bogey / hostile (all other enemy declarations)
+
 /** Maximum position entries kept per contact in the history ring buffer. */
 const HISTORY_MAX = 30;
 
@@ -75,12 +83,14 @@ function _project(lat, lon, hdgDeg, distM) {
 // ── Builder functions ─────────────────────────────────────────
 
 /**
- * Build the blip FeatureCollection (circle layer).
+ * Build the blip FeatureCollection (circle layer for friendly/neutral,
+ * triangle symbol layer for hostile/bandit — filtered in the map layer).
  *
  * Each contact with a valid position becomes a Point feature.
- * Colour is determined by DCS coalition ID.
- * `isPrimary` (1 or 0) lets the Mapbox paint expression distinguish
- * primary radar contacts (smaller, dimmer) from datalink tracks.
+ * The `declaration` property lets map layer filter expressions split
+ * friendly circles from hostile triangles without a separate source.
+ * `isPrimary` (1 or 0) distinguishes primary radar contacts from
+ * datalink tracks (smaller, dimmer marker for primaries).
  *
  * @param {object[]} contacts  Coalition-filtered unit array from the server
  * @returns {object}  GeoJSON FeatureCollection
@@ -91,13 +101,16 @@ function buildBlips(contacts) {
   for (const c of contacts) {
     if (c.lat == null || c.lon == null) continue;
 
+    const decl = c.declaration || '';
+
     features.push({
       type:     'Feature',
-      geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
+      geometry: { type: 'Point', coordinates: [c.lon, c.lat, c.alt ?? 0] },
       properties: {
-        id:        String(c.id),
-        colour:    _coalitionColour(c.coalition),
-        isPrimary: c.contactType === 'primary' ? 1 : 0,
+        id:          String(c.id),
+        colour:      _coalitionColour(c.coalition),
+        isPrimary:   c.contactType === 'primary' ? 1 : 0,
+        declaration: decl,
       },
     });
   }
@@ -131,10 +144,11 @@ function buildHeadingTicks(contacts, zoom) {
       Math.pow(2, zoom);
     const tickM = 20 * metersPerPixel;
     const end   = _project(c.lat, c.lon, c.hdg, tickM);
+    const alt   = c.alt ?? 0;
 
     features.push({
       type:     'Feature',
-      geometry: { type: 'LineString', coordinates: [[c.lon, c.lat], end] },
+      geometry: { type: 'LineString', coordinates: [[c.lon, c.lat, alt], [end[0], end[1], alt]] },
       properties: {
         id:     String(c.id),
         colour: _coalitionColour(c.coalition),
@@ -188,10 +202,17 @@ function buildTrails(contacts, history) {
  * Primary radar contacts carry no useful annotation so they receive an
  * empty label string; the symbol layer should omit empty labels.
  *
+ * If an `offsets` map is provided, any unit ID present in it will have
+ * its label placed at a position offset from the unit by [deltaLon, deltaLat]
+ * degrees.  The label therefore moves with the unit, preserving the relative
+ * declutter offset even as the unit moves.  Pass an empty Map or omit the
+ * argument for default positioning (label placed at the unit's own position).
+ *
  * @param {object[]} contacts  Coalition-filtered unit array
+ * @param {Map<string, [number,number]>} [offsets]  Per-unit delta offsets [dLon, dLat] keyed by String(id)
  * @returns {object}  GeoJSON FeatureCollection
  */
-function buildLabels(contacts) {
+function buildLabels(contacts, offsets) {
   const features = [];
 
   for (const c of contacts) {
@@ -209,12 +230,61 @@ function buildLabels(contacts) {
       label = [callsign, altLine, spdLine].filter(Boolean).join('\n');
     }
 
+    // Apply relative delta offset when the user has dragged this label
+    const delta = offsets && offsets.get(String(c.id));
+    const lon = delta ? c.lon + delta[0] : c.lon;
+    const lat = delta ? c.lat + delta[1] : c.lat;
+
     features.push({
       type:     'Feature',
-      geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
+      geometry: { type: 'Point', coordinates: [lon, lat, c.alt ?? 0] },
       properties: {
-        id:    String(c.id),
+        id:        String(c.id),
         label,
+        hasOffset: delta ? 1 : 0,
+      },
+    });
+  }
+
+  return { type: 'FeatureCollection', features };
+}
+
+/**
+ * Build the leader-line FeatureCollection (line layer).
+ *
+ * For every contact that has a dragged label (i.e. an entry in `offsets`),
+ * produces a short LineString from the unit's actual position to the label's
+ * geographic position (unit position + delta).  Contacts with no offset
+ * produce no feature, keeping the layer empty until the operator declutters.
+ *
+ * @param {object[]} contacts  Coalition-filtered unit array
+ * @param {Map<string, [number,number]>} offsets  Per-unit delta offsets [dLon, dLat]
+ * @returns {object}  GeoJSON FeatureCollection
+ */
+function buildLeaderLines(contacts, offsets) {
+  const features = [];
+
+  if (!offsets || !offsets.size) return { type: 'FeatureCollection', features };
+
+  for (const c of contacts) {
+    if (c.lat == null || c.lon == null) continue;
+
+    const delta = offsets.get(String(c.id));
+    if (!delta) continue;
+
+    const alt = c.alt ?? 0;
+    features.push({
+      type:     'Feature',
+      geometry: {
+        type:        'LineString',
+        coordinates: [
+          [c.lon,            c.lat,            alt],
+          [c.lon + delta[0], c.lat + delta[1], alt],
+        ],
+      },
+      properties: {
+        id:     String(c.id),
+        colour: _coalitionColour(c.coalition),
       },
     });
   }
@@ -227,8 +297,14 @@ function buildLabels(contacts) {
 // Browser: expose as a named global accessible from plain <script> tags.
 // This runs when the file is loaded as <script type="module">.
 if (typeof window !== 'undefined') {
-  window.AsacsBuilder = { buildBlips, buildHeadingTicks, buildTrails, buildLabels, HISTORY_MAX };
+  window.AsacsBuilder = {
+    buildBlips, buildHeadingTicks, buildTrails, buildLabels, buildLeaderLines,
+    HISTORY_MAX, COLOUR_BANDIT, COLOUR_HOSTILE,
+  };
 }
 
 // Node.js / ESM: named exports for the test runner.
-export { buildBlips, buildHeadingTicks, buildTrails, buildLabels, HISTORY_MAX };
+export {
+  buildBlips, buildHeadingTicks, buildTrails, buildLabels, buildLeaderLines,
+  HISTORY_MAX, COLOUR_BANDIT, COLOUR_HOSTILE,
+};
