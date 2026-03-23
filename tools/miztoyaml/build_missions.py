@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 
 from .models import Carrier, Flight, Waypoint
-from .projection import dms
+from .projection import dcs_to_latlon, dms
 from .weapons import encode_loadout
 
 # ── Syria / PG / Caucasus airfield ID → ICAO / name lookup ───────────────────
@@ -544,13 +544,48 @@ def _build_mission_targets(steer_pts: list[dict], targets: dict,
     return result or None
 
 
+def steerpoints_from_dtc_nav_pts(nav_pts: list[dict], theatre: str) -> list[dict]:
+    """
+    Convert a DTC NAV_PTS list into the steer_points schema used by build_missions.
+
+    Each input entry must have 'x', 'y' (DCS world coords) and optionally
+    'alt_m' (altitude metres) and 'note' (label text).
+
+    Returns a list of steer_point dicts with 'coords', '_x', '_y', and
+    optionally 'altitude_ft' and 'name'.
+    """
+    result = []
+    for pt in nav_pts:
+        x, y = pt['x'], pt['y']
+        lat, lon = dcs_to_latlon(x, y, theatre)
+        entry: dict = {
+            'coords': dms(lat, lon),
+            '_x':     x,
+            '_y':     y,
+        }
+        note = (pt.get('note') or '').strip()
+        if note:
+            entry['name'] = note
+        alt_m = pt.get('alt_m')
+        if alt_m is not None:
+            entry['altitude_ft'] = round(alt_m / _FT_TO_M)
+        result.append(entry)
+    return result
+
+
 def build_missions(flights: list[Flight], msn_start: int,
                    targets: dict, carriers: list[Carrier],
                    airfields: dict[str, dict],
-                   ref_pts: dict) -> tuple[list[dict], list[dict]]:
+                   ref_pts: dict,
+                   dtcs: dict | None = None,
+                   theatre: str = "Syria") -> tuple[list[dict], list[dict]]:
     """
     Produce the ato.missions list for non-tanker, non-AWACS flights,
     and the shared_steerpoints list for merged waypoints.
+
+    When a flight has a DTC cartridge whose DTC data contains 'nav_pts',
+    those steerpoints are used instead of the mission-file waypoints.
+    If NAV_PTS is absent the behaviour is unchanged (backwards compatible).
 
     Returns (missions, shared_steerpoints).
     """
@@ -580,6 +615,14 @@ def build_missions(flights: list[Flight], msn_start: int,
 
         steer_pts = _classify_waypoints(f, flights, targets, carriers,
                                          airfields, ref_pts)
+
+        # Override with DTC NAV_PTS when available (backwards compatible)
+        if dtcs and f.dtc_cartridge:
+            dtc_data = dtcs.get(f.dtc_cartridge, {})
+            dtc_nav = dtc_data.get('nav_pts')
+            if dtc_nav:
+                steer_pts = steerpoints_from_dtc_nav_pts(dtc_nav, theatre)
+
         flight_steerpoints[callsign] = steer_pts
 
         msn_targets = _build_mission_targets(steer_pts, targets, f.task)

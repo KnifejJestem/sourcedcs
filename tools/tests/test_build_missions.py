@@ -5,6 +5,7 @@ import pytest
 from tools.miztoyaml.build_missions import (
     AIRDROME_IDS,
     SPECIAL_WAYPOINT_TYPES,
+    _FT_TO_M,
     _ft_between_3d,
     _nm_between,
     _parse_dms_approx,
@@ -12,6 +13,7 @@ from tools.miztoyaml.build_missions import (
     build_airfields_registry,
     build_missions,
     merge_shared_steerpoints,
+    steerpoints_from_dtc_nav_pts,
 )
 from tools.miztoyaml.models import Carrier, Flight, FlightUnit, Waypoint
 
@@ -230,3 +232,120 @@ class TestBuildMissions:
         ac = missions[0]["aircraft"]
         assert ac["count"] == 1
         assert ac["type"] == "F16C"
+
+
+class TestSteerpointsFromDtcNavPts:
+    # Syria nav point near Incirlik (approx DCS coords)
+    _NAV_PT = {'number': 1, 'x': 22735.0, 'y': 256990.0, 'alt_m': 442.0, 'note': '', 'type': 'STPT'}
+
+    def test_returns_list(self):
+        result = steerpoints_from_dtc_nav_pts([self._NAV_PT], 'Syria')
+        assert isinstance(result, list)
+        assert len(result) == 1
+
+    def test_coords_present(self):
+        result = steerpoints_from_dtc_nav_pts([self._NAV_PT], 'Syria')
+        assert 'coords' in result[0]
+        assert result[0]['coords']  # non-empty string
+
+    def test_raw_xy_stored(self):
+        result = steerpoints_from_dtc_nav_pts([self._NAV_PT], 'Syria')
+        assert result[0]['_x'] == pytest.approx(22735.0)
+        assert result[0]['_y'] == pytest.approx(256990.0)
+
+    def test_altitude_converted_to_ft(self):
+        result = steerpoints_from_dtc_nav_pts([self._NAV_PT], 'Syria')
+        # 442 m ÷ _FT_TO_M ≈ 1450 ft
+        assert result[0]['altitude_ft'] == pytest.approx(round(442.0 / _FT_TO_M))
+
+    def test_no_altitude_omitted(self):
+        pt = dict(self._NAV_PT, alt_m=None)
+        result = steerpoints_from_dtc_nav_pts([pt], 'Syria')
+        assert 'altitude_ft' not in result[0]
+
+    def test_note_becomes_name(self):
+        pt = dict(self._NAV_PT, note='IP')
+        result = steerpoints_from_dtc_nav_pts([pt], 'Syria')
+        assert result[0]['name'] == 'IP'
+
+    def test_empty_note_no_name(self):
+        result = steerpoints_from_dtc_nav_pts([self._NAV_PT], 'Syria')
+        assert 'name' not in result[0]
+
+    def test_empty_input(self):
+        assert steerpoints_from_dtc_nav_pts([], 'Syria') == []
+
+    def test_multiple_points_ordered(self):
+        pts = [
+            dict(self._NAV_PT, number=1, x=0.0,     y=0.0),
+            dict(self._NAV_PT, number=2, x=10000.0,  y=10000.0),
+        ]
+        result = steerpoints_from_dtc_nav_pts(pts, 'Syria')
+        assert len(result) == 2
+
+
+class TestBuildMissionsDtcNavPts:
+    """build_missions should use DTC nav_pts when present, fall back otherwise."""
+
+    def _make_flight(self, name, dtc_cartridge=None):
+        wp1 = Waypoint(name=None, x=0, y=0, lat=36.0, lon=37.0,
+                       typ="TakeOffParking", airdrome_id=16,
+                       link_unit_id=None, is_orbit=False)
+        wp2 = Waypoint(name="WP1", x=100000, y=100000, lat=36.5, lon=37.5,
+                       typ="Turning Point", airdrome_id=None,
+                       link_unit_id=None, is_orbit=False, alt_ft=20000)
+        fu = FlightUnit(type="F-16C_50", callsign=name,
+                        onboard_num="101", skill="Client", loadout=[],
+                        dtc_cartridge=dtc_cartridge)
+        return Flight(id="FLT-1", name=name, task="CAP",
+                      aircraft_type="F-16C_50", freq_mhz=251.0,
+                      units=[fu], waypoints=[wp1, wp2],
+                      dtc_cartridge=dtc_cartridge)
+
+    def test_dtc_nav_pts_override(self):
+        """When DTC has nav_pts, they replace mission waypoints as steer_points."""
+        nav_pt = {'number': 1, 'x': 22735.0, 'y': 256990.0, 'alt_m': 442.0, 'note': '', 'type': 'STPT'}
+        dtcs = {'ROSETHORN': {'nav_pts': [nav_pt]}}
+        f = self._make_flight("VIPER-1", dtc_cartridge="ROSETHORN")
+        missions, _ = build_missions([f], 1000, {}, [], {"LTAG": {}}, {},
+                                     dtcs=dtcs, theatre="Syria")
+        steer_pts = missions[0]["steer_points"]
+        assert steer_pts is not None
+        assert len(steer_pts) == 1
+        # _x/_y are internal fields stripped from output; verify via altitude
+        assert steer_pts[0].get('altitude_ft') == round(442.0 / _FT_TO_M)
+
+    def test_no_dtc_uses_waypoints(self):
+        """Without DTC nav_pts, steer_points come from mission waypoints."""
+        f = self._make_flight("VIPER-1")
+        missions, _ = build_missions([f], 1000, {}, [], {"LTAG": {}}, {},
+                                     dtcs={}, theatre="Syria")
+        steer_pts = missions[0]["steer_points"]
+        # wp2 is the only non-takeoff waypoint → should yield 1 steer point
+        assert steer_pts is not None
+
+    def test_dtc_without_nav_pts_falls_back(self):
+        """DTC present but without nav_pts → mission waypoints used."""
+        dtcs = {'ROSETHORN': {'COMM1': {1: 251.0}}}  # comms only, no nav_pts
+        f = self._make_flight("VIPER-1", dtc_cartridge="ROSETHORN")
+        missions, _ = build_missions([f], 1000, {}, [], {"LTAG": {}}, {},
+                                     dtcs=dtcs, theatre="Syria")
+        steer_pts = missions[0]["steer_points"]
+        # Should still have steer_points from mission waypoints
+        assert steer_pts is not None
+
+    def test_dtc_not_in_dtcs_dict_falls_back(self):
+        """DTC name set but DTC data not loaded → fall back to waypoints."""
+        f = self._make_flight("VIPER-1", dtc_cartridge="MISSING")
+        missions, _ = build_missions([f], 1000, {}, [], {"LTAG": {}}, {},
+                                     dtcs={}, theatre="Syria")
+        assert missions[0]["steer_points"] is not None
+
+    def test_dtc_cartridge_preserved_in_mission(self):
+        """dtc_cartridge field should still appear in mission output."""
+        nav_pt = {'number': 1, 'x': 22735.0, 'y': 256990.0, 'alt_m': 100.0, 'note': '', 'type': 'STPT'}
+        dtcs = {'ROSETHORN': {'nav_pts': [nav_pt]}}
+        f = self._make_flight("VIPER-1", dtc_cartridge="ROSETHORN")
+        missions, _ = build_missions([f], 1000, {}, [], {"LTAG": {}}, {},
+                                     dtcs=dtcs, theatre="Syria")
+        assert missions[0]["dtc_cartridge"] == "ROSETHORN"

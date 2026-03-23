@@ -120,6 +120,14 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
     elif dtcs:
         log.warning("No DTC cartridges matched to flights; available: %s", ", ".join(sorted(dtcs)))
 
+    # Summarise DTC NAV_PTS (steerpoint) coverage
+    flights_with_nav = [f for f in flights
+                        if f.dtc_cartridge and dtcs.get(f.dtc_cartridge, {}).get('nav_pts')]
+    if flights_with_nav:
+        log.info("DTC NAV_PTS steerpoints loaded for %d flight(s): %s",
+                 len(flights_with_nav),
+                 ", ".join(f"'{f.name}'→{f.dtc_cartridge}" for f in flights_with_nav))
+
     # ACO drawings
     log.info("Parsing drawings…")
     drawings = parse_drawings(mission_text)
