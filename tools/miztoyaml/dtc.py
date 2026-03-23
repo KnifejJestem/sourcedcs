@@ -51,17 +51,63 @@ def parse_dtc_file(content: bytes) -> dict[str, dict[int, float]]:
     return result
 
 
+def parse_dtc_nav_pts(content: bytes) -> list[dict]:
+    """
+    Parse NAV_PTS steerpoints from a DCS DTC JSON file (data.MPD.NAV_PTS).
+
+    Returns a list of nav point dicts, each containing:
+      number (int), x (float), y (float), alt_m (float|None), note (str), type (str).
+
+    Returns an empty list when NAV_PTS is absent (backwards compatible).
+    """
+    try:
+        data = json.loads(content.decode('utf-8', errors='replace'))['data']
+    except (json.JSONDecodeError, KeyError):
+        return []
+    nav_pts_raw = data.get('MPD', {}).get('NAV_PTS', [])
+    if not isinstance(nav_pts_raw, list):
+        return []
+    result = []
+    for pt in nav_pts_raw:
+        if not isinstance(pt, dict):
+            continue
+        x = pt.get('x')
+        y = pt.get('y')
+        if x is None or y is None:
+            continue
+        num_raw = pt.get('number')
+        result.append({
+            'number': int(num_raw) if num_raw is not None else None,
+            'x':      float(x),
+            'y':      float(y),
+            'alt_m':  float(pt['alt']) if pt.get('alt') is not None else None,
+            'note':   pt.get('note', ''),
+            'type':   pt.get('type', 'STPT'),
+        })
+    result.sort(key=lambda p: p.get('number') or 0)
+    return result
+
+
 def load_dtc_files(z: zipfile.ZipFile) -> dict[str, dict]:
     """
     Load all DTC files from the miz archive.
-    Returns {dtc_name: {radio: {channel_num: freq_mhz}}}.
+
+    Returns {dtc_name: dtc_data} where dtc_data contains:
+      - COMM1, COMM2, … keys: {channel_num: freq_mhz}  (passed to build_comms_from_dtc)
+      - 'nav_pts' key (optional): list of nav point dicts from parse_dtc_nav_pts
+
     DTC name is the stem of the file (e.g. 'Broomstick_F16').
     """
     dtcs: dict[str, dict] = {}
     for fname in z.namelist():
         if fname.startswith('DTC/') and fname.endswith('.dtc'):
             stem = Path(fname).stem
-            dtcs[stem] = parse_dtc_file(z.read(fname))
+            content = z.read(fname)
+            entry: dict = dict(parse_dtc_file(content))
+            nav_pts = parse_dtc_nav_pts(content)
+            if nav_pts:
+                entry['nav_pts'] = nav_pts
+            dtcs[stem] = entry
     return dtcs
 
 

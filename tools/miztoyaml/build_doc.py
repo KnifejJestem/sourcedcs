@@ -296,7 +296,9 @@ def build_doc(*, mission_name, mission_date, theatre,
     # AWACS and tanker flights are excluded from missions.
     missions_result = build_missions(
         flights, msn_start,
-        targets, carriers, airfields, ref_pts)
+        targets, carriers, airfields, ref_pts,
+        dtcs=dtcs or {},
+        theatre=theatre)
     missions = missions_result[0] or None
     shared_steerpoints = missions_result[1] or None
     msn_numbers = [m["mission_number"] for m in missions] if missions else []

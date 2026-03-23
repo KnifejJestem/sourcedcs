@@ -7,6 +7,7 @@ import pytest
 from tools.miztoyaml.dtc import (
     build_comms_from_dtc,
     parse_dtc_file,
+    parse_dtc_nav_pts,
     parse_spins_md,
 )
 
@@ -91,6 +92,60 @@ class TestBuildCommsFromDtc:
         uhf, vhf = build_comms_from_dtc({})
         assert uhf is None
         assert vhf is None
+
+
+class TestParseDtcNavPts:
+    def _make_dtc_with_nav_pts(self, nav_pts: list) -> bytes:
+        return json.dumps({"data": {"MPD": {"NAV_PTS": nav_pts}}}).encode()
+
+    def test_basic(self):
+        pts = [
+            {"number": 1, "x": 22735.0, "y": 256990.0, "alt": 442.0, "note": "", "type": "STPT"},
+            {"number": 2, "x": -7340.0, "y": 298859.0, "alt": 327.0, "note": "IP", "type": "STPT"},
+        ]
+        result = parse_dtc_nav_pts(self._make_dtc_with_nav_pts(pts))
+        assert len(result) == 2
+        assert result[0]["number"] == 1
+        assert result[0]["x"] == pytest.approx(22735.0)
+        assert result[0]["y"] == pytest.approx(256990.0)
+        assert result[0]["alt_m"] == pytest.approx(442.0)
+        assert result[0]["note"] == ""
+        assert result[1]["note"] == "IP"
+
+    def test_sorted_by_number(self):
+        pts = [
+            {"number": 3, "x": 1.0, "y": 1.0},
+            {"number": 1, "x": 2.0, "y": 2.0},
+            {"number": 2, "x": 3.0, "y": 3.0},
+        ]
+        result = parse_dtc_nav_pts(self._make_dtc_with_nav_pts(pts))
+        assert [p["number"] for p in result] == [1, 2, 3]
+
+    def test_no_nav_pts_returns_empty(self):
+        content = json.dumps({"data": {"COMM": {}}}).encode()
+        assert parse_dtc_nav_pts(content) == []
+
+    def test_empty_nav_pts_list(self):
+        result = parse_dtc_nav_pts(self._make_dtc_with_nav_pts([]))
+        assert result == []
+
+    def test_missing_xy_skipped(self):
+        pts = [{"number": 1, "alt": 100.0, "note": ""}]  # no x/y
+        result = parse_dtc_nav_pts(self._make_dtc_with_nav_pts(pts))
+        assert result == []
+
+    def test_no_alt_allowed(self):
+        pts = [{"number": 1, "x": 100.0, "y": 200.0, "note": ""}]
+        result = parse_dtc_nav_pts(self._make_dtc_with_nav_pts(pts))
+        assert len(result) == 1
+        assert result[0]["alt_m"] is None
+
+    def test_invalid_json_returns_empty(self):
+        assert parse_dtc_nav_pts(b"not json") == []
+
+    def test_comms_ignored_without_mpd(self):
+        content = json.dumps({"data": {"COMM": {"COMM1": {"Channel_1": {"freq": 251.0}}}}}).encode()
+        assert parse_dtc_nav_pts(content) == []
 
 
 # ── SPINS markdown parser ────────────────────────────────────────────────────
