@@ -12,7 +12,6 @@
         pkgs = nixpkgs.legacyPackages.${system};
 
         # Node.js versions matching each service's Dockerfile
-        nodejs20 = pkgs.nodejs_20;  # atobrief, sourcedcs-web
         nodejs22 = pkgs.nodejs_22;  # asacs-link
 
         # Python environment with the one third-party dependency (PyYAML)
@@ -48,7 +47,7 @@
           pname = "atobrief";
           version = "1.0.0";
           src = ./atobrief;
-          nodejs = nodejs20;
+          nodejs = nodejs22;
           npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
           installPhase = ''
             mkdir -p $out/share/atobrief
@@ -60,7 +59,7 @@
             cat > $out/bin/atobrief <<EOF
             #!/usr/bin/env sh
             cd $out/share/atobrief
-            exec ${nodejs20}/bin/node server.js "\$@"
+            exec ${nodejs22}/bin/node server.js "\$@"
             EOF
             chmod +x $out/bin/atobrief
           '';
@@ -74,7 +73,7 @@
           pname = "sourcedcs-web";
           version = "1.0.0";
           src = ./sourcedcs-web;
-          nodejs = nodejs20;
+          nodejs = nodejs22;
           npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
           installPhase = ''
             mkdir -p $out/share/sourcedcs-web
@@ -86,7 +85,7 @@
             cat > $out/bin/sourcedcs-web <<EOF
             #!/usr/bin/env sh
             cd $out/share/sourcedcs-web
-            exec ${nodejs20}/bin/node server.js "\$@"
+            exec ${nodejs22}/bin/node server.js "\$@"
             EOF
             chmod +x $out/bin/sourcedcs-web
           '';
