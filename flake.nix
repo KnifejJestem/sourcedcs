@@ -11,6 +11,10 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
+        # Node.js versions matching each service's Dockerfile
+        nodejs20 = pkgs.nodejs_20;  # atobrief, sourcedcs-web
+        nodejs22 = pkgs.nodejs_22;  # asacs-link
+
         # Python environment with the one third-party dependency (PyYAML)
         pythonEnv = pkgs.python3.withPackages (ps: [ ps.pyyaml ps.pytest ]);
 
@@ -37,65 +41,75 @@
         };
 
         # atobrief — tactical briefing web app (Express + js-yaml + socket.io)
-        # Run `nix build .#atobrief` once with the fakeHash to obtain the real hash from the error.
+        # Matches Dockerfile: node:20-alpine, exposes port 4000 (set via PORT env var).
+        # Required env vars: CASDOOR_ENDPOINT, ATOBRIEF_CLIENT_ID, ATOBRIEF_CLIENT_SECRET
+        # Run `nix build .#atobrief` once — Nix will report the correct npmDepsHash on failure.
         atobrief = pkgs.buildNpmPackage {
           pname = "atobrief";
           version = "1.0.0";
           src = ./atobrief;
+          nodejs = nodejs20;
           npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
           installPhase = ''
             mkdir -p $out/share/atobrief
-            cp -r . $out/share/atobrief
+            cp server.js package.json $out/share/atobrief/
+            cp -r public/ $out/share/atobrief/public/
+            cp -r data/   $out/share/atobrief/data/
+            cp -r node_modules/ $out/share/atobrief/node_modules/
             mkdir -p $out/bin
             cat > $out/bin/atobrief <<EOF
-            #!${pkgs.nodejs}/bin/node
-            process.chdir('$out/share/atobrief');
-            require('$out/share/atobrief/server.js');
+            #!/usr/bin/env sh
+            cd $out/share/atobrief
+            exec ${nodejs20}/bin/node server.js "\$@"
             EOF
             chmod +x $out/bin/atobrief
           '';
         };
 
         # sourcedcs-web — main website (Express)
-        # Run `nix build .#sourcedcs-web` once with this hash to obtain the real hash from the error.
+        # Matches Dockerfile: node:20-alpine, exposes port 7000 (set via PORT=7000 env var).
+        # Required env vars: see .env.example — CASDOOR_*, DISCORD_BOT_TOKEN, etc.
+        # Run `nix build .#sourcedcs-web` once — Nix will report the correct npmDepsHash on failure.
         sourcedcs-web = pkgs.buildNpmPackage {
           pname = "sourcedcs-web";
           version = "1.0.0";
           src = ./sourcedcs-web;
+          nodejs = nodejs20;
           npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
           installPhase = ''
             mkdir -p $out/share/sourcedcs-web
-            cp -r . $out/share/sourcedcs-web
+            cp server.js package.json $out/share/sourcedcs-web/
+            cp -r public/ $out/share/sourcedcs-web/public/
+            cp -r node_modules/ $out/share/sourcedcs-web/node_modules/
+            mkdir -p $out/share/sourcedcs-web/data
             mkdir -p $out/bin
             cat > $out/bin/sourcedcs-web <<EOF
-            #!${pkgs.nodejs}/bin/node
-            process.chdir('$out/share/sourcedcs-web');
-            require('$out/share/sourcedcs-web/server.js');
+            #!/usr/bin/env sh
+            cd $out/share/sourcedcs-web
+            exec ${nodejs20}/bin/node server.js "\$@"
             EOF
             chmod +x $out/bin/sourcedcs-web
           '';
         };
 
-        # asacs-link — DCS GCI server (WebSocket relay)
-        # Run `nix build .#asacs-link` once with this hash to obtain the real hash from the error.
+        # asacs-link — DCS GCI server (WebSocket relay, ESM)
+        # Matches Dockerfile: node:22-alpine, exposes HTTP port 3000 + UDP 7788 for DCS.
+        # Required env vars: ASACS_PASSWORD_{BLUE,RED,NEUTRAL,ADMIN}, ASACS_UDP_HOST
+        # Run `nix build .#asacs-link` once — Nix will report the correct npmDepsHash on failure.
         asacs-link = pkgs.buildNpmPackage {
           pname = "asacs-link";
           version = "1.0.0";
           src = ./asacs_link;
+          nodejs = nodejs22;
           npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
           installPhase = ''
             mkdir -p $out/share/asacs-link
-            cp -r . $out/share/asacs-link
+            cp -r . $out/share/asacs-link/
             mkdir -p $out/bin
             cat > $out/bin/asacs-link <<EOF
-            #!${pkgs.nodejs}/bin/node --input-type=module
-            import { createRequire } from 'module';
-            import { fileURLToPath } from 'url';
-            import { dirname } from 'path';
-            const __filename = fileURLToPath(import.meta.url);
-            const __dirname = dirname(__filename);
-            process.chdir('$out/share/asacs-link');
-            await import('$out/share/asacs-link/server.js');
+            #!/usr/bin/env sh
+            cd $out/share/asacs-link
+            exec ${nodejs22}/bin/node server.js "\$@"
             EOF
             chmod +x $out/bin/asacs-link
           '';
@@ -109,20 +123,28 @@
 
         devShells.default = pkgs.mkShell {
           name = "sourcedcs";
+          # nodejs_22 is the highest version needed; it can also run the Node 20 apps.
           buildInputs = [
-            pkgs.nodejs
+            nodejs22
             pythonEnv
+            pkgs.docker
+            pkgs.docker-compose
           ];
           shellHook = ''
             echo "SOURCE DCS dev shell"
             echo "  node    $(node --version)"
             echo "  python  $(python3 --version)"
             echo ""
-            echo "Run miztoyaml:    python3 -m tools.miztoyaml <file.miz>"
-            echo "Run atobrief:     cd atobrief && npm start"
-            echo "Run sourcedcs-web:  cd sourcedcs-web && npm start"
-            echo "Run asacs-link:   cd asacs_link && npm start"
-            echo "Run tests:        python3 -m pytest tools/tests/ -v"
+            echo "Individual services:"
+            echo "  miztoyaml:    python3 -m tools.miztoyaml <file.miz>"
+            echo "  atobrief:     cd atobrief    && PORT=4000 npm start"
+            echo "  sourcedcs-web: cd sourcedcs-web && PORT=7000 npm start"
+            echo "  asacs-link:   cd asacs_link  && PORT=3000 npm start"
+            echo "  tests:        python3 -m pytest tools/tests/ -v"
+            echo ""
+            echo "Full stack (Docker Compose):"
+            echo "  cp .env.example infra/.env && \$EDITOR infra/.env"
+            echo "  cd infra && docker compose up -d"
           '';
         };
       }
