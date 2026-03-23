@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildBlips, buildLabels, buildLeaderLines, COLOUR_BANDIT, COLOUR_HOSTILE,
+  bearingDeg, distNm,
 } from '../public/js/display/builder.js';
 
 describe('buildLabels with offsets', () => {
@@ -211,5 +212,185 @@ describe('buildBlips 3D coordinates', () => {
     const contacts = [{ id: 4, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' }];
     const fc = buildBlips(contacts);
     assert.equal(fc.features[0].properties.declaration, '');
+  });
+});
+
+// ── Vertical-speed arrows in labels ──────────────────────────
+
+describe('buildLabels — vertical speed arrows', () => {
+  const base = {
+    lat: 35.0, lon: 38.0,
+    coalition: 2, contactType: 'track',
+    pilotName: 'HAWK 1',
+    alt: 6096,   // FL200
+    gs: 350,
+  };
+
+  it('climbing: shows ↑ arrow with VS value', () => {
+    const contacts = [{ ...base, id: 10, vs: 25 }]; // +2500 ft/min
+    const { label } = buildLabels(contacts).features[0].properties;
+    assert.ok(label.includes('↑25'), `expected ↑25 in label, got: "${label}"`);
+    assert.ok(!label.includes('↓'),  'should not have down arrow when climbing');
+  });
+
+  it('descending: shows ↓ arrow with absolute VS value', () => {
+    const contacts = [{ ...base, id: 11, vs: -12 }]; // -1200 ft/min
+    const { label } = buildLabels(contacts).features[0].properties;
+    assert.ok(label.includes('↓12'), `expected ↓12 in label, got: "${label}"`);
+    assert.ok(!label.includes('↑'),  'should not have up arrow when descending');
+    assert.ok(!label.includes('-12'), 'negative sign should not appear — arrow replaces it');
+  });
+
+  it('level flight (vs=0): shows 0 without any arrow', () => {
+    const contacts = [{ ...base, id: 12, vs: 0 }];
+    const { label } = buildLabels(contacts).features[0].properties;
+    assert.ok(label.includes('| 0'), `expected "| 0" in label, got: "${label}"`);
+    assert.ok(!label.includes('↑'), 'no up arrow when level');
+    assert.ok(!label.includes('↓'), 'no down arrow when level');
+  });
+
+  it('vs absent: VS portion is omitted from the altitude line', () => {
+    const contacts = [{ ...base, id: 13, vs: null }];
+    const { label } = buildLabels(contacts).features[0].properties;
+    assert.ok(label.includes('FL200'), 'altitude should still appear');
+    assert.ok(!label.includes('↑'),   'no arrow when vs is null');
+    assert.ok(!label.includes('↓'),   'no arrow when vs is null');
+    assert.ok(!label.includes(' | '), 'no pipe separator when vs is absent');
+  });
+});
+
+// ── Label colour property ─────────────────────────────────────
+
+describe('buildLabels — colour property', () => {
+  it('friendly (coalition 2) label uses green coalition colour', () => {
+    const contacts = [{ id: 20, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track', pilotName: 'F1' }];
+    const { colour } = buildLabels(contacts).features[0].properties;
+    assert.equal(colour, '#39ff7a', 'friendly label should use green');
+  });
+
+  it('hostile (coalition 1) label uses red coalition colour', () => {
+    const contacts = [{ id: 21, lat: 35.0, lon: 38.0, coalition: 1, contactType: 'track' }];
+    const { colour } = buildLabels(contacts).features[0].properties;
+    assert.equal(colour, '#ef5350', 'hostile label should use red');
+  });
+
+  it('neutral (coalition 0) label uses grey coalition colour', () => {
+    const contacts = [{ id: 22, lat: 35.0, lon: 38.0, coalition: 0, contactType: 'track' }];
+    const { colour } = buildLabels(contacts).features[0].properties;
+    assert.equal(colour, '#aaaaaa', 'neutral label should use grey');
+  });
+});
+
+// ── buildLeaderLines with defaultOffset ───────────────────────
+
+describe('buildLeaderLines — defaultOffset', () => {
+  it('generates a line for every contact when defaultOffset is non-zero', () => {
+    const contacts = [
+      { id: 30, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' },
+      { id: 31, lat: 36.0, lon: 39.0, coalition: 2, contactType: 'track' },
+    ];
+    const fc = buildLeaderLines(contacts, new Map(), [0.1, 0.05]);
+    assert.equal(fc.features.length, 2, 'both contacts should have leader lines');
+  });
+
+  it('line ends at unit + defaultOffset when no drag offset exists', () => {
+    const contacts = [{ id: 32, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' }];
+    const fc = buildLeaderLines(contacts, new Map(), [0.1, 0.05]);
+    const coords = fc.features[0].geometry.coordinates;
+    assert.equal(coords[0][0], 38.0, 'start lon = unit lon');
+    assert.equal(coords[0][1], 35.0, 'start lat = unit lat');
+    assert.ok(Math.abs(coords[1][0] - 38.1)  < 1e-9, 'end lon = unit lon + defaultOffset dLon');
+    assert.ok(Math.abs(coords[1][1] - 35.05) < 1e-9, 'end lat = unit lat + defaultOffset dLat');
+  });
+
+  it('drag offset adds on top of defaultOffset', () => {
+    const contacts = [{ id: 33, lat: 35.0, lon: 38.0, coalition: 2, contactType: 'track' }];
+    const drag = new Map([['33', [0.2, 0.1]]]);
+    const fc = buildLeaderLines(contacts, drag, [0.1, 0.05]);
+    const coords = fc.features[0].geometry.coordinates;
+    assert.ok(Math.abs(coords[1][0] - 38.3)  < 1e-9, 'end lon = unit + default + drag dLon');
+    assert.ok(Math.abs(coords[1][1] - 35.15) < 1e-9, 'end lat = unit + default + drag dLat');
+  });
+
+  it('leader lines are always white regardless of coalition', () => {
+    const contacts = [{ id: 34, lat: 35.0, lon: 38.0, coalition: 1, contactType: 'track' }];
+    const fc = buildLeaderLines(contacts, new Map(), [0.1, 0.05]);
+    assert.equal(fc.features[0].properties.colour, '#ffffff', 'leader lines must be white');
+  });
+});
+
+// ── bearingDeg ────────────────────────────────────────────────
+
+describe('bearingDeg', () => {
+  it('due north: bearing = 0°', () => {
+    // Moving north: lat increases, lon unchanged
+    const b = bearingDeg(0, 0, 1, 0);
+    assert.ok(Math.abs(b - 0) < 0.01 || Math.abs(b - 360) < 0.01,
+      `expected ~0°, got ${b}`);
+  });
+
+  it('due east: bearing = 90°', () => {
+    const b = bearingDeg(0, 0, 0, 1);
+    assert.ok(Math.abs(b - 90) < 0.01, `expected ~90°, got ${b}`);
+  });
+
+  it('due south: bearing = 180°', () => {
+    const b = bearingDeg(1, 0, 0, 0);
+    assert.ok(Math.abs(b - 180) < 0.01, `expected ~180°, got ${b}`);
+  });
+
+  it('due west: bearing = 270°', () => {
+    const b = bearingDeg(0, 1, 0, 0);
+    assert.ok(Math.abs(b - 270) < 0.01, `expected ~270°, got ${b}`);
+  });
+
+  it('always returns a value in [0, 360)', () => {
+    const cases = [
+      [35, 38, 36, 37],
+      [35, 38, 34, 39],
+      [35, 38, 34, 37],
+      [35, 38, 36, 39],
+    ];
+    for (const [lat1, lon1, lat2, lon2] of cases) {
+      const b = bearingDeg(lat1, lon1, lat2, lon2);
+      assert.ok(b >= 0 && b < 360, `bearing ${b} outside [0,360) for ${[lat1,lon1,lat2,lon2]}`);
+    }
+  });
+
+  it('reciprocal bearing differs by 180°', () => {
+    const b1 = bearingDeg(35, 38, 36, 39);
+    const b2 = bearingDeg(36, 39, 35, 38);
+    const diff = Math.abs((b1 - b2 + 360) % 360 - 180);
+    assert.ok(diff < 1, `reciprocal bearing difference ${diff}° exceeds 1°`);
+  });
+});
+
+// ── distNm ────────────────────────────────────────────────────
+
+describe('distNm', () => {
+  it('same point returns 0 NM', () => {
+    assert.ok(distNm(35, 38, 35, 38) < 1e-9);
+  });
+
+  it('1° of latitude ≈ 60 NM at the equator', () => {
+    // Exact value varies slightly with Earth-radius model; allow ±1 NM
+    const d = distNm(0, 0, 1, 0);
+    assert.ok(Math.abs(d - 60) < 1, `expected ~60 NM, got ${d.toFixed(2)}`);
+  });
+
+  it('distance is symmetric (A→B equals B→A)', () => {
+    const d1 = distNm(35, 38, 36, 39);
+    const d2 = distNm(36, 39, 35, 38);
+    assert.ok(Math.abs(d1 - d2) < 1e-9, `d(A→B)=${d1} ≠ d(B→A)=${d2}`);
+  });
+
+  it('larger separation gives greater distance', () => {
+    const dSmall = distNm(35, 38, 35.1, 38.1);
+    const dLarge = distNm(35, 38, 36.0, 39.0);
+    assert.ok(dLarge > dSmall, 'larger angular separation should give greater NM');
+  });
+
+  it('returns a positive value for distinct points', () => {
+    assert.ok(distNm(35, 38, 36, 39) > 0);
   });
 });

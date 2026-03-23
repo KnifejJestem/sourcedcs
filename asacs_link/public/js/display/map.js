@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════
    display/map.js — Tactical map (CHART / TERRAIN display modes)
 
-   Renders live contacts using six GeoJSON sources / layers:
+   Renders live contacts using seven GeoJSON sources / layers:
 
      contacts         → circle  — friendly / neutral blips
      contacts-hostile → symbol  — hostile / bandit triangles (▲)
@@ -9,6 +9,7 @@
      contact-trails   → line    — position history trail
      contact-leaders  → line    — leader line from unit to dragged label
      contact-labels   → symbol  — callsign / FL / knots tag
+     measure-line     → line    — BRA measuring line (right-click hold)
 
    FeatureCollections are produced by AsacsBuilder (builder.js).
    Heading ticks are rebuilt only when zoom changes (they depend
@@ -20,6 +21,11 @@
    the unit position, so the label tracks the unit as it moves and
    a leader line is drawn from the unit to the displaced label.
    Double-click resets the label to its default position.
+
+   Measuring line: hold right mouse button and drag to draw a dashed
+   yellow line showing the magnetic heading and slant range in NM.
+   The start and end points snap to any nearby track or primary radar
+   contact within 20 screen pixels.
 
    Exposes a single global: AsacsMap
 ════════════════════════════════════════════════════════════ */
@@ -55,12 +61,21 @@ const AsacsMap = (() => {
   // Drag-label state
   let _dragLabel  = null;  // { id: String, startLngLat: {lng, lat} }
 
+  // Measuring-line state
+  let _measure        = null;   // active: { startLng, startLat, endLng, endLat }
+  let _measureReadout = null;   // HTML overlay element showing heading / range
+  let _measureInited  = false;  // guard: native canvas listeners added only once
+
+  /** Screen-space snapping threshold in pixels for the measuring-line. */
+  const SNAP_PIXELS = 20;
+
   const SRC_BLIPS   = 'contacts';
   const SRC_HOSTILE = 'contacts-hostile';
   const SRC_HEADS   = 'contact-heads';
   const SRC_TRAILS  = 'contact-trails';
   const SRC_LEADERS = 'contact-leaders';
   const SRC_LABELS  = 'contact-labels';
+  const SRC_MEASURE = 'measure-line';
 
   const LAYER_TRAILS   = 'contact-trails-layer';
   const LAYER_BLIPS    = 'contacts-layer';
@@ -68,9 +83,15 @@ const AsacsMap = (() => {
   const LAYER_HEADS    = 'contact-heads-layer';
   const LAYER_LEADERS  = 'contact-leaders-layer';
   const LAYER_LABELS   = 'contact-labels-layer';
+  const LAYER_MEASURE  = 'measure-line-layer';
 
   // Hostile / bandit declaration values
   const HOSTILE_DECLS = new Set(['bogey', 'bandit', 'hostile']);
+
+  // Mapbox Web Mercator metres-per-pixel constant at zoom 0 on the equator.
+  // Used to convert zoom level + latitude into a geographic degree offset
+  // that corresponds to a fixed screen-pixel distance.
+  const MPP_ZOOM0 = 156543.03392;
 
   // ── Public API ────────────────────────────────────────────────
 
@@ -105,6 +126,9 @@ const AsacsMap = (() => {
       pitch:              0,
       attributionControl: false,
     });
+
+    // Disable right-click-drag map rotation so right-click is free for measuring
+    _map.dragRotate.disable();
 
     _map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right');
     _map.addControl(new mapboxgl.ScaleControl(), 'bottom-left');
@@ -177,6 +201,7 @@ const AsacsMap = (() => {
     _ready = false;
     _map.setStyle(style);
     _map.once('style.load', () => {
+      _map.dragRotate.disable(); // re-disable after style reload resets handlers
       _ready = true;
       _initSources();
       _initLayers();
@@ -240,15 +265,32 @@ const AsacsMap = (() => {
 
   /**
    * Push pending FeatureCollection updates to the map sources.
-   * Only the sources that actually need refreshing are updated:
-   *   - blips / trails / labels: when _dataDirty
-   *   - heading ticks: when _zoomDirty or zoom has changed
+   *
+   * Sources are split into two groups:
+   *   • Zoom-independent (blips, trails): refreshed only when _dataDirty.
+   *   • Zoom-dependent (heading ticks, leader lines, labels): refreshed
+   *     whenever _zoomDirty, which is set on every data change AND on every
+   *     zoom event.  Leader lines and labels must rebuild on zoom because the
+   *     defaultLabelOffset (which keeps labels a constant screen-pixel
+   *     distance from their unit) is derived from the current zoom level.
    */
   function _doRender() {
     if (!_ready || !_map) return;
     if (typeof AsacsBuilder === 'undefined') return;
 
     const zoom = _map.getZoom();
+
+    // Compute the default label anchor offset in geographic degrees.
+    // Labels are placed ~15 screen pixels right and ~8 pixels above the unit.
+    // The offset is zoom-dependent: at higher zoom levels 1° covers fewer
+    // pixels, so we compute metres-per-pixel and convert to degrees.
+    const centerLat = _map.getCenter().lat;
+    const latRad    = centerLat * Math.PI / 180;
+    const mpp       = (MPP_ZOOM0 * Math.cos(latRad)) / Math.pow(2, zoom);
+    const defaultLabelOffset = [
+      (15 * mpp) / (111320 * Math.cos(latRad)), // dLon in degrees (15 px right)
+      (8  * mpp) / 111320,                       // dLat in degrees (8 px up)
+    ];
 
     if (_dataDirty) {
       _dataDirty = false;
@@ -261,19 +303,15 @@ const AsacsMap = (() => {
         else friendly.push(u);
       }
 
-      const blipSrc   = _map.getSource(SRC_BLIPS);
-      const hostSrc   = _map.getSource(SRC_HOSTILE);
-      const trailSrc  = _map.getSource(SRC_TRAILS);
-      const leaderSrc = _map.getSource(SRC_LEADERS);
-      const lblSrc    = _map.getSource(SRC_LABELS);
+      const blipSrc  = _map.getSource(SRC_BLIPS);
+      const hostSrc  = _map.getSource(SRC_HOSTILE);
+      const trailSrc = _map.getSource(SRC_TRAILS);
 
-      if (blipSrc)   blipSrc.setData(AsacsBuilder.buildBlips(friendly));
-      if (hostSrc)   hostSrc.setData(AsacsBuilder.buildBlips(hostile));
-      if (trailSrc)  trailSrc.setData(AsacsBuilder.buildTrails(_units, _history));
-      if (leaderSrc) leaderSrc.setData(AsacsBuilder.buildLeaderLines(_units, _labelOffsets));
-      if (lblSrc)    lblSrc.setData(AsacsBuilder.buildLabels(_units, _labelOffsets));
+      if (blipSrc)  blipSrc.setData(AsacsBuilder.buildBlips(friendly));
+      if (hostSrc)  hostSrc.setData(AsacsBuilder.buildBlips(hostile));
+      if (trailSrc) trailSrc.setData(AsacsBuilder.buildTrails(_units, _history));
 
-      // Heading ticks depend on zoom → mark as dirty too when data changes
+      // Labels and leader lines depend on zoom (defaultLabelOffset) — rebuild them too
       _zoomDirty = true;
     }
 
@@ -281,8 +319,13 @@ const AsacsMap = (() => {
       _zoomDirty = false;
       _lastZoom  = zoom;
 
-      const headSrc = _map.getSource(SRC_HEADS);
-      if (headSrc) headSrc.setData(AsacsBuilder.buildHeadingTicks(_units, zoom));
+      const headSrc   = _map.getSource(SRC_HEADS);
+      const leaderSrc = _map.getSource(SRC_LEADERS);
+      const lblSrc    = _map.getSource(SRC_LABELS);
+
+      if (headSrc)   headSrc.setData(AsacsBuilder.buildHeadingTicks(_units, zoom));
+      if (leaderSrc) leaderSrc.setData(AsacsBuilder.buildLeaderLines(_units, _labelOffsets, defaultLabelOffset));
+      if (lblSrc)    lblSrc.setData(AsacsBuilder.buildLabels(_units, _labelOffsets, defaultLabelOffset));
     }
   }
 
@@ -291,6 +334,7 @@ const AsacsMap = (() => {
   function _onLoad() {
     _ready = true;
     _initLabelDrag();
+    _initMeasuringLine();
     // Apply any persisted settings (pitch, bearing, layer visibility etc.)
     if (typeof AsacsSettings !== 'undefined') {
       applySettings(AsacsSettings.get());
@@ -334,6 +378,7 @@ const AsacsMap = (() => {
     addSrc(SRC_TRAILS,  { type: 'geojson', data: empty });
     addSrc(SRC_LEADERS, { type: 'geojson', data: empty });
     addSrc(SRC_LABELS,  { type: 'geojson', data: empty });
+    addSrc(SRC_MEASURE, { type: 'geojson', data: empty });
   }
 
   function _initLayers() {
@@ -353,16 +398,16 @@ const AsacsMap = (() => {
       },
     });
 
-    // 2. Leader lines — faint dashed lines from unit to displaced labels
+    // 2. Leader lines — solid white lines from every unit to its label anchor.
+    //    Always visible (driven by defaultLabelOffset computed in _doRender).
     addLayer({
       id:     LAYER_LEADERS,
       type:   'line',
       source: SRC_LEADERS,
       paint: {
-        'line-color':      ['get', 'colour'],
-        'line-width':      1,
-        'line-opacity':    0.45,
-        'line-dasharray':  [2, 3],
+        'line-color':   '#ffffff',
+        'line-width':   1.2,
+        'line-opacity': 0.80,
       },
     });
 
@@ -420,7 +465,24 @@ const AsacsMap = (() => {
       },
     });
 
-    // 6. Data tags — allow overlap; units can be dragged for decluttering
+    // 6. Measuring line — drawn above ticks, below labels
+    addLayer({
+      id:     LAYER_MEASURE,
+      type:   'line',
+      source: SRC_MEASURE,
+      paint: {
+        'line-color':    '#ffff00',
+        'line-width':    2,
+        'line-opacity':  0.9,
+        'line-dasharray': [6, 3],
+      },
+    });
+
+    // 7. Data tags — left-aligned, colour matches coalition, allow overlap.
+    //    text-anchor='left' means the leader line terminates exactly at the
+    //    left edge of the text.  A small text-offset pushes the text 0.3 em
+    //    right so there is a clean gap between the line tip and the first
+    //    character.  Units are draggable for decluttering.
     addLayer({
       id:     LAYER_LABELS,
       type:   'symbol',
@@ -429,13 +491,14 @@ const AsacsMap = (() => {
         'text-field':            ['get', 'label'],
         'text-font':             ['DIN Offc Pro Regular', 'Arial Unicode MS Regular'],
         'text-size':             10,
-        'text-offset':           [1, -1],
-        'text-anchor':           'bottom-left',
+        'text-offset':           [0.3, 0],
+        'text-anchor':           'left',
+        'text-justify':          'left',
         'text-allow-overlap':    true,
         'text-ignore-placement': true,
       },
       paint: {
-        'text-color':      '#ffffff',
+        'text-color':      ['get', 'colour'],
         'text-halo-color': '#000000',
         'text-halo-width': 1.5,
       },
@@ -514,6 +577,147 @@ const AsacsMap = (() => {
     });
     _map.on('mouseleave', LAYER_LABELS, () => {
       _map.getCanvas().style.cursor = '';
+    });
+  }
+
+  // ── Measuring line ────────────────────────────────────────────
+
+  /**
+   * Find the nearest contact within SNAP_PIXELS of the given screen position.
+   * Returns the contact object, or null if nothing is within the threshold.
+   *
+   * @param {number} screenX  Canvas X pixel (from e.offsetX)
+   * @param {number} screenY  Canvas Y pixel (from e.offsetY)
+   * @returns {object|null}
+   */
+  function _snapToContact(screenX, screenY) {
+    let bestDist = SNAP_PIXELS;
+    let best     = null;
+    for (const u of _units) {
+      if (u.lat == null || u.lon == null) continue;
+      const pt = _map.project([u.lon, u.lat]);
+      const d  = Math.hypot(pt.x - screenX, pt.y - screenY);
+      if (d < bestDist) { bestDist = d; best = u; }
+    }
+    return best;
+  }
+
+  /**
+   * Push the current measuring-line geometry to the Mapbox source and
+   * refresh the readout overlay (bearing + distance).
+   */
+  function _updateMeasureLine() {
+    if (!_measure || typeof AsacsBuilder === 'undefined') return;
+    const { startLng, startLat, endLng, endLat } = _measure;
+
+    const src = _map.getSource(SRC_MEASURE);
+    if (src) {
+      src.setData({
+        type: 'FeatureCollection',
+        features: [{
+          type:     'Feature',
+          geometry: { type: 'LineString', coordinates: [[startLng, startLat], [endLng, endLat]] },
+          properties: {},
+        }],
+      });
+    }
+
+    const dist    = AsacsBuilder.distNm(startLat, startLng, endLat, endLng);
+    const hdg     = dist < 0.005 ? 0 : AsacsBuilder.bearingDeg(startLat, startLng, endLat, endLng);
+    const hdgStr  = Math.round(hdg).toString().padStart(3, '0');
+    const distStr = dist.toFixed(1);
+    if (_measureReadout) _measureReadout.textContent = `${hdgStr}°  ${distStr} NM`;
+  }
+
+  /**
+   * Set up the measuring-line interaction (right-click hold).
+   *
+   * Right mouse button down starts the line at the click position (snapping
+   * to any contact within SNAP_PIXELS).  Moving the mouse while the button
+   * is held extends the line to the current cursor position (also snapping).
+   * Releasing the right button clears the line.
+   *
+   * Native canvas events with capture:true are used so that the handler
+   * intercepts the right-click before Mapbox's dragRotate handler, preventing
+   * the map from rotating while measuring.  The browser context menu is also
+   * suppressed over the canvas.
+   *
+   * Called once on initial map load (_onLoad); the _measureInited guard
+   * prevents duplicate listeners if _onLoad runs more than once.
+   */
+  function _initMeasuringLine() {
+    if (_measureInited) return;
+    _measureInited = true;
+
+    const canvas    = _map.getCanvas();
+    const container = _map.getContainer();
+
+    // HTML overlay for the heading / range readout
+    _measureReadout = document.createElement('div');
+    Object.assign(_measureReadout.style, {
+      position:      'absolute',
+      background:    'rgba(0,0,0,0.80)',
+      color:         '#fff',
+      padding:       '3px 8px',
+      border:        '1px solid rgba(255,255,255,0.45)',
+      borderRadius:  '3px',
+      fontFamily:    '"DIN Offc Pro Regular", monospace, sans-serif',
+      fontSize:      '12px',
+      letterSpacing: '0.5px',
+      pointerEvents: 'none',
+      display:       'none',
+      whiteSpace:    'nowrap',
+      zIndex:        '10',
+    });
+    container.appendChild(_measureReadout);
+
+    // Suppress the browser context menu over the map canvas
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Right mouse button press — start measuring.
+    // Capture phase intercepts before Mapbox's dragRotate listener so the
+    // map does not rotate while the measuring line is being drawn.
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button !== 2) return;
+      e.stopPropagation(); // prevent Mapbox dragRotate from starting
+
+      const lngLat  = _map.unproject([e.offsetX, e.offsetY]);
+      const snapped = _snapToContact(e.offsetX, e.offsetY);
+
+      _measure = {
+        startLng: snapped ? snapped.lon : lngLat.lng,
+        startLat: snapped ? snapped.lat : lngLat.lat,
+        endLng:   snapped ? snapped.lon : lngLat.lng,
+        endLat:   snapped ? snapped.lat : lngLat.lat,
+      };
+
+      _measureReadout.style.display = 'block';
+      _measureReadout.style.left    = `${e.offsetX + 15}px`;
+      _measureReadout.style.top     = `${e.offsetY - 10}px`;
+      _updateMeasureLine();
+    }, true /* capture */);
+
+    // Mouse move — extend the line to the current cursor while right button held
+    canvas.addEventListener('mousemove', (e) => {
+      if (!_measure) return;
+
+      const lngLat  = _map.unproject([e.offsetX, e.offsetY]);
+      const snapped = _snapToContact(e.offsetX, e.offsetY);
+      _measure.endLng = snapped ? snapped.lon : lngLat.lng;
+      _measure.endLat = snapped ? snapped.lat : lngLat.lat;
+
+      _measureReadout.style.left = `${e.offsetX + 15}px`;
+      _measureReadout.style.top  = `${e.offsetY - 10}px`;
+      _updateMeasureLine();
+    });
+
+    // Right mouse button release — clear the measuring line
+    canvas.addEventListener('mouseup', (e) => {
+      if (e.button !== 2 || !_measure) return;
+      _measure = null;
+      _measureReadout.style.display = 'none';
+      const src = _map.getSource(SRC_MEASURE);
+      if (src) src.setData({ type: 'FeatureCollection', features: [] });
     });
   }
 
