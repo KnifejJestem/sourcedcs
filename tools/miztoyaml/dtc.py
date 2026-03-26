@@ -53,7 +53,11 @@ def parse_dtc_file(content: bytes) -> dict[str, dict[int, float]]:
 
 def parse_dtc_nav_pts(content: bytes) -> list[dict]:
     """
-    Parse NAV_PTS steerpoints from a DCS DTC JSON file (data.MPD.NAV_PTS).
+    Parse NAV_PTS steerpoints from a DCS DTC JSON file.
+
+    Supports two aircraft-specific layouts:
+      - F-16: data.MPD.NAV_PTS  (each entry has a 'number' field)
+      - F-18: data.WYPT.NAV_PTS (each entry has a 'wypt_num' field)
 
     Returns a list of nav point dicts, each containing:
       number (int), x (float), y (float), alt_m (float|None), note (str), type (str).
@@ -64,7 +68,10 @@ def parse_dtc_nav_pts(content: bytes) -> list[dict]:
         data = json.loads(content.decode('utf-8', errors='replace'))['data']
     except (json.JSONDecodeError, KeyError):
         return []
-    nav_pts_raw = data.get('MPD', {}).get('NAV_PTS', [])
+    # Try F-16 path first, then fall back to F-18 path
+    nav_pts_raw = data.get('MPD', {}).get('NAV_PTS')
+    if nav_pts_raw is None:
+        nav_pts_raw = data.get('WYPT', {}).get('NAV_PTS', [])
     if not isinstance(nav_pts_raw, list):
         return []
     result = []
@@ -75,7 +82,7 @@ def parse_dtc_nav_pts(content: bytes) -> list[dict]:
         y = pt.get('y')
         if x is None or y is None:
             continue
-        num_raw = pt.get('number')
+        num_raw = pt.get('number') if pt.get('number') is not None else pt.get('wypt_num')
         result.append({
             'number': int(num_raw) if num_raw is not None else None,
             'x':      float(x),
