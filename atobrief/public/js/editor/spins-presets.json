@@ -1,0 +1,145 @@
+{
+  "roe": [
+    {
+      "label": "Standard (PID / BVR / SFC / CIV)",
+      "entries": [
+        { "heading": "C4.1 — PID" },
+        { "value": "PID required prior to weapons release on air contacts unless hostile act is demonstrated." },
+        { "bullet": "PID on surface targets not designated by ATO required" },
+        { "label": "PID SOURCES", "value": "NCTR / radar profile, Correlated track from CRC/AWACS, Visual ID (VID)" },
+        { "bullet": "Unidentified aircraft departing known mixed-use or adversary-controlled bases are automatically hostile" },
+        { "heading": "C4.2 — BVR" },
+        { "value": "NOTE: BVR weapons authorised only after PID or declaration by controlling agency." },
+        { "bullet": "Weapons free against aircraft declared HOSTILE or demonstrating hostile act" },
+        { "bullet": "Aircraft operating third-party deconfliction agreements require higher authority clearance unless self-defence" },
+        { "heading": "C4.3 — SFC ATTACK" },
+        { "bullet": "Weapons release authorized only on assigned ATO targets" },
+        { "bullet": "Collateral damage estimate 3 delegated; higher requires CAOC approval" },
+        { "heading": "C4.4 — Civilian Traffic" },
+        { "value": "NO FACTOR" }
+      ]
+    },
+    {
+      "label": "Weapons Free",
+      "entries": [
+        { "value": "WEAPONS FREE — No PID required against declared hostile contacts." },
+        { "bullet": "All hostile contacts may be engaged at pilot discretion" },
+        { "bullet": "Rules of engagement card in effect — verify IFF before BVR" }
+      ]
+    },
+    {
+      "label": "Defensive Only",
+      "entries": [
+        { "value": "WEAPONS TIGHT — Engage only when fired upon or imminent hostile act demonstrated." },
+        { "bullet": "BVR engagement requires explicit ATC clearance" },
+        { "bullet": "SFC attack requires CAOC authorization" },
+        { "bullet": "Civilian traffic in area — heightened ROE awareness required" }
+      ]
+    }
+  ],
+
+  "lost_comms": [
+    {
+      "label": "Standard (AWACS / Package / Intraflight)",
+      "entries": [
+        { "heading": "C7.1 — Loss of AWACS" },
+        { "bullet": "Default to package commander control" },
+        { "bullet": "Abort mission if communication cannot be restored within 5 minutes" },
+        { "heading": "C7.2 — Loss of Package Comms" },
+        { "bullet": "Continue mission if task and ROE remain clear" },
+        { "bullet": "Abort in case of degraded situation awareness" },
+        { "heading": "C7.3 — Loss of Intraflight Comms" },
+        { "bullet": "Continue assigned task" },
+        { "bullet": "Reestablish communication post target if feasible" },
+        { "bullet": "Abort mission if communication cannot be reestablished" }
+      ]
+    },
+    {
+      "label": "Abort on Any Loss",
+      "entries": [
+        { "bullet": "Loss of any communication link is grounds for mission abort" },
+        { "bullet": "RTB to home base and await new tasking" },
+        { "bullet": "Declare MAYDAY on Guard if safety of flight is compromised" }
+      ]
+    }
+  ],
+
+  "abort_criteria": [
+    {
+      "label": "Standard",
+      "entries": [
+        { "bullet": "Target PID cannot be confirmed" },
+        { "bullet": "Collateral damage risk exceeds authorization" },
+        { "bullet": "Fuel state prevents safe recovery" },
+        { "bullet": "Supporting mission unsuccessful and threat unacceptable" },
+        { "bullet": "Major technical faults" }
+      ]
+    },
+    {
+      "label": "Extended",
+      "entries": [
+        { "bullet": "Target PID cannot be confirmed" },
+        { "bullet": "Collateral damage risk exceeds authorization" },
+        { "bullet": "Fuel state prevents safe recovery" },
+        { "bullet": "Supporting mission unsuccessful and threat unacceptable" },
+        { "bullet": "Major technical faults" },
+        { "bullet": "Weather below minimums at recovery base" },
+        { "bullet": "IFF / SIF failure — cannot confirm coalition status" },
+        { "bullet": "Loss of all data-link / navigation systems" }
+      ]
+    }
+  ],
+
+  "sar": [
+    {
+      "label": "Not Simulated",
+      "entries": [{ "value": "NOT SIMULATED" }]
+    },
+    {
+      "label": "Standard CSAR",
+      "entries": [
+        { "label": "SAR FREQUENCY", "value": "282.800 MHz (Guard)" },
+        { "bullet": "All coalition assets participate in SAR on declaration" },
+        { "bullet": "Emergency beacons monitored on Guard continuously" },
+        { "bullet": "CSAR authority: Package Commander or designate" }
+      ]
+    }
+  ],
+
+  "authentication": [
+    {
+      "label": "Daily Table",
+      "entries": [{ "label": "AUTHENTICATION", "value": "Daily authentication table per COMSEC" }]
+    },
+    {
+      "label": "Not Required",
+      "entries": [{ "value": "AUTHENTICATION NOT REQUIRED FOR THIS EXERCISE" }]
+    },
+    {
+      "label": "Challenge / Reply",
+      "entries": [
+        { "label": "AUTHENTICATION", "value": "Challenge / Reply per daily COMSEC card" },
+        { "bullet": "Challenge on first contact with unknown aircraft" },
+        { "bullet": "Failure to authenticate: treat as hostile pending PID" }
+      ]
+    }
+  ],
+
+  "safety": [
+    {
+      "label": "Standard",
+      "entries": [
+        { "label": "MINIMUM SEPARATION", "value": "3NM / 1000ft between coalition aircraft outside tactical formation" }
+      ]
+    },
+    {
+      "label": "Extended",
+      "entries": [
+        { "label": "MINIMUM SEPARATION", "value": "3NM / 1000ft between coalition aircraft outside tactical formation" },
+        { "bullet": "No supersonic flight below FL250 without authorization" },
+        { "bullet": "Night / IMC — increase separation to 5NM / 2000ft" },
+        { "bullet": "Jettison ordnance only in designated areas" }
+      ]
+    }
+  ]
+}
