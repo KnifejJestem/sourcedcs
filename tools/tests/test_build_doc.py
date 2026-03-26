@@ -10,6 +10,7 @@ from tools.miztoyaml.build_doc import (
     build_doc,
     build_flight_comms,
     build_frequencies_registry,
+    build_spins_sections,
     build_support_flights,
     build_tankers_list,
 )
@@ -224,20 +225,6 @@ class TestBuildDoc:
             )
         assert doc["ato"]["local_offset_hours"] is None
 
-    def test_with_spins(self):
-        spins = [{"title": "ROE", "entries": [{"bullet": "weapons free"}]}]
-        doc = build_doc(
-            mission_name="Test",
-            mission_date="2024-01-01",
-            theatre="Syria",
-            year=2024, month=1,
-            targets={}, ref_pts={}, acms=[],
-            metar="METAR", wx_notes="",
-            flights=[], carriers=[],
-            spins_sections=spins,
-        )
-        assert doc["spins"]["sections"] == spins
-
     def test_meta_counts(self):
         f1 = _make_flight("VIPER-1", task="CAP")
         f2 = _make_flight("SHELL-1", task="TANKER", is_tanker=True)
@@ -252,3 +239,93 @@ class TestBuildDoc:
         )
         assert doc["_meta"]["missions"] == 1
         assert doc["_meta"]["tankers"] == 1
+
+
+class TestBuildSpinsSections:
+    def test_auto_generates_standard_sections(self):
+        missions = [
+            {"mission_number": "MSN8023", "callsign": "VIPER", "mission_type": "DEAD"},
+            {"mission_number": "MSN8024", "callsign": "BOLO",  "mission_type": "ESCORT"},
+        ]
+        sections = build_spins_sections(missions, {})
+        titles = [s["title"] for s in sections]
+        assert "C1 — COMMAND & CONTROL" in titles
+        assert "C3 — IFF / SIF" in titles
+        assert "C4 — RULES OF ENGAGEMENT" in titles
+        assert "C5 — EXECUTION" in titles
+        assert "C7 — LOST COMMS" in titles
+        assert "C8 — ABORT CRITERIA" in titles
+        assert "C9 — SEARCH AND RESCUE" in titles
+        assert "C10 — AUTHENTICATION" in titles
+        assert "C11 — SAFETY" in titles
+
+    def test_iff_squawk_codes_sequential(self):
+        missions = [
+            {"mission_number": "MSN8023", "callsign": "V", "mission_type": "CAP"},
+            {"mission_number": "MSN8024", "callsign": "B", "mission_type": "CAP"},
+            {"mission_number": "MSN8025", "callsign": "S", "mission_type": "CAP"},
+        ]
+        sections = build_spins_sections(missions, {})
+        c3 = next(s for s in sections if s["title"] == "C3 — IFF / SIF")
+        rows = c3["table"]["rows"]
+        assert rows[0] == ["8023", "3", "4701"]
+        assert rows[1] == ["8024", "3", "4711"]
+        assert rows[2] == ["8025", "3", "4721"]
+
+    def test_tactical_control_from_agencies(self):
+        agencies = {
+            "DARKSTAR": {"type": "AWACS", "callsign": "DARKSTAR", "primary_freq_mhz": "305.0"},
+        }
+        sections = build_spins_sections([], agencies)
+        c1 = next(s for s in sections if s["title"] == "C1 — COMMAND & CONTROL")
+        kv = next(e for e in c1["entries"] if e.get("label") == "PRIMARY AWACS")
+        assert "DARKSTAR" in kv["value"]
+        assert "305.0" in kv["value"]
+
+    def test_execution_has_objective_and_desired_effects(self):
+        missions = [{"mission_number": "MSN8023", "callsign": "VIPER", "mission_type": "DEAD"}]
+        sections = build_spins_sections(missions, {})
+        c5 = next(s for s in sections if s["title"] == "C5 — EXECUTION")
+        labels = [e.get("label") for e in c5["entries"]]
+        assert "OBJECTIVE" in labels
+        assert "DESIRED EFFECTS" in labels
+
+    def test_no_missions_no_iff_table(self):
+        sections = build_spins_sections([], {})
+        c3 = next(s for s in sections if s["title"] == "C3 — IFF / SIF")
+        assert "table" not in c3
+
+    def test_iff_missing_mission_number_uses_empty_string(self):
+        """Missions without mission_number produce an empty MSN cell, not an error."""
+        missions = [
+            {"callsign": "VIPER", "mission_type": "CAP"},          # no mission_number key
+            {"mission_number": "",  "callsign": "BOLO", "mission_type": "ESCORT"},  # empty
+            {"mission_number": "MSN8025", "callsign": "SHADOW", "mission_type": "DEAD"},
+        ]
+        sections = build_spins_sections(missions, {})
+        c3 = next(s for s in sections if s["title"] == "C3 — IFF / SIF")
+        rows = c3["table"]["rows"]
+        assert len(rows) == 3
+        assert rows[0][0] == ""    # missing key → empty string
+        assert rows[1][0] == ""    # explicit empty → empty string
+        assert rows[2][0] == "8025"
+        # Squawk codes are still sequential regardless of msn number content
+        assert rows[0][2] == "4701"
+        assert rows[1][2] == "4711"
+        assert rows[2][2] == "4721"
+
+    def test_spins_always_auto_generated_in_build_doc(self):
+        """build_doc always auto-generates SPINS sections from ATO data."""
+        doc = build_doc(
+            mission_name="Test",
+            mission_date="2024-01-01",
+            theatre="Syria",
+            year=2024, month=1,
+            targets={}, ref_pts={}, acms=[],
+            metar="METAR", wx_notes="",
+            flights=[], carriers=[],
+        )
+        titles = [s["title"] for s in (doc["spins"]["sections"] or [])]
+        assert "C1 — COMMAND & CONTROL" in titles
+        assert "C4 — RULES OF ENGAGEMENT" in titles
+        assert "C11 — SAFETY" in titles

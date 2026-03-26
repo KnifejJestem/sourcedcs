@@ -818,8 +818,42 @@ reordered freely without any code changes.
 The SPINS section no longer needs its own `operation`, `ato_day`, or
 `classification` fields — these are propagated from `header`.
 
-SPINS content can also be loaded from a `spins.md` file placed in the same
-directory as the `.miz` file — see [Authoring SPINS in Markdown](#authoring-spins-in-markdown).
+**All standard SPINS sections are auto-generated** by `miztoyaml` from the
+ATO data — no separate `spins.md` markdown file is required or supported.
+In the web editor, the **GENERATE STANDARD SECTIONS FROM ATO** button
+rebuilds all sections from the currently loaded package at any time.
+
+### Standard auto-generated sections
+
+| Section | Source |
+|---------|--------|
+| **C1 — Command & Control** | C1.1 Tactical Control populated from `registry.control_agencies`; C1.3 Package Lead left empty for manual assignment |
+| **C3 — IFF / SIF** | Table auto-built from `ato.missions`: always Mode 3, squawk codes sequential from 4701 (+10 per mission) |
+| **C4 — Rules of Engagement** | Populated from the Standard preset; changeable via preset picker or individual entry editing |
+| **C5 — Execution** | One block per mission in `ato.missions` with empty OBJECTIVE and DESIRED EFFECTS fields |
+| **C7 — Lost Comms** | Standard preset (AWACS / Package / Intraflight loss procedures) |
+| **C8 — Abort Criteria** | Standard preset |
+| **C9 — Search and Rescue** | "NOT SIMULATED" preset by default |
+| **C10 — Authentication** | Daily table preset by default |
+| **C11 — Safety** | Standard minimum separation preset |
+
+### Editor workflow
+
+1. Load or create a package YAML.
+2. Switch to the **SPINS** tab and enter edit mode (✎ EDIT SPINS).
+3. Click **↺ GENERATE STANDARD SECTIONS FROM ATO** to populate all sections
+   from the loaded ATO data.  Any existing sections are replaced.
+4. Open individual sections to edit them:
+   - **C1.1 Tactical Control** — click *↺ REFRESH FROM REGISTRY* to re-pull
+     agency data; entries can also be edited manually.
+   - **C1.3 Package Lead** — use the callsign dropdown to assign the lead
+     from the active ATO missions.
+   - **C3 IFF / SIF** — table is pre-filled; edit squawk codes as needed.
+   - **C4 ROE / C7–C11** — select a built-in preset from the dropdown
+     and click *APPLY PRESET*, or edit entries individually.
+   - **C5 Execution** — mission headings are auto-added; fill in OBJECTIVE
+     and DESIRED EFFECTS for each mission.  Use *+ HEADING* to add custom
+     sub-sections.
 
 ### Top-level fields
 
@@ -1232,53 +1266,40 @@ METAR LTAG 011900Z 22008KT 9999 SCT030 22/12 Q1015 NOSIG
 
 ---
 
-## Authoring SPINS in Markdown
+## IFF Squawk Code Generation
 
-When extracting a package from a `.miz` file with `miztoyaml.py`, the tool
-looks for a `spins.md` file in the same directory as the `.miz` file.  If
-found, the Markdown content is parsed and placed in `spins.sections`.
+When `miztoyaml` builds the SPINS sections, Mode 3 squawk codes are assigned
+automatically to each mission in ATO order using the following formula:
 
-### Markdown format for `spins.md`
-
-```markdown
-## C1 — COMMAND & CONTROL
-
-### C1.1 — Tactical Control
-
-NOTE: All C2 passes through package commander.
-
-PRIMARY AWACS: MAGIC / 265.1 MHz
-SECONDARY: DARKSTAR / 265.0 MHz
-- Bullet point text
-- Another bullet
-
-### C1.2 — Airspace Control
-
-SCT, via LTAG MTMA and CVN-75
-
-## C3 — IFF / SIF
-
-NOTE: Squawk assigned code. Mode 4 mandatory.
-
-| MSN | MODE | CODE |
-|-----|------|------|
-| MSN001 | 3 | 4821 |
+```
+squawk = 4701 + (mission_index × 10)
 ```
 
-| Markdown element | Produces |
-|-----------------|----------|
-| `## Section Title` | New section with `title: Section Title` |
-| `### Sub-heading` | `{heading: Sub-heading}` entry within the current section |
-| `NOTE: text` | `note:` field at the top of the current section |
-| `KEY: value` (UPPERCASE key) | `{label: KEY, value: value}` entry |
-| `- bullet text` | `{bullet: bullet text}` entry |
-| Markdown table | `table: {headers, rows}` sub-block |
-| Other lines | `{value: line}` (plain objective text) |
+This produces codes **4701, 4711, 4721, …** for the first, second, and third
+missions respectively.  Codes can be changed by editing the IFF table in the
+web editor (SPINS → section C3 → edit → adjust CODE column values).
 
-Sections without any `entries` (only a `table`) are fully supported.
-The NOTE line must come before any key-value, bullet, or table rows.
+---
 
-`###` sub-headings create `{heading}` entries within the current `##` section.
-Entries after a `###` heading are grouped inside that heading block in the
-rendered output, allowing for nested mission-specific sections (e.g.
-`### C5.6011 — SHADOW (SEAD)`).
+## SPINS Presets
+
+The following built-in presets are available in the section editor for
+sections C4 and C7–C11.  Select a preset from the dropdown and click
+**APPLY PRESET** to replace the current entries, then edit as needed.
+
+| Section | Preset name |
+|---------|-------------|
+| C4 — Rules of Engagement | Standard (PID / BVR / SFC / CIV) |
+| C4 — Rules of Engagement | Weapons Free |
+| C4 — Rules of Engagement | Defensive Only |
+| C7 — Lost Comms | Standard (AWACS / Package / Intraflight) |
+| C7 — Lost Comms | Abort on Any Loss |
+| C8 — Abort Criteria | Standard |
+| C8 — Abort Criteria | Extended |
+| C9 — Search and Rescue | Not Simulated |
+| C9 — Search and Rescue | Standard CSAR |
+| C10 — Authentication | Daily Table |
+| C10 — Authentication | Not Required |
+| C10 — Authentication | Challenge / Reply |
+| C11 — Safety | Standard |
+| C11 — Safety | Extended |

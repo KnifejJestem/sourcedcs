@@ -707,6 +707,15 @@ function showToast(msg, type) {
 
 // ── File input wiring ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // ── Load SPINS presets from JSON data file ────────────────
+  fetch('js/editor/spins-presets.json')
+    .then(function (r) { return r.json(); })
+    .then(function (data) { window.SPINS_PRESETS = data; })
+    .catch(function (err) {
+      console.error('Failed to load spins-presets.json:', err);
+      window.SPINS_PRESETS = {};
+    });
+
   const fileInput = document.getElementById('fileInput');
   const dropZone  = document.getElementById('dropZone');
 

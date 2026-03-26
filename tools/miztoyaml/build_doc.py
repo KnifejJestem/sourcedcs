@@ -250,9 +250,155 @@ def build_frequencies_registry(flight_comms: list[dict]) -> list[dict] | None:
     return result or None
 
 
+def build_spins_sections(missions: list[dict] | None,
+                          control_agencies: dict | None) -> list[dict]:
+    """
+    Auto-generate the standard SPINS sections from ATO mission data.
+
+    Produces sections C1 (Command & Control), C3 (IFF/SIF), C4 (ROE),
+    C5 (Execution), C7 (Lost Comms), C8 (Abort Criteria), C9 (SAR),
+    C10 (Authentication), and C11 (Safety).
+
+    IFF squawk codes are generated sequentially starting at 4701,
+    incrementing by 10 per mission (4701, 4711, 4721, …).
+    """
+    missions = missions or []
+    control_agencies = control_agencies or {}
+
+    sections: list[dict] = []
+
+    # ── C1 — COMMAND & CONTROL ───────────────────────────────────────────────
+    c1_entries: list[dict] = []
+
+    # C1.1 — Tactical Control — populate from control_agencies
+    c1_entries.append({"heading": "C1.1 — Tactical Control"})
+    if control_agencies:
+        for ag in control_agencies.values():
+            callsign = ag.get("callsign", "")
+            freq     = ag.get("primary_freq_mhz", "")
+            role     = ag.get("type", "AWACS").upper()
+            label    = f"PRIMARY {role}"
+            value    = callsign + (f" / {freq} MHz" if freq else "")
+            c1_entries.append({"label": label, "value": value})
+    else:
+        c1_entries.append({"label": "PRIMARY AWACS", "value": ""})
+
+    # C1.3 — Package Lead (empty by default, filled via editor)
+    c1_entries.append({"heading": "C1.3 — Package Lead"})
+    c1_entries.append({"label": "PACKAGE LEAD", "value": ""})
+
+    sections.append({"title": "C1 — COMMAND & CONTROL", "entries": c1_entries})
+
+    # ── C3 — IFF / SIF ───────────────────────────────────────────────────────
+    iff_rows = []
+    for i, m in enumerate(missions):
+        msn    = str(m.get("mission_number", "")).replace("MSN", "").strip()
+        squawk = str(4701 + i * 10)
+        iff_rows.append([msn, "3", squawk])
+
+    c3: dict = {
+        "title": "C3 — IFF / SIF",
+        "note":  "Squawk assigned Mode 3 code. Mode 4 mandatory.",
+    }
+    if iff_rows:
+        c3["table"] = {"headers": ["MSN", "MODE", "CODE"], "rows": iff_rows}
+    sections.append(c3)
+
+    # ── C4 — RULES OF ENGAGEMENT ─────────────────────────────────────────────
+    sections.append({
+        "title": "C4 — RULES OF ENGAGEMENT",
+        "entries": [
+            {"heading": "C4.1 — PID"},
+            {"value": "PID required prior to weapons release on air contacts "
+                      "unless hostile act is demonstrated."},
+            {"bullet": "PID on surface targets not designated by ATO required"},
+            {"label": "PID SOURCES",
+             "value": "NCTR / radar profile, Correlated track from CRC/AWACS, "
+                      "Visual ID (VID)"},
+            {"heading": "C4.2 — BVR"},
+            {"bullet": "Weapons free against aircraft declared HOSTILE or "
+                       "demonstrating hostile act"},
+            {"heading": "C4.3 — SFC ATTACK"},
+            {"bullet": "Weapons release authorized only on assigned ATO targets"},
+            {"heading": "C4.4 — Civilian Traffic"},
+            {"value": "NO FACTOR"},
+        ],
+    })
+
+    # ── C5 — EXECUTION ───────────────────────────────────────────────────────
+    c5_entries: list[dict] = []
+    for m in missions:
+        msn_raw      = str(m.get("mission_number", "")).replace("MSN", "").strip()
+        callsign     = m.get("callsign", "")
+        mission_type = m.get("mission_type", "")
+        prefix       = f"C5.{msn_raw} — " if msn_raw else ""
+        heading_text = prefix + callsign + (f" ({mission_type})" if mission_type else "")
+        if heading_text.strip():
+            c5_entries.append({"heading": heading_text})
+            c5_entries.append({"label": "OBJECTIVE",       "value": ""})
+            c5_entries.append({"label": "DESIRED EFFECTS", "value": ""})
+
+    sections.append({"title": "C5 — EXECUTION", "entries": c5_entries})
+
+    # ── C7 — LOST COMMS ──────────────────────────────────────────────────────
+    sections.append({
+        "title": "C7 — LOST COMMS",
+        "entries": [
+            {"heading": "C7.1 — Loss of AWACS"},
+            {"bullet": "Default to package commander control"},
+            {"bullet": "Abort mission if communication cannot be restored within 5 minutes"},
+            {"heading": "C7.2 — Loss of Package Comms"},
+            {"bullet": "Continue mission if task and ROE remain clear"},
+            {"bullet": "Abort in case of degraded situation awareness"},
+            {"heading": "C7.3 — Loss of Intraflight Comms"},
+            {"bullet": "Continue assigned task"},
+            {"bullet": "Reestablish communication post target if feasible"},
+            {"bullet": "Abort mission if communication cannot be reestablished"},
+        ],
+    })
+
+    # ── C8 — ABORT CRITERIA ──────────────────────────────────────────────────
+    sections.append({
+        "title": "C8 — ABORT CRITERIA",
+        "entries": [
+            {"bullet": "Target PID cannot be confirmed"},
+            {"bullet": "Collateral damage risk exceeds authorization"},
+            {"bullet": "Fuel state prevents safe recovery"},
+            {"bullet": "Supporting mission unsuccessful and threat unacceptable"},
+            {"bullet": "Major technical faults"},
+        ],
+    })
+
+    # ── C9 — SEARCH AND RESCUE ────────────────────────────────────────────────
+    sections.append({
+        "title": "C9 — SEARCH AND RESCUE",
+        "entries": [{"value": "NOT SIMULATED"}],
+    })
+
+    # ── C10 — AUTHENTICATION ─────────────────────────────────────────────────
+    sections.append({
+        "title": "C10 — AUTHENTICATION",
+        "entries": [
+            {"label": "AUTHENTICATION",
+             "value": "Daily authentication table per COMSEC"},
+        ],
+    })
+
+    # ── C11 — SAFETY ─────────────────────────────────────────────────────────
+    sections.append({
+        "title": "C11 — SAFETY",
+        "entries": [
+            {"label": "MINIMUM SEPARATION",
+             "value": "3NM / 1000ft between coalition aircraft outside tactical formation"},
+        ],
+    })
+
+    return sections
+
+
 def build_doc(*, mission_name, mission_date, theatre,
               year, month, targets, ref_pts, acms, metar, wx_notes,
-              flights, carriers, dtcs=None, spins_sections=None,
+              flights, carriers, dtcs=None,
               ingame_start_local=None,
               extra_metars=None, extra_tafs=None) -> dict:
 
@@ -362,7 +508,7 @@ def build_doc(*, mission_name, mission_date, theatre,
 
         "spins": {
             "version":  "1.0",
-            "sections": spins_sections,
+            "sections": build_spins_sections(missions, control_agencies),
         },
 
         "comms": {

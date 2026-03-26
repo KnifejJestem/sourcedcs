@@ -11,7 +11,7 @@ import yaml
 
 from .build_doc import build_doc
 from .build_targets import build_acms, build_targets
-from .dtc import load_dtc_files, parse_spins_md
+from .dtc import load_dtc_files
 from .log import log, setup_logging
 from .lua import lua_get_block
 from .parse import parse_bullseye, parse_drawings, parse_groups
@@ -151,16 +151,6 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
     else:
         log.info("No weather.txt found at '%s' — using DCS weather only", wx_txt_path)
 
-    # SPINS — look for spins.md in the same directory as the .miz file
-    spins_sections = None
-    spins_path = Path(miz_path).parent / 'spins.md'
-    if spins_path.exists():
-        spins_text = spins_path.read_text(encoding='utf-8', errors='replace')
-        spins_sections = parse_spins_md(spins_text)
-        log.info("Loaded SPINS from '%s': %d sections", spins_path.name, len(spins_sections or []))
-    else:
-        log.info("No spins.md found at '%s' — spins will be empty", spins_path)
-
     return build_doc(
         mission_name=Path(miz_path).stem,
         mission_date=mission_date,
@@ -174,7 +164,6 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
         flights=flights,
         carriers=carriers,
         dtcs=dtcs,
-        spins_sections=spins_sections,
         ingame_start_local=ingame_start_local,
         extra_metars=extra_metars,
         extra_tafs=extra_tafs,
