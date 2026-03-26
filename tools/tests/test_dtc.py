@@ -147,6 +147,52 @@ class TestParseDtcNavPts:
         content = json.dumps({"data": {"COMM": {"COMM1": {"Channel_1": {"freq": 251.0}}}}}).encode()
         assert parse_dtc_nav_pts(content) == []
 
+    def _make_dtc_f18_nav_pts(self, nav_pts: list) -> bytes:
+        """Build a DTC bytes payload using the F-18 WYPT.NAV_PTS layout."""
+        return json.dumps({"data": {"WYPT": {"NAV_PTS": nav_pts}}}).encode()
+
+    def test_f18_wypt_layout(self):
+        """F-18 uses data.WYPT.NAV_PTS with wypt_num instead of number."""
+        pts = [
+            {"wypt_num": 1, "x": 8817.5, "y": 5608.1, "alt": 7620.0, "note": "", "altitudeType": 1},
+            {"wypt_num": 2, "x": 34338.7, "y": 135444.3, "alt": 7620.0, "note": "", "altitudeType": 1},
+        ]
+        result = parse_dtc_nav_pts(self._make_dtc_f18_nav_pts(pts))
+        assert len(result) == 2
+        assert result[0]["number"] == 1
+        assert result[0]["x"] == pytest.approx(8817.5)
+        assert result[0]["y"] == pytest.approx(5608.1)
+        assert result[0]["alt_m"] == pytest.approx(7620.0)
+        assert result[1]["number"] == 2
+
+    def test_f18_wypt_sorted_by_wypt_num(self):
+        """Entries are sorted by wypt_num when that is the number field."""
+        pts = [
+            {"wypt_num": 3, "x": 1.0, "y": 1.0},
+            {"wypt_num": 1, "x": 2.0, "y": 2.0},
+            {"wypt_num": 2, "x": 3.0, "y": 3.0},
+        ]
+        result = parse_dtc_nav_pts(self._make_dtc_f18_nav_pts(pts))
+        assert [p["number"] for p in result] == [1, 2, 3]
+
+    def test_f18_wypt_type_defaults_to_stpt(self):
+        """F-18 entries without a 'type' field default to 'STPT'."""
+        pts = [{"wypt_num": 1, "x": 100.0, "y": 200.0}]
+        result = parse_dtc_nav_pts(self._make_dtc_f18_nav_pts(pts))
+        assert result[0]["type"] == "STPT"
+
+    def test_f16_mpd_path_still_works(self):
+        """Original F-16 MPD.NAV_PTS path continues to work after the fix."""
+        content = json.dumps({
+            "data": {"MPD": {"NAV_PTS": [
+                {"number": 1, "x": 22735.0, "y": 256990.0, "alt": 442.0, "note": "", "type": "STPT"},
+            ]}}
+        }).encode()
+        result = parse_dtc_nav_pts(content)
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+        assert result[0]["type"] == "STPT"
+
 
 # ── SPINS markdown parser ────────────────────────────────────────────────────
 
