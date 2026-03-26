@@ -1,48 +1,66 @@
 // ═══════════════════════════════════════════════════════════
-// editor-spins.js — SPINS section editor (structured)
+// editor-spins.js — SPINS section editor
 //
-// Replaces raw YAML entry editing with a structured list of
-// typed entry rows (HDG / KV / BULLET / TEXT).
+// Data model: sections store content as a `markdown` string
+// (plus an optional `table` object for structured data).
+// No more `entries` arrays.
 //
-// Special section handling:
-//   C1.1 / TACTICAL CONTROL — auto-populated from registry
-//     control_agencies; agency can be changed in edit mode.
-//   C1.3 / PACKAGE LEAD     — callsign dropdown from ATO missions.
-//   C5 / EXECUTION          — auto-adds a heading + OBJECTIVE +
-//     DESIRED EFFECTS row for each mission so nothing is forgotten.
-//   C3 / IFF                — auto-builds the IFF table with one row
-//     per mission (mode 3, sequential squawk codes) when no table exists.
-//   C4 / C7-C11             — preset picker: select from built-in
-//     presets or edit entries individually.
+// Section editors:
+//   C1 / COMMAND & CONTROL — structured: registry agency list
+//     (read-only, refreshable) + mission callsign dropdown for
+//     package lead.  Saves content as markdown.
+//   C3 / IFF               — table editor only; IFF squawk
+//     codes are randomised on auto-build.
+//   All other sections     — plain markdown textarea with an
+//     optional preset picker (C4, C7–C11).
 //
-// Preset data lives in spins-presets.json and is loaded once at
-// startup into window.SPINS_PRESETS by app.js.
+// Preset data lives in spins-presets.json and is loaded once
+// at startup into window.SPINS_PRESETS by app.js.
 // ═══════════════════════════════════════════════════════════
 
 'use strict';
 
-// ── Detect the preset category for a section title ───────────
-// Returns a key into SPINS_PRESETS, or null if no presets apply.
+// ── Section type detectors ────────────────────────────────
+function _spinsIsCommandControl(title) {
+  return /\bc1\b|command.*control/i.test(title || '');
+}
+function _spinsIsIff(title) {
+  return /\bc3\b|iff\b/i.test(title || '');
+}
 function _spinsPresetCategory(title) {
-  var t = (title || '').toLowerCase();
-  if (/c4\b|rules of engagement|roe/i.test(t))   return 'roe';
-  if (/c7\b|lost comms/i.test(t))                return 'lost_comms';
-  if (/c8\b|abort crit/i.test(t))                return 'abort_criteria';
-  if (/c9\b|search.*rescue|sar/i.test(t))        return 'sar';
-  if (/c10\b|authentication/i.test(t))           return 'authentication';
-  if (/c11\b|safety/i.test(t))                   return 'safety';
+  if (/\bc4\b|rules of engagement|roe/i.test(title))    return 'roe';
+  if (/\bc7\b|lost comms/i.test(title))                 return 'lost_comms';
+  if (/\bc8\b|abort crit/i.test(title))                 return 'abort_criteria';
+  if (/\bc9\b|search.*rescue|sar/i.test(title))         return 'sar';
+  if (/\bc10\b|authentication/i.test(title))            return 'authentication';
+  if (/\bc11\b|safety/i.test(title))                    return 'safety';
   return null;
 }
 
-// ── Detect whether the title matches a known structural section ──
-function _spinsIsTacticalControl(title) {
-  return /c1\.1\b|tactical control/i.test(title || '');
-}
-function _spinsIsPackageLead(title) {
-  return /c1\.3\b|package lead/i.test(title || '');
+// ── Convert preset entries array → markdown string ────────
+function _entriesToMarkdown(entries) {
+  return (entries || []).map(function (e) {
+    if (e.heading != null) return '## ' + e.heading;
+    if (e.label != null)   return '**' + e.label + '**: ' + (e.value != null ? e.value : '');
+    if (e.bullet != null)  return '- ' + e.bullet;
+    if (e.value != null)   return String(e.value);
+    return '';
+  }).filter(function (l) { return l !== ''; }).join('\n');
 }
 
-// ── Open SPINS list editor ────────────────────────────────────
+// ── Random valid octal Mode-3 squawk, no emergency codes ──
+// exclude: Set<string> of already-used codes
+function _randomSquawkCode(exclude) {
+  var forbidden = new Set(['7500', '7600', '7700']);
+  var code;
+  do {
+    code = '';
+    for (var i = 0; i < 4; i++) code += String(Math.floor(Math.random() * 8));
+  } while (forbidden.has(code) || exclude.has(code));
+  return code;
+}
+
+// ── Open SPINS list editor ────────────────────────────────
 function openSpinsEditor() {
   var sp = editorEnsureSection('spins');
 
@@ -57,10 +75,12 @@ function openSpinsEditor() {
     var sections = (sp.sections || []).map(function (s) { return Object.assign({}, s); });
     body._spinsSections = sections;
 
-    // ── Initialize from ATO button ────────────────────────────
+    // Generate standard sections button
     var initRow = el('div', 'ef-ap-row');
-    var initBtn = el('button', 'ef-btn ef-btn-add', '\u21ba GENERATE STANDARD SECTIONS FROM ATO');
-    initBtn.title = 'Auto-populate all standard SPINS sections (C1, C3, C4, C5, C7\u2013C11) from the loaded ATO data. Existing sections will be replaced.';
+    var initBtn = el('button', 'ef-btn ef-btn-add',
+      '\u21ba GENERATE STANDARD SECTIONS FROM ATO');
+    initBtn.title = 'Auto-populate all standard SPINS sections from the loaded ATO data. ' +
+                    'Existing sections will be replaced.';
     initBtn.addEventListener('click', function () {
       if (sections.length > 0 &&
           !confirm('Replace all current sections with auto-generated standard sections?')) {
@@ -81,7 +101,7 @@ function openSpinsEditor() {
 
     var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD SECTION');
     addBtn.addEventListener('click', function () {
-      body._spinsSections.push({ title: 'NEW SECTION', entries: [] });
+      body._spinsSections.push({ title: 'NEW SECTION', markdown: '' });
       _renderSpinsSectionsList(listEl, body._spinsSections);
     });
     body.appendChild(addBtn);
@@ -111,9 +131,12 @@ function _renderSpinsSectionsList(container, sections) {
   });
 }
 
-// ── Edit a single SPINS section ──────────────────────────────
+// ── Edit a single SPINS section ──────────────────────────
 function _editSpinsSection(sections, index) {
   var sec = sections[index];
+  var isC1        = _spinsIsCommandControl(sec.title);
+  var isIff       = _spinsIsIff(sec.title);
+  var presetCat   = _spinsPresetCategory(sec.title);
 
   openEditorDialog('EDIT SPINS SECTION', function (body) {
     var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO SPINS');
@@ -123,78 +146,26 @@ function _editSpinsSection(sections, index) {
     });
     body.appendChild(backBtn);
 
-    var fTitle = editorField(body, 'Title', sec.title, { placeholder: 'e.g. C5 — EXECUTION' });
-    var fNote  = editorField(body, 'Note',  sec.note,  { placeholder: 'Optional section note' });
+    var fTitle = editorField(body, 'Title', sec.title,
+      { placeholder: 'e.g. C5 — EXECUTION' });
+    var fNote  = editorField(body, 'Note',  sec.note,
+      { placeholder: 'Optional section note' });
 
-    var isExecution = /c5\b|execution/i.test(sec.title || '');
-    var isIff       = /c3\b|iff\b/i.test(sec.title || '');
-    var isTactical  = _spinsIsTacticalControl(sec.title);
-    var isPkgLead   = _spinsIsPackageLead(sec.title);
-    var presetCat   = _spinsPresetCategory(sec.title);
-
-    // ── Section-type hints ────────────────────────────────────
-    if (isTactical) {
-      var hint = el('div', 'ef-hint', '\u21b3 Tactical Control is auto-populated from registry control agencies. Use the button below to refresh from the current registry.');
-      body.appendChild(hint);
-      var refreshBtn = el('button', 'ef-btn ef-btn-sm', '\u21ba REFRESH FROM REGISTRY');
-      refreshBtn.addEventListener('click', function () {
-        body._spinsEntries = _buildTacticalControlEntries();
-        _renderSpinsEntriesList(entriesListEl, body._spinsEntries);
-      });
-      body.appendChild(refreshBtn);
+    if (isC1) {
+      // ── C1 — registry agencies + package lead dropdown ──
+      _buildC1SectionEditor(body, sec);
+    } else if (isIff) {
+      // ── C3 — table editor only ──────────────────────────
+      var tableData = sec.table ? JSON.parse(JSON.stringify(sec.table)) : null;
+      if (!tableData) tableData = _buildMissionIffTable();
+      _buildSpinsTableEditor(body, tableData);
+    } else {
+      // ── All other sections — markdown textarea ───────────
+      if (presetCat) {
+        _buildPresetPickerRow(body, presetCat);
+      }
+      _buildMarkdownEditor(body, sec);
     }
-
-    if (isPkgLead) {
-      _buildPackageLeadPicker(body, sec.entries || []);
-    }
-
-    // ── Preset picker (C4, C7–C11) ───────────────────────────
-    if (presetCat) {
-      _buildPresetPickerRow(body, presetCat, function (entries) {
-        body._spinsEntries = entries;
-        _renderSpinsEntriesList(entriesListEl, body._spinsEntries);
-      });
-    }
-
-    // ── Entries ───────────────────────────────────────────────
-    editorSectionTitle(body, 'ENTRIES');
-    var entries = (sec.entries || []).map(function (e) { return Object.assign({}, e); });
-    body._spinsEntries = entries;
-
-    if (isExecution) {
-      var hint = el('div', 'ef-hint', '\u21b3 Missing missions are auto-added below. Fill in OBJECTIVE and DESIRED EFFECTS for each.');
-      body.appendChild(hint);
-      _ensureMissionHeadings(entries);
-    }
-
-    var entriesListEl = el('div', 'ef-list-items');
-    _renderSpinsEntriesList(entriesListEl, entries);
-    body.appendChild(entriesListEl);
-
-    // Add-entry type buttons
-    var addRow = el('div', 'ef-add-entry-row');
-    [
-      ['+ HEADING',   function () { return { heading: '' }; }],
-      ['+ LABEL/VAL', function () { return { label: '', value: '' }; }],
-      ['+ BULLET',    function () { return { bullet: '' }; }],
-      ['+ TEXT',      function () { return { value: '' }; }],
-    ].forEach(function (pair) {
-      var btn = el('button', 'ef-btn ef-btn-sm ef-btn-add', pair[0]);
-      btn.addEventListener('click', function () {
-        entries.push(pair[1]());
-        _renderSpinsEntriesList(entriesListEl, entries);
-      });
-      addRow.appendChild(btn);
-    });
-    body.appendChild(addRow);
-
-    // ── Table (optional) ──────────────────────────────────────
-    editorSectionTitle(body, 'TABLE (OPTIONAL)');
-    var tableData = sec.table ? JSON.parse(JSON.stringify(sec.table)) : null;
-    if (isIff && !tableData) {
-      tableData = _buildMissionIffTable();
-    }
-    _buildSpinsTableEditor(body, tableData);
 
     body._spinsSecFields = { title: fTitle, note: fNote };
     body._spinsSections  = sections;
@@ -205,11 +176,160 @@ function _editSpinsSection(sections, index) {
   });
 }
 
-// ── Build the preset picker row for preset-enabled sections ──
-// onApply(entries) is called when the user clicks APPLY PRESET.
-function _buildPresetPickerRow(body, presetCat, onApply) {
+// ── Collect section fields → save to in-memory array ─────
+function _collectSpinsSection(sections, index) {
+  var body = document.getElementById('editorBody');
+  if (!body || !body._spinsSecFields) return;
+  var sec = sections[index];
+  sec.title = body._spinsSecFields.title.value || '';
+  sec.note  = body._spinsSecFields.note.value  || undefined;
+
+  if (body._spinsC1Mode) {
+    sec.markdown = _generateC1Markdown(body);
+  } else if (body._spinsMarkdownArea) {
+    sec.markdown = body._spinsMarkdownArea.value;
+  }
+
+  if (body._spinsTableEnabled && body._spinsTableHeaders) {
+    sec.table = {
+      headers: body._spinsTableHeaders,
+      rows:    body._spinsTableRows || [],
+    };
+  } else if (!body._spinsTableEnabled) {
+    delete sec.table;
+  }
+
+  editorEnsureSection('spins').sections = sections;
+}
+
+// ── C1 structured editor ─────────────────────────────────
+// Shows registry agencies (readonly, refreshable) and a
+// package lead dropdown.  Saves as markdown on collect.
+function _buildC1SectionEditor(body, sec) {
+  body._spinsC1Mode = true;
+
+  // Tactical control block
+  editorSectionTitle(body, 'TACTICAL CONTROL');
+  var hint = el('div', 'ef-hint',
+    '\u21b3 Populated from registry control agencies. ' +
+    'Add agencies in the Registry editor to update this list.');
+  body.appendChild(hint);
+
+  var agenciesEl = el('div', 'ef-list-items');
+  body._spinsC1AgenciesEl = agenciesEl;
+  _renderC1Agencies(agenciesEl);
+  body.appendChild(agenciesEl);
+
+  var refreshBtn = el('button', 'ef-btn ef-btn-sm', '\u21ba REFRESH FROM REGISTRY');
+  refreshBtn.addEventListener('click', function () {
+    _renderC1Agencies(agenciesEl);
+  });
+  body.appendChild(refreshBtn);
+
+  // Package lead block
+  editorSectionTitle(body, 'PACKAGE LEAD');
+  var missions = (STATE.pkg && STATE.pkg.ato && STATE.pkg.ato.missions) || [];
+
+  // Parse current package lead from existing markdown
+  var currentLead = '';
+  var m = (sec.markdown || '').match(/\*\*PACKAGE LEAD\*\*:\s*(\S.*)/);
+  if (m) currentLead = m[1].trim();
+
+  var pkgRow = el('div', 'ef-ap-row');
+  var pkgSel = document.createElement('select');
+  pkgSel.className = 'ef-input';
+  var blankOpt = document.createElement('option');
+  blankOpt.value = '';
+  blankOpt.textContent = '\u2014 select callsign \u2014';
+  pkgSel.appendChild(blankOpt);
+  missions.forEach(function (msn) {
+    var cs = msn.callsign || '';
+    if (!cs) return;
+    var opt = document.createElement('option');
+    opt.value = cs;
+    opt.textContent = cs + (msn.mission_type ? ' (' + msn.mission_type + ')' : '');
+    if (cs === currentLead) opt.selected = true;
+    pkgSel.appendChild(opt);
+  });
+  if (!missions.length) {
+    pkgSel.disabled = true;
+    var noMsnHint = el('div', 'ef-hint', 'No ATO missions loaded.');
+    body.appendChild(noMsnHint);
+  }
+  pkgRow.appendChild(pkgSel);
+  body.appendChild(pkgRow);
+  body._spinsC1PkgLeadSel = pkgSel;
+}
+
+function _renderC1Agencies(container) {
+  container.innerHTML = '';
+  var agencies = (STATE.pkg && STATE.pkg.registry &&
+                  STATE.pkg.registry.control_agencies) || {};
+  var agencyList = Object.values(agencies);
+  if (!agencyList.length) {
+    container.appendChild(el('div', 'ef-hint', 'No control agencies in registry.'));
+    return;
+  }
+  agencyList.forEach(function (ag) {
+    var callsign = ag.callsign || '';
+    var freq     = ag.primary_freq_mhz || '';
+    var role     = (ag.type || 'AWACS').toUpperCase();
+    var value    = callsign + (freq ? ' / ' + freq + ' MHz' : '');
+    var row = el('div', 'ef-ap-row');
+    var badge = el('span', 'ef-entry-type', role);
+    var lbl   = document.createElement('span');
+    lbl.style.flex = '1';
+    lbl.style.fontFamily = 'var(--font-mono)';
+    lbl.style.fontSize   = '11px';
+    lbl.textContent = value;
+    row.appendChild(badge);
+    row.appendChild(lbl);
+    container.appendChild(row);
+  });
+}
+
+function _generateC1Markdown(body) {
+  var lines = ['## C1.1 \u2014 Tactical Control'];
+  var agencies = (STATE.pkg && STATE.pkg.registry &&
+                  STATE.pkg.registry.control_agencies) || {};
+  var agencyList = Object.values(agencies);
+  if (agencyList.length) {
+    agencyList.forEach(function (ag) {
+      var callsign = ag.callsign || '';
+      var freq     = ag.primary_freq_mhz || '';
+      var role     = (ag.type || 'AWACS').toUpperCase();
+      var value    = callsign + (freq ? ' / ' + freq + ' MHz' : '');
+      lines.push('**PRIMARY ' + role + '**: ' + value);
+    });
+  } else {
+    lines.push('**PRIMARY AWACS**: ');
+  }
+  lines.push('');
+  lines.push('## C1.3 \u2014 Package Lead');
+  var lead = body._spinsC1PkgLeadSel ? body._spinsC1PkgLeadSel.value : '';
+  lines.push('**PACKAGE LEAD**: ' + lead);
+  return lines.join('\n');
+}
+
+// ── Markdown textarea editor ──────────────────────────────
+function _buildMarkdownEditor(body, sec) {
+  editorSectionTitle(body, 'CONTENT');
+  var md = sec.markdown != null ? sec.markdown : '';
+  var ta = document.createElement('textarea');
+  ta.className = 'ef-input ef-textarea ef-markdown-area';
+  ta.value = md;
+  body.appendChild(ta);
+  body._spinsMarkdownArea = ta;
+}
+
+// ── Preset picker (inserts markdown into textarea) ────────
+function _buildPresetPickerRow(body, presetCat) {
   var presets = SPINS_PRESETS[presetCat] || [];
   if (!presets.length) return;
+
+  var hint = el('div', 'ef-hint',
+    '\u21b3 Apply a built-in preset or edit the content freely below.');
+  body.appendChild(hint);
 
   var row = el('div', 'ef-ap-row');
   row.style.marginBottom = '6px';
@@ -226,277 +346,125 @@ function _buildPresetPickerRow(body, presetCat, onApply) {
 
   var applyBtn = el('button', 'ef-btn ef-btn-sm', 'APPLY PRESET');
   applyBtn.addEventListener('click', function () {
-    var idx = parseInt(sel.value, 10);
-    var preset = presets[idx];
+    var preset = presets[parseInt(sel.value, 10)];
     if (!preset) return;
-    var copied = preset.entries.map(function (e) { return Object.assign({}, e); });
-    onApply(copied);
+    // Find the markdown textarea (rendered after this row)
+    var ta = body.querySelector('.ef-markdown-area');
+    if (ta) ta.value = _entriesToMarkdown(preset.entries);
   });
   row.appendChild(applyBtn);
-
-  body.insertBefore(row, body.querySelector('.ef-section-title'));
-  body.insertBefore(el('div', 'ef-hint', '\u21b3 Apply a built-in preset to replace the entries below, or edit them manually.'), row);
-}
-
-// ── Build Package Lead picker row ─────────────────────────────
-// Shows a dropdown of ATO mission callsigns and writes the chosen
-// callsign into the entries list when the user clicks ASSIGN.
-function _buildPackageLeadPicker(body, currentEntries) {
-  var missions = (STATE.pkg && STATE.pkg.ato && STATE.pkg.ato.missions) || [];
-  if (!missions.length) return;
-
-  var hint = el('div', 'ef-hint', '\u21b3 Select the package lead from the active ATO missions.');
-  body.appendChild(hint);
-
-  var row = el('div', 'ef-ap-row');
-
-  var sel = document.createElement('select');
-  sel.className = 'ef-input';
-  var blankOpt = document.createElement('option');
-  blankOpt.value = '';
-  blankOpt.textContent = '— select callsign —';
-  sel.appendChild(blankOpt);
-  missions.forEach(function (m) {
-    var cs = m.callsign || '';
-    if (!cs) return;
-    var opt = document.createElement('option');
-    opt.value = cs;
-    opt.textContent = cs;
-    var kv = currentEntries.find(function (e) { return e.label === 'PACKAGE LEAD'; });
-    if (kv && kv.value === cs) opt.selected = true;
-    sel.appendChild(opt);
-  });
-  row.appendChild(sel);
-
-  var assignBtn = el('button', 'ef-btn ef-btn-sm', 'ASSIGN');
-  assignBtn.addEventListener('click', function () {
-    var cs = sel.value;
-    if (!cs) return;
-    // Find or create PACKAGE LEAD entry
-    var kv = currentEntries.find(function (e) { return e.label === 'PACKAGE LEAD'; });
-    if (kv) {
-      kv.value = cs;
-    } else {
-      currentEntries.push({ label: 'PACKAGE LEAD', value: cs });
-    }
-    // Re-render entries list if it already exists on the body
-    var listEl = body.querySelector('.ef-list-items');
-    if (listEl) _renderSpinsEntriesList(listEl, currentEntries);
-  });
-  row.appendChild(assignBtn);
   body.appendChild(row);
 }
 
-// ── Build Tactical Control entries from registry ─────────────
-function _buildTacticalControlEntries() {
-  var entries = [{ heading: 'C1.1 — Tactical Control' }];
-  var agencies = (STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.control_agencies) || {};
-  var agencyList = Object.values(agencies);
-  if (agencyList.length > 0) {
-    agencyList.forEach(function (ag) {
-      var callsign = ag.callsign || '';
-      var freq     = ag.primary_freq_mhz || '';
-      var role     = (ag.type || 'AWACS').toUpperCase();
-      var label    = 'PRIMARY ' + role;
-      var value    = callsign + (freq ? ' / ' + freq + ' MHz' : '');
-      entries.push({ label: label, value: value });
-    });
-  } else {
-    entries.push({ label: 'PRIMARY AWACS', value: '' });
-  }
-  return entries;
-}
-
-// ── Auto-generate all standard SPINS sections from ATO data ──
+// ── Auto-generate all standard SPINS sections from ATO ───
 function _initializeSpinsFromAto() {
   var sections = [];
   var missions = (STATE.pkg && STATE.pkg.ato && STATE.pkg.ato.missions) || [];
 
-  // ── C1 — COMMAND & CONTROL ─────────────────────────────────
-  var c1Entries = _buildTacticalControlEntries();
-  // C1.3 — Package Lead (empty, user fills via editor)
-  c1Entries.push({ heading: 'C1.3 — Package Lead' });
-  c1Entries.push({ label: 'PACKAGE LEAD', value: '' });
-  sections.push({ title: 'C1 — COMMAND & CONTROL', entries: c1Entries });
+  // C1 — COMMAND & CONTROL
+  var c1Lines = ['## C1.1 \u2014 Tactical Control'];
+  var agencies = (STATE.pkg && STATE.pkg.registry &&
+                  STATE.pkg.registry.control_agencies) || {};
+  var agencyList = Object.values(agencies);
+  if (agencyList.length) {
+    agencyList.forEach(function (ag) {
+      var callsign = ag.callsign || '';
+      var freq     = ag.primary_freq_mhz || '';
+      var role     = (ag.type || 'AWACS').toUpperCase();
+      c1Lines.push('**PRIMARY ' + role + '**: ' +
+        callsign + (freq ? ' / ' + freq + ' MHz' : ''));
+    });
+  } else {
+    c1Lines.push('**PRIMARY AWACS**: ');
+  }
+  c1Lines.push('', '## C1.3 \u2014 Package Lead', '**PACKAGE LEAD**: ');
+  sections.push({ title: 'C1 \u2014 COMMAND & CONTROL',
+                  markdown: c1Lines.join('\n') });
 
-  // ── C3 — IFF / SIF ─────────────────────────────────────────
+  // C3 — IFF / SIF
   var iffTable = _buildMissionIffTable();
-  var c3 = {
-    title: 'C3 — IFF / SIF',
-    note:  'Squawk assigned Mode 3 code. Mode 4 mandatory.',
-  };
+  var c3 = { title: 'C3 \u2014 IFF / SIF',
+              note:  'Squawk assigned Mode 3 code. Mode 4 mandatory.' };
   if (iffTable) c3.table = iffTable;
   sections.push(c3);
 
-  // ── C4 — RULES OF ENGAGEMENT ───────────────────────────────
+  // C4 — RULES OF ENGAGEMENT
   sections.push({
-    title:   'C4 — RULES OF ENGAGEMENT',
-    entries: SPINS_PRESETS.roe[0].entries.map(function (e) { return Object.assign({}, e); }),
+    title:    'C4 \u2014 RULES OF ENGAGEMENT',
+    markdown: _entriesToMarkdown(SPINS_PRESETS.roe[0].entries),
   });
 
-  // ── C5 — EXECUTION ─────────────────────────────────────────
-  var c5Entries = [];
-  _ensureMissionHeadings(c5Entries);
-  sections.push({ title: 'C5 — EXECUTION', entries: c5Entries });
+  // C5 — EXECUTION
+  var c5Blocks = missions.map(function (msn) {
+    var num  = (msn.mission_number || '').replace(/^MSN/i, '');
+    var cs   = msn.callsign || '';
+    var type = msn.mission_type || '';
+    var prefix  = num ? 'C5.' + num + ' \u2014 ' : '';
+    var heading = prefix + cs + (type ? ' (' + type + ')' : '');
+    if (!heading.trim()) return null;
+    return '## ' + heading + '\n**OBJECTIVE**: \n**DESIRED EFFECTS**: ';
+  }).filter(Boolean);
+  sections.push({ title: 'C5 \u2014 EXECUTION',
+                  markdown: c5Blocks.join('\n\n') });
 
-  // ── C7 — LOST COMMS ────────────────────────────────────────
+  // C7 — LOST COMMS
   sections.push({
-    title:   'C7 — LOST COMMS',
-    entries: SPINS_PRESETS.lost_comms[0].entries.map(function (e) { return Object.assign({}, e); }),
+    title:    'C7 \u2014 LOST COMMS',
+    markdown: _entriesToMarkdown(SPINS_PRESETS.lost_comms[0].entries),
   });
 
-  // ── C8 — ABORT CRITERIA ────────────────────────────────────
+  // C8 — ABORT CRITERIA
   sections.push({
-    title:   'C8 — ABORT CRITERIA',
-    entries: SPINS_PRESETS.abort_criteria[0].entries.map(function (e) { return Object.assign({}, e); }),
+    title:    'C8 \u2014 ABORT CRITERIA',
+    markdown: _entriesToMarkdown(SPINS_PRESETS.abort_criteria[0].entries),
   });
 
-  // ── C9 — SEARCH AND RESCUE ─────────────────────────────────
+  // C9 — SEARCH AND RESCUE
   sections.push({
-    title:   'C9 — SEARCH AND RESCUE',
-    entries: SPINS_PRESETS.sar[0].entries.map(function (e) { return Object.assign({}, e); }),
+    title:    'C9 \u2014 SEARCH AND RESCUE',
+    markdown: _entriesToMarkdown(SPINS_PRESETS.sar[0].entries),
   });
 
-  // ── C10 — AUTHENTICATION ───────────────────────────────────
+  // C10 — AUTHENTICATION
   sections.push({
-    title:   'C10 — AUTHENTICATION',
-    entries: SPINS_PRESETS.authentication[0].entries.map(function (e) { return Object.assign({}, e); }),
+    title:    'C10 \u2014 AUTHENTICATION',
+    markdown: _entriesToMarkdown(SPINS_PRESETS.authentication[0].entries),
   });
 
-  // ── C11 — SAFETY ───────────────────────────────────────────
+  // C11 — SAFETY
   sections.push({
-    title:   'C11 — SAFETY',
-    entries: SPINS_PRESETS.safety[0].entries.map(function (e) { return Object.assign({}, e); }),
+    title:    'C11 \u2014 SAFETY',
+    markdown: _entriesToMarkdown(SPINS_PRESETS.safety[0].entries),
   });
 
   return sections;
 }
 
-// ── Collect section form → save to in-memory array and STATE ─
-function _collectSpinsSection(sections, index) {
-  var body = document.getElementById('editorBody');
-  if (!body || !body._spinsSecFields) return;
-  var sec = sections[index];
-  sec.title   = body._spinsSecFields.title.value || '';
-  sec.note    = body._spinsSecFields.note.value || undefined;
-  sec.entries = body._spinsEntries || [];
-  if (body._spinsTableEnabled && body._spinsTableHeaders) {
-    sec.table = {
-      headers: body._spinsTableHeaders,
-      rows:    body._spinsTableRows || [],
-    };
-  } else {
-    delete sec.table;
-  }
-  // Persist to STATE so navigation doesn't lose edits
-  editorEnsureSection('spins').sections = sections;
-}
-
-// ── Render the structured entries list ────────────────────────
-function _renderSpinsEntriesList(container, entries) {
-  container.innerHTML = '';
-  entries.forEach(function (entry, i) {
-    var row = el('div', 'ef-entry-row');
-
-    if (entry.heading != null) {
-      row.appendChild(el('span', 'ef-entry-type', 'HDG'));
-      var inp = el('input', 'ef-input ef-input-sm');
-      inp.placeholder = 'Heading text';
-      inp.value = String(entry.heading);
-      (function (e) { inp.addEventListener('input', function () { e.heading = this.value; }); })(entry);
-      row.appendChild(inp);
-    } else if (entry.label != null) {
-      row.appendChild(el('span', 'ef-entry-type', 'KV'));
-      var lInp = el('input', 'ef-input ef-input-sm');
-      lInp.placeholder = 'Label';
-      lInp.value = entry.label || '';
-      (function (e) { lInp.addEventListener('input', function () { e.label = this.value; }); })(entry);
-      row.appendChild(lInp);
-      var vInp = el('input', 'ef-input ef-input-sm');
-      vInp.placeholder = 'Value';
-      vInp.value = entry.value != null ? String(entry.value) : '';
-      (function (e) { vInp.addEventListener('input', function () { e.value = this.value; }); })(entry);
-      row.appendChild(vInp);
-    } else if (entry.bullet != null) {
-      row.appendChild(el('span', 'ef-entry-type', '\u2022'));
-      var inp = el('input', 'ef-input ef-input-sm');
-      inp.placeholder = 'Bullet text';
-      inp.value = String(entry.bullet);
-      (function (e) { inp.addEventListener('input', function () { e.bullet = this.value; }); })(entry);
-      row.appendChild(inp);
-    } else {
-      row.appendChild(el('span', 'ef-entry-type', 'TXT'));
-      var inp = el('input', 'ef-input ef-input-sm');
-      inp.placeholder = 'Text';
-      inp.value = entry.value != null ? String(entry.value) : '';
-      (function (e) { inp.addEventListener('input', function () { e.value = this.value; }); })(entry);
-      row.appendChild(inp);
-    }
-
-    var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '\u2715');
-    (function (idx) {
-      delBtn.addEventListener('click', function () {
-        entries.splice(idx, 1);
-        _renderSpinsEntriesList(container, entries);
-      });
-    })(i);
-    row.appendChild(delBtn);
-
-    container.appendChild(row);
-  });
-}
-
-// ── Auto-populate C5 (EXECUTION) with per-mission headings ───
-function _ensureMissionHeadings(entries) {
-  var missions = (STATE.pkg && STATE.pkg.ato && STATE.pkg.ato.missions) || [];
-  if (!missions.length) return;
-
-  var existingHeadings = entries
-    .filter(function (e) { return e.heading != null; })
-    .map(function (e) { return String(e.heading || ''); });
-
-  missions.forEach(function (m) {
-    var msnNum   = (m.mission_number || '').replace(/^MSN/i, '');
-    var callsign = m.callsign || '';
-    var msnType  = m.mission_type || '';
-    var prefix   = msnNum ? 'C5.' + msnNum + ' \u2014 ' : '';
-    var headingText = prefix + callsign + (msnType ? ' (' + msnType + ')' : '');
-    if (!headingText.trim()) return;
-
-    var exists = existingHeadings.some(function (h) {
-      return callsign ? h.indexOf(callsign) >= 0 : h === headingText;
-    });
-    if (!exists) {
-      entries.push({ heading: headingText });
-      entries.push({ label: 'OBJECTIVE',       value: '' });
-      entries.push({ label: 'DESIRED EFFECTS', value: '' });
-    }
-  });
-}
-
-// ── Auto-build IFF table from mission list ────────────────────
-// Squawk codes are generated sequentially: 4701, 4711, 4721, …
+// ── Auto-build IFF table with randomised squawk codes ─────
 function _buildMissionIffTable() {
   var missions = (STATE.pkg && STATE.pkg.ato && STATE.pkg.ato.missions) || [];
   if (!missions.length) return null;
-  var rows = missions.map(function (m, i) {
-    var msn    = (m.mission_number || '').replace(/^MSN/i, '');
-    var squawk = String(4701 + i * 10);
-    return [msn, '3', squawk];
+  var used = new Set();
+  var rows = missions.map(function (msn) {
+    var num    = (msn.mission_number || '').replace(/^MSN/i, '');
+    var squawk = _randomSquawkCode(used);
+    used.add(squawk);
+    return [num, '3', squawk];
   });
   return { headers: ['MSN', 'MODE', 'CODE'], rows: rows };
 }
 
-// ── Structured table editor ───────────────────────────────────
+// ── Structured table editor ───────────────────────────────
 function _buildSpinsTableEditor(body, tableData) {
-  var headers = tableData ? tableData.headers.slice()                           : ['COL1', 'COL2'];
-  var rows    = tableData ? tableData.rows.map(function (r) { return r.slice(); }) : [];
+  var headers = tableData ? tableData.headers.slice()
+                          : ['COL1', 'COL2'];
+  var rows    = tableData ? tableData.rows.map(function (r) { return r.slice(); })
+                          : [];
 
   body._spinsTableEnabled = !!tableData;
   body._spinsTableHeaders = headers;
   body._spinsTableRows    = rows;
 
-  // Enable checkbox
   var checkRow = el('div', 'ef-ap-row');
   var enableChk = document.createElement('input');
   enableChk.type = 'checkbox';
@@ -514,13 +482,11 @@ function _buildSpinsTableEditor(body, tableData) {
     tableForm.style.display = this.checked ? '' : 'none';
   });
 
-  // Header inputs
   editorSectionTitle(tableForm, 'TABLE HEADERS');
   var hdrRow = el('div', 'ef-ap-row');
   _buildTableHeaderInputs(hdrRow, headers, rows, tableForm, body);
   tableForm.appendChild(hdrRow);
 
-  // Data rows
   editorSectionTitle(tableForm, 'TABLE ROWS');
   var rowsEl = el('div', 'ef-list-items');
   _renderSpinsTableRows(rowsEl, headers, rows);
@@ -536,7 +502,6 @@ function _buildSpinsTableEditor(body, tableData) {
   body.appendChild(tableForm);
 }
 
-// ── Build header input row (called on initial build and after adding a column) ──
 function _buildTableHeaderInputs(hdrRow, headers, rows, tableForm, body) {
   hdrRow.innerHTML = '';
   headers.forEach(function (h, hi) {
@@ -553,14 +518,12 @@ function _buildTableHeaderInputs(hdrRow, headers, rows, tableForm, body) {
     headers.push('');
     rows.forEach(function (r) { r.push(''); });
     _buildTableHeaderInputs(hdrRow, headers, rows, tableForm, body);
-    // Re-render rows to add new cell column
     var rowsEl = tableForm.querySelector('.ef-list-items');
     if (rowsEl) _renderSpinsTableRows(rowsEl, headers, rows);
   });
   hdrRow.appendChild(addColBtn);
 }
 
-// ── Render table data rows ────────────────────────────────────
 function _renderSpinsTableRows(container, headers, rows) {
   container.innerHTML = '';
   rows.forEach(function (row, ri) {

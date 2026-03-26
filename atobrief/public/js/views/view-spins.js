@@ -1,20 +1,45 @@
 // ═══════════════════════════════════════════════════════════
 // view-spins.js — SPINS tab renderer
 //
-// The SPINS YAML uses a flexible `sections` list so any
-// C-section can be added, removed, or reordered without
-// touching this file.  Each section has:
-//   title   — displayed as the section heading
-//   note    — (optional) single note line at the top
-//   entries — (optional) list of typed display rows:
-//               {label, value, style?}  → key-value row
-//               {bullet, style?}        → bullet text
-//               {heading}               → mission block header
-//               {value}  (no label)     → plain objective text
-//   table   — (optional) {headers, rows, cell_classes?}
+// Each section has:
+//   title    — displayed as the section heading
+//   note     — (optional) single note line at the top
+//   markdown — (optional) free-form content rendered as markdown
+//   table    — (optional) {headers, rows, cell_classes?}
+//
+// Markdown syntax recognised:
+//   ## Heading text       → sub-heading block
+//   - Bullet text         → bullet line
+//   **Key**: Value        → key-value row
+//   Plain text            → paragraph line
+//   Blank line            → spacer
 // ═══════════════════════════════════════════════════════════
 
 'use strict';
+
+// ── Render markdown text into parent element ──────────────
+function _spinsMarkdown(parent, text) {
+  let block = null;
+  (text || '').split('\n').forEach(line => {
+    if (/^##\s/.test(line)) {
+      block = el('div', 'spins-mission-block');
+      block.appendChild(el('div', 'spins-mission-id', line.replace(/^##\s+/, '')));
+      parent.appendChild(block);
+    } else if (/^-\s/.test(line)) {
+      const target = block || parent;
+      target.appendChild(el('div', 'spins-sub', '• ' + line.replace(/^-\s+/, '')));
+    } else {
+      const kv = line.match(/^\*\*([^*]+)\*\*:\s*(.*)/);
+      if (kv) {
+        const target = block || parent;
+        kvRow(target, kv[1], kv[2] || null);
+      } else if (line.trim()) {
+        const target = block || parent;
+        target.appendChild(el('div', 'spins-mission-obj', reformatCoordsInText(line)));
+      }
+    }
+  });
+}
 
 function renderSPINS(sp) {
   const div = document.getElementById('spins-content');
@@ -44,44 +69,9 @@ function renderSPINS(sp) {
         s.appendChild(el('div', 'spins-sub', sec.note));
       }
 
-      // Render entries.  When a {heading} entry is seen a
-      // spins-mission-block is opened; subsequent entries
-      // go inside that block until the next heading.
-      let currentBlock = null;
-      (sec.entries || []).forEach(e => {
-        if (e.heading != null) {
-          currentBlock = el('div', 'spins-mission-block');
-          currentBlock.appendChild(el('div', 'spins-mission-id', e.heading));
-          s.appendChild(currentBlock);
-        } else if (e.type === 'orbit_reference') {
-          const target = currentBlock || s;
-          const parts = [];
-          if (e.coords) parts.push('ORBIT: ' + reformatCoordsInText(String(e.coords)));
-          if (e.anchor) parts.push(e.anchor);
-          if (e.bearing_deg != null) parts.push(e.bearing_deg + '°');
-          if (e.distance_nm != null) parts.push(e.distance_nm + 'nm');
-          const d = el('div', 'spins-sub', '• ' + parts.join(' '));
-          if (e.style) d.style.color = `var(--${e.style})`;
-          target.appendChild(d);
-        } else {
-          const target = currentBlock || s;
-
-          if (e.label != null) {
-            const valStr = e.value != null ? String(e.value) : null;
-            kvRow(target, e.label,
-              valStr != null ? reformatCoordsInText(valStr) : null,
-              e.style || null);
-          } else if (e.bullet != null) {
-            const d = el('div', 'spins-sub', '• ' + reformatCoordsInText(String(e.bullet)));
-            if (e.style === 'red' || e.style === 'blue') {
-              d.style.color = `var(--${e.style})`;
-            }
-            target.appendChild(d);
-          } else if (e.value != null) {
-            target.appendChild(el('div', 'spins-mission-obj', reformatCoordsInText(String(e.value))));
-          }
-        }
-      });
+      if (sec.markdown) {
+        _spinsMarkdown(s, sec.markdown);
+      }
 
       if (sec.table) {
         const cls = sec.table.cell_classes || [];
