@@ -10,6 +10,7 @@ from tools.miztoyaml.build_doc import (
     build_doc,
     build_flight_comms,
     build_frequencies_registry,
+    build_spins_sections,
     build_support_flights,
     build_tankers_list,
 )
@@ -252,3 +253,88 @@ class TestBuildDoc:
         )
         assert doc["_meta"]["missions"] == 1
         assert doc["_meta"]["tankers"] == 1
+
+
+class TestBuildSpinsSections:
+    def test_auto_generates_standard_sections(self):
+        missions = [
+            {"mission_number": "MSN8023", "callsign": "VIPER", "mission_type": "DEAD"},
+            {"mission_number": "MSN8024", "callsign": "BOLO",  "mission_type": "ESCORT"},
+        ]
+        sections = build_spins_sections(missions, {})
+        titles = [s["title"] for s in sections]
+        assert "C1 — COMMAND & CONTROL" in titles
+        assert "C3 — IFF / SIF" in titles
+        assert "C4 — RULES OF ENGAGEMENT" in titles
+        assert "C5 — EXECUTION" in titles
+        assert "C7 — LOST COMMS" in titles
+        assert "C8 — ABORT CRITERIA" in titles
+        assert "C9 — SEARCH AND RESCUE" in titles
+        assert "C10 — AUTHENTICATION" in titles
+        assert "C11 — SAFETY" in titles
+
+    def test_iff_squawk_codes_sequential(self):
+        missions = [
+            {"mission_number": "MSN8023", "callsign": "V", "mission_type": "CAP"},
+            {"mission_number": "MSN8024", "callsign": "B", "mission_type": "CAP"},
+            {"mission_number": "MSN8025", "callsign": "S", "mission_type": "CAP"},
+        ]
+        sections = build_spins_sections(missions, {})
+        c3 = next(s for s in sections if s["title"] == "C3 — IFF / SIF")
+        rows = c3["table"]["rows"]
+        assert rows[0] == ["8023", "3", "4701"]
+        assert rows[1] == ["8024", "3", "4711"]
+        assert rows[2] == ["8025", "3", "4721"]
+
+    def test_tactical_control_from_agencies(self):
+        agencies = {
+            "DARKSTAR": {"type": "AWACS", "callsign": "DARKSTAR", "primary_freq_mhz": "305.0"},
+        }
+        sections = build_spins_sections([], agencies)
+        c1 = next(s for s in sections if s["title"] == "C1 — COMMAND & CONTROL")
+        kv = next(e for e in c1["entries"] if e.get("label") == "PRIMARY AWACS")
+        assert "DARKSTAR" in kv["value"]
+        assert "305.0" in kv["value"]
+
+    def test_execution_has_objective_and_desired_effects(self):
+        missions = [{"mission_number": "MSN8023", "callsign": "VIPER", "mission_type": "DEAD"}]
+        sections = build_spins_sections(missions, {})
+        c5 = next(s for s in sections if s["title"] == "C5 — EXECUTION")
+        labels = [e.get("label") for e in c5["entries"]]
+        assert "OBJECTIVE" in labels
+        assert "DESIRED EFFECTS" in labels
+
+    def test_no_missions_no_iff_table(self):
+        sections = build_spins_sections([], {})
+        c3 = next(s for s in sections if s["title"] == "C3 — IFF / SIF")
+        assert "table" not in c3
+
+    def test_spins_sections_override_in_build_doc(self):
+        """When spins_sections is explicitly provided it takes precedence."""
+        spins = [{"title": "ROE", "entries": [{"bullet": "weapons free"}]}]
+        doc = build_doc(
+            mission_name="Test",
+            mission_date="2024-01-01",
+            theatre="Syria",
+            year=2024, month=1,
+            targets={}, ref_pts={}, acms=[],
+            metar="METAR", wx_notes="",
+            flights=[], carriers=[],
+            spins_sections=spins,
+        )
+        assert doc["spins"]["sections"] == spins
+
+    def test_auto_spins_in_build_doc_no_markdown(self):
+        """When no spins_sections is provided, build_doc auto-generates them."""
+        doc = build_doc(
+            mission_name="Test",
+            mission_date="2024-01-01",
+            theatre="Syria",
+            year=2024, month=1,
+            targets={}, ref_pts={}, acms=[],
+            metar="METAR", wx_notes="",
+            flights=[], carriers=[],
+        )
+        titles = [s["title"] for s in (doc["spins"]["sections"] or [])]
+        assert "C1 — COMMAND & CONTROL" in titles
+        assert "C4 — RULES OF ENGAGEMENT" in titles
