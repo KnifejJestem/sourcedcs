@@ -225,20 +225,6 @@ class TestBuildDoc:
             )
         assert doc["ato"]["local_offset_hours"] is None
 
-    def test_with_spins(self):
-        spins = [{"title": "ROE", "entries": [{"bullet": "weapons free"}]}]
-        doc = build_doc(
-            mission_name="Test",
-            mission_date="2024-01-01",
-            theatre="Syria",
-            year=2024, month=1,
-            targets={}, ref_pts={}, acms=[],
-            metar="METAR", wx_notes="",
-            flights=[], carriers=[],
-            spins_sections=spins,
-        )
-        assert doc["spins"]["sections"] == spins
-
     def test_meta_counts(self):
         f1 = _make_flight("VIPER-1", task="CAP")
         f2 = _make_flight("SHELL-1", task="TANKER", is_tanker=True)
@@ -309,23 +295,27 @@ class TestBuildSpinsSections:
         c3 = next(s for s in sections if s["title"] == "C3 — IFF / SIF")
         assert "table" not in c3
 
-    def test_spins_sections_override_in_build_doc(self):
-        """When spins_sections is explicitly provided it takes precedence."""
-        spins = [{"title": "ROE", "entries": [{"bullet": "weapons free"}]}]
-        doc = build_doc(
-            mission_name="Test",
-            mission_date="2024-01-01",
-            theatre="Syria",
-            year=2024, month=1,
-            targets={}, ref_pts={}, acms=[],
-            metar="METAR", wx_notes="",
-            flights=[], carriers=[],
-            spins_sections=spins,
-        )
-        assert doc["spins"]["sections"] == spins
+    def test_iff_missing_mission_number_uses_empty_string(self):
+        """Missions without mission_number produce an empty MSN cell, not an error."""
+        missions = [
+            {"callsign": "VIPER", "mission_type": "CAP"},          # no mission_number key
+            {"mission_number": "",  "callsign": "BOLO", "mission_type": "ESCORT"},  # empty
+            {"mission_number": "MSN8025", "callsign": "SHADOW", "mission_type": "DEAD"},
+        ]
+        sections = build_spins_sections(missions, {})
+        c3 = next(s for s in sections if s["title"] == "C3 — IFF / SIF")
+        rows = c3["table"]["rows"]
+        assert len(rows) == 3
+        assert rows[0][0] == ""    # missing key → empty string
+        assert rows[1][0] == ""    # explicit empty → empty string
+        assert rows[2][0] == "8025"
+        # Squawk codes are still sequential regardless of msn number content
+        assert rows[0][2] == "4701"
+        assert rows[1][2] == "4711"
+        assert rows[2][2] == "4721"
 
-    def test_auto_spins_in_build_doc_no_markdown(self):
-        """When no spins_sections is provided, build_doc auto-generates them."""
+    def test_spins_always_auto_generated_in_build_doc(self):
+        """build_doc always auto-generates SPINS sections from ATO data."""
         doc = build_doc(
             mission_name="Test",
             mission_date="2024-01-01",
@@ -338,3 +328,4 @@ class TestBuildSpinsSections:
         titles = [s["title"] for s in (doc["spins"]["sections"] or [])]
         assert "C1 — COMMAND & CONTROL" in titles
         assert "C4 — RULES OF ENGAGEMENT" in titles
+        assert "C11 — SAFETY" in titles

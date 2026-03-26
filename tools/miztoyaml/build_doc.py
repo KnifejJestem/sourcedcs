@@ -398,7 +398,7 @@ def build_spins_sections(missions: list[dict] | None,
 
 def build_doc(*, mission_name, mission_date, theatre,
               year, month, targets, ref_pts, acms, metar, wx_notes,
-              flights, carriers, dtcs=None, spins_sections=None,
+              flights, carriers, dtcs=None,
               ingame_start_local=None,
               extra_metars=None, extra_tafs=None) -> dict:
 
@@ -461,15 +461,6 @@ def build_doc(*, mission_name, mission_date, theatre,
     # If there is exactly one AWACS, set it as the default global_control agency
     awacs_agency_id = next(iter(control_agencies or {}), None)
 
-    # Auto-generate SPINS sections when no markdown override was supplied.
-    # If spins_sections was explicitly provided (e.g. from a spins.md file),
-    # it takes precedence for full backward compatibility.
-    effective_spins_sections = (
-        spins_sections
-        if spins_sections is not None
-        else build_spins_sections(missions, control_agencies)
-    )
-
     return {
         "schema_version": "1.0",
 
@@ -517,7 +508,7 @@ def build_doc(*, mission_name, mission_date, theatre,
 
         "spins": {
             "version":  "1.0",
-            "sections": effective_spins_sections,
+            "sections": build_spins_sections(missions, control_agencies),
         },
 
         "comms": {
