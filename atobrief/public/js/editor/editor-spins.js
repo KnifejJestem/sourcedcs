@@ -399,6 +399,15 @@ function _editSpinsSection(sections, index) {
   var presetCat = _spinsPresetCategory(sec.title);
 
   openEditorDialog('EDIT SPINS SECTION', function (body) {
+    // Reset per-section transient state so previously edited sections
+    // cannot leak mode/inputs into the current section.
+    body._spinsC1Mode       = false;
+    body._spinsC1PkgLeadSel = null;
+    body._spinsMarkdownArea = null;
+    body._spinsTableEnabled = false;
+    body._spinsTableHeaders = null;
+    body._spinsTableRows    = null;
+
     var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO SPINS');
     backBtn.addEventListener('click', function () {
       _collectSpinsSection(sections, index);
