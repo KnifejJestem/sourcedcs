@@ -47,7 +47,7 @@ function _parseMissionNum(msn) {
   return (msn.mission_number || '').replace(/^MSN/i, '').trim();
 }
 
-
+function _getRegistryAgencies() {
   return Object.values(
     (STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.control_agencies) || {}
   );
