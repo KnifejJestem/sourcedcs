@@ -507,7 +507,7 @@ def build_doc(*, mission_name, mission_date, theatre,
 
         "spins": {
             "version":  "1.0",
-            "sections": build_spins_sections(missions, control_agencies),
+            "sections": [],
         },
 
         "comms": {

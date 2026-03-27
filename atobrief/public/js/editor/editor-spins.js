@@ -75,36 +75,10 @@ function openSpinsEditor() {
     var sections = (sp.sections || []).map(function (s) { return Object.assign({}, s); });
     body._spinsSections = sections;
 
-    // Generate standard sections button
-    var initRow = el('div', 'ef-ap-row');
-    var initBtn = el('button', 'ef-btn ef-btn-add',
-      '\u21ba GENERATE STANDARD SECTIONS FROM ATO');
-    initBtn.title = 'Auto-populate all standard SPINS sections from the loaded ATO data. ' +
-                    'Existing sections will be replaced.';
-    initBtn.addEventListener('click', function () {
-      if (sections.length > 0 &&
-          !confirm('Replace all current sections with auto-generated standard sections?')) {
-        return;
-      }
-      var generated = _initializeSpinsFromAto();
-      sections.length = 0;
-      generated.forEach(function (s) { sections.push(s); });
-      _renderSpinsSectionsList(listEl, sections);
-    });
-    initRow.appendChild(initBtn);
-    body.appendChild(initRow);
-
     editorSectionTitle(body, 'SECTIONS');
     var listEl = el('div', 'ef-list-items');
     _renderSpinsSectionsList(listEl, body._spinsSections);
     body.appendChild(listEl);
-
-    var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD SECTION');
-    addBtn.addEventListener('click', function () {
-      body._spinsSections.push({ title: 'NEW SECTION', markdown: '' });
-      _renderSpinsSectionsList(listEl, body._spinsSections);
-    });
-    body.appendChild(addBtn);
   }, function () {
     var body = document.getElementById('editorBody');
     var h = body._spinsHeader;
@@ -147,7 +121,7 @@ function _editSpinsSection(sections, index) {
     body.appendChild(backBtn);
 
     var fTitle = editorField(body, 'Title', sec.title,
-      { placeholder: 'e.g. C5 — EXECUTION' });
+      { placeholder: 'e.g. C5 — EXECUTION', disabled: true });
     var fNote  = editorField(body, 'Note',  sec.note,
       { placeholder: 'Optional section note' });
 
