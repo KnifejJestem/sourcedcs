@@ -55,6 +55,21 @@ function renderSPINS(sp) {
   editBtn.addEventListener('click', openSpinsEditor);
   div.appendChild(editBtn);
 
+  // Generate-from-presets button (edit mode only, initializes empty spins)
+  const genBtn = el('button', 'editor-btn', '⟳ GENERATE FROM PRESETS');
+  genBtn.title = 'Auto-populate all standard SPINS sections from the loaded ATO data and default presets.';
+  genBtn.addEventListener('click', function () {
+    if ((sp.sections || []).length > 0 &&
+        !confirm('Replace all current SPINS sections with auto-generated standard sections?')) {
+      return;
+    }
+    const generated = _initializeSpinsFromAto();
+    const spins = editorEnsureSection('spins');
+    spins.sections = generated;
+    editorReRender('spins');
+  });
+  div.appendChild(genBtn);
+
   docHeader(div, [
     ['OPERATION', sp.operation],
     ['ATO DAY',   sp.ato_day],

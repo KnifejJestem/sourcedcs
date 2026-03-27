@@ -340,8 +340,9 @@ class TestBuildSpinsSections:
         codes = [row[2] for row in rows]
         assert len(set(codes)) == 3
 
-    def test_spins_always_auto_generated_in_build_doc(self):
-        """build_doc always auto-generates SPINS sections from ATO data."""
+    def test_spins_sections_empty_by_default_in_build_doc(self):
+        """build_doc produces empty spins sections by default.
+        Sections are generated on the website via the 'Generate from presets' button."""
         doc = build_doc(
             mission_name="Test",
             mission_date="2024-01-01",
@@ -351,7 +352,4 @@ class TestBuildSpinsSections:
             metar="METAR", wx_notes="",
             flights=[], carriers=[],
         )
-        titles = [s["title"] for s in (doc["spins"]["sections"] or [])]
-        assert "C1 — COMMAND & CONTROL" in titles
-        assert "C4 — RULES OF ENGAGEMENT" in titles
-        assert "C11 — SAFETY" in titles
+        assert doc["spins"]["sections"] == []
