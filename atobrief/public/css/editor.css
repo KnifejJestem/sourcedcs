@@ -334,6 +334,14 @@
   color: var(--bg);
 }
 
+/* ── SPINS markdown textarea ─────────────────────────────────── */
+.ef-markdown-area {
+  min-height: 220px;
+  resize: vertical;
+  line-height: 1.6;
+  font-size: 11px;
+}
+
 /* ── SPINS structured entry row ──────────────────────────────── */
 .ef-entry-row {
   display: flex;

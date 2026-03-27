@@ -545,6 +545,25 @@ function _buildTimelineSection() {
 
 // ── SPINS section ─────────────────────────────────────────────
 
+function _spinsMarkdownToHtml(text) {
+  let out = '';
+  (text || '').split('\n').forEach(line => {
+    if (/^##\s/.test(line)) {
+      out += `<div class="pdf-spins-heading">${_escHtml(line.replace(/^##\s+/, ''))}</div>\n`;
+    } else if (/^-\s/.test(line)) {
+      out += `<div class="pdf-spins-bullet">• ${_escHtml(line.replace(/^-\s+/, ''))}</div>\n`;
+    } else {
+      const kv = line.match(/^\*\*([^*]+)\*\*:\s*(.*)/);
+      if (kv) {
+        out += `<div class="pdf-spins-kv"><span class="pdf-spins-k">${_escHtml(kv[1])}</span><span class="pdf-spins-v">${_escHtml(kv[2])}</span></div>\n`;
+      } else if (line.trim()) {
+        out += `<div class="pdf-spins-obj">${_escHtml(line)}</div>\n`;
+      }
+    }
+  });
+  return out;
+}
+
 function _buildSpinsSection() {
   const spins = STATE.pkg?.spins;
   if (!spins) {
@@ -564,17 +583,9 @@ function _buildSpinsSection() {
       html += `<div class="pdf-spins-note">${_escHtml(sec.note)}</div>\n`;
     }
 
-    (sec.entries || []).forEach(e => {
-      if (e.heading != null) {
-        html += `<div class="pdf-spins-heading">${_escHtml(String(e.heading))}</div>\n`;
-      } else if (e.label != null) {
-        html += `<div class="pdf-spins-kv"><span class="pdf-spins-k">${_escHtml(e.label)}</span><span class="pdf-spins-v">${_escHtml(String(e.value ?? ''))}</span></div>\n`;
-      } else if (e.bullet != null) {
-        html += `<div class="pdf-spins-bullet">• ${_escHtml(String(e.bullet))}</div>\n`;
-      } else if (e.value != null) {
-        html += `<div class="pdf-spins-obj">${_escHtml(String(e.value))}</div>\n`;
-      }
-    });
+    if (sec.markdown) {
+      html += _spinsMarkdownToHtml(sec.markdown);
+    }
 
     if (sec.table) {
       html += '<table><thead><tr>';

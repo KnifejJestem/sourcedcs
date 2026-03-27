@@ -259,7 +259,17 @@ class TestBuildSpinsSections:
         assert "C10 — AUTHENTICATION" in titles
         assert "C11 — SAFETY" in titles
 
-    def test_iff_squawk_codes_sequential(self):
+    def test_text_sections_use_markdown_not_entries(self):
+        """All text sections store content as a markdown string, never an entries list."""
+        sections = build_spins_sections([], {})
+        for sec in sections:
+            if sec["title"] == "C3 — IFF / SIF":
+                continue  # C3 is table-only
+            assert "markdown" in sec, f"{sec['title']} missing markdown field"
+            assert "entries" not in sec, f"{sec['title']} still has entries field"
+
+    def test_iff_squawk_codes_random(self):
+        """IFF squawk codes are random, unique, valid octal, and avoid emergency codes."""
         missions = [
             {"mission_number": "MSN8023", "callsign": "V", "mission_type": "CAP"},
             {"mission_number": "MSN8024", "callsign": "B", "mission_type": "CAP"},
@@ -268,9 +278,23 @@ class TestBuildSpinsSections:
         sections = build_spins_sections(missions, {})
         c3 = next(s for s in sections if s["title"] == "C3 — IFF / SIF")
         rows = c3["table"]["rows"]
-        assert rows[0] == ["8023", "3", "4701"]
-        assert rows[1] == ["8024", "3", "4711"]
-        assert rows[2] == ["8025", "3", "4721"]
+        assert len(rows) == 3
+        codes = [row[2] for row in rows]
+        # All unique
+        assert len(set(codes)) == 3
+        # All 4 digits, valid octal (no 8 or 9)
+        for code in codes:
+            assert len(code) == 4
+            assert all(d in "01234567" for d in code), f"Non-octal digit in squawk {code}"
+        # No emergency codes
+        forbidden = {"7500", "7600", "7700"}
+        assert not forbidden & set(codes)
+        # Mission numbers still correct
+        assert rows[0][0] == "8023"
+        assert rows[1][0] == "8024"
+        assert rows[2][0] == "8025"
+        # Mode column is always "3"
+        assert all(row[1] == "3" for row in rows)
 
     def test_tactical_control_from_agencies(self):
         agencies = {
@@ -278,17 +302,20 @@ class TestBuildSpinsSections:
         }
         sections = build_spins_sections([], agencies)
         c1 = next(s for s in sections if s["title"] == "C1 — COMMAND & CONTROL")
-        kv = next(e for e in c1["entries"] if e.get("label") == "PRIMARY AWACS")
-        assert "DARKSTAR" in kv["value"]
-        assert "305.0" in kv["value"]
+        md = c1["markdown"]
+        assert "**PRIMARY AWACS**: DARKSTAR / 305.0 MHz" in md
+        assert "## C1.1" in md
+        assert "## C1.3" in md
+        assert "**PACKAGE LEAD**:" in md
 
     def test_execution_has_objective_and_desired_effects(self):
         missions = [{"mission_number": "MSN8023", "callsign": "VIPER", "mission_type": "DEAD"}]
         sections = build_spins_sections(missions, {})
         c5 = next(s for s in sections if s["title"] == "C5 — EXECUTION")
-        labels = [e.get("label") for e in c5["entries"]]
-        assert "OBJECTIVE" in labels
-        assert "DESIRED EFFECTS" in labels
+        md = c5["markdown"]
+        assert "OBJECTIVE" in md
+        assert "DESIRED EFFECTS" in md
+        assert "VIPER" in md
 
     def test_no_missions_no_iff_table(self):
         sections = build_spins_sections([], {})
@@ -309,10 +336,9 @@ class TestBuildSpinsSections:
         assert rows[0][0] == ""    # missing key → empty string
         assert rows[1][0] == ""    # explicit empty → empty string
         assert rows[2][0] == "8025"
-        # Squawk codes are still sequential regardless of msn number content
-        assert rows[0][2] == "4701"
-        assert rows[1][2] == "4711"
-        assert rows[2][2] == "4721"
+        # Squawk codes are unique, valid, not emergency
+        codes = [row[2] for row in rows]
+        assert len(set(codes)) == 3
 
     def test_spins_always_auto_generated_in_build_doc(self):
         """build_doc always auto-generates SPINS sections from ATO data."""
