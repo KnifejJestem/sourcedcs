@@ -21,7 +21,6 @@ function renderCOMMS(cm) {
   docHeader(div, [
     ['OPERATION', cm.operation],
     ['ATO DAY',   cm.ato_day],
-    ['WING LEAD', cm.wing_lead],
     ['CLASS',     cm.classification],
   ]);
 

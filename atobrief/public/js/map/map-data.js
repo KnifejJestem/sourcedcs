@@ -71,7 +71,7 @@ function collectData(ato, aco) {
   const takeoffsByKey = {};
   const recoveriesByKey = {};
   missions.forEach(m => {
-    const depKey = (m.deploy_location_icao || '').trim().toUpperCase();
+    const depKey = (m.deploy || '').trim().toUpperCase();
     if (depKey) {
       if (!takeoffsByKey[depKey]) takeoffsByKey[depKey] = [];
       takeoffsByKey[depKey].push({
@@ -80,7 +80,7 @@ function collectData(ato, aco) {
         time: m.takeoff_time || null,
       });
     }
-    const recKey = (m.aar_location_icao || '').trim().toUpperCase();
+    const recKey = (m.recovery || '').trim().toUpperCase();
     if (recKey) {
       if (!recoveriesByKey[recKey]) recoveriesByKey[recKey] = [];
       recoveriesByKey[recKey].push({
@@ -93,8 +93,8 @@ function collectData(ato, aco) {
 
   // ── Phase 2: Static map markers ───────────────────────────
 
-  // Bullseye
-  const bs = ato.global_control?.bullseye;
+  // Bullseye — v2.0: registry.bullseye (propagated to ato._bullseye in app.js)
+  const bs = ato._bullseye;
   if (bs?.coords) {
     const p = parseCoord(bs.coords);
     if (p) points.push({ ...p, kind: 'bullseye', label: bs.name || 'BULLSEYE', sub: '' });
@@ -177,21 +177,20 @@ function collectData(ato, aco) {
   });
 
   // ── Phase 3a: Shared steerpoints (must precede Phase 3 so missions can reference them) ──
+  // v2.0: source is registry.shared_steerpoints (propagated to ato._shared_steerpoints)
   const sharedSteerpointMap = {};
-  (ato.shared_steerpoints || []).forEach(ssp => {
+  (ato._shared_steerpoints || []).forEach(ssp => {
     if (!ssp.id || !ssp.coords) return;
     const p = parseCoord(ssp.coords);
     if (!p) return;
     sharedSteerpointMap[ssp.id] = { ...ssp, ...p };
     const typeLabel = (ssp.type || '').toUpperCase();
     const nameLabel = ssp.name ? `${typeLabel} ${ssp.name}` : typeLabel;
-    const flightsLabel = (ssp.flights || []).join(', ');
     points.push({
       ...p, kind: 'shared-steerpoint',
       label: nameLabel,
-      sub: flightsLabel,
+      sub: '',
       specialType: ssp.type,
-      flights: ssp.flights || [],
       altitude_ft: ssp.altitude_ft ?? null,
       sspId: ssp.id,
     });
@@ -206,7 +205,7 @@ function collectData(ato, aco) {
     const route    = { msnKey, callsign, msnNum, color, pts: [] };
 
     // 1. Deploy location
-    const deployLoc = resolve(m.deploy_location_icao);
+    const deployLoc = resolve(m.deploy);
     if (deployLoc) route.pts.push({ ...deployLoc, kind: 'route-node' });
 
     // 2. Steer points — support both inline coords and name_ref to namedLocs.
@@ -329,39 +328,16 @@ function collectData(ato, aco) {
 
     // 4. Recovery location — carriers use their projected recovery position,
     //    not the deploy position stored in namedLocs.
-    const aarKey = (m.aar_location_icao || '').trim().toUpperCase();
-    const recLoc = carrierRecoveryLocs[aarKey]
-                || resolve(m.aar_location_icao)
-                || resolve(m.deploy_location_icao);
+    const recKey = (m.recovery || '').trim().toUpperCase();
+    const recLoc = carrierRecoveryLocs[recKey]
+                || resolve(m.recovery)
+                || resolve(m.deploy);
     if (recLoc) route.pts.push({ ...recLoc, kind: 'route-node' });
 
     if (route.pts.length >= 2) routes.push(route);
   });
 
-  // ── Phase 4: Tanker orbit anchors ─────────────────────────
-  const tankerList = Array.isArray(ato.tankers) ? ato.tankers : Object.values(ato.tankers || {});
-  tankerList.forEach(t => {
-    if (!t.orbit_anchor_coords) return;
-    const anchorPt = parseCoord(t.orbit_anchor_coords);
-    if (!anchorPt) return;
-    airspaces.push({
-      kind: 'airspace',
-      name: t.callsign || 'TANKER',
-      type: 'REFUEL',
-      altLower: t.altitude || null,
-      altUpper: null,
-      lat: anchorPt.lat, lon: anchorPt.lon,
-      shape: 'anchor',
-      anchorPt,
-      headingDeg: t.orbit_heading_deg || 0,
-      legLengthNm: t.orbit_leg_nm || 10,
-      widthNm: t.orbit_width_nm || 5,
-      direction: (t.orbit_direction || 'ccw').toLowerCase(),
-      speedKts: t.speed_kts,
-    });
-  });
-
-  // ── Phase 4b: Support flights ─────────────────────────────
+  // ── Phase 4: Support flights (tankers + control agencies) ────
   (ato.support_flights || []).forEach(sf => {
     const callsign = sf.callsign || '?';
     const sfKey = `SUPPORT-${callsign}`;

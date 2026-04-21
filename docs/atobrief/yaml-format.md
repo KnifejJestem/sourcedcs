@@ -62,7 +62,9 @@ header:
 The `registry` block defines entities once so they can be referenced by key
 throughout the rest of the file.  It contains: `callsigns`,
 `airfields`, `carriers`, `tankers`, `targets` (with nested aim points),
-`reference_points` (bullseye, named positions),
+`bullseye` (single reference point),
+`reference_points` (named positions),
+`shared_steerpoints` (merged IP/EP/MARSHAL waypoints shared across flights),
 `control_agencies` (AWACS, CRC), and `frequencies` (net/callsign metadata
 for each frequency used in the COMMS channel assignments).
 
@@ -110,6 +112,7 @@ registry:
 | `name` | string | Human-readable name |
 | `coords` | coord string | Position (DMS format — see [Coordinate strings](#coordinate-strings)) |
 | `elevation_ft` | number | Field elevation in feet |
+| `runways` | string or list | Runway designators (e.g. `"12L/30R"` or `["12L", "30R"]`).  Displayed in the map popup when present; not required |
 
 ### `carriers:` (map)
 
@@ -160,14 +163,17 @@ registry:
 |-------|------|-------------|
 | `callsign` | string | Tanker group / callsign — matches `refuel.tanker_id` |
 | `altitude_ft` | integer | Refueling altitude in feet (from DCS orbit params) |
+| `altitude` | string | Human-readable altitude string e.g. `FL240` (optional, manual) |
 | `speed_kts` | integer | Refueling speed in knots (from DCS orbit params) |
+| `freq_mhz` | number | Primary frequency in MHz — displayed on the tanker strip |
+| `tacan` | string | TACAN channel (e.g. `39X`) — displayed as a badge on the tanker card |
+| `tacan_role` | string | TACAN role label (e.g. `REFUELING`) — shown as a tooltip on the TACAN badge |
 | `orbit_anchor_coords` | coord string | Orbit anchor point DMS coordinates |
 | `orbit_heading_deg` | integer | Hot-leg heading in degrees true |
 | `orbit_leg_nm` | number | Hot-leg length in NM |
 | `orbit_width_nm` | number | Track width (turn diameter) in NM |
 | `orbit_direction` | string | Orbit direction: `cw` (clockwise) or `ccw` (counterclockwise).  Default is `ccw` |
 | `ar_track` | string | AR track identifier (optional, manual) |
-| `altitude` | string | Human-readable altitude string e.g. `FL240` (optional, manual) |
 
 ### `targets:` (map)
 
@@ -214,13 +220,30 @@ pulled into the mission.
 | `name` | string | Display name |
 | `coords` | coord string | Position |
 
+### `bullseye:` (object)
+
+A single object defining the bullseye reference point for the package.
+Displayed in the intel strip on the ATO tab.
+
+```yaml
+registry:
+  bullseye:
+    name: COYOTE
+    coords: N26°51'19" E056°21'37"
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Display name shown in the intel strip |
+| `coords` | coord string | Position |
+
 ### `reference_points:` (list)
 
-A list of named positional references: bullseye and any other named geographic
-positions that multiple flights might reference.
+A list of named positional references for non-bullseye geographic points
+that multiple flights might reference (e.g. marshal holds, IP names).
 
-Marshal points are now managed as shared steerpoints (see `shared_steerpoints`
-in the `ato` block) and no longer appear in `reference_points`.
+Marshal points are managed as shared steerpoints (see `shared_steerpoints`
+in the `registry` block) and no longer appear in `reference_points`.
 
 Mission-specific steer points (SP1, SP2, SP3 chains) do **not** belong here —
 they stay in the mission's `steer_points` block.
@@ -228,16 +251,54 @@ they stay in the mission's `steer_points` block.
 ```yaml
 registry:
   reference_points:
-    - name: COYOTE
-      type: bullseye
-      coords: N26°51'19" E056°21'37"
+    - name: MARSHAL NORTH
+      type: marshal
+      coords: N27°05'00" E056°10'00"
+      altitude: FL200
+      time_on_station: '2030Z'
+      time_off_station: '2230Z'
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | string | Display name (used as the bullseye reference key in `global_control.bullseye`) |
-| `type` | string | `bullseye` |
+| `name` | string | Display name |
+| `type` | string | Descriptive type string (e.g. `marshal`, `ip`) |
 | `coords` | coord string | Position |
+| `altitude` | string | Altitude reference (e.g. `FL200`) — optional |
+| `time_on_station` | time string | Time at which aircraft arrive at this point (`HHMMz`) — optional |
+| `time_off_station` | time string | Time at which aircraft depart this point (`HHMMz`) — optional |
+
+### `shared_steerpoints:` (list)
+
+Merged steerpoints shared across multiple flights.  When two or more
+flights have a **special waypoint** (IP, EP, or MARSHAL) of the **same type**
+within **750 ft in 3D space** and with **compatible names** (both unnamed, or
+both carrying the same name), they are collapsed into a single shared steerpoint.
+
+Each shared steerpoint is defined once here with a unique ID, and individual
+flights reference it via `shared_steerpoint_id` in their `steer_points` list
+instead of duplicating coordinate data.
+
+```yaml
+registry:
+  shared_steerpoints:
+    - id: SSP-1
+      type: ip
+      name: WEST
+      coords: N35°24'25" E038°07'30"
+      altitude_ft: 15000
+    - id: SSP-2
+      type: ep
+      coords: N35°30'00" E038°15'00"
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique shared steerpoint identifier (e.g. `SSP-1`) |
+| `type` | string | Special waypoint type: `ip` (Ingress Point), `ep` (Egress Point), `marshal` (Marshal Point) |
+| `name` | string | Optional sub-name (e.g. `WEST` from a waypoint named `IP WEST`) |
+| `coords` | coord string | Centroid position (average lat/lon of all merged points) |
+| `altitude_ft` | number | Centroid altitude in feet (average of merged points) |
 
 ### `control_agencies:` (map)
 
@@ -388,7 +449,8 @@ platform are resolved from the agency definition.
 | `primary_freq_mhz` | string | Package primary frequency — auto-resolved from agency if `agency_id` is set |
 | `controlling_unit` | string | Agency callsign — auto-resolved from agency if `agency_id` is set |
 | `aircraft_type` | string | Platform / aircraft type — auto-resolved from agency if `agency_id` is set |
-| `bullseye` | string | Reference point id in `registry.reference_points` (resolved at load time to `{name, coords}`) |
+
+The bullseye is now defined directly in `registry` as a top-level `bullseye` entry rather than being referenced by ID from `global_control`.
 
 ### `airfields:` (list)
 
@@ -425,45 +487,6 @@ carriers:
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | Carrier id (must match a key in `registry.carriers`) |
-
-### `shared_steerpoints:` (list)
-
-Merged steerpoints shared across multiple flights.  When two or more
-flights have a **special waypoint** (IP, EP, or MARSHAL) of the **same type**
-within **750 ft in 3D space** and with **compatible names** (both unnamed, or
-both carrying the same name), they are collapsed into a single shared steerpoint.
-
-Each shared steerpoint is defined once here with a unique ID, and individual
-flights reference it via `shared_steerpoint_id` in their `steer_points` list
-instead of duplicating coordinate data.
-
-```yaml
-shared_steerpoints:
-  - id: SSP-1
-    type: ip
-    name: WEST
-    coords: N35°24'25" E038°07'30"
-    altitude_ft: 15000
-    flights:
-      - VIPER-1
-      - VIPER-2
-  - id: SSP-2
-    type: ep
-    coords: N35°30'00" E038°15'00"
-    flights:
-      - VIPER-1
-      - VIPER-2
-      - JEDI-1
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique shared steerpoint identifier (e.g. `SSP-1`) |
-| `type` | string | Special waypoint type: `ip` (Ingress Point), `ep` (Egress Point), `marshal` (Marshal Point) |
-| `name` | string | Optional sub-name (e.g. `WEST` from a waypoint named `IP WEST`) |
-| `coords` | coord string | Centroid position (average lat/lon of all merged points) |
-| `altitude_ft` | number | Centroid altitude in feet (average of merged points) |
-| `flights` | list of strings | Callsigns of all flights that pass through this shared point |
 
 ### `support_flights:` (list)
 
@@ -527,9 +550,9 @@ be listed first in each mission entry.
 | `callsign` | string | Flight callsign |
 | `mission_type` | string | `CAP` / `BAI` / `CAS` / `SEAD` / `STRIKE` / `REFUELING` / `OCA` / `DCA` / `DEAD` / `AI` / `ESCORT` / `FAC(A)` / `RECCE` / `ANTISHIP` / `INTERCEPT` / `FERRY` / `TRANSPORT` (drives color coding; unknown types display as `OTHER`) |
 | `unit` | string | Operating unit |
-| `home_base_icao` | string | Home base ICAO (display only) |
-| `deploy_location_icao` | string | Start of route on map — accepts an airfield ICAO, a carrier registry ID (e.g. `CVN-71`), a carrier callsign, or a raw DMS coordinate string |
-| `aar_location_icao` | string | Recovery / end of route on map — same resolution as `deploy_location_icao` |
+| `deploy` | string | Start of route on map — accepts an airfield ICAO, a carrier registry ID (e.g. `CVN-71`), or a carrier callsign |
+| `recovery` | string | End of route on map — same resolution as `deploy` |
+| `divert` | string | Divert / alternate airfield — display only |
 | `dtc_cartridge` | string | Name of the DCS DTC file assigned to this flight (auto-generated by `miztoyaml.py`) |
 
 #### `aircraft:`
@@ -553,8 +576,6 @@ treated as a list containing a single item.
 | `target_id` | string | Reference to a target in `registry.targets` — pulls aim points from the target's nested `aim_points` list |
 | `mission_type_override` | string | Optional sub-type shown alongside `mission_type` |
 | `altitude` | string | Target altitude reference (e.g. `E73FT`, `FL200`) |
-| `not_earlier_than` | time string | Legacy mission window open (NET) — used when neither `tot_*` nor `tos`/`toffs` is set |
-| `not_later_than` | time string | Legacy mission window close (NLT) |
 | `tot_net` | time string | Time on Target — NET (strike/BAI missions: when weapons should be on target) |
 | `tot_nlt` | time string | Time on Target — NLT |
 | `tos` | time string | Time on Station (CAP/CAS missions: when aircraft should be on station) |
@@ -564,13 +585,13 @@ treated as a list containing a single item.
 - For **strike/BAI/SEAD** missions, use `tot_net` / `tot_nlt` (Time on Target — when weapons should impact).
 - For **CAP/CAS/orbit** missions, use `tos` / `toffs` (Time on Station / Time OFF Station).
 - Both can be specified for a single mission (e.g. a SEAD flight that must be on station before a strike TOT).
-- The legacy `not_earlier_than` / `not_later_than` fields are still accepted for backward compatibility.
 
 #### Mission-level timing fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `takeoff_time` | time string | Planned takeoff time |
+| `marshal_time` | time string | Planned marshal / hold time — shown as a vertical marker on the timeline |
 | `recovery_time` | time string | Planned recovery / landing time |
 | `vul_start` | time string | Vulnerability window start — period when the flight is exposed to threats |
 | `vul_end` | time string | Vulnerability window end |
@@ -649,7 +670,7 @@ passage through that location is clearly visible.
 
 **Shared steerpoint references:**
 When `shared_steerpoint_id` is set, the waypoint references a merged steerpoint defined
-in `ato.shared_steerpoints`.  The viewer resolves the position from the shared steerpoint
+in `registry.shared_steerpoints`.  The viewer resolves the position from the shared steerpoint
 and renders a small reference circle (similar to `name_ref` behaviour).  Marshal points
 are always represented as shared steerpoints.
 
@@ -658,7 +679,7 @@ steer_points:
   - coords: N24°30'00" E056°00'00"
     name: SP1
   - coords: N25°15'00" E056°05'00"    # unnamed — route-shaping only, no map label
-  - shared_steerpoint_id: SSP-1        # references ato.shared_steerpoints
+  - shared_steerpoint_id: SSP-1        # references registry.shared_steerpoints
   - coords: N26°30'00" E056°20'00"
     name: SAM-1 TR         # this waypoint lies on an aim point
     aim_point_id: TGT-A    # informational — set by miztoyaml.py when the waypoint
@@ -679,7 +700,7 @@ steer_points:
 | `coords` | coord string | Waypoint position (used when `name_ref` and `shared_steerpoint_id` are not set) |
 | `name_ref` | string | Name of an airfield (ICAO) or carrier callsign/ID to use as the waypoint position.  A small unlabelled circle is drawn at the referenced location so the flight path's passage through it is visible; the named location's own marker provides the label |
 | `name` | string | Waypoint label shown on map.  If omitted, the waypoint is a route-shaping point with no visible label |
-| `shared_steerpoint_id` | string | References a shared steerpoint by ID from `ato.shared_steerpoints`.  When set, position is resolved from the shared steerpoint and coordinates are not duplicated |
+| `shared_steerpoint_id` | string | References a shared steerpoint by ID from `registry.shared_steerpoints`.  When set, position is resolved from the shared steerpoint and coordinates are not duplicated |
 | `aim_point_id` | string | Optional — informational link to a registry aim point id.  Set by `miztoyaml.py` when a flight waypoint lies on an aim point; ignored by the viewer |
 | `orbit` | object | Optional — present when the waypoint has a DCS Orbit task (CAP station, tanker track).  The map renders a racetrack pattern using these parameters. |
 | `orbit.alt_ft` | number | Orbit altitude in feet |
@@ -707,24 +728,28 @@ control:
 | `secondary_freq_mhz` | string | Mission secondary frequency — auto-resolved from agency |
 | `net_name` | string | Net callsign — auto-resolved from agency |
 
-#### `refuel:`
+#### `refuel:` (list)
 
-Mission-level refueling block.  References a tanker defined in `registry.tankers`
+Mission-level refueling list.  Each entry references a tanker in `registry.tankers`
 by `tanker_id`.  Only mission-specific timing is stored here; tanker track and
-altitude come from the registry tanker definition.
+altitude come from the registry tanker definition.  Multiple AAR events per mission
+are supported.
 
 ```yaml
 refuel:
-  tanker_id: ARCO4
-  not_earlier_than: '2143Z'
-  not_later_than: '2150Z'
+  - tanker_id: ARCO4
+    time_from: '2143Z'
+    time_to: '2150Z'
+  - tanker_id: TEXACO
+    time_from: '2220Z'
+    time_to: '2230Z'
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `tanker_id` | string | ID of a tanker in `registry.tankers` |
-| `not_earlier_than` | time string | AAR window open (NET) |
-| `not_later_than` | time string | AAR window close (NLT) — shown as a hatched bar on the timeline |
+| `time_from` | time string | AAR window open (NET) — shown as a hatched bar on the timeline |
+| `time_to` | time string | AAR window close (NLT) |
 
 #### `coordination:` (list)
 
@@ -939,12 +964,6 @@ channel presets set in the DCS mission editor (for aircraft without a DTC).
 This reflects the real-world configuration where different aircraft types
 carry different cartridges.
 
-### Top-level fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `wing_lead` | string | Wing lead callsign (display only) |
-
 ### `flights:` (list) — per-flight channel assignment tables
 
 Each entry corresponds to one flight group.  Both DTC-equipped flights and
@@ -956,7 +975,6 @@ looked up from `registry.frequencies` at render time.
 
 ```yaml
 comms:
-  wing_lead: FALCON5
   flights:
     - group: SHADOW-1
       callsign: SHADOW-1
@@ -1015,7 +1033,6 @@ supported for backward compatibility.
 
 ```yaml
 comms:
-  wing_lead: FALCON5
   uhf_presets:
     1: 243.0
     2: 260.0

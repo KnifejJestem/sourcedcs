@@ -63,20 +63,7 @@ function deleteMission(index) {
 
   ato.missions.splice(index, 1);
 
-  // Clean up shared steerpoints: remove this flight's callsign from their
-  // flights lists. Remove any shared steerpoints that have no remaining flights.
-  if (referencedSspIds.size > 0 && Array.isArray(ato.shared_steerpoints)) {
-    var callsign = m.callsign;
-    ato.shared_steerpoints = ato.shared_steerpoints.filter(function (ssp) {
-      if (!referencedSspIds.has(ssp.id)) return true;
-      // Remove the deleted flight from this SSP's flights list
-      if (callsign && Array.isArray(ssp.flights)) {
-        ssp.flights = ssp.flights.filter(function (f) { return f !== callsign; });
-      }
-      // Keep SSP only if other flights still reference it
-      return !ssp.flights || ssp.flights.length > 0;
-    });
-  }
+  // v2.0: shared_steerpoints are in registry and have no flights[] list — no cleanup needed
 
   editorReRender();
 }
@@ -91,7 +78,7 @@ function _openMissionForm(title, m, onSave) {
     _buildTimingSection(body, m, f);
     _buildTargetSection(body, m, title, onSave);
     _buildControlSection(body, m, f);
-    _buildRefuelSection(body, m, f);
+    _buildRefuelSection(body, m);
     _buildSteerPointsSection(body, m);
 
     body._msnFields = f;
@@ -115,13 +102,13 @@ function _buildIdentificationSection(body, m, f) {
   });
   if (m.mission_type) f.mission_type.value = m.mission_type;
   f.unit             = editorField(body, 'Unit',              m.unit, { placeholder: 'e.g. 510vFS' });
+  // Combine airfields and carriers for deploy/recovery/divert
   var afOpts = _registryOptions('airfields', function (id, af) { return id + (af.name ? ' \u2014 ' + af.name : ''); });
-  // Combine airfields and carriers for deploy/recovery location
   var cvOpts = _registryOptions('carriers', function (id, cv) { return id + (cv.name ? ' \u2014 ' + cv.name : ''); });
   var locationOpts = afOpts.concat(cvOpts.filter(function (o) { return o.value !== ''; }));
-  f.home_base_icao   = editorField(body, 'Home Base', m.home_base_icao, { type: 'select', options: afOpts });
-  f.deploy_location  = editorField(body, 'Deploy Location', m.deploy_location_icao, { type: 'select', options: locationOpts });
-  f.aar_location     = editorField(body, 'Recovery Location', m.aar_location_icao, { type: 'select', options: locationOpts });
+  f.deploy   = editorField(body, 'Deploy',   m.deploy,   { type: 'select', options: locationOpts });
+  f.recovery = editorField(body, 'Recovery', m.recovery, { type: 'select', options: locationOpts });
+  f.divert   = editorField(body, 'Divert',   m.divert,   { type: 'select', options: locationOpts });
 }
 
 function _buildAircraftSection(body, m, f) {
@@ -200,13 +187,56 @@ function _buildControlSection(body, m, f) {
   });
 }
 
-function _buildRefuelSection(body, m, f) {
+function _buildRefuelSection(body, m) {
   editorSectionTitle(body, 'REFUEL');
-  var ref = m.refuel || {};
-  var tnkOpts = _registryOptions('tankers', function (id, t) { return id + (t.callsign ? ' \u2014 ' + t.callsign : ''); });
-  f.ref_tanker_id = editorField(body, 'Tanker', ref.tanker_id, { type: 'select', options: tnkOpts });
-  f.ref_net = editorField(body, 'AAR NET', ref.not_earlier_than, { placeholder: '2143' });
-  f.ref_nlt = editorField(body, 'AAR NLT', ref.not_later_than,  { placeholder: '2150' });
+  var refuels = (Array.isArray(m.refuel) ? m.refuel : []).map(function (r) { return Object.assign({}, r); });
+  body._refuelEntriesEl   = el('div', 'ef-list-items');
+  body._refuelEntriesMeta = [];
+
+  function renderRefuelEntries() {
+    body._refuelEntriesEl.innerHTML = '';
+    body._refuelEntriesMeta = [];
+    var tnkOpts = _registryOptions('tankers', function (id, t) { return id + (t.callsign ? ' \u2014 ' + t.callsign : ''); });
+    refuels.forEach(function (ref, ri) {
+      var wrap = el('div', 'ef-refuel-entry');
+      var hdr  = el('div', 'ef-list-row');
+      hdr.appendChild(el('span', 'ef-list-row-label', 'AAR ' + (ri + 1)));
+      var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-del', '\u2715');
+      delBtn.type = 'button';
+      delBtn.addEventListener('click', (function (idx) {
+        return function () { refuels.splice(idx, 1); renderRefuelEntries(); };
+      })(ri));
+      hdr.appendChild(delBtn);
+      wrap.appendChild(hdr);
+      var meta = {
+        tanker_id: editorField(wrap, 'Tanker',     ref.tanker_id, { type: 'select', options: tnkOpts }),
+        time_from: editorField(wrap, 'From (NET)', ref.time_from, { placeholder: '2143' }),
+        time_to:   editorField(wrap, 'To (NLT)',   ref.time_to,   { placeholder: '2150' }),
+      };
+      body._refuelEntriesMeta.push(meta);
+      body._refuelEntriesEl.appendChild(wrap);
+    });
+  }
+
+  renderRefuelEntries();
+  body.appendChild(body._refuelEntriesEl);
+
+  var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD REFUEL');
+  addBtn.type = 'button';
+  addBtn.addEventListener('click', function () { refuels.push({}); renderRefuelEntries(); });
+  body.appendChild(addBtn);
+}
+
+function _collectRefuel(body) {
+  var metas  = body._refuelEntriesMeta || [];
+  var result = metas.map(function (meta) {
+    var tid  = meta.tanker_id.value || undefined;
+    var from = meta.time_from.value || undefined;
+    var to   = meta.time_to.value   || undefined;
+    if (!tid && !from && !to) return null;
+    return { tanker_id: tid, time_from: from, time_to: to };
+  }).filter(Boolean);
+  return result.length ? result : undefined;
 }
 
 function _buildSteerPointsSection(body, m) {
@@ -258,13 +288,13 @@ function _collectMissionDraft() {
   var m = Object.assign({}, body._msnOriginal || {});
 
   var rawMsn = (f.mission_number.value || '').trim();
-  m.mission_number       = rawMsn ? 'MSN' + rawMsn.replace(/^MSN/i, '') : undefined;
-  m.callsign             = f.callsign.value || undefined;
-  m.mission_type         = f.mission_type.value || undefined;
-  m.unit                 = f.unit.value || undefined;
-  m.home_base_icao       = f.home_base_icao.value || undefined;
-  m.deploy_location_icao = f.deploy_location.value || undefined;
-  m.aar_location_icao    = f.aar_location.value || undefined;
+  m.mission_number = rawMsn ? 'MSN' + rawMsn.replace(/^MSN/i, '') : undefined;
+  m.callsign       = f.callsign.value      || undefined;
+  m.mission_type   = f.mission_type.value  || undefined;
+  m.unit           = f.unit.value          || undefined;
+  m.deploy         = f.deploy.value        || undefined;
+  m.recovery       = f.recovery.value      || undefined;
+  m.divert         = f.divert.value        || undefined;
 
   var acCount = parseInt(f.ac_count.value);
   if (f.ac_type.value || !isNaN(acCount)) {
@@ -288,12 +318,8 @@ function _collectMissionDraft() {
     m.control.secondary_freq_mhz = f.ctrl_secondary.disabled ? undefined : (f.ctrl_secondary.value || undefined);
   }
 
-  if (f.ref_tanker_id && f.ref_tanker_id.value) {
-    m.refuel = m.refuel || {};
-    m.refuel.tanker_id        = f.ref_tanker_id.value || undefined;
-    m.refuel.not_earlier_than = f.ref_net.value || undefined;
-    m.refuel.not_later_than   = f.ref_nlt.value || undefined;
-  }
+  // Refuel — v2.0 array; collect from dynamic list rendered in body
+  m.refuel = _collectRefuel(body);
 
   // Preserve live arrays so edits made in sub-dialogs are reflected
   m.targets      = body._targets || [];
@@ -310,12 +336,12 @@ function _saveMissionFromForm(onSave) {
   // Identification
   var rawMsn = (f.mission_number.value || '').trim();
   m.mission_number = rawMsn ? 'MSN' + rawMsn.replace(/^MSN/i, '') : undefined;
-  m.callsign             = f.callsign.value || undefined;
-  m.mission_type         = f.mission_type.value || undefined;
-  m.unit                 = f.unit.value || undefined;
-  m.home_base_icao       = f.home_base_icao.value || undefined;
-  m.deploy_location_icao = f.deploy_location.value || undefined;
-  m.aar_location_icao    = f.aar_location.value || undefined;
+  m.callsign     = f.callsign.value     || undefined;
+  m.mission_type = f.mission_type.value || undefined;
+  m.unit         = f.unit.value         || undefined;
+  m.deploy       = f.deploy.value       || undefined;
+  m.recovery     = f.recovery.value     || undefined;
+  m.divert       = f.divert.value       || undefined;
 
   // Aircraft
   var acCount = parseInt(f.ac_count.value);
@@ -349,13 +375,8 @@ function _saveMissionFromForm(onSave) {
     m.control.secondary_freq_mhz = f.ctrl_secondary.disabled ? undefined : (f.ctrl_secondary.value || undefined);
   }
 
-  // Refuel
-  if (f.ref_tanker_id.value) {
-    m.refuel = m.refuel || {};
-    m.refuel.tanker_id         = f.ref_tanker_id.value || undefined;
-    m.refuel.not_earlier_than  = f.ref_net.value || undefined;
-    m.refuel.not_later_than    = f.ref_nlt.value || undefined;
-  }
+  // Refuel — v2.0: array of {tanker_id, time_from, time_to}
+  m.refuel = _collectRefuel(body);
 
   // Steer points: keep shared steerpoint refs as-is; keep regular pts that have
   // coordinates (named or unnamed).  Unnamed steerpoints (no name, has coords) are

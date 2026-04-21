@@ -18,11 +18,10 @@ function openCommsEditor() {
 
   openEditorDialog('EDIT COMMS', function (body) {
     editorSectionTitle(body, 'HEADER');
-    var fOp   = editorField(body, 'Operation',      cm.operation);
-    var fLead = editorField(body, 'Wing Lead',       cm.wing_lead);
-    var fCls  = editorField(body, 'Classification',  cm.classification);
+    var fOp   = editorField(body, 'Operation',     cm.operation);
+    var fCls  = editorField(body, 'Classification', cm.classification);
 
-    body._commsHeader = { op: fOp, lead: fLead, cls: fCls };
+    body._commsHeader = { op: fOp, cls: fCls };
 
     // Per-flight comms (new format)
     if (Array.isArray(cm.flights) && cm.flights.length > 0) {
@@ -44,8 +43,7 @@ function openCommsEditor() {
     var body = document.getElementById('editorBody');
     var h = body._commsHeader;
     var cm = editorEnsureSection('comms');
-    cm.operation      = h.op.value || undefined;
-    cm.wing_lead      = h.lead.value || undefined;
+    cm.operation      = h.op.value  || undefined;
     cm.classification = h.cls.value || undefined;
 
     if (body._commsFlights) {

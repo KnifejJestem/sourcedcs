@@ -419,44 +419,79 @@ function loadPackage_obj(data) {
     });
   }
 
-  // ── Resolve registry tankers into ato.tankers ───────────
-  // Supports both list format (new: [{callsign, altitude_ft, ...}]) and
-  // dict format (legacy: {CALLSIGN: {callsign, ar_track, ...}}).
-  if (pkg.registry?.tankers && pkg.ato) {
-    const tankerReg = pkg.registry.tankers;
-    // Normalise registry to a map keyed by callsign for fast lookup
-    const tankerRegMap = {};
-    if (Array.isArray(tankerReg)) {
-      tankerReg.forEach(t => { if (t.callsign) tankerRegMap[t.callsign] = t; });
-    } else {
-      Object.entries(tankerReg).forEach(([id, t]) => { tankerRegMap[id] = { ...t, id: t.id ?? id }; });
-    }
+  // ── Resolve ato.support_flights from registry (v2.0) ───
+  // In v2.0, ato.support_flights is a flat list of ID strings.
+  // Resolve each ID to a full object from registry.tankers or registry.control_agencies.
+  if (pkg.ato?.support_flights && Array.isArray(pkg.ato.support_flights) && pkg.registry) {
+    const tankerDict  = pkg.registry.tankers         || {};
+    const agencyDict  = pkg.registry.control_agencies || {};
 
-    if (!pkg.ato.tankers || pkg.ato.tankers.length === 0) {
-      // Build tanker list directly from registry
-      pkg.ato.tankers = Object.values(tankerRegMap).map(t => ({
-        id: t.id ?? t.callsign,
-        ...t,
-      }));
-    } else {
-      // Resolve existing tanker references — registry wins for known fields
-      pkg.ato.tankers.forEach(t => {
-        const reg = tankerRegMap[t.id] ?? tankerRegMap[t.callsign];
-        if (reg) {
-          if (reg.callsign              != null) t.callsign              = reg.callsign;
-          if (reg.ar_track              != null) t.ar_track              = reg.ar_track;
-          if (reg.altitude              != null) t.altitude              = reg.altitude;
-          if (reg.altitude_ft           != null) t.altitude_ft           = reg.altitude_ft;
-          if (reg.speed_kts             != null) t.speed_kts             = reg.speed_kts;
-          if (reg.freq_mhz              != null) t.freq_mhz              = reg.freq_mhz;
-          if (reg.orbit_anchor_coords   != null) t.orbit_anchor_coords   = reg.orbit_anchor_coords;
-          if (reg.orbit_heading_deg     != null) t.orbit_heading_deg     = reg.orbit_heading_deg;
-          if (reg.orbit_leg_nm          != null) t.orbit_leg_nm          = reg.orbit_leg_nm;
-          if (reg.orbit_width_nm        != null) t.orbit_width_nm        = reg.orbit_width_nm;
-          if (reg.orbit_direction       != null) t.orbit_direction       = reg.orbit_direction;
-        }
-      });
-    }
+    // Build fast lookup maps by both key and callsign
+    const tankerMap = {};
+    Object.entries(tankerDict).forEach(([k, t]) => {
+      tankerMap[k] = t;
+      if (t.callsign) tankerMap[t.callsign] = t;
+    });
+    const agencyMap = {};
+    Object.entries(agencyDict).forEach(([k, a]) => {
+      agencyMap[k] = a;
+      if (a.callsign) agencyMap[a.callsign] = a;
+    });
+
+    pkg.ato.support_flights = pkg.ato.support_flights.map(entry => {
+      // Already a full object (legacy format) — pass through
+      if (typeof entry === 'object') return entry;
+
+      const id = entry;
+
+      // Try tankers first
+      const t = tankerMap[id];
+      if (t) {
+        return {
+          id,
+          callsign:     t.callsign || id,
+          type:         t.type || 'tanker',
+          aircraft_type: t.aircraft_type || t.platform,
+          freq_mhz:     t.freq_mhz,
+          count:        t.count,
+          altitude_ft:  t.altitude_ft,
+          ar_track:     t.ar_track,
+          orbit: t.orbit_anchor_coords ? {
+            anchor_point: t.orbit_anchor_coords,
+            heading_deg:  t.orbit_heading_deg,
+            leg_nm:       t.orbit_leg_nm,
+            width_nm:     t.orbit_width_nm,
+            direction:    t.orbit_direction,
+          } : (t.orbit || undefined),
+          route: t.route,
+          _registry: t,
+        };
+      }
+
+      // Try control agencies
+      const a = agencyMap[id];
+      if (a) {
+        return {
+          id,
+          callsign:     a.callsign || id,
+          type:         a.type || 'control',
+          aircraft_type: a.platform,
+          freq_mhz:     a.primary_freq_mhz,
+          orbit: a.orbit_anchor_coords ? {
+            anchor_point: a.orbit_anchor_coords,
+            heading_deg:  a.orbit_heading_deg,
+            leg_nm:       a.orbit_leg_nm,
+            width_nm:     a.orbit_width_nm,
+            direction:    a.orbit_direction,
+          } : (a.orbit || undefined),
+          route: a.route,
+          _registry: a,
+        };
+      }
+
+      // Fallback
+      return { id, callsign: id };
+    });
   }
 
   // ── Resolve registry targets into ato.targets ───────────
@@ -468,67 +503,38 @@ function loadPackage_obj(data) {
     });
   }
 
-  // ── Resolve registry reference_points: bullseye ─
-  if (pkg.registry?.reference_points && pkg.ato) {
-    const refPts = pkg.registry.reference_points;
-    // Support both list (new) and dict (legacy) formats
-    const refList = Array.isArray(refPts)
-      ? refPts
-      : Object.entries(refPts).map(([id, rp]) => ({ name: id, ...rp }));
-
-    // Resolve bullseye if it's a string reference
-    const gc = pkg.ato.global_control;
-    if (gc && typeof gc.bullseye === 'string') {
-      const ref = refList.find(rp => rp.name === gc.bullseye);
-      if (ref) {
-        gc.bullseye = { name: ref.name, coords: ref.coords };
-      }
-    }
+  // ── Propagate registry.bullseye and shared_steerpoints onto ato ──
+  // Gives map-data.js and view code easy access via the ato object.
+  if (pkg.registry && pkg.ato) {
+    if (pkg.registry.bullseye)           pkg.ato._bullseye           = pkg.registry.bullseye;
+    if (pkg.registry.shared_steerpoints) pkg.ato._shared_steerpoints = pkg.registry.shared_steerpoints;
   }
 
-  // ── Resolve registry control_agencies into global_control + mission control ─
-  if (pkg.registry?.control_agencies && pkg.ato) {
-    const gc = pkg.ato.global_control;
-    if (gc?.agency_id) {
-      const ag = pkg.registry.control_agencies[gc.agency_id];
-      if (ag) {
-        if (ag.callsign != null)         gc.controlling_unit  = ag.callsign;
-        if (ag.platform != null)         gc.aircraft_type     = ag.platform;
-        if (ag.primary_freq_mhz != null) gc.primary_freq_mhz = ag.primary_freq_mhz;
-        gc._agency = ag;
-      }
-    }
-
-    (pkg.ato.missions || []).forEach(m => {
-      if (m.control?.agency_id) {
-        const ag = pkg.registry.control_agencies[m.control.agency_id];
-        if (ag) {
-          if (ag.primary_freq_mhz != null)   m.control.primary_freq_mhz   = ag.primary_freq_mhz;
-          if (ag.secondary_freq_mhz != null) m.control.secondary_freq_mhz = ag.secondary_freq_mhz;
-          if (ag.callsign != null)           m.control.net_name            = ag.callsign;
-          m.control._agency = ag;
-        }
-      }
-    });
-  }
-
-  // ── Normalize ingame start time (v1.0 uses ingame_start_time in Zulu) ─
+  // ── Normalize ingame start time (always Zulu in v2.0) ────────
   if (pkg.ato?.ingame_start_time && !pkg.ato.ingame_start_local) {
     pkg.ato.ingame_start_local = pkg.ato.ingame_start_time;
     pkg.ato._ingame_is_zulu = true;
   }
 
-  // ── Resolve tanker references in mission refuel blocks ───
-  if (pkg.ato?.tankers && pkg.ato?.missions) {
-    const tankerMap = {};
-    pkg.ato.tankers.forEach(t => { if (t.id) tankerMap[t.id] = t; });
+  // ── Resolve tanker references in mission refuel list (v2.0: array) ─
+  if (pkg.ato?.missions && pkg.registry) {
+    const tankerDict = pkg.registry.tankers || {};
+    const tankerMap  = {};
+    Object.entries(tankerDict).forEach(([k, t]) => {
+      tankerMap[k] = t;
+      if (t.callsign) tankerMap[t.callsign] = t;
+    });
 
     pkg.ato.missions.forEach(m => {
-      if (m.refuel?.tanker_id && tankerMap[m.refuel.tanker_id]) {
-        const t = tankerMap[m.refuel.tanker_id];
-        if (!m.refuel.tanker_callsign) m.refuel.tanker_callsign = t.callsign;
-        if (!m.refuel.ar_track)        m.refuel.ar_track        = t.ar_track;
-        if (!m.refuel.altitude)        m.refuel.altitude        = t.altitude;
+      if (Array.isArray(m.refuel)) {
+        m.refuel.forEach(ref => {
+          const t = ref.tanker_id ? tankerMap[ref.tanker_id] : null;
+          if (t) {
+            if (!ref._tanker_callsign) ref._tanker_callsign = t.callsign;
+            if (!ref._ar_track)        ref._ar_track        = t.ar_track;
+            if (!ref._altitude)        ref._altitude        = t.altitude_ft;
+          }
+        });
       }
     });
   }
@@ -590,6 +596,12 @@ function loadPackage_obj(data) {
             arr[i] = ap;
           }
         });
+
+        // Populate _name from registry target for display (v2.0)
+        if (target.target_id && !target._name) {
+          const reg = tgtMap[target.target_id];
+          if (reg) target._name = reg.name || reg.id || target.target_id;
+        }
       });
     });
   }

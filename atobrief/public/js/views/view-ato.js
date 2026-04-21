@@ -23,11 +23,10 @@ var DOM_IDS = {
 // Public entry point — called by app.js on load / re-render
 // ═════════════════════════════════════════════════════════════
 function renderATO(ato) {
-  var gc       = ato.global_control || {};
   var missions = ato.missions || [];
   var prevIdx  = STATE.selectedIdx;
 
-  renderIntelStrip(gc, ato);
+  renderIntelStrip(ato);
   renderTankers((STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.tankers) || []);
   renderMissionCards(missions);
   renderTimeline(missions);
@@ -71,7 +70,7 @@ function formatIrlZuluTime(rawValue) {
   return String(rawValue).replace(/[ZL]$/i, '').padStart(4, '0') + 'Z';
 }
 
-function renderIntelStrip(gc, ato) {
+function renderIntelStrip(ato) {
   var irlTimeFormatted = formatIrlZuluTime(ato.irl_time_zulu);
   var irl    = [ato.irl_date, irlTimeFormatted].filter(Boolean).join(' ') || '—';
   var ingame = ato._ingame_is_zulu
@@ -85,14 +84,16 @@ function renderIntelStrip(gc, ato) {
     ]),
   ];
 
-  if (gc.bullseye) {
-    var bsParsed = parseCoord(gc.bullseye.coords);
+  // Bullseye now lives in registry.bullseye (v2.0)
+  var bullseye = ato._bullseye || (STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.bullseye);
+  if (bullseye) {
+    var bsParsed = parseCoord(bullseye.coords);
     var bsCoords = bsParsed
       ? fmtCoord(bsParsed.lat, bsParsed.lon)
-      : (gc.bullseye.coords || '—');
+      : (bullseye.coords || '—');
 
     sections.push(buildIntelSection([
-      ['BULLSEYE', gc.bullseye.name || '—'],
+      ['BULLSEYE', bullseye.name || '—'],
       ['COORDS',   bsCoords, 'coords'],
     ]));
   }
@@ -223,13 +224,7 @@ function getMissionWindow(target) {
   if (hasTOS) {
     return { label: 'TOS', start: target.tos, end: target.toffs, hasTOT: false, hasTOS: true };
   }
-  return {
-    label: 'WINDOW',
-    start: target ? target.not_earlier_than : undefined,
-    end:   target ? target.not_later_than   : undefined,
-    hasTOT: false,
-    hasTOS: false,
-  };
+  return { label: 'WINDOW', start: undefined, end: undefined, hasTOT: false, hasTOS: false };
 }
 
 /**
@@ -310,10 +305,11 @@ function renderMissionCards(missions) {
     if (m.control && m.control.primary_freq_mhz) {
       body.appendChild(buildCardRow('PFREQ', m.control.primary_freq_mhz + ' MHz', 'freq'));
     }
-    if (m.refuel) {
+    if (m.refuel && m.refuel.length) {
+      var r0 = m.refuel[0];
       body.appendChild(buildCardRow(
         'TANKER',
-        (m.refuel.tanker_callsign || '—') + (m.refuel.altitude ? ' ' + m.refuel.altitude : ''),
+        (r0._tanker_callsign || r0.tanker_id || '—') + (r0._altitude ? ' ' + r0._altitude : ''),
         'tanker'
       ));
     }
@@ -348,9 +344,10 @@ function collectMissionTimes(m) {
       toMins(t.toffs)
     );
   });
+  (m.refuel || []).forEach(function (ref) {
+    times.push(toMins(ref.time_from), toMins(ref.time_to));
+  });
   times.push(
-    toMins(m.refuel ? m.refuel.not_earlier_than : null),
-    toMins(m.refuel ? m.refuel.not_later_than   : null),
     toMins(m.takeoff_time),
     toMins(m.marshal_time),
     toMins(m.recovery_time),
@@ -584,18 +581,7 @@ function addMissionBars(track, m, missionIdx, range) {
         labelShown = true;
       }
     } else if (target) {
-      addBarIfValid(track, missionIdx, {
-        startTime: target.not_earlier_than,
-        endTime:   target.not_later_than,
-        cssClass:  '',
-        color:     color,
-        title:     m.callsign + ' · ' + fmtTime(target.not_earlier_than)
-                 + ' – ' + fmtTime(target.not_later_than),
-        label:     labelShown ? '' : (m.callsign || ''),
-        range:     range,
-        span:      span,
-      });
-      labelShown = true;
+      // No explicit time window for this target — skip bar
     }
   });
 }
@@ -604,23 +590,24 @@ function addMissionBars(track, m, missionIdx, range) {
  * Add the AAR / refuel hatched bar.
  */
 function addRefuelBar(track, m, range) {
-  if (!m.refuel) { return; }
-  var rStart = normMins(m.refuel.not_earlier_than, range);
-  var rEnd   = normMins(m.refuel.not_later_than,   range);
-  if (rStart == null || rEnd == null) { return; }
+  if (!m.refuel || !m.refuel.length) { return; }
+  var span = range.max - range.min;
+  m.refuel.forEach(function (ref) {
+    var rStart = normMins(ref.time_from, range);
+    var rEnd   = normMins(ref.time_to,   range);
+    if (rStart == null || rEnd == null) { return; }
 
-  var span     = range.max - range.min;
-  var leftPct  = timeToLeftPct(rStart, range.min, span);
-  var widthPct = timeSpanToWidthPct(rStart, rEnd, span);
-  var title    = (m.refuel.tanker_callsign || '') + ' ' + (m.refuel.altitude || '')
-               + ' · ' + fmtTime(m.refuel.not_earlier_than)
-               + ' – ' + fmtTime(m.refuel.not_later_than);
+    var leftPct  = timeToLeftPct(rStart, range.min, span);
+    var widthPct = timeSpanToWidthPct(rStart, rEnd, span);
+    var title    = (ref._tanker_callsign || ref.tanker_id || '') + ' ' + (ref._altitude || '')
+                 + ' · ' + fmtTime(ref.time_from) + ' – ' + fmtTime(ref.time_to);
 
-  var bar = el('div', 'tl-bar refuel');
-  bar.style.left  = leftPct + '%';
-  bar.style.width = widthPct + '%';
-  bar.title       = title;
-  track.appendChild(bar);
+    var bar = el('div', 'tl-bar refuel');
+    bar.style.left  = leftPct + '%';
+    bar.style.width = widthPct + '%';
+    bar.title       = title;
+    track.appendChild(bar);
+  });
 }
 
 /**
@@ -832,8 +819,9 @@ function selectMission(idx) {
     }
     detailField(col, 'TYPE', typeStr);
     detailField(col, 'UNIT', m.unit || '—');
-    detailField(col, 'BASE → DEPLOY',
-      (m.home_base_icao || '?') + ' → ' + (m.deploy_location_icao || '?'), 'sm');
+    detailField(col, 'DEPLOY',   m.deploy   || '—', 'sm');
+    detailField(col, 'RECOVERY', m.recovery || '—', 'sm');
+    if (m.divert) { detailField(col, 'DIVERT', m.divert, 'sm'); }
     detailField(col, 'AIRCRAFT',
       m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '—');
 
@@ -879,7 +867,7 @@ function selectMission(idx) {
         if (targets.length > 1) {
           col.appendChild(el('div', 'dk', 'TARGET ' + (ti + 1)));
         }
-        detailField(col, 'LOCATION', target.location || '—');
+        detailField(col, 'TARGET', target._name || target.target_id || '—');
         detailField(col, 'ALTITUDE', target.altitude || '—');
 
         var hasTOT = target.tot_net || target.tot_nlt;
@@ -892,8 +880,6 @@ function selectMission(idx) {
           if (hasTOS) {
             detailTimePair(col, 'TIME ON STATION (TOS)', target.tos, target.toffs, 'TOS', 'TOFFS');
           }
-        } else {
-          detailTimePair(col, 'TIME ON TARGET', target.not_earlier_than, target.not_later_than);
         }
 
         var aimPoints = target.aim_points;
@@ -911,14 +897,17 @@ function selectMission(idx) {
 
   // COL 4 — AAR / Refuel
   inner.appendChild(buildDetailColumn('AAR / REFUEL', function (col) {
-    if (!m.refuel) {
+    if (!m.refuel || !m.refuel.length) {
       detailField(col, 'STATUS', 'No AAR planned', 'sm');
       return;
     }
-    detailField(col, 'TANKER',   m.refuel.tanker_callsign || '—');
-    detailField(col, 'AR TRACK', m.refuel.ar_track || '—');
-    detailField(col, 'ALTITUDE', m.refuel.altitude || '—');
-    detailTimePair(col, 'AAR WINDOW', m.refuel.not_earlier_than, m.refuel.not_later_than);
+    m.refuel.forEach(function (ref, ri) {
+      if (m.refuel.length > 1) { col.appendChild(el('div', 'dk', 'AAR ' + (ri + 1))); }
+      detailField(col, 'TANKER',   ref._tanker_callsign || ref.tanker_id || '—');
+      detailField(col, 'AR TRACK', ref._ar_track  || '—');
+      detailField(col, 'ALTITUDE', ref._altitude  || '—');
+      detailTimePair(col, 'AAR WINDOW', ref.time_from, ref.time_to);
+    });
   }));
 
   // COL 5 — Comms
@@ -935,8 +924,7 @@ function selectMission(idx) {
 
     detailField(col, 'PRIMARY FREQ',   primaryFreq,   'freq');
     detailField(col, 'SECONDARY FREQ', secondaryFreq, 'freq');
-    detailField(col, 'NET',            m.control ? m.control.net_name || '—' : '—');
-    detailField(col, 'AAR LOCATION',   m.aar_location_icao || '—');
+    detailField(col, 'NET', m.control ? m.control.net_name || '—' : '—');
   }));
 }
 

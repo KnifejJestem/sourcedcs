@@ -7,6 +7,8 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+.direnv/
+.envrc
 .Python
 build/
 develop-eggs/
@@ -194,3 +196,6 @@ vendor/
 infra/.env.example
 sourcedcs-web/data/gallery.json
 sourcedcs-web/data/uploads/
+
+# debug data
+/tools/data/
