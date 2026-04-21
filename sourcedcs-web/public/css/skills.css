@@ -1,0 +1,543 @@
+/* ═══════════════════════════════════════════════════════════
+   SKILLS PAGE STYLES
+   Imports all tokens from css/style.css (loaded first)
+═══════════════════════════════════════════════════════════ */
+
+.active-nav {
+  color: var(--text) !important;
+  border-color: var(--border-strong) !important;
+}
+:root.movie .active-nav { color: var(--accent) !important; }
+
+/* ── Hero ───────────────────────────────────────────────── */
+.skills-hero {
+  border-bottom: 1px solid var(--border);
+  padding: 56px 24px 48px;
+  background: var(--bg2);
+}
+.skills-hero-inner { max-width: 960px; margin: 0 auto; }
+.skills-title {
+  font-family: 'Orbitron', monospace;
+  font-weight: 900;
+  font-size: clamp(20px, 4vw, 36px);
+  letter-spacing: 4px;
+  color: var(--text);
+  margin: 12px 0 10px;
+}
+:root.movie .skills-title { color: var(--accent); text-shadow: 0 0 20px rgba(57,255,122,.3); }
+.skills-sub {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+}
+
+/* ── Score overview ─────────────────────────────────────── */
+.skills-score-bar {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  padding: 20px 24px;
+}
+.skills-score-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+.score-overall {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+.score-overall-label {
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.score-overall-value {
+  font-family: 'Orbitron', monospace;
+  font-weight: 900;
+  font-size: 28px;
+  color: var(--green);
+  letter-spacing: 2px;
+}
+:root.movie .score-overall-value { color: var(--accent); }
+.score-divider {
+  width: 1px;
+  height: 40px;
+  background: var(--border);
+}
+.score-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  flex: 1;
+}
+.score-cat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+}
+.score-cat-name {
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.score-cat-bar {
+  height: 4px;
+  background: var(--border);
+  position: relative;
+  overflow: hidden;
+}
+.score-cat-fill {
+  height: 100%;
+  background: var(--green);
+  transition: width .3s ease;
+}
+:root.movie .score-cat-fill { background: var(--accent); }
+.score-cat-pct {
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-2);
+}
+
+/* ── Main content layout ────────────────────────────────── */
+.skills-body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+
+/* ── Category section ───────────────────────────────────── */
+.skill-category {
+  margin-bottom: 40px;
+}
+.skill-cat-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+.skill-cat-name {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--text);
+  text-transform: uppercase;
+}
+.skill-cat-weight {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+}
+
+/* ── Module cards ───────────────────────────────────────── */
+.skill-modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.skill-module {
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color .15s;
+}
+.skill-module:hover { border-color: var(--border-strong); }
+.skill-module.state-locked {
+  opacity: .5;
+  pointer-events: none;
+}
+.skill-module.state-completed {
+  border-color: var(--green);
+}
+:root.movie .skill-module.state-completed { border-color: var(--accent); }
+.skill-module.state-in-progress {
+  border-color: var(--amber);
+}
+
+.skill-mod-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.skill-mod-title {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text);
+  text-transform: uppercase;
+}
+.skill-mod-badge {
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  padding: 2px 7px;
+  border: 1px solid;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.badge-locked       { color: var(--text-3); border-color: var(--border); }
+.badge-not-started  { color: var(--text-3); border-color: var(--border-strong); }
+.badge-in-progress  { color: var(--amber);  border-color: var(--amber); }
+.badge-completed    { color: var(--green);  border-color: var(--green); }
+:root.movie .badge-completed { color: var(--accent); border-color: var(--accent); }
+
+.skill-mod-desc {
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.skill-mod-prereqs {
+  font-size: 8px;
+  letter-spacing: .5px;
+  color: var(--text-3);
+}
+.skill-mod-grade {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.skill-mod-grade-val {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+.grade-U { color: var(--red);   }
+.grade-F { color: var(--amber); }
+.grade-G { color: var(--green); }
+.grade-E { color: var(--blue);  }
+:root.movie .grade-G { color: var(--accent); }
+
+.skill-mod-grade-meta {
+  font-size: 8px;
+  letter-spacing: .5px;
+  color: var(--text-3);
+  text-align: right;
+}
+.skill-mod-grade-notes {
+  font-size: 9px;
+  color: var(--text-2);
+  font-style: italic;
+}
+
+.skill-mod-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.btn-request-grading {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  padding: 5px 10px;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  background: transparent;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+  transition: background .15s, color .15s;
+}
+.btn-request-grading:hover { background: var(--amber); color: var(--bg); }
+.btn-request-grading:disabled {
+  border-color: var(--border);
+  color: var(--text-3);
+  cursor: default;
+}
+.btn-request-grading:disabled:hover { background: transparent; color: var(--text-3); }
+.btn-cancel-request {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-3);
+  background: transparent;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+  transition: background .15s, color .15s;
+}
+.btn-cancel-request:hover { background: var(--border); color: var(--text); }
+
+/* ── Grading request pending notice ─────────────────────── */
+.grading-pending-notice {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--amber);
+  padding: 4px 0;
+}
+
+/* ── Request status section ─────────────────────────────── */
+.skills-requests-section {
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+  margin-top: 16px;
+}
+.skills-section-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.request-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+}
+.request-status {
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  padding: 2px 7px;
+  border: 1px solid;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.req-open    { color: var(--amber); border-color: var(--amber); }
+.req-claimed { color: var(--blue);  border-color: var(--blue); }
+.req-closed  { color: var(--text-3); border-color: var(--border); }
+.request-date { color: var(--text-3); font-size: 9px; flex: 1; }
+.request-claim-info { font-size: 9px; color: var(--text-2); }
+
+/* ── Admin: pilot list ──────────────────────────────────── */
+.admin-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 0;
+  min-height: calc(100vh - 200px);
+}
+.admin-sidebar {
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+.admin-main {
+  overflow-y: auto;
+  padding: 24px;
+}
+.admin-sidebar-section {
+  border-bottom: 1px solid var(--border);
+}
+.admin-sidebar-label {
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding: 12px 16px 8px;
+}
+.pilot-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.pilot-row:hover   { background: var(--bg2); }
+.pilot-row.active  { background: var(--bg2); border-left: 2px solid var(--green); }
+:root.movie .pilot-row.active { border-left-color: var(--accent); }
+.pilot-row-callsign {
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--text);
+}
+.pilot-row-score {
+  font-size: 8px;
+  color: var(--green);
+  letter-spacing: 1px;
+}
+:root.movie .pilot-row-score { color: var(--accent); }
+
+/* ── Admin: request queue ───────────────────────────────── */
+.req-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 9px;
+}
+.req-queue-callsign {
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text);
+  flex: 1;
+}
+.req-queue-time { color: var(--text-3); font-size: 8px; }
+.btn-sm {
+  font-size: 7px;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  background: transparent;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+  transition: background .15s, color .15s;
+}
+.btn-sm:hover { background: var(--border); color: var(--text); }
+.btn-sm-blue {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.btn-sm-blue:hover { background: var(--blue); color: var(--bg); }
+.btn-sm-danger {
+  border-color: var(--red);
+  color: var(--red);
+}
+.btn-sm-danger:hover { background: var(--red); color: var(--bg); }
+
+/* ── Admin: grade controls ──────────────────────────────── */
+.admin-grade-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.grade-select {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  padding: 3px 6px;
+  cursor: pointer;
+}
+.grade-notes-input {
+  flex: 1;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+}
+.grade-notes-input::placeholder { color: var(--text-3); }
+.btn-save-grade {
+  font-size: 7px;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border: 1px solid var(--green);
+  color: var(--green);
+  background: transparent;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+  transition: background .15s, color .15s;
+}
+.btn-save-grade:hover { background: var(--green); color: var(--bg); }
+:root.movie .btn-save-grade { border-color: var(--accent); color: var(--accent); }
+:root.movie .btn-save-grade:hover { background: var(--accent); color: var(--bg); }
+.btn-clear-grade {
+  font-size: 7px;
+  letter-spacing: 1px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-3);
+  background: transparent;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+  transition: background .15s, color .15s;
+}
+.btn-clear-grade:hover { background: var(--border); color: var(--text); }
+
+/* ── Admin: skill tree editor ───────────────────────────── */
+.tree-editor-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.tree-editor-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.tree-editor-textarea {
+  width: 100%;
+  min-height: 280px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  padding: 12px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.tree-editor-textarea:focus { outline: none; border-color: var(--green); }
+:root.movie .tree-editor-textarea:focus { border-color: var(--accent); }
+.tree-editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.tree-editor-msg {
+  font-size: 9px;
+  letter-spacing: .5px;
+  flex: 1;
+}
+.tree-editor-msg.ok  { color: var(--green); }
+.tree-editor-msg.err { color: var(--red); }
+
+/* ── No-content states ──────────────────────────────────── */
+.skills-empty {
+  padding: 32px 0;
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+/* ── Toast ──────────────────────────────────────────────── */
+.skills-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--bg2);
+  border: 1px solid var(--green);
+  color: var(--green);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 10px 16px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s;
+  z-index: 9999;
+}
+:root.movie .skills-toast { border-color: var(--accent); color: var(--accent); }
+.skills-toast.visible { opacity: 1; }
+.skills-toast.err { border-color: var(--red); color: var(--red); }
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .admin-layout { grid-template-columns: 1fr; }
+  .admin-sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: 260px; }
+  .skill-modules { grid-template-columns: 1fr; }
+  .score-divider { display: none; }
+}

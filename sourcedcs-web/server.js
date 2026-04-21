@@ -11,13 +11,17 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 /* ─── Data persistence ──────────────────────────────────── */
-const DATA_DIR           = path.join(__dirname, 'data');
-const EVENTS_FILE        = path.join(DATA_DIR, 'events.json');
-const APPS_FILE          = path.join(DATA_DIR, 'applications.json');
-const SQUADRONS_FILE     = path.join(DATA_DIR, 'squadrons.json');
-const DISCORD_ROLES_FILE = path.join(DATA_DIR, 'discord-roles.json');
-const GALLERY_FILE       = path.join(DATA_DIR, 'gallery.json');
-const HERO_FILE          = path.join(DATA_DIR, 'hero-image.json');
+const DATA_DIR              = path.join(__dirname, 'data');
+const EVENTS_FILE           = path.join(DATA_DIR, 'events.json');
+const APPS_FILE             = path.join(DATA_DIR, 'applications.json');
+const SQUADRONS_FILE        = path.join(DATA_DIR, 'squadrons.json');
+const DISCORD_ROLES_FILE    = path.join(DATA_DIR, 'discord-roles.json');
+const GALLERY_FILE          = path.join(DATA_DIR, 'gallery.json');
+const HERO_FILE             = path.join(DATA_DIR, 'hero-image.json');
+const SKILL_TREE_FILE       = path.join(DATA_DIR, 'skill-tree.json');
+const SKILL_GRADES_FILE     = path.join(DATA_DIR, 'skill-grades.json');
+const GRADING_REQS_FILE     = path.join(DATA_DIR, 'grading-requests.json');
+const PILOT_REGISTRY_FILE   = path.join(DATA_DIR, 'pilot-registry.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
 if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
@@ -74,6 +78,14 @@ let nextEventId = events.reduce((m, e) => Math.max(m, e.id || 0), 0) + 1;
 
 let squadrons = loadJSON(SQUADRONS_FILE, []);
 
+/* Skill tracker */
+let skillTree       = loadJSON(SKILL_TREE_FILE,     { categories: [] });
+let skillGrades     = loadJSON(SKILL_GRADES_FILE,   {});
+let gradingRequests = loadJSON(GRADING_REQS_FILE,   []);
+let pilotRegistry   = loadJSON(PILOT_REGISTRY_FILE, {});
+let nextGradingReqId = gradingRequests.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
+const VALID_GRADES  = new Set(['U', 'F', 'G', 'E']);
+
 /* Load discord role → squadron mapping (role names as keys) */
 let discordRoles = loadJSON(DISCORD_ROLES_FILE, {});
 
@@ -81,6 +93,7 @@ let discordRoles = loadJSON(DISCORD_ROLES_FILE, {});
 const DISCORD_BOT_TOKEN  = process.env.DISCORD_BOT_TOKEN  || '';
 const DISCORD_GUILD_ID   = process.env.DISCORD_GUILD_ID   || '';
 const APPLY_CHANNEL_ID   = process.env.APPLY_CHANNEL_ID   || '';
+const GRADING_CHANNEL_ID = process.env.GRADING_CHANNEL_ID || '';
 
 /* Roster in-memory cache (populated from Discord) */
 let rosterCache   = null;
@@ -300,6 +313,31 @@ async function sendApplicationToDiscord(application) {
   };
   await discordPost('/channels/' + APPLY_CHANNEL_ID + '/messages', { embeds: [embed] });
   console.debug('[apply] Application ' + application.id + ' posted to Discord channel ' + APPLY_CHANNEL_ID);
+}
+
+/* Send a grading request notification to the configured grading channel */
+async function sendGradingRequestToDiscord(request) {
+  if (!DISCORD_BOT_TOKEN) {
+    console.warn('[grading] DISCORD_BOT_TOKEN not set — cannot post grading request to Discord');
+    return null;
+  }
+  if (!GRADING_CHANNEL_ID) {
+    console.warn('[grading] GRADING_CHANNEL_ID not set — skipping Discord notification');
+    return null;
+  }
+  const embed = {
+    title:  '🎯 Grading Request',
+    color:  0xf0a500,
+    fields: [
+      { name: 'Pilot',    value: request.pilot_callsign || request.pilot_name || request.pilot_id, inline: true },
+      { name: 'Request',  value: 'Pilot has requested evaluation', inline: false },
+    ],
+    timestamp: request.requested_at,
+    footer:    { text: 'Request ID: ' + request.id },
+  };
+  const msg = await discordPost('/channels/' + GRADING_CHANNEL_ID + '/messages', { embeds: [embed] });
+  console.debug('[grading] Request ' + request.id + ' posted to Discord channel ' + GRADING_CHANNEL_ID);
+  return msg && msg.id ? msg.id : null;
 }
 
 /* ─── Rate limiting ─────────────────────────────────────── */
@@ -871,6 +909,196 @@ api.delete('/squadrons/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, r
   res.json({ ok: true });
 });
 
+/* ── Skill Tree (public read, admin write) ── */
+api.get('/skill-tree', (_req, res) => {
+  res.json(skillTree);
+});
+
+api.put('/skill-tree', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const tree = req.body;
+  if (!tree || !Array.isArray(tree.categories)) {
+    return res.status(400).json({ error: 'categories array required' });
+  }
+  for (const cat of tree.categories) {
+    if (!cat.id || !cat.name || typeof cat.weight !== 'number') {
+      return res.status(400).json({ error: 'Each category requires id, name, and numeric weight' });
+    }
+    if (!Array.isArray(cat.modules)) {
+      return res.status(400).json({ error: 'Each category requires a modules array' });
+    }
+    for (const mod of cat.modules) {
+      if (!mod.id || !mod.title) {
+        return res.status(400).json({ error: 'Each module requires id and title' });
+      }
+      if (mod.min_pass_grade && !VALID_GRADES.has(mod.min_pass_grade)) {
+        return res.status(400).json({ error: 'Invalid min_pass_grade: ' + mod.min_pass_grade });
+      }
+    }
+  }
+  const totalWeight = tree.categories.reduce((s, c) => s + (Number(c.weight) || 0), 0);
+  if (Math.abs(totalWeight - 100) > 0.01) {
+    return res.status(400).json({ error: 'Category weights must sum to 100 (got ' + totalWeight + ')' });
+  }
+  skillTree = tree;
+  saveJSON(SKILL_TREE_FILE, skillTree);
+  res.json(skillTree);
+});
+
+/* ── Skill Grades ── */
+api.get('/skill-grades', requireAuth, (req, res) => {
+  const sub   = req.user.sub;
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  const isAdm = roles.some(r => (typeof r === 'string' ? r : (r?.name || '')) === 'admin');
+
+  /* Auto-register pilot on first access */
+  if (sub && !pilotRegistry[sub]) {
+    const rawName = req.user.name || req.user.preferred_username || req.user.sub || '';
+    const callsign = parseCallsign(rawName) || rawName;
+    pilotRegistry[sub] = { sub, name: rawName, callsign, registered_at: new Date().toISOString() };
+    saveJSON(PILOT_REGISTRY_FILE, pilotRegistry);
+  }
+
+  if (isAdm) {
+    res.json(skillGrades);
+  } else {
+    res.json({ [sub]: skillGrades[sub] || {} });
+  }
+});
+
+api.get('/skill-grades/:pilotId', requireAuth, requireAdmin, (req, res) => {
+  res.json(skillGrades[req.params.pilotId] || {});
+});
+
+const MAX_GRADE_NOTES_LEN = 500;
+api.put('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const { pilotId, moduleId } = req.params;
+  const { grade, notes } = req.body;
+
+  if (!grade || !VALID_GRADES.has(grade)) {
+    return res.status(400).json({ error: 'grade must be one of U, F, G, E' });
+  }
+
+  const graderSub  = req.user.sub;
+  const graderName = req.user.name || req.user.preferred_username || graderSub || '';
+
+  if (!skillGrades[pilotId]) skillGrades[pilotId] = {};
+  skillGrades[pilotId][moduleId] = {
+    grade,
+    notes:     sanitizeStr(notes || '', MAX_GRADE_NOTES_LEN),
+    graded_at: new Date().toISOString(),
+    graded_by: graderName,
+  };
+  saveJSON(SKILL_GRADES_FILE, skillGrades);
+  res.json(skillGrades[pilotId][moduleId]);
+});
+
+api.delete('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const { pilotId, moduleId } = req.params;
+  if (!skillGrades[pilotId] || !skillGrades[pilotId][moduleId]) {
+    return res.status(404).json({ error: 'Grade not found' });
+  }
+  delete skillGrades[pilotId][moduleId];
+  saveJSON(SKILL_GRADES_FILE, skillGrades);
+  res.json({ ok: true });
+});
+
+/* ── Pilot Registry (admin read) ── */
+api.get('/skill-pilots', requireAuth, requireAdmin, (_req, res) => {
+  res.json(pilotRegistry);
+});
+
+/* ── Grading Requests ── */
+api.get('/grading-requests', requireAuth, (req, res) => {
+  const sub   = req.user.sub;
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  const isAdm = roles.some(r => (typeof r === 'string' ? r : (r?.name || '')) === 'admin');
+  if (isAdm) {
+    res.json(gradingRequests);
+  } else {
+    res.json(gradingRequests.filter(r => r.pilot_id === sub));
+  }
+});
+
+const MAX_PILOT_NAME_LEN     = 64;
+const MAX_PILOT_CALLSIGN_LEN = 32;
+api.post('/grading-requests', writeOpsLimiter, requireAuth, (req, res) => {
+  const sub = req.user.sub;
+  if (!sub) return res.status(401).json({ error: 'User sub claim missing from token' });
+
+  /* 409 if the pilot already has an open or claimed request */
+  const existing = gradingRequests.find(r => r.pilot_id === sub && (r.status === 'open' || r.status === 'claimed'));
+  if (existing) {
+    return res.status(409).json({ error: 'You already have an open grading request (id ' + existing.id + ')' });
+  }
+
+  const rawName = req.user.name || req.user.preferred_username || sub || '';
+  const callsign = parseCallsign(rawName) || rawName;
+
+  const request = {
+    id:              nextGradingReqId++,
+    pilot_id:        sub,
+    pilot_name:      sanitizeStr(rawName,    MAX_PILOT_NAME_LEN),
+    pilot_callsign:  sanitizeStr(callsign,   MAX_PILOT_CALLSIGN_LEN),
+    requested_at:    new Date().toISOString(),
+    status:          'open',
+    claimed_by:      null,
+    claimed_by_name: null,
+    discord_message_id: null,
+  };
+
+  gradingRequests.push(request);
+  saveJSON(GRADING_REQS_FILE, gradingRequests);
+
+  /* Fire-and-forget Discord notification */
+  sendGradingRequestToDiscord(request).then(msgId => {
+    if (msgId) {
+      request.discord_message_id = msgId;
+      saveJSON(GRADING_REQS_FILE, gradingRequests);
+    }
+  }).catch(err => {
+    console.error('[grading] Discord post failed:', err.message);
+  });
+
+  res.status(201).json(request);
+});
+
+api.put('/grading-requests/:id/claim', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const id  = Number(req.params.id);
+  const idx = gradingRequests.findIndex(r => r.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Grading request not found' });
+
+  const graderSub  = req.user.sub;
+  const graderName = req.user.name || req.user.preferred_username || graderSub || '';
+
+  gradingRequests[idx] = {
+    ...gradingRequests[idx],
+    status:          'claimed',
+    claimed_by:      graderSub,
+    claimed_by_name: sanitizeStr(graderName, MAX_PILOT_NAME_LEN),
+  };
+  saveJSON(GRADING_REQS_FILE, gradingRequests);
+  res.json(gradingRequests[idx]);
+});
+
+api.delete('/grading-requests/:id', writeOpsLimiter, requireAuth, (req, res) => {
+  const id    = Number(req.params.id);
+  const sub   = req.user.sub;
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  const isAdm = roles.some(r => (typeof r === 'string' ? r : (r?.name || '')) === 'admin');
+
+  const idx = gradingRequests.findIndex(r => r.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Grading request not found' });
+
+  const request = gradingRequests[idx];
+  if (!isAdm && request.pilot_id !== sub) {
+    return res.status(403).json({ error: 'You can only delete your own grading requests' });
+  }
+
+  gradingRequests.splice(idx, 1);
+  saveJSON(GRADING_REQS_FILE, gradingRequests);
+  res.json({ ok: true });
+});
+
 app.use('/api', api);
 
 /* ─── JSON error handler ─────────────────────────────── */
@@ -897,4 +1125,5 @@ app.listen(PORT, () => {
   console.log('  DISCORD_BOT_TOKEN  :', DISCORD_BOT_TOKEN  ? '*** (set)' : 'NOT SET');
   console.log('  DISCORD_GUILD_ID   :', DISCORD_GUILD_ID   || 'NOT SET');
   console.log('  APPLY_CHANNEL_ID   :', APPLY_CHANNEL_ID   || 'NOT SET (applications will be stored in JSON)');
+  console.log('  GRADING_CHANNEL_ID :', GRADING_CHANNEL_ID || 'NOT SET (grading requests will not post to Discord)');
 });

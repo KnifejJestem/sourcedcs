@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skills Admin — SOURCE DCS</title>
+  <meta name="description" content="Admin panel for managing pilot skill qualifications.">
+  <link rel="icon" href="sourcelogobg.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/skills.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <a class="header-logo-link" href="/">
+    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    <div class="header-title">SOURCEDCS</div>
+  </a>
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
+    <a class="nav-link" href="/">HOME</a>
+    <a class="nav-link" href="skills.html">PILOT VIEW</a>
+    <a class="nav-link active-nav" href="skills-admin.html">SKILLS ADMIN</a>
+  </nav>
+  <div class="header-spacer"></div>
+  <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
+    <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
+    <div class="hdr-toggle-group">
+      <span class="hdr-toggle-label">DISPLAY</span>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="skills-hero">
+  <div class="skills-hero-inner">
+    <div class="section-label">STAFF ACCESS</div>
+    <h1 class="skills-title">SKILLS ADMIN</h1>
+    <p class="skills-sub">Grade pilot modules &middot; Manage evaluation requests &middot; Edit qualification tree</p>
+  </div>
+</section>
+
+<div id="accessDenied" class="skills-body" style="display:none">
+  <p class="skills-empty">Admin access required.</p>
+</div>
+
+<div id="adminPanel" style="display:none">
+  <div class="admin-layout">
+    <!-- Sidebar: pilot list + grading queue -->
+    <div class="admin-sidebar">
+      <div class="admin-sidebar-section">
+        <div class="admin-sidebar-label">GRADING QUEUE</div>
+        <div id="gradingQueue">
+          <div class="skills-empty" style="padding:12px 16px;font-size:9px">Loading...</div>
+        </div>
+      </div>
+
+      <div class="admin-sidebar-section">
+        <div class="admin-sidebar-label">PILOTS</div>
+        <div id="pilotList">
+          <div class="skills-empty" style="padding:12px 16px;font-size:9px">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main: selected pilot detail + tree editor -->
+    <div class="admin-main">
+      <div id="pilotDetail">
+        <p class="skills-empty">Select a pilot to view and edit their skill record.</p>
+      </div>
+
+      <div class="tree-editor-section">
+        <div class="tree-editor-label">SKILL TREE EDITOR</div>
+        <textarea class="tree-editor-textarea" id="treeEditorTA" spellcheck="false"></textarea>
+        <div class="tree-editor-actions">
+          <button class="btn-save-grade" id="treeEditorSave" onclick="saveSkillTree()">SAVE TREE</button>
+          <button class="btn-clear-grade" onclick="resetTreeEditor()">RESET</button>
+          <span class="tree-editor-msg" id="treeEditorMsg"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="skills-toast" id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/skills-admin.js"></script>
+</body>
+</html>

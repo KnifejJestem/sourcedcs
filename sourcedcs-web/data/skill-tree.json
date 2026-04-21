@@ -1,0 +1,141 @@
+{
+  "categories": [
+    {
+      "id": "fund",
+      "name": "Flight Fundamentals",
+      "weight": 25,
+      "modules": [
+        {
+          "id": "fund-001",
+          "title": "Basic Air Navigation",
+          "description": "Navigate using TACAN, INS, and visual references. Demonstrate accurate fix-to-fix navigation and fuel planning on a cross-country sortie.",
+          "min_pass_grade": "G",
+          "prerequisites": []
+        },
+        {
+          "id": "fund-002",
+          "title": "Instrument Procedures",
+          "description": "Fly partial-panel approaches, holds, and SIDs/STARs in IMC conditions. Demonstrate ILS and TACAN approach to minimums.",
+          "min_pass_grade": "G",
+          "prerequisites": [
+            { "module_id": "fund-001", "min_grade": "G" }
+          ]
+        },
+        {
+          "id": "fund-003",
+          "title": "Emergency Procedures",
+          "description": "React correctly to simulated engine failures, hydraulic failures, and fire warnings. Demonstrate correct checklist usage and decision-making under pressure.",
+          "min_pass_grade": "G",
+          "prerequisites": []
+        }
+      ]
+    },
+    {
+      "id": "wpn",
+      "name": "Weapons Employment",
+      "weight": 30,
+      "modules": [
+        {
+          "id": "wpn-001",
+          "title": "Basic Gunnery",
+          "description": "Demonstrate air-to-air and air-to-ground gun employment. Achieve a minimum 15% hit rate in a strafe pass and one valid snapshot opportunity in a turning engagement.",
+          "min_pass_grade": "G",
+          "prerequisites": []
+        },
+        {
+          "id": "wpn-002",
+          "title": "A/G Unguided Weapons",
+          "description": "Employ unguided iron bombs, rockets, and CBUs against point and area targets. Demonstrate correct dive and laydown attack profiles.",
+          "min_pass_grade": "G",
+          "prerequisites": [
+            { "module_id": "fund-001", "min_grade": "G" }
+          ]
+        },
+        {
+          "id": "wpn-003",
+          "title": "A/G Guided Weapons",
+          "description": "Employ laser-guided and GPS-guided munitions. Demonstrate correct laser-lasing procedures, stand-off employment, and post-release terminal guidance.",
+          "min_pass_grade": "G",
+          "prerequisites": [
+            { "module_id": "wpn-002", "min_grade": "G" }
+          ]
+        },
+        {
+          "id": "wpn-004",
+          "title": "BVR A/A Employment",
+          "description": "Demonstrate radar search, lock, and BVR missile employment against a non-manoeuvring and manoeuvring target. Correct Rmax/NEZ/Rpi awareness required.",
+          "min_pass_grade": "G",
+          "prerequisites": [
+            { "module_id": "fund-001", "min_grade": "G" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tac",
+      "name": "Tactical Procedures",
+      "weight": 25,
+      "modules": [
+        {
+          "id": "tac-001",
+          "title": "Formation Flying",
+          "description": "Fly fingertip, route, and tactical spread formations. Demonstrate correct join-up, position maintenance to ±50ft, and safe break/rejoin procedures.",
+          "min_pass_grade": "G",
+          "prerequisites": [
+            { "module_id": "fund-001", "min_grade": "G" }
+          ]
+        },
+        {
+          "id": "tac-002",
+          "title": "CAS Procedures",
+          "description": "Execute a 9-line CAS brief from a JTAC, correctly identify and attack the assigned target, and pass a BDA. Demonstrate correct abort criteria awareness.",
+          "min_pass_grade": "G",
+          "prerequisites": [
+            { "module_id": "wpn-003", "min_grade": "G" }
+          ]
+        },
+        {
+          "id": "tac-003",
+          "title": "SEAD/DEAD Operations",
+          "description": "Demonstrate correct threat identification, ARM employment, and suppression timing in coordination with a strike package. Correct deconfliction from escort required.",
+          "min_pass_grade": "G",
+          "prerequisites": [
+            { "module_id": "wpn-003", "min_grade": "G" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "com",
+      "name": "Communications & Coordination",
+      "weight": 20,
+      "modules": [
+        {
+          "id": "com-001",
+          "title": "Radio Procedures",
+          "description": "Demonstrate correct radio discipline: callsign usage, correct read-back, freqency management, and stepping on air to ground/ground to air comms.",
+          "min_pass_grade": "F",
+          "prerequisites": []
+        },
+        {
+          "id": "com-002",
+          "title": "ATC & IFR Operations",
+          "description": "Communicate correctly with virtual ATC on all phases of flight: pushback, taxi, departure, en-route, approach, and landing. Correct ATIS decode required.",
+          "min_pass_grade": "G",
+          "prerequisites": [
+            { "module_id": "com-001", "min_grade": "F" }
+          ]
+        },
+        {
+          "id": "com-003",
+          "title": "Tactical Brevity",
+          "description": "Use correct NATO BREVITY code words during a multi-ship tactical scenario. Assessed on BULLSEYE reporting, threat calls, and flight lead communications.",
+          "min_pass_grade": "G",
+          "prerequisites": [
+            { "module_id": "com-001", "min_grade": "F" }
+          ]
+        }
+      ]
+    }
+  ]
+}

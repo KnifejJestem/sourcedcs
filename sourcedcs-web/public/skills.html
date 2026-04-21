@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pilot Skills — SOURCE DCS</title>
+  <meta name="description" content="Track your pilot qualification progress and request evaluations.">
+  <link rel="icon" href="sourcelogobg.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/skills.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <a class="header-logo-link" href="/">
+    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    <div class="header-title">SOURCEDCS</div>
+  </a>
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
+    <a class="nav-link" href="/#about">ABOUT</a>
+    <a class="nav-link" href="/#subsquadrons">WINGS</a>
+    <a class="nav-link" href="schedule.html">SCHEDULE</a>
+    <a class="nav-link active-nav" href="skills.html">SKILLS</a>
+    <a class="nav-link" href="/#join">JOIN</a>
+  </nav>
+  <div class="header-spacer"></div>
+  <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
+    <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
+    <div class="hdr-toggle-group">
+      <span class="hdr-toggle-label">DISPLAY</span>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="skills-hero">
+  <div class="skills-hero-inner">
+    <div class="section-label">QUALIFICATION RECORD</div>
+    <h1 class="skills-title">PILOT SKILLS</h1>
+    <p class="skills-sub">Track your qualifications &middot; Request evaluations &middot; Log in to view your record</p>
+  </div>
+</section>
+
+<div class="skills-score-bar" id="scoreBar" style="display:none">
+  <div class="skills-score-inner">
+    <div class="score-overall">
+      <div class="score-overall-label">OVERALL SCORE</div>
+      <div class="score-overall-value" id="overallScore">—</div>
+    </div>
+    <div class="score-divider"></div>
+    <div class="score-cats" id="scoreCats"></div>
+  </div>
+</div>
+
+<div id="loginPrompt" class="skills-body" style="display:none">
+  <p class="skills-empty">Log in to view your skill record and request evaluations.</p>
+</div>
+
+<div class="skills-body" id="skillsBody" style="display:none">
+  <div id="skillsTree"></div>
+
+  <div class="skills-requests-section" id="requestsSection" style="display:none">
+    <div class="skills-section-label">YOUR GRADING REQUESTS</div>
+    <div id="requestsList"></div>
+  </div>
+</div>
+
+<div class="skills-toast" id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/skills.js"></script>
+</body>
+</html>
