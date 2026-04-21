@@ -287,9 +287,14 @@ function renderMissionCards(missions) {
       'acft'
     ));
     var firstTgt = m.targets && m.targets[0];
-    var tgtLabel = m.targets && m.targets.length > 1
-      ? m.targets.length + ' TARGETS'
-      : (firstTgt ? firstTgt.location || '—' : '—');
+    var tgtLabel;
+    if (!m.targets || !m.targets.length) {
+      tgtLabel = '—';
+    } else if (m.targets.length > 1) {
+      tgtLabel = m.targets.length + ' TARGETS';
+    } else {
+      tgtLabel = firstTgt.target_id || '—';
+    }
     body.appendChild(buildCardRow('TARGET', tgtLabel));
     body.appendChild(buildCardRow(
       win.label,
@@ -314,12 +319,10 @@ function renderMissionCards(missions) {
       body.appendChild(buildCardRow('PFREQ', m.control.primary_freq_mhz + ' MHz', 'freq'));
     }
     if (m.refuel && m.refuel.length) {
-      var r0 = m.refuel[0];
-      body.appendChild(buildCardRow(
-        'TANKER',
-        (r0._tanker_callsign || r0.tanker_id || '—') + (r0._altitude ? ' ' + r0._altitude : ''),
-        'tanker'
-      ));
+      var tankerLabel = m.refuel.map(function (r) {
+        return r._tanker_callsign || r.tanker_id || '?';
+      }).join(' / ');
+      body.appendChild(buildCardRow('TANKER', tankerLabel, 'tanker'));
     }
 
     card.appendChild(body);

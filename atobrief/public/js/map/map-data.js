@@ -317,18 +317,23 @@ function collectData(ato, aco) {
       }
     });
 
-    // 3. Target aim-point markers.
+    // 3. Target markers — one per target entry, at the registry target's coords.
     //    IMPORTANT: we do NOT push any route.pts nodes here — adding target nodes
     //    after all steer_points would cause the route line to detour to the targets
     //    again after the egress waypoints, before the recovery.
     (m.targets || []).forEach(target => {
-      (target.aim_points || []).forEach((ap, i) => {
-        const raw  = typeof ap === 'string' ? ap : ap.coords;
-        const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i + 1}`;
-        const p    = parseCoord(raw);
-        if (p) {
-          points.push({ ...p, kind: 'target', label: callsign, sub: name, color, msnType: m.mission_type, mission: m });
-        }
+      const tgtRef = target.target_id && ato.targets
+        ? ato.targets.find(function (t) { return t.id === target.target_id; })
+        : null;
+      const coords = tgtRef ? tgtRef.coords : null;
+      if (!coords) return;
+      const p = parseCoord(coords);
+      if (!p) return;
+      points.push({
+        ...p, kind: 'target',
+        label: callsign,
+        sub: tgtRef.name || target.target_id,
+        color, msnType: m.mission_type, mission: m,
       });
     });
 

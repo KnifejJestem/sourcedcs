@@ -255,13 +255,31 @@ function _buildSteerPointsSection(body, m) {
   _renderSteerPointsList(spListEl, steerPts);
   body.appendChild(spListEl);
 
-  var addSpBtn = el('button', 'ef-btn ef-btn-add', '+ ADD STEER POINT');
+  var addSpBtn = el('button', 'ef-btn ef-btn-add', '+ ADD INLINE POINT');
   addSpBtn.addEventListener('click', function () {
     steerPts.push({ name: '', coords: '' });
     body._steerPoints = steerPts;
     _renderSteerPointsList(spListEl, steerPts);
   });
   body.appendChild(addSpBtn);
+
+  var addRefBtn = el('button', 'ef-btn ef-btn-add', '+ ADD REGISTRY REF');
+  addRefBtn.title = 'Add a reference to a steerpoint in registry.steerpoints';
+  addRefBtn.addEventListener('click', function () {
+    var reg = editorEnsureRegistry();
+    var sspList = reg.steerpoints || [];
+    if (!sspList.length) {
+      alert('No steerpoints defined in the registry yet. Add them via STEER PTS editor first.');
+      return;
+    }
+    // Pick the first one not yet referenced — user can change it via the select
+    var usedIds = steerPts.filter(function (s) { return s && s.id; }).map(function (s) { return s.id; });
+    var unused = sspList.find(function (s) { return !usedIds.includes(s.id); }) || sspList[0];
+    steerPts.push({ id: unused.id });
+    body._steerPoints = steerPts;
+    _renderSteerPointsList(spListEl, steerPts);
+  });
+  body.appendChild(addRefBtn);
 }
 
 // ── Snapshot mission form without saving to state ────────────

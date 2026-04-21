@@ -79,31 +79,74 @@ function _editTarget(targets, index, msnTitle, onSave) {
 function _renderSteerPointsList(container, steerPts) {
   container.innerHTML = '';
   steerPts.forEach(function (sp, i) {
-    // Registry steerpoint reference — render with optional time input and delete button.
-    if (sp && sp.id) {
-      var ato = STATE.pkg && STATE.pkg.ato;
-      var sspList = (ato && ato._steerpoints) || [];
-      var ssp = sspList.find(function (s) { return s.id === sp.id; });
-      var sspLabel = ssp
-        ? [((ssp.type || '').toUpperCase()), ssp.name].filter(Boolean).join(' ') || ssp.id
-        : sp.id;
+    var row = el('div', 'ef-ap-row');
 
-      var row = el('div', 'ef-ap-row');
-      var badge = el('span', 'ef-ssp-badge', '◈ ' + sspLabel);
-      badge.title = 'Registry steerpoint (managed in STEERPOINTS editor)';
-      row.appendChild(badge);
+    // ── Up / Down reorder buttons (shared by both row types) ──
+    var upBtn = el('button', 'ef-btn ef-btn-sm', '↑');
+    upBtn.title = 'Move up';
+    upBtn.type = 'button';
+    upBtn.disabled = i === 0;
+    (function (idx) {
+      upBtn.addEventListener('click', function () {
+        var tmp = steerPts[idx - 1];
+        steerPts[idx - 1] = steerPts[idx];
+        steerPts[idx] = tmp;
+        _renderSteerPointsList(container, steerPts);
+      });
+    })(i);
+    row.appendChild(upBtn);
+
+    var downBtn = el('button', 'ef-btn ef-btn-sm', '↓');
+    downBtn.title = 'Move down';
+    downBtn.type = 'button';
+    downBtn.disabled = i === steerPts.length - 1;
+    (function (idx) {
+      downBtn.addEventListener('click', function () {
+        var tmp = steerPts[idx + 1];
+        steerPts[idx + 1] = steerPts[idx];
+        steerPts[idx] = tmp;
+        _renderSteerPointsList(container, steerPts);
+      });
+    })(i);
+    row.appendChild(downBtn);
+
+    // Registry steerpoint reference — select + time input + delete button.
+    if (sp && sp.id) {
+      var reg = (STATE.pkg && STATE.pkg.registry) || {};
+      var sspList = reg.steerpoints || [];
+
+      // Build select from registry steerpoints
+      var sspSelect = document.createElement('select');
+      sspSelect.className = 'ef-input ef-input-sm';
+      sspList.forEach(function (ssp) {
+        var opt = document.createElement('option');
+        opt.value = ssp.id;
+        var typeLabel = (ssp.type || '').toUpperCase();
+        opt.textContent = [typeLabel, ssp.name, ssp.id].filter(Boolean).join(' — ');
+        sspSelect.appendChild(opt);
+      });
+      if (!sspList.length) {
+        var opt = document.createElement('option');
+        opt.value = sp.id; opt.textContent = sp.id + ' (not in registry)';
+        sspSelect.appendChild(opt);
+      }
+      sspSelect.value = sp.id;
+      (function (point) {
+        sspSelect.addEventListener('change', function () { point.id = this.value; });
+      })(sp);
+      row.appendChild(sspSelect);
 
       var timeInput = el('input', 'ef-input ef-input-sm');
-      timeInput.placeholder = 'Time (e.g. 2046)';
+      timeInput.placeholder = 'Time (e.g. 2046Z)';
       timeInput.value = sp.time || '';
-      timeInput.title = 'Optional time for this steerpoint (required for ip/ep/marshal)';
+      timeInput.title = 'Optional time; required for ip/ep/marshal (sets VUL/MARSHAL times)';
       (function (point) {
         timeInput.addEventListener('input', function () { point.time = this.value || undefined; });
       })(sp);
       row.appendChild(timeInput);
 
       var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '\u2715');
-      delBtn.title = 'Remove steerpoint reference from this mission';
+      delBtn.title = 'Remove registry ref from this mission';
       (function (idx) {
         delBtn.addEventListener('click', function () {
           steerPts.splice(idx, 1);
@@ -115,8 +158,7 @@ function _renderSteerPointsList(container, steerPts) {
       return;
     }
 
-    var row = el('div', 'ef-ap-row');
-
+    // ── Inline steerpoint ────────────────────────────────────
     var nameInput = el('input', 'ef-input ef-input-sm');
     nameInput.placeholder = 'Name (e.g. SP1)';
     nameInput.value = sp.name || '';
@@ -133,6 +175,16 @@ function _renderSteerPointsList(container, steerPts) {
     })(sp);
     row.appendChild(coordInput);
 
+    var timeInput2 = el('input', 'ef-input ef-input-sm');
+    timeInput2.placeholder = 'Time (e.g. 2046Z)';
+    timeInput2.style.width = '80px';
+    timeInput2.value = sp.time || '';
+    timeInput2.title = 'Optional time at this waypoint';
+    (function (point) {
+      timeInput2.addEventListener('input', function () { point.time = this.value || undefined; });
+    })(sp);
+    row.appendChild(timeInput2);
+
     var pickBtn = el('button', 'ef-btn ef-btn-sm ef-btn-pick', '📍');
     pickBtn.title = 'Pick from map';
     pickBtn.type = 'button';
@@ -145,7 +197,7 @@ function _renderSteerPointsList(container, steerPts) {
     var orbitBtn = el('button', 'ef-btn ef-btn-sm' + (sp.orbit ? ' ef-btn-orbit-active' : ''), '⟳');
     orbitBtn.title = 'Add/edit orbit pattern';
     orbitBtn.type = 'button';
-    (function (point, idx) {
+    (function (point) {
       orbitBtn.addEventListener('click', function () {
         if (!point.orbit) {
           point.orbit = { heading_deg: 0, leg_nm: 10, width_nm: 5, cw: true };
@@ -154,7 +206,7 @@ function _renderSteerPointsList(container, steerPts) {
         }
         _renderSteerPointsList(container, steerPts);
       });
-    })(sp, i);
+    })(sp);
     row.appendChild(orbitBtn);
 
     var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '\u2715');
