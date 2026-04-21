@@ -343,7 +343,9 @@ function buildCatSection(cat, myOpenReq) {
           var reqBtn = document.createElement('button');
           reqBtn.className   = 'btn-request-grading';
           reqBtn.textContent = 'REQUEST GRADING';
-          reqBtn.addEventListener('click', requestGrading);
+          (function (mid, mtitle) {
+            reqBtn.addEventListener('click', function () { requestGrading(mid, mtitle); });
+          })(mod.id, mod.title);
           actDiv.appendChild(reqBtn);
         }
 
@@ -397,14 +399,14 @@ function renderRequests() {
 }
 
 /* ── User actions ───────────────────────────────────────── */
-function requestGrading() {
+function requestGrading(moduleId, moduleTitle) {
   var tok = getToken();
   if (!tok) { showToast('Please log in first', true); return; }
 
   fetch('/api/grading-requests', {
     method:  'POST',
     headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
-    body:    JSON.stringify({}),
+    body:    JSON.stringify({ module_id: moduleId || null, module_title: moduleTitle || null }),
   }).then(function (r) {
     if (r.status === 409) { showToast('You already have an open grading request', true); return null; }
     if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || String(r.status)); });

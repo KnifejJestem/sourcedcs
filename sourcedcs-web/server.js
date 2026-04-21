@@ -315,7 +315,65 @@ async function sendApplicationToDiscord(application) {
   console.debug('[apply] Application ' + application.id + ' posted to Discord channel ' + APPLY_CHANNEL_ID);
 }
 
-/* Send a grading request notification to the configured grading channel */
+/* PATCH a Discord message (edit in place) */
+function discordPatch(apiPath, body) {
+  const payload = JSON.stringify(body);
+  console.debug('[discord] PATCH /api/v10' + apiPath);
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'discord.com',
+      path:     '/api/v10' + apiPath,
+      method:   'PATCH',
+      headers: {
+        'Authorization':  'Bot ' + DISCORD_BOT_TOKEN,
+        'User-Agent':     'SourceDCS-Web/1.0 (https://github.com/NikNam3/sourcedcs)',
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+    const req = https.request(options, (res) => {
+      let raw = '';
+      res.on('data', chunk => { raw += chunk; });
+      res.on('end', () => {
+        console.debug('[discord] PATCH /api/v10' + apiPath + ' → HTTP ' + res.statusCode);
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(raw)); } catch (e) { resolve({}); }
+        } else {
+          reject(new Error('Discord API ' + res.statusCode + ': ' + raw.slice(0, 400)));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+/* Build the Discord embed for a grading request (used for both POST and PATCH) */
+function buildGradingEmbed(request) {
+  const pilot   = request.pilot_callsign || request.pilot_name || request.pilot_id;
+  const module  = request.module_title   || request.module_id  || '—';
+  const claimed = request.status === 'claimed';
+
+  const color  = claimed ? 0x57f287 : 0xf0a500; /* green if claimed, amber if open */
+  const status = claimed
+    ? '✅  Claimed by **' + (request.claimed_by_name || '—') + '**'
+    : '🟡  Open — awaiting instructor';
+
+  return {
+    title:  '🎯 Grading Request',
+    color,
+    fields: [
+      { name: 'Pilot',  value: pilot,  inline: true },
+      { name: 'Module', value: module, inline: true },
+      { name: 'Status', value: status, inline: false },
+    ],
+    timestamp: request.requested_at,
+    footer:    { text: 'Request ID: ' + request.id },
+  };
+}
+
+/* Post a new grading request to Discord; returns the Discord message ID or null */
 async function sendGradingRequestToDiscord(request) {
   if (!DISCORD_BOT_TOKEN) {
     console.warn('[grading] DISCORD_BOT_TOKEN not set — cannot post grading request to Discord');
@@ -325,19 +383,19 @@ async function sendGradingRequestToDiscord(request) {
     console.warn('[grading] GRADING_CHANNEL_ID not set — skipping Discord notification');
     return null;
   }
-  const embed = {
-    title:  '🎯 Grading Request',
-    color:  0xf0a500,
-    fields: [
-      { name: 'Pilot',    value: request.pilot_callsign || request.pilot_name || request.pilot_id, inline: true },
-      { name: 'Request',  value: 'Pilot has requested evaluation', inline: false },
-    ],
-    timestamp: request.requested_at,
-    footer:    { text: 'Request ID: ' + request.id },
-  };
-  const msg = await discordPost('/channels/' + GRADING_CHANNEL_ID + '/messages', { embeds: [embed] });
+  const msg = await discordPost('/channels/' + GRADING_CHANNEL_ID + '/messages', { embeds: [buildGradingEmbed(request)] });
   console.debug('[grading] Request ' + request.id + ' posted to Discord channel ' + GRADING_CHANNEL_ID);
   return msg && msg.id ? msg.id : null;
+}
+
+/* Edit an existing Discord message to reflect the current request state */
+async function updateGradingRequestOnDiscord(request) {
+  if (!DISCORD_BOT_TOKEN || !GRADING_CHANNEL_ID || !request.discord_message_id) return;
+  await discordPatch(
+    '/channels/' + GRADING_CHANNEL_ID + '/messages/' + request.discord_message_id,
+    { embeds: [buildGradingEmbed(request)] }
+  );
+  console.debug('[grading] Request ' + request.id + ' Discord message updated');
 }
 
 /* ─── Rate limiting ─────────────────────────────────────── */
@@ -1021,6 +1079,7 @@ api.get('/grading-requests', requireAuth, (req, res) => {
 
 const MAX_PILOT_NAME_LEN     = 64;
 const MAX_PILOT_CALLSIGN_LEN = 32;
+const MAX_MODULE_TITLE_LEN   = 128;
 api.post('/grading-requests', writeOpsLimiter, requireAuth, (req, res) => {
   const sub = req.user.sub;
   if (!sub) return res.status(401).json({ error: 'User sub claim missing from token' });
@@ -1031,14 +1090,19 @@ api.post('/grading-requests', writeOpsLimiter, requireAuth, (req, res) => {
     return res.status(409).json({ error: 'You already have an open grading request (id ' + existing.id + ')' });
   }
 
-  const rawName = req.user.name || req.user.preferred_username || sub || '';
+  const rawName  = req.user.name || req.user.preferred_username || sub || '';
   const callsign = parseCallsign(rawName) || rawName;
+
+  const moduleId    = sanitizeStr(req.body.module_id    || '', 64);
+  const moduleTitle = sanitizeStr(req.body.module_title || '', MAX_MODULE_TITLE_LEN);
 
   const request = {
     id:              nextGradingReqId++,
     pilot_id:        sub,
     pilot_name:      sanitizeStr(rawName,    MAX_PILOT_NAME_LEN),
     pilot_callsign:  sanitizeStr(callsign,   MAX_PILOT_CALLSIGN_LEN),
+    module_id:       moduleId    || null,
+    module_title:    moduleTitle || null,
     requested_at:    new Date().toISOString(),
     status:          'open',
     claimed_by:      null,
@@ -1077,6 +1141,36 @@ api.put('/grading-requests/:id/claim', writeOpsLimiter, requireAuth, requireAdmi
     claimed_by_name: sanitizeStr(graderName, MAX_PILOT_NAME_LEN),
   };
   saveJSON(GRADING_REQS_FILE, gradingRequests);
+
+  /* Update Discord message to show claimed state */
+  updateGradingRequestOnDiscord(gradingRequests[idx]).catch(err => {
+    console.error('[grading] Discord message update (claim) failed:', err.message);
+  });
+
+  res.json(gradingRequests[idx]);
+});
+
+api.put('/grading-requests/:id/unclaim', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const id  = Number(req.params.id);
+  const idx = gradingRequests.findIndex(r => r.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Grading request not found' });
+  if (gradingRequests[idx].status !== 'claimed') {
+    return res.status(400).json({ error: 'Request is not currently claimed' });
+  }
+
+  gradingRequests[idx] = {
+    ...gradingRequests[idx],
+    status:          'open',
+    claimed_by:      null,
+    claimed_by_name: null,
+  };
+  saveJSON(GRADING_REQS_FILE, gradingRequests);
+
+  /* Update Discord message to show open state again */
+  updateGradingRequestOnDiscord(gradingRequests[idx]).catch(err => {
+    console.error('[grading] Discord message update (unclaim) failed:', err.message);
+  });
+
   res.json(gradingRequests[idx]);
 });
 
