@@ -475,26 +475,12 @@
   letter-spacing: 2px;
   color: var(--text-3);
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
-.tree-editor-textarea {
-  width: 100%;
-  min-height: 280px;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
-  background: var(--bg2);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  padding: 12px;
-  resize: vertical;
-  box-sizing: border-box;
-}
-.tree-editor-textarea:focus { outline: none; border-color: var(--green); }
-:root.movie .tree-editor-textarea:focus { border-color: var(--accent); }
 .tree-editor-actions {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 16px;
   align-items: center;
 }
 .tree-editor-msg {
@@ -504,6 +490,164 @@
 }
 .tree-editor-msg.ok  { color: var(--green); }
 .tree-editor-msg.err { color: var(--red); }
+
+/* Weight indicator */
+.tree-weight-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.tree-weight-total {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+.tree-weight-total.ok  { color: var(--green); }
+.tree-weight-total.err { color: var(--red); }
+:root.movie .tree-weight-total.ok { color: var(--accent); }
+
+/* Shared input style for tree editor */
+.tree-input {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 4px 7px;
+  box-sizing: border-box;
+}
+.tree-input:focus   { outline: none; border-color: var(--green); }
+:root.movie .tree-input:focus { border-color: var(--accent); }
+.tree-input::placeholder { color: var(--text-3); }
+
+/* Category cards */
+.tree-cat-list  { display: flex; flex-direction: column; gap: 12px; }
+.tree-cat-card  {
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+}
+.tree-cat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.tree-cat-name-input {
+  flex: 1;
+  min-width: 120px;
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.tree-weight-input {
+  width: 56px;
+  text-align: right;
+}
+
+/* ID rows */
+.tree-id-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+.tree-field-label {
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.tree-id-input {
+  flex: 1;
+  font-size: 9px;
+  color: var(--text-2);
+}
+
+/* Module list */
+.tree-mod-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 10px;
+}
+.tree-mod-card {
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+  background: var(--bg2);
+}
+.tree-mod-card:last-child { margin-bottom: 0; }
+.tree-mod-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.tree-mod-title-input {
+  flex: 1;
+  min-width: 100px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.tree-mod-body {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Description textarea */
+.tree-desc-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tree-textarea {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 5px 7px;
+  resize: vertical;
+  min-height: 56px;
+  box-sizing: border-box;
+  width: 100%;
+}
+.tree-textarea:focus { outline: none; border-color: var(--green); }
+:root.movie .tree-textarea:focus { border-color: var(--accent); }
+.tree-textarea::placeholder { color: var(--text-3); }
+
+/* Pass grade row */
+.tree-pass-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Prerequisites */
+.tree-prereq-section { display: flex; flex-direction: column; gap: 4px; }
+.tree-prereq-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tree-prereq-row select { flex: 1; }
 
 /* ── No-content states ──────────────────────────────────── */
 .skills-empty {

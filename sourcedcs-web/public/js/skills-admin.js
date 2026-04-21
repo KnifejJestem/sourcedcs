@@ -26,11 +26,12 @@ function logout() {
 }
 
 /* ── State ──────────────────────────────────────────────── */
-var _tree      = null;
-var _allGrades = {};   /* { [sub]: { [moduleId]: gradeRec } } */
-var _pilots    = {};   /* { [sub]: { sub, name, callsign, registered_at } } */
-var _requests  = [];
-var _activeSub = null;
+var _tree       = null;
+var _treeEditor = null;  /* working copy mutated by the GUI editor */
+var _allGrades  = {};    /* { [sub]: { [moduleId]: gradeRec } } */
+var _pilots     = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
+var _requests   = [];
+var _activeSub  = null;
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 (function () {
@@ -75,7 +76,7 @@ function loadAll(tok) {
 
     renderGradingQueue();
     renderPilotList();
-    resetTreeEditor();
+    initTreeEditor();
   }).catch(function (err) {
     console.error('[skills-admin] load failed:', err);
     showToast('Failed to load admin data', true);
@@ -390,47 +391,431 @@ function deleteRequest(id) {
 }
 
 /* ── Skill tree editor ──────────────────────────────────── */
-function resetTreeEditor() {
-  var ta  = document.getElementById('treeEditorTA');
-  var msg = document.getElementById('treeEditorMsg');
-  if (ta)  ta.value = _tree ? JSON.stringify(_tree, null, 2) : '{}';
-  if (msg) { msg.textContent = ''; msg.className = 'tree-editor-msg'; }
+
+function initTreeEditor() {
+  _treeEditor = JSON.parse(JSON.stringify(_tree || { categories: [] }));
+  renderTreeEditor();
+}
+
+/* Collect all modules flat across the tree (for prereq dropdowns) */
+function flatModules() {
+  var all = [];
+  (_treeEditor.categories || []).forEach(function (cat) {
+    (cat.modules || []).forEach(function (mod) {
+      all.push({ id: mod.id, title: mod.title, catName: cat.name });
+    });
+  });
+  return all;
+}
+
+function renderTreeEditor() {
+  var el = document.getElementById('treeEditor');
+  if (!el) return;
+  el.innerHTML = '';
+
+  var cats        = _treeEditor.categories || [];
+  var totalWeight = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
+  var weightOk    = Math.abs(totalWeight - 100) <= 0.01;
+  var allMods     = flatModules();
+
+  /* Weight indicator */
+  var weightBar = document.createElement('div');
+  weightBar.className = 'tree-weight-bar';
+  var wLabel = document.createElement('span');
+  wLabel.className   = 'tree-field-label';
+  wLabel.textContent = 'TOTAL WEIGHT';
+  var wTotal = document.createElement('span');
+  wTotal.className   = 'tree-weight-total ' + (weightOk ? 'ok' : 'err');
+  wTotal.textContent = totalWeight + ' / 100';
+  weightBar.appendChild(wLabel);
+  weightBar.appendChild(wTotal);
+  el.appendChild(weightBar);
+
+  /* Category cards */
+  var catList = document.createElement('div');
+  catList.className = 'tree-cat-list';
+  cats.forEach(function (cat, ci) {
+    catList.appendChild(buildCatCard(cat, ci, cats.length, allMods));
+  });
+  el.appendChild(catList);
+
+  /* Add category button */
+  var addCatBtn = document.createElement('button');
+  addCatBtn.className   = 'btn-sm btn-sm-blue';
+  addCatBtn.textContent = '+ ADD CATEGORY';
+  addCatBtn.style.marginTop = '12px';
+  addCatBtn.addEventListener('click', addCategory);
+  el.appendChild(addCatBtn);
+
+  /* Save / reset actions */
+  var actions = document.createElement('div');
+  actions.className = 'tree-editor-actions';
+
+  var saveBtn = document.createElement('button');
+  saveBtn.className   = 'btn-save-grade';
+  saveBtn.textContent = 'SAVE TREE';
+  saveBtn.addEventListener('click', saveSkillTree);
+
+  var resetBtn = document.createElement('button');
+  resetBtn.className   = 'btn-clear-grade';
+  resetBtn.textContent = 'RESET';
+  resetBtn.addEventListener('click', initTreeEditor);
+
+  var msg = document.createElement('span');
+  msg.className = 'tree-editor-msg';
+  msg.id        = 'treeEditorMsg';
+
+  actions.appendChild(saveBtn);
+  actions.appendChild(resetBtn);
+  actions.appendChild(msg);
+  el.appendChild(actions);
+}
+
+function updateWeightBar() {
+  var cats  = _treeEditor.categories || [];
+  var total = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
+  var ok    = Math.abs(total - 100) <= 0.01;
+  var el    = document.querySelector('.tree-weight-total');
+  if (el) { el.textContent = total + ' / 100'; el.className = 'tree-weight-total ' + (ok ? 'ok' : 'err'); }
+}
+
+function buildCatCard(cat, ci, totalCats, allMods) {
+  var card = document.createElement('div');
+  card.className = 'tree-cat-card';
+
+  /* ── Header: name + weight + reorder/delete ── */
+  var hdr = document.createElement('div');
+  hdr.className = 'tree-cat-header';
+
+  var nameInput = document.createElement('input');
+  nameInput.className   = 'tree-input tree-cat-name-input';
+  nameInput.placeholder = 'Category name';
+  nameInput.value       = cat.name || '';
+  nameInput.addEventListener('input', function () { cat.name = this.value; });
+
+  var wLabel = document.createElement('span');
+  wLabel.className   = 'tree-field-label';
+  wLabel.textContent = 'WEIGHT';
+
+  var weightInput = document.createElement('input');
+  weightInput.className   = 'tree-input tree-weight-input';
+  weightInput.type        = 'number';
+  weightInput.min         = '0';
+  weightInput.max         = '100';
+  weightInput.placeholder = '0';
+  weightInput.value       = cat.weight != null ? cat.weight : '';
+  weightInput.addEventListener('input', function () {
+    cat.weight = Number(this.value) || 0;
+    updateWeightBar();
+  });
+
+  var pct = document.createElement('span');
+  pct.style.cssText  = 'font-size:10px;color:var(--text-3)';
+  pct.textContent    = '%';
+
+  var ctrlDiv = document.createElement('div');
+  ctrlDiv.style.cssText = 'display:flex;gap:4px;margin-left:auto;flex-shrink:0';
+
+  var upBtn = document.createElement('button');
+  upBtn.className   = 'btn-sm';
+  upBtn.textContent = '↑';
+  upBtn.disabled    = ci === 0;
+  (function (i) { upBtn.addEventListener('click', function () { moveCategoryUp(i); }); })(ci);
+
+  var dnBtn = document.createElement('button');
+  dnBtn.className   = 'btn-sm';
+  dnBtn.textContent = '↓';
+  dnBtn.disabled    = ci === totalCats - 1;
+  (function (i) { dnBtn.addEventListener('click', function () { moveCategoryDown(i); }); })(ci);
+
+  var delBtn = document.createElement('button');
+  delBtn.className   = 'btn-sm btn-sm-danger';
+  delBtn.textContent = '×';
+  (function (i, name) {
+    delBtn.addEventListener('click', function () {
+      if (confirm('Remove category "' + (name || 'unnamed') + '" and all its modules?')) removeCategory(i);
+    });
+  })(ci, cat.name);
+
+  ctrlDiv.appendChild(upBtn); ctrlDiv.appendChild(dnBtn); ctrlDiv.appendChild(delBtn);
+  hdr.appendChild(nameInput); hdr.appendChild(wLabel); hdr.appendChild(weightInput);
+  hdr.appendChild(pct); hdr.appendChild(ctrlDiv);
+  card.appendChild(hdr);
+
+  /* ── Category ID row ── */
+  card.appendChild(buildIdRow(cat, 'category-id'));
+
+  /* ── Module list ── */
+  var modList = document.createElement('div');
+  modList.className = 'tree-mod-list';
+  (cat.modules || []).forEach(function (mod, mi) {
+    modList.appendChild(buildModCard(mod, mi, (cat.modules || []).length, ci, allMods));
+  });
+  card.appendChild(modList);
+
+  /* ── Add module button ── */
+  var addModBtn = document.createElement('button');
+  addModBtn.className   = 'btn-sm';
+  addModBtn.textContent = '+ ADD MODULE';
+  addModBtn.style.cssText = 'margin: 4px 10px 10px';
+  (function (i) { addModBtn.addEventListener('click', function () { addModule(i); }); })(ci);
+  card.appendChild(addModBtn);
+
+  return card;
+}
+
+function buildModCard(mod, mi, totalMods, ci, allMods) {
+  var card = document.createElement('div');
+  card.className = 'tree-mod-card';
+
+  /* ── Module header: title + pass grade + reorder/delete ── */
+  var hdr = document.createElement('div');
+  hdr.className = 'tree-mod-header';
+
+  var titleInput = document.createElement('input');
+  titleInput.className   = 'tree-input tree-mod-title-input';
+  titleInput.placeholder = 'Module title';
+  titleInput.value       = mod.title || '';
+  titleInput.addEventListener('input', function () { mod.title = this.value; });
+
+  var passLabel = document.createElement('span');
+  passLabel.className   = 'tree-field-label';
+  passLabel.textContent = 'PASS';
+
+  var gradeSel = document.createElement('select');
+  gradeSel.className = 'grade-select';
+  ['U', 'F', 'G', 'E'].forEach(function (g) {
+    var opt = document.createElement('option');
+    opt.value = g; opt.textContent = g;
+    if ((mod.min_pass_grade || 'G') === g) opt.selected = true;
+    gradeSel.appendChild(opt);
+  });
+  gradeSel.addEventListener('change', function () { mod.min_pass_grade = this.value; });
+
+  var ctrlDiv = document.createElement('div');
+  ctrlDiv.style.cssText = 'display:flex;gap:4px;margin-left:auto;flex-shrink:0';
+
+  var upBtn = document.createElement('button');
+  upBtn.className = 'btn-sm'; upBtn.textContent = '↑'; upBtn.disabled = mi === 0;
+  (function (c, m) { upBtn.addEventListener('click', function () { moveModuleUp(c, m); }); })(ci, mi);
+
+  var dnBtn = document.createElement('button');
+  dnBtn.className = 'btn-sm'; dnBtn.textContent = '↓'; dnBtn.disabled = mi === totalMods - 1;
+  (function (c, m) { dnBtn.addEventListener('click', function () { moveModuleDown(c, m); }); })(ci, mi);
+
+  var delBtn = document.createElement('button');
+  delBtn.className = 'btn-sm btn-sm-danger'; delBtn.textContent = '×';
+  (function (c, m, title) {
+    delBtn.addEventListener('click', function () {
+      if (confirm('Remove module "' + (title || 'unnamed') + '"?')) removeModule(c, m);
+    });
+  })(ci, mi, mod.title);
+
+  ctrlDiv.appendChild(upBtn); ctrlDiv.appendChild(dnBtn); ctrlDiv.appendChild(delBtn);
+  hdr.appendChild(titleInput); hdr.appendChild(passLabel); hdr.appendChild(gradeSel); hdr.appendChild(ctrlDiv);
+  card.appendChild(hdr);
+
+  /* ── Module body ── */
+  var body = document.createElement('div');
+  body.className = 'tree-mod-body';
+
+  /* ID */
+  body.appendChild(buildIdRow(mod, 'module-id'));
+
+  /* Description */
+  var descRow = document.createElement('div');
+  descRow.className = 'tree-desc-row';
+  var descLabel = document.createElement('span');
+  descLabel.className = 'tree-field-label'; descLabel.textContent = 'DESCRIPTION';
+  var descTA = document.createElement('textarea');
+  descTA.className   = 'tree-textarea';
+  descTA.placeholder = 'What must the pilot demonstrate?';
+  descTA.value       = mod.description || '';
+  descTA.addEventListener('input', function () { mod.description = this.value; });
+  descRow.appendChild(descLabel); descRow.appendChild(descTA);
+  body.appendChild(descRow);
+
+  /* Prerequisites */
+  body.appendChild(buildPrereqSection(mod, ci, mi, allMods));
+
+  card.appendChild(body);
+  return card;
+}
+
+/* Shared ID row builder */
+function buildIdRow(obj, placeholder) {
+  var row = document.createElement('div');
+  row.className = 'tree-id-row';
+  var lbl = document.createElement('span');
+  lbl.className = 'tree-field-label'; lbl.textContent = 'ID';
+  var inp = document.createElement('input');
+  inp.className = 'tree-input tree-id-input';
+  inp.placeholder = placeholder || 'id';
+  inp.value = obj.id || '';
+  inp.addEventListener('input', function () { obj.id = this.value; });
+  row.appendChild(lbl); row.appendChild(inp);
+  return row;
+}
+
+function buildPrereqSection(mod, ci, mi, allMods) {
+  var section = document.createElement('div');
+  section.className = 'tree-prereq-section';
+
+  /* Label + add button on same row */
+  var topRow = document.createElement('div');
+  topRow.style.cssText = 'display:flex;align-items:center;gap:8px';
+  var lbl = document.createElement('span');
+  lbl.className = 'tree-field-label'; lbl.textContent = 'PREREQUISITES';
+  var addBtn = document.createElement('button');
+  addBtn.className = 'btn-sm'; addBtn.textContent = '+ ADD';
+  (function (c, m) { addBtn.addEventListener('click', function () { addPrereq(c, m); }); })(ci, mi);
+  topRow.appendChild(lbl); topRow.appendChild(addBtn);
+  section.appendChild(topRow);
+
+  /* One row per existing prereq */
+  var prereqs  = mod.prerequisites || [];
+  var availMods = allMods.filter(function (m) { return m.id !== mod.id; });
+
+  if (!prereqs.length) {
+    var none = document.createElement('span');
+    none.style.cssText = 'font-size:9px;color:var(--text-3);margin-top:4px;display:block';
+    none.textContent   = 'None';
+    section.appendChild(none);
+  } else {
+    prereqs.forEach(function (prereq, pi) {
+      section.appendChild(buildPrereqRow(prereq, pi, ci, mi, availMods));
+    });
+  }
+
+  return section;
+}
+
+function buildPrereqRow(prereq, pi, ci, mi, availMods) {
+  var row = document.createElement('div');
+  row.className = 'tree-prereq-row';
+
+  /* Module select */
+  var modSel = document.createElement('select');
+  modSel.className = 'grade-select';
+  modSel.style.flex = '1';
+  if (!availMods.length) {
+    var noOpt = document.createElement('option');
+    noOpt.value = ''; noOpt.textContent = '(no other modules yet)';
+    modSel.appendChild(noOpt);
+  } else {
+    availMods.forEach(function (m) {
+      var opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = (m.title || m.id);
+      if (prereq.module_id === m.id) opt.selected = true;
+      modSel.appendChild(opt);
+    });
+  }
+  modSel.addEventListener('change', function () { prereq.module_id = this.value; });
+
+  /* Min grade select */
+  var gradeSel = document.createElement('select');
+  gradeSel.className = 'grade-select';
+  ['U', 'F', 'G', 'E'].forEach(function (g) {
+    var opt = document.createElement('option');
+    opt.value = g; opt.textContent = g + '+';
+    if ((prereq.min_grade || 'G') === g) opt.selected = true;
+    gradeSel.appendChild(opt);
+  });
+  gradeSel.addEventListener('change', function () { prereq.min_grade = this.value; });
+
+  var delBtn = document.createElement('button');
+  delBtn.className = 'btn-sm btn-sm-danger'; delBtn.textContent = '×';
+  (function (c, m, p) { delBtn.addEventListener('click', function () { removePrereq(c, m, p); }); })(ci, mi, pi);
+
+  row.appendChild(modSel); row.appendChild(gradeSel); row.appendChild(delBtn);
+  return row;
+}
+
+/* ── Tree mutation helpers (all re-render) ──────────────── */
+function addCategory() {
+  (_treeEditor.categories = _treeEditor.categories || []).push({
+    id: 'cat-' + Date.now(), name: '', weight: 0, modules: [],
+  });
+  renderTreeEditor();
+}
+function removeCategory(ci) {
+  _treeEditor.categories.splice(ci, 1);
+  renderTreeEditor();
+}
+function moveCategoryUp(ci) {
+  var a = _treeEditor.categories;
+  if (ci < 1) return;
+  var t = a[ci - 1]; a[ci - 1] = a[ci]; a[ci] = t;
+  renderTreeEditor();
+}
+function moveCategoryDown(ci) {
+  var a = _treeEditor.categories;
+  if (ci >= a.length - 1) return;
+  var t = a[ci + 1]; a[ci + 1] = a[ci]; a[ci] = t;
+  renderTreeEditor();
+}
+function addModule(ci) {
+  var cat = _treeEditor.categories[ci];
+  if (!cat) return;
+  (cat.modules = cat.modules || []).push({
+    id: 'mod-' + Date.now(), title: '', description: '', min_pass_grade: 'G', prerequisites: [],
+  });
+  renderTreeEditor();
+}
+function removeModule(ci, mi) {
+  _treeEditor.categories[ci].modules.splice(mi, 1);
+  renderTreeEditor();
+}
+function moveModuleUp(ci, mi) {
+  var a = _treeEditor.categories[ci].modules;
+  if (mi < 1) return;
+  var t = a[mi - 1]; a[mi - 1] = a[mi]; a[mi] = t;
+  renderTreeEditor();
+}
+function moveModuleDown(ci, mi) {
+  var a = _treeEditor.categories[ci].modules;
+  if (mi >= a.length - 1) return;
+  var t = a[mi + 1]; a[mi + 1] = a[mi]; a[mi] = t;
+  renderTreeEditor();
+}
+function addPrereq(ci, mi) {
+  var mod      = _treeEditor.categories[ci].modules[mi];
+  var allIds   = flatModules().map(function (m) { return m.id; });
+  var existing = (mod.prerequisites || []).map(function (p) { return p.module_id; });
+  var first    = allIds.find(function (id) { return id !== mod.id && !existing.includes(id); }) || '';
+  (mod.prerequisites = mod.prerequisites || []).push({ module_id: first, min_grade: 'G' });
+  renderTreeEditor();
+}
+function removePrereq(ci, mi, pi) {
+  _treeEditor.categories[ci].modules[mi].prerequisites.splice(pi, 1);
+  renderTreeEditor();
 }
 
 function saveSkillTree() {
-  var ta  = document.getElementById('treeEditorTA');
   var msg = document.getElementById('treeEditorMsg');
-  var parsed;
-  try {
-    parsed = JSON.parse(ta.value);
-  } catch (e) {
-    msg.textContent = 'Invalid JSON: ' + e.message;
-    msg.className   = 'tree-editor-msg err';
-    return;
-  }
 
   var tok = getToken();
   fetch('/api/skill-tree', {
     method:  'PUT',
     headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
-    body:    JSON.stringify(parsed),
+    body:    JSON.stringify(_treeEditor),
   }).then(function (r) {
     return r.json().then(function (body) { return { ok: r.ok, body: body }; });
   }).then(function (result) {
     if (!result.ok) {
-      msg.textContent = 'Error: ' + (result.body.error || 'unknown');
-      msg.className   = 'tree-editor-msg err';
+      if (msg) { msg.textContent = 'Error: ' + (result.body.error || 'unknown'); msg.className = 'tree-editor-msg err'; }
       return;
     }
-    _tree = result.body;
-    msg.textContent = 'Saved.';
-    msg.className   = 'tree-editor-msg ok';
+    _tree       = result.body;
+    _treeEditor = JSON.parse(JSON.stringify(_tree));
+    renderTreeEditor();
+    if (msg) { msg.textContent = 'Saved.'; msg.className = 'tree-editor-msg ok'; }
     if (_activeSub) selectPilot(_activeSub);
     renderPilotList();
     showToast('Skill tree saved');
   }).catch(function (err) {
-    msg.textContent = 'Error: ' + err.message;
-    msg.className   = 'tree-editor-msg err';
+    if (msg) { msg.textContent = 'Error: ' + err.message; msg.className = 'tree-editor-msg err'; }
   });
 }
 
