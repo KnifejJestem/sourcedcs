@@ -68,12 +68,10 @@ def build_targets(groups: list[Group]) -> dict:
         key = f"SAM-{seq}"; seq += 1
         aim_pts = build_aim_points(g, key)
         targets[key] = {
-            "name":                f"{g.name} ({sys.name})",
-            "type":                "SAM",
-            "coords":              dms(g.lat, g.lon),
-            "engagement_range_nm": sys.range_nm,
-            "max_alt_ft":          sys.max_alt_ft,
-            "aim_points":          aim_pts,
+            "name":       f"{g.name} ({sys.name})",
+            "type":       sys.short_name,
+            "coords":     dms(g.lat, g.lon),
+            "aim_points": aim_pts,
         }
         if g.alt_ft is not None:
             targets[key]["elevation"] = f"{g.alt_ft}ft"

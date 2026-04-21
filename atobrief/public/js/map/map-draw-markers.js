@@ -92,7 +92,7 @@ function drawSharedMarkers(ctx, points, showPopup) {
 
     } else if (p.kind === 'shared-steerpoint') {
       // Diamond (rotated square) with a dashed orbit ring — same visual as the
-      // old marshal point, but driven by shared_steerpoints data.
+      // old marshal point, but driven by registry steerpoints data.
       const col = '#7ec8e3';
       const h   = MARSHAL_HALF;
       const pts = `0,${-h} ${h},0 0,${h} ${-h},0`;

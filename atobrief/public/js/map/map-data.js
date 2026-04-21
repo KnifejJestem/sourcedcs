@@ -33,11 +33,16 @@ function collectData(ato, aco) {
   // recovery position rather than the deploy position stored in namedLocs.
   const carrierRecoveryLocs = {};
 
-  (ato.airfields || []).forEach(af => {
+  // Build registry-backed arrays (registry stores dicts keyed by id/icao)
+  const reg = (STATE.pkg && STATE.pkg.registry) || {};
+  const regAirfields = Object.entries(reg.airfields || {}).map(([icao, af]) => ({ icao, ...af }));
+  const regCarriers  = Object.entries(reg.carriers  || {}).map(([id, cv])  => ({ id, ...cv }));
+
+  regAirfields.forEach(af => {
     const p = parseCoord(af.coords);
     if (p && af.icao) namedLocs[af.icao.trim().toUpperCase()] = p;
   });
-  (ato.carriers || []).forEach(cv => {
+  regCarriers.forEach(cv => {
     if (cv.deploy_coords) {
       const p = parseCoord(cv.deploy_coords);
       if (p) {
@@ -68,7 +73,7 @@ function collectData(ato, aco) {
   // ── Phase 1b: Build takeoffs/recoveries-by-location key maps ─
   // Maps a deploy/recovery key (ICAO, carrier callsign, or carrier id) →
   // list of mission summaries used by the airfield and carrier popups.
-  const takeoffsByKey = {};
+  const takeoffsByKey  = {};
   const recoveriesByKey = {};
   missions.forEach(m => {
     const depKey = (m.deploy || '').trim().toUpperCase();
@@ -101,7 +106,7 @@ function collectData(ato, aco) {
   }
 
   // Airfields
-  (ato.airfields || []).forEach(af => {
+  regAirfields.forEach(af => {
     const p = parseCoord(af.coords);
     if (p) {
       const icao = (af.icao || '').trim().toUpperCase();
@@ -132,7 +137,7 @@ function collectData(ato, aco) {
   }
 
   // Carriers
-  (ato.carriers || []).forEach(cv => {
+  regCarriers.forEach(cv => {
     // Collect all keys this carrier is known by (callsign + id, both uppercased)
     const cvKeys = [cv.callsign, cv.id]
       .filter(Boolean).map(k => k.trim().toUpperCase());
@@ -144,6 +149,7 @@ function collectData(ato, aco) {
         label: cv.name || cv.callsign || 'CVN',
         sub: 'DEPLOY EST',
         callsign: cv.callsign,
+        brc: cv.brc,
         takeoffs: mergeByKeys(takeoffsByKey, cvKeys),
       });
     }
@@ -154,6 +160,7 @@ function collectData(ato, aco) {
         label: cv.name || cv.callsign || 'CVN',
         sub: 'RECOVERY EST',
         callsign: cv.callsign,
+        brc: cv.brc,
         recoveries: mergeByKeys(recoveriesByKey, cvKeys),
       });
     }
@@ -168,18 +175,17 @@ function collectData(ato, aco) {
       ...p,
       kind: 'threat',
       label: tgt.name || tgt.id || '?',
-      sub: [tgt.type, tgt.elevation, tgt.engagement_range_nm ? `ER ${tgt.engagement_range_nm}nm` : null].filter(Boolean).join(' · '),
+      sub: [tgt.type, tgt.elevation, tgt._engagement_range_nm ? `ER ${tgt._engagement_range_nm}nm` : null].filter(Boolean).join(' · '),
       threatType: tgt.type,
-      engagementRange: tgt.engagement_range_nm,
-      maxAlt: tgt.max_alt_ft,
+      engagementRange: tgt._engagement_range_nm,
+      maxAlt: tgt._max_alt_ft,
       elevation: tgt.elevation ?? null,
     });
   });
 
-  // ── Phase 3a: Shared steerpoints (must precede Phase 3 so missions can reference them) ──
-  // v2.0: source is registry.shared_steerpoints (propagated to ato._shared_steerpoints)
+  // ── Phase 3a: Registry steerpoints (must precede Phase 3 so missions can reference them) ──
   const sharedSteerpointMap = {};
-  (ato._shared_steerpoints || []).forEach(ssp => {
+  (ato._steerpoints || []).forEach(ssp => {
     if (!ssp.id || !ssp.coords) return;
     const p = parseCoord(ssp.coords);
     if (!p) return;
@@ -239,8 +245,8 @@ function collectData(ato, aco) {
     );
 
     (m.steer_points || []).forEach((sp, i) => {
-      // Handle shared steerpoint references
-      const sspId = typeof sp === 'object' ? sp.shared_steerpoint_id : null;
+      // Handle registry steerpoint references
+      const sspId = typeof sp === 'object' ? sp.id : null;
       if (sspId && sharedSteerpointMap[sspId]) {
         const ssp = sharedSteerpointMap[sspId];
         const p = { lat: ssp.lat, lon: ssp.lon };
@@ -337,40 +343,27 @@ function collectData(ato, aco) {
     if (route.pts.length >= 2) routes.push(route);
   });
 
-  // ── Phase 4: Support flights (tankers + control agencies) ────
-  (ato.support_flights || []).forEach(sf => {
-    const callsign = sf.callsign || '?';
-    const sfKey = `SUPPORT-${callsign}`;
-    const color = typeColor(sf.type);
-    const route = { msnKey: sfKey, callsign, msnNum: '', color, pts: [] };
-
-    (sf.route || []).forEach(wp => {
-      const p = parseCoord(wp.coords);
-      if (p) route.pts.push({ ...p, kind: 'route-node' });
+  // ── Phase 4: Tanker orbits from registry ─────────────────────
+  Object.entries(reg.tankers || {}).forEach(([id, t]) => {
+    if (!t.orbit_anchor_coords) return;
+    const anchorPt = parseCoord(t.orbit_anchor_coords);
+    if (!anchorPt) return;
+    const altFt = t.altitude_ft;
+    airspaces.push({
+      kind: 'airspace',
+      name: t.callsign || id,
+      type: 'REFUEL',
+      altLower: altFt != null ? `FL${String(Math.round(altFt / 100)).padStart(3, '0')}` : null,
+      altUpper: null,
+      lat: anchorPt.lat, lon: anchorPt.lon,
+      shape: 'anchor',
+      anchorPt,
+      headingDeg: t.orbit_heading_deg || 0,
+      legLengthNm: t.orbit_leg_nm || 10,
+      widthNm: t.orbit_width_nm || 5,
+      direction: (t.orbit_direction || 'ccw').toLowerCase(),
+      speedKts: t.speed_kts,
     });
-    if (route.pts.length >= 2) routes.push(route);
-
-    if (sf.orbit && sf.orbit.anchor_point) {
-      const anchorPt = parseCoord(sf.orbit.anchor_point);
-      if (anchorPt) {
-        const orb = sf.orbit;
-        airspaces.push({
-          kind: 'airspace',
-          name: callsign,
-          type: sf.type === 'TANKER' ? 'REFUEL' : 'ORBIT',
-          altLower: orb.altitude_ft != null ? Math.round(orb.altitude_ft / 100) * 100 + 'ft' : null,
-          altUpper: null,
-          lat: anchorPt.lat, lon: anchorPt.lon,
-          shape: 'anchor',
-          anchorPt,
-          headingDeg: orb.heading_deg || 0,
-          legLengthNm: orb.leg_nm || 10,
-          widthNm: orb.width_nm || 5,
-          direction: (orb.direction || 'ccw').toLowerCase(),
-          speedKts: orb.speed_kts,
-        });
-      }
-    }
   });
 
   // ── Phase 5: ACO airspace measures ────────────────────────
@@ -381,7 +374,7 @@ function collectData(ato, aco) {
       name: acm.name, type: acm.type,
       altLower: acm.alt_lower, altUpper: acm.alt_upper,
       timeFrom: acm.time_from, timeTo: acm.time_to,
-      agency: acm.control_agency, freq: acm.control_freq_mhz,
+      agency: acm.control_agency,
       notes: acm.notes, missions: acm.missions,
     };
 

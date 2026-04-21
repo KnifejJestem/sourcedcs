@@ -138,16 +138,14 @@ def _parse_special_waypoint(name: str | None) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _ft_between_3d(x1: float, y1: float, alt1_ft: float | None,
-                   x2: float, y2: float, alt2_ft: float | None) -> float:
-    """3D Euclidean distance in feet between two waypoints."""
+def _ft_between_2d(x1: float, y1: float, x2: float, y2: float) -> float:
+    """2D (horizontal) Euclidean distance in feet between two waypoints. Altitude is ignored."""
     dx_ft = (x2 - x1) / _FT_TO_M
     dy_ft = (y2 - y1) / _FT_TO_M
-    dalt  = ((alt2_ft or 0) - (alt1_ft or 0))
-    return math.sqrt(dx_ft * dx_ft + dy_ft * dy_ft + dalt * dalt)
+    return math.sqrt(dx_ft * dx_ft + dy_ft * dy_ft)
 
 
-_MERGE_THRESHOLD_FT = 750.0  # 3D proximity threshold for shared steerpoint merging
+_MERGE_THRESHOLD_FT = 1000.0  # 2D (horizontal) proximity threshold for steerpoint merging
 
 
 def _parse_dms_approx(coord_str: str) -> tuple[float | None, float | None]:
@@ -297,17 +295,18 @@ def _classify_waypoints(flight: Flight,
     return result
 
 
-def merge_shared_steerpoints(
+def merge_steerpoints(
     flight_steerpoints: dict[str, list[dict]],
 ) -> tuple[list[dict], dict[str, list[dict]]]:
     """
-    Merge functionally-identical special waypoints across flights into shared
-    steerpoints.
+    Merge functionally-identical special waypoints across flights into shared steerpoints.
 
     Merge criteria (all three must be true):
-    1. Both waypoints are the same special_type (IP, EP, MARSHAL)
-    2. Within 750 ft of each other in 3D space
+    1. Both waypoints are the same special_type (IP, EP, MARSHAL, WP)
+    2. Within 1000 ft of each other in 2D (horizontal) space — altitude is ignored
     3. Names are compatible (both unnamed, or same name)
+
+    When merging, the higher altitude of the cluster is used (not average).
     """
     specials: list[tuple[str, int, dict]] = []
     for flight_name, sps in flight_steerpoints.items():
@@ -320,7 +319,7 @@ def merge_shared_steerpoints(
         key = (sp["special_type"], sp.get("special_name"))
         groups[key].append((flight_name, idx, sp))
 
-    shared_steerpoints: list[dict] = []
+    steerpoints: list[dict] = []
     ssp_counter = 1
     merged_indices: dict[tuple[str, int], str] = {}
 
@@ -341,9 +340,9 @@ def merge_shared_steerpoints(
                 if j in used:
                     continue
                 for _, _, csp in cluster:
-                    dist = _ft_between_3d(
-                        csp.get("_x", 0), csp.get("_y", 0), csp.get("altitude_ft"),
-                        sp2.get("_x", 0), sp2.get("_y", 0), sp2.get("altitude_ft"),
+                    dist = _ft_between_2d(
+                        csp.get("_x", 0), csp.get("_y", 0),
+                        sp2.get("_x", 0), sp2.get("_y", 0),
                     )
                     if dist <= _MERGE_THRESHOLD_FT:
                         cluster.append((fn2, idx2, sp2))
@@ -373,7 +372,8 @@ def merge_shared_steerpoints(
 
             avg_lat = sum(lats) / len(lats) if lats else 0
             avg_lon = sum(lons) / len(lons) if lons else 0
-            avg_alt = round(sum(alts) / len(alts)) if alts else None
+            # Use the highest altitude in the cluster (not average)
+            max_alt = max(alts) if alts else None
 
             centroid_coords = dms(avg_lat, avg_lon)
 
@@ -385,19 +385,19 @@ def merge_shared_steerpoints(
             }
             if sname:
                 ssp["name"] = sname
-            if avg_alt is not None:
-                ssp["altitude_ft"] = avg_alt
+            if max_alt is not None:
+                ssp["altitude_ft"] = max_alt
 
-            shared_steerpoints.append(ssp)
+            steerpoints.append(ssp)
 
-    # Update flight steerpoints: replace merged entries with shared_steerpoint_id refs
+    # Update flight steerpoints: replace merged entries with registry ref {id: ssp_id}
     updated: dict[str, list[dict]] = {}
     for flight_name, sps in flight_steerpoints.items():
         new_sps = []
         for i, sp in enumerate(sps):
             ssp_id = merged_indices.get((flight_name, i))
             if ssp_id:
-                new_sps.append({"shared_steerpoint_id": ssp_id})
+                new_sps.append({"id": ssp_id})
             else:
                 clean = {k: v for k, v in sp.items() if not k.startswith("_")}
                 clean.pop("special_type", None)
@@ -405,7 +405,7 @@ def merge_shared_steerpoints(
                 new_sps.append(clean)
         updated[flight_name] = new_sps
 
-    return shared_steerpoints, updated
+    return steerpoints, updated
 
 
 def _home_base(flight: Flight, airfields: dict[str, dict],
@@ -508,37 +508,15 @@ def _build_mission_targets(steer_pts: list[dict], targets: dict,
         return None
 
     is_orbit = task in ('CAP', 'CAS', 'ESCORT', 'TANKER', 'FAC(A)')
-    # Build a map from aim_point_id → altitude_ft for fast lookup
-    sp_alt_by_apid: dict[str, float] = {
-        sp['aim_point_id']: sp['altitude_ft']
-        for sp in steer_pts
-        if sp.get('aim_point_id') and sp.get('altitude_ft') is not None
-    }
     result = []
-    for tgt_id, ap_ids in seen_tgt.items():
-        tgt_info = targets.get(tgt_id, {})
-        raw_name = tgt_info.get('name') or tgt_id
-        location = re.sub(r'\s*\([^)]+\)\s*$', '', raw_name).strip() or tgt_id
-        entry: dict = {
-            "location":  location,
-            "target_id": tgt_id,
-        }
-        # Derive attack altitude from the steer point that flies over this target
-        attack_alt_ft = next(
-            (sp_alt_by_apid[apid] for apid in ap_ids if apid in sp_alt_by_apid),
-            None,
-        )
-        if attack_alt_ft is not None:
-            entry["altitude"] = f"{round(attack_alt_ft)}FT"
+    for tgt_id, _ in seen_tgt.items():
+        entry: dict = {"target_id": tgt_id}
         if is_orbit:
             entry["tos"]   = None
             entry["toffs"] = None
         else:
             entry["tot_net"] = None
             entry["tot_nlt"] = None
-        all_ap_ids = [ap['id'] for ap in tgt_info.get('aim_points', [])]
-        if ap_ids and ap_ids != all_ap_ids:
-            entry["aim_points"] = [{"aim_point_id": a} for a in ap_ids]
         result.append(entry)
 
     return result or None
@@ -581,13 +559,13 @@ def build_missions(flights: list[Flight], msn_start: int,
                    theatre: str = "Syria") -> tuple[list[dict], list[dict]]:
     """
     Produce the ato.missions list for non-tanker, non-AWACS flights,
-    and the shared_steerpoints list for merged waypoints.
+    and the steerpoints list for merged waypoints.
 
     When a flight has a DTC cartridge whose DTC data contains 'nav_pts',
     those steerpoints are used instead of the mission-file waypoints.
     If NAV_PTS is absent the behaviour is unchanged (backwards compatible).
 
-    Returns (missions, shared_steerpoints).
+    Returns (missions, steerpoints).
     """
     missions = []
     strike_i = 0
@@ -628,31 +606,30 @@ def build_missions(flights: list[Flight], msn_start: int,
         msn_targets = _build_mission_targets(steer_pts, targets, f.task)
 
         msn: dict = {
-            "mission_number":       msn_num,
-            "callsign":             callsign,
-            "mission_type":         f.task,
-            "unit":                 None,
-            "home_base_icao":       deploy,
-            "deploy_location_icao": deploy,
-            "aar_location_icao":    recovery,
-            "takeoff_time":         None,
-            "recovery_time":        None,
+            "mission_number": msn_num,
+            "callsign":       callsign,
+            "mission_type":   f.task,
+            "unit":           None,
+            "deploy":         deploy,
+            "recovery":       recovery,
+            "takeoff_time":   None,
+            "recovery_time":  None,
             "aircraft": {
                 "count":   count,
                 "type":    ac_type,
                 "loadout": loadout_str,
             },
-            "targets":         msn_targets,
-            "control":         {"agency_id": None},
-            "refuel":          None,
-            "steer_points":    None,  # filled after merge
-            "dtc_cartridge":   f.dtc_cartridge,
+            "targets":       msn_targets,
+            "control":       {"agency_id": None},
+            "refuel":        None,
+            "steer_points":  None,  # filled after merge
+            "dtc_cartridge": f.dtc_cartridge,
         }
 
         missions.append(msn)
 
-    # Merge shared steerpoints across all flights
-    shared_steerpoints, updated_sps = merge_shared_steerpoints(flight_steerpoints)
+    # Merge steerpoints across all flights
+    steerpoints, updated_sps = merge_steerpoints(flight_steerpoints)
 
     # Wire merged steer_points back into missions
     for msn in missions:
@@ -660,4 +637,4 @@ def build_missions(flights: list[Flight], msn_start: int,
         if cs in updated_sps:
             msn["steer_points"] = updated_sps[cs] or None
 
-    return missions, shared_steerpoints
+    return missions, steerpoints

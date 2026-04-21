@@ -393,121 +393,28 @@ function loadPackage_obj(data) {
       pkg.comms.classification = h.classification;
   }
 
-  // ── Resolve registry airfields into ato.airfields ────────
-  if (pkg.registry?.airfields && pkg.ato?.airfields) {
-    pkg.ato.airfields.forEach(af => {
-      const reg = pkg.registry.airfields[af.icao];
-      if (reg) {
-        if (reg.name != null)          af.name          = reg.name;
-        if (reg.coords != null)        af.coords        = reg.coords;
-        if (reg.elevation_ft != null)  af.elevation_ft  = reg.elevation_ft;
-        if (reg.runways != null)       af.runways       = reg.runways;
-      }
-    });
-  }
-
-  // ── Resolve registry carriers into ato.carriers ─────────
-  if (pkg.registry?.carriers && pkg.ato?.carriers) {
-    pkg.ato.carriers.forEach(cv => {
-      const reg = pkg.registry.carriers[cv.id];
-      if (reg) {
-        if (reg.name != null)            cv.name            = reg.name;
-        if (reg.callsign != null)        cv.callsign        = reg.callsign;
-        if (reg.deploy_coords != null)   cv.deploy_coords   = reg.deploy_coords;
-        if (reg.recovery_coords != null) cv.recovery_coords = reg.recovery_coords;
-      }
-    });
-  }
-
-  // ── Resolve ato.support_flights from registry (v2.0) ───
-  // In v2.0, ato.support_flights is a flat list of ID strings.
-  // Resolve each ID to a full object from registry.tankers or registry.control_agencies.
-  if (pkg.ato?.support_flights && Array.isArray(pkg.ato.support_flights) && pkg.registry) {
-    const tankerDict  = pkg.registry.tankers         || {};
-    const agencyDict  = pkg.registry.control_agencies || {};
-
-    // Build fast lookup maps by both key and callsign
-    const tankerMap = {};
-    Object.entries(tankerDict).forEach(([k, t]) => {
-      tankerMap[k] = t;
-      if (t.callsign) tankerMap[t.callsign] = t;
-    });
-    const agencyMap = {};
-    Object.entries(agencyDict).forEach(([k, a]) => {
-      agencyMap[k] = a;
-      if (a.callsign) agencyMap[a.callsign] = a;
-    });
-
-    pkg.ato.support_flights = pkg.ato.support_flights.map(entry => {
-      // Already a full object (legacy format) — pass through
-      if (typeof entry === 'object') return entry;
-
-      const id = entry;
-
-      // Try tankers first
-      const t = tankerMap[id];
-      if (t) {
-        return {
-          id,
-          callsign:     t.callsign || id,
-          type:         t.type || 'tanker',
-          aircraft_type: t.aircraft_type || t.platform,
-          freq_mhz:     t.freq_mhz,
-          count:        t.count,
-          altitude_ft:  t.altitude_ft,
-          ar_track:     t.ar_track,
-          orbit: t.orbit_anchor_coords ? {
-            anchor_point: t.orbit_anchor_coords,
-            heading_deg:  t.orbit_heading_deg,
-            leg_nm:       t.orbit_leg_nm,
-            width_nm:     t.orbit_width_nm,
-            direction:    t.orbit_direction,
-          } : (t.orbit || undefined),
-          route: t.route,
-          _registry: t,
-        };
-      }
-
-      // Try control agencies
-      const a = agencyMap[id];
-      if (a) {
-        return {
-          id,
-          callsign:     a.callsign || id,
-          type:         a.type || 'control',
-          aircraft_type: a.platform,
-          freq_mhz:     a.primary_freq_mhz,
-          orbit: a.orbit_anchor_coords ? {
-            anchor_point: a.orbit_anchor_coords,
-            heading_deg:  a.orbit_heading_deg,
-            leg_nm:       a.orbit_leg_nm,
-            width_nm:     a.orbit_width_nm,
-            direction:    a.orbit_direction,
-          } : (a.orbit || undefined),
-          route: a.route,
-          _registry: a,
-        };
-      }
-
-      // Fallback
-      return { id, callsign: id };
-    });
-  }
-
   // ── Resolve registry targets into ato.targets ───────────
   if (pkg.registry?.targets && pkg.ato) {
     // Always rebuild from registry so edits are reflected
+    const samDb = window.SAM_DB || {};
     pkg.ato.targets = [];
     Object.entries(pkg.registry.targets).forEach(([id, t]) => {
-      pkg.ato.targets.push({ id, ...t });
+      const entry = { id, ...t };
+      // Resolve engagement ring data from SAM database using the type key
+      const samData = samDb[entry.type];
+      if (samData) {
+        entry._engagement_range_nm = samData.range_nm;
+        entry._max_alt_ft          = samData.max_alt_ft;
+      }
+      pkg.ato.targets.push(entry);
     });
   }
 
-  // ── Propagate registry.bullseye and shared_steerpoints onto ato ──
+  // ── Propagate registry.bullseye and steerpoints onto ato ──
   // Gives map-data.js and view code easy access via the ato object.
   if (pkg.registry && pkg.ato) {
-    if (pkg.registry.bullseye)           pkg.ato._bullseye           = pkg.registry.bullseye;
-    if (pkg.registry.shared_steerpoints) pkg.ato._shared_steerpoints = pkg.registry.shared_steerpoints;
+    if (pkg.registry.bullseye)    pkg.ato._bullseye    = pkg.registry.bullseye;
+    if (pkg.registry.steerpoints) pkg.ato._steerpoints = pkg.registry.steerpoints;
   }
 
   // ── Normalize ingame start time (always Zulu in v2.0) ────────
@@ -531,8 +438,10 @@ function loadPackage_obj(data) {
           const t = ref.tanker_id ? tankerMap[ref.tanker_id] : null;
           if (t) {
             if (!ref._tanker_callsign) ref._tanker_callsign = t.callsign;
-            if (!ref._ar_track)        ref._ar_track        = t.ar_track;
-            if (!ref._altitude)        ref._altitude        = t.altitude_ft;
+            // Derive altitude display from altitude_ft (e.g. FL190)
+            if (!ref._altitude && t.altitude_ft) {
+              ref._altitude = 'FL' + String(Math.round(t.altitude_ft / 100)).padStart(3, '0');
+            }
           }
         });
       }
@@ -602,6 +511,30 @@ function loadPackage_obj(data) {
           const reg = tgtMap[target.target_id];
           if (reg) target._name = reg.name || reg.id || target.target_id;
         }
+      });
+    });
+  }
+
+  // ── Derive mission timing from steerpoints ────────────────
+  // ip steerpoint time → _vul_start
+  // ep steerpoint time → _vul_end
+  // marshal steerpoint time → _marshal_time
+  if (pkg.ato?.missions && pkg.registry?.steerpoints) {
+    const sspMap = {};
+    (pkg.registry.steerpoints || []).forEach(function (s) {
+      if (s.id) sspMap[s.id] = s;
+    });
+    pkg.ato.missions.forEach(function (m) {
+      (m.steer_points || []).forEach(function (sp) {
+        // Registry ref entry: { id, time? }
+        var sspId = sp.id;
+        var time  = sp.time;
+        if (!sspId || !time) return;
+        var ssp = sspMap[sspId];
+        if (!ssp) return;
+        if (ssp.type === 'ip'      && !m._vul_start)    m._vul_start    = time;
+        if (ssp.type === 'ep'      && !m._vul_end)      m._vul_end      = time;
+        if (ssp.type === 'marshal' && !m._marshal_time) m._marshal_time = time;
       });
     });
   }
@@ -726,6 +659,15 @@ document.addEventListener('DOMContentLoaded', () => {
     .catch(function (err) {
       console.error('Failed to load spins-presets.json:', err);
       window.SPINS_PRESETS = {};
+    });
+
+  // ── Load SAM database for engagement ring resolution ─────
+  fetch('data/sam_database.json')
+    .then(function (r) { return r.json(); })
+    .then(function (data) { window.SAM_DB = data; })
+    .catch(function (err) {
+      console.error('Failed to load sam_database.json:', err);
+      window.SAM_DB = {};
     });
 
   const fileInput = document.getElementById('fileInput');

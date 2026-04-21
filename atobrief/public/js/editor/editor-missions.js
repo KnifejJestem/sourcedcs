@@ -55,10 +55,10 @@ function deleteMission(index) {
   var m = ato.missions[index];
   if (!confirm('Delete mission ' + (m.callsign || '#' + index) + '?')) return;
 
-  // Collect shared steerpoint IDs referenced by this mission
+  // Collect steerpoint IDs referenced by this mission
   var referencedSspIds = new Set();
   (m.steer_points || []).forEach(function (sp) {
-    if (sp && sp.shared_steerpoint_id) referencedSspIds.add(sp.shared_steerpoint_id);
+    if (sp && sp.id) referencedSspIds.add(sp.id);
   });
 
   ato.missions.splice(index, 1);
@@ -123,9 +123,7 @@ function _buildTimingSection(body, m, f) {
   editorSectionTitle(body, 'TIMING');
   f.takeoff_time  = editorField(body, 'Takeoff Time',  m.takeoff_time,  { placeholder: '2000' });
   f.recovery_time = editorField(body, 'Recovery Time', m.recovery_time, { placeholder: '2300' });
-  f.marshal_time  = editorField(body, 'Marshal Time',  m.marshal_time,  { placeholder: '1945' });
-  f.vul_start     = editorField(body, 'VUL Start',     m.vul_start,     { placeholder: '2040' });
-  f.vul_end       = editorField(body, 'VUL End',       m.vul_end,       { placeholder: '2115' });
+  // marshal_time, vul_start, vul_end are derived at load time from steerpoints (ip/ep/marshal type)
 }
 
 function _buildTargetSection(body, m, msnTitle, onSave) {
@@ -154,21 +152,15 @@ function _buildControlSection(body, m, f) {
 
   // Resolve freq from registry when agency is selected
   var agencyReg = (STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.control_agencies) || {};
-  var resolvedPrimary   = ctrl.agency_id && agencyReg[ctrl.agency_id] ? agencyReg[ctrl.agency_id].primary_freq_mhz   : null;
-  var resolvedSecondary = ctrl.agency_id && agencyReg[ctrl.agency_id] ? agencyReg[ctrl.agency_id].secondary_freq_mhz : null;
+  var resolvedPrimary = ctrl.agency_id && agencyReg[ctrl.agency_id] ? agencyReg[ctrl.agency_id].primary_freq_mhz : null;
 
-  f.ctrl_primary   = editorField(body, 'Primary Freq (MHz)',   resolvedPrimary || ctrl.primary_freq_mhz || '', {
+  f.ctrl_primary = editorField(body, 'Primary Freq (MHz)', resolvedPrimary || ctrl.primary_freq_mhz || '', {
     placeholder: '260.0',
     disabled: !!resolvedPrimary,
     hint: resolvedPrimary ? 'Read from registry' : undefined,
   });
-  f.ctrl_secondary = editorField(body, 'Secondary Freq (MHz)', resolvedSecondary || ctrl.secondary_freq_mhz || '', {
-    placeholder: '134.0',
-    disabled: !!resolvedSecondary,
-    hint: resolvedSecondary ? 'Read from registry' : undefined,
-  });
 
-  // Update freq fields when agency selection changes
+  // Update freq field when agency selection changes
   f.ctrl_agency_id.addEventListener('change', function () {
     var agId = this.value;
     var ag   = agId ? agencyReg[agId] : null;
@@ -177,12 +169,6 @@ function _buildControlSection(body, m, f) {
       f.ctrl_primary.disabled = true;
     } else {
       f.ctrl_primary.disabled = false;
-    }
-    if (ag && ag.secondary_freq_mhz) {
-      f.ctrl_secondary.value    = ag.secondary_freq_mhz;
-      f.ctrl_secondary.disabled = true;
-    } else {
-      f.ctrl_secondary.disabled = false;
     }
   });
 }
@@ -241,16 +227,16 @@ function _collectRefuel(body) {
 
 function _buildSteerPointsSection(body, m) {
   editorSectionTitle(body, 'STEER POINTS');
-  // Preserve the full steer_points array including shared_steerpoint_id references.
-  // Regular steer points are represented as { name, coords, orbit? }.
-  // Shared steerpoint refs are { shared_steerpoint_id: '...' } — kept as-is.
+  // Preserve the full steer_points array including registry ref entries.
+  // Regular steer points are represented as { name, coords, altitude_ft?, time?, orbit? }.
+  // Registry steerpoint refs are { id: '...', time?: '...' } — kept as-is.
   // Extra informational properties (aim_point_id, altitude_ft, name_ref, _x, _y, etc.)
   // are not editable in the UI but must be round-tripped so that saving the form does
   // not silently strip data produced by miztoyaml or manually added by the user.
   var steerPts = (m.steer_points || []).map(function (sp) {
-    if (sp && sp.shared_steerpoint_id) {
-      // Preserve shared steerpoint reference unchanged
-      return { shared_steerpoint_id: sp.shared_steerpoint_id };
+    if (sp && sp.id) {
+      // Preserve registry steerpoint reference; keep optional time field
+      return sp.time ? { id: sp.id, time: sp.time } : { id: sp.id };
     }
     // Copy all properties so non-editable fields (aim_point_id, altitude_ft, name_ref,
     // _x, _y, special_type, …) survive the round-trip through the editor.
@@ -307,15 +293,11 @@ function _collectMissionDraft() {
 
   m.takeoff_time  = f.takeoff_time.value || undefined;
   m.recovery_time = f.recovery_time.value || undefined;
-  m.marshal_time  = f.marshal_time.value || undefined;
-  m.vul_start     = f.vul_start.value || undefined;
-  m.vul_end       = f.vul_end.value || undefined;
 
   if (f.ctrl_agency_id && (f.ctrl_agency_id.value || f.ctrl_primary.value)) {
     m.control = m.control || {};
-    m.control.agency_id          = f.ctrl_agency_id.value || undefined;
-    m.control.primary_freq_mhz   = f.ctrl_primary.disabled   ? undefined : (f.ctrl_primary.value || undefined);
-    m.control.secondary_freq_mhz = f.ctrl_secondary.disabled ? undefined : (f.ctrl_secondary.value || undefined);
+    m.control.agency_id        = f.ctrl_agency_id.value || undefined;
+    m.control.primary_freq_mhz = f.ctrl_primary.disabled ? undefined : (f.ctrl_primary.value || undefined);
   }
 
   // Refuel — v2.0 array; collect from dynamic list rendered in body
@@ -356,23 +338,20 @@ function _saveMissionFromForm(onSave) {
   // Timing
   m.takeoff_time  = f.takeoff_time.value || undefined;
   m.recovery_time = f.recovery_time.value || undefined;
-  m.marshal_time  = f.marshal_time.value || undefined;
-  m.vul_start     = f.vul_start.value || undefined;
-  m.vul_end       = f.vul_end.value || undefined;
+  // marshal_time, vul_start, vul_end are derived from steerpoints at load time
 
   // Targets
   var savedTargets = (body._targets || []).filter(function (t) {
-    return t.location || t.target_id || t.tot_net || t.tos;
+    return t.target_id || t.tot_net || t.tos;
   });
   m.targets = savedTargets.length ? savedTargets : undefined;
 
   // Control
   if (f.ctrl_agency_id.value || f.ctrl_primary.value) {
     m.control = m.control || {};
-    m.control.agency_id          = f.ctrl_agency_id.value || undefined;
+    m.control.agency_id        = f.ctrl_agency_id.value || undefined;
     // Only save freq if it was manually entered (not resolved from registry)
-    m.control.primary_freq_mhz   = f.ctrl_primary.disabled   ? undefined : (f.ctrl_primary.value || undefined);
-    m.control.secondary_freq_mhz = f.ctrl_secondary.disabled ? undefined : (f.ctrl_secondary.value || undefined);
+    m.control.primary_freq_mhz = f.ctrl_primary.disabled ? undefined : (f.ctrl_primary.value || undefined);
   }
 
   // Refuel — v2.0: array of {tanker_id, time_from, time_to}
@@ -383,7 +362,7 @@ function _saveMissionFromForm(onSave) {
   // valid route-shaping waypoints and must not be discarded.  Completely empty
   // placeholder rows (added by the UI but never filled in) are filtered out.
   var steerPts = (body._steerPoints || []).filter(function (sp) {
-    if (sp && sp.shared_steerpoint_id) return true; // always keep SSP refs
+    if (sp && sp.id) return true; // always keep registry steerpoint refs
     return sp.coords || sp.name_ref;                // coords or named-location ref required
   });
   m.steer_points = steerPts.length ? steerPts : undefined;

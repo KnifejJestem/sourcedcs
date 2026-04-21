@@ -65,8 +65,9 @@ function buildAirfieldRows(p) {
 
 function buildCarrierRows(p) {
   const rows = [['NAME', p.label]];
-  if (p.callsign) rows.push(['CALLSIGN', p.callsign]);
-  if (p.sub)      rows.push(['STATUS',   p.sub]);
+  if (p.callsign)  rows.push(['CALLSIGN', p.callsign]);
+  if (p.brc != null) rows.push(['BRC', String(p.brc).padStart(3, '0') + '°']);
+  if (p.sub)       rows.push(['STATUS',   p.sub]);
   if (p.takeoffs?.length) {
     p.takeoffs.forEach(t => rows.push(['TAKEOFF', fmtMsnEntry(t)]));
   }

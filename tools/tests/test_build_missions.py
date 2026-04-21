@@ -6,13 +6,13 @@ from tools.miztoyaml.build_missions import (
     AIRDROME_IDS,
     SPECIAL_WAYPOINT_TYPES,
     _FT_TO_M,
-    _ft_between_3d,
+    _ft_between_2d,
     _nm_between,
     _parse_dms_approx,
     _parse_special_waypoint,
     build_airfields_registry,
     build_missions,
-    merge_shared_steerpoints,
+    merge_steerpoints,
     steerpoints_from_dtc_nav_pts,
 )
 from tools.miztoyaml.models import Carrier, Flight, FlightUnit, Waypoint
@@ -31,18 +31,19 @@ class TestNmBetween:
         assert d > 1.0
 
 
-class TestFtBetween3d:
+class TestFtBetween2d:
     def test_zero(self):
-        assert _ft_between_3d(0, 0, 0, 0, 0, 0) == 0.0
+        assert _ft_between_2d(0, 0, 0, 0) == 0.0
 
-    def test_altitude_only(self):
-        result = _ft_between_3d(0, 0, 0, 0, 0, 1000)
+    def test_horizontal(self):
+        # 1 ft = _FT_TO_M metres; move 1000 ft east
+        result = _ft_between_2d(0, 0, 0, 1000 * _FT_TO_M)
         assert result == pytest.approx(1000.0)
 
-    def test_null_altitudes(self):
-        # None altitude defaults to 0
-        result = _ft_between_3d(0, 0, None, 0, 0, None)
-        assert result == 0.0
+    def test_diagonal(self):
+        # 3-4-5 triangle in feet → hypotenuse 500 ft
+        result = _ft_between_2d(0, 0, 300 * _FT_TO_M, 400 * _FT_TO_M)
+        assert result == pytest.approx(500.0)
 
 
 class TestParseSpecialWaypoint:
@@ -122,7 +123,7 @@ class TestBuildAirfieldsRegistry:
         assert build_airfields_registry([], [], "Syria") == {}
 
 
-class TestMergeSharedSteerpoints:
+class TestMergeSteerpoints:
     def _make_sp(self, stype, x=0, y=0, alt=None, name=None):
         sp = {"coords": "N36°00'00\" E037°00'00\"", "special_type": stype,
               "_x": x, "_y": y}
@@ -137,7 +138,7 @@ class TestMergeSharedSteerpoints:
             "VIPER-1": [self._make_sp("ip")],
             "VIPER-2": [self._make_sp("ip")],
         }
-        shared, updated = merge_shared_steerpoints(flight_sps)
+        shared, updated = merge_steerpoints(flight_sps)
         assert len(shared) == 1
         assert shared[0]["id"] == "SSP-1"
         assert "VIPER-1" in shared[0]["flights"]
@@ -148,7 +149,7 @@ class TestMergeSharedSteerpoints:
             "F1": [self._make_sp("ip")],
             "F2": [self._make_sp("ep")],
         }
-        shared, _ = merge_shared_steerpoints(flight_sps)
+        shared, _ = merge_steerpoints(flight_sps)
         assert len(shared) == 0
 
     def test_no_merge_too_far(self):
@@ -156,12 +157,12 @@ class TestMergeSharedSteerpoints:
             "F1": [self._make_sp("ip", x=0, y=0)],
             "F2": [self._make_sp("ip", x=10000, y=10000)],
         }
-        shared, _ = merge_shared_steerpoints(flight_sps)
+        shared, _ = merge_steerpoints(flight_sps)
         assert len(shared) == 0
 
     def test_single_flight_no_merge(self):
         flight_sps = {"F1": [self._make_sp("ip")]}
-        shared, _ = merge_shared_steerpoints(flight_sps)
+        shared, _ = merge_steerpoints(flight_sps)
         assert len(shared) == 0
 
     def test_updated_sps_has_reference(self):
@@ -169,9 +170,9 @@ class TestMergeSharedSteerpoints:
             "F1": [self._make_sp("ip")],
             "F2": [self._make_sp("ip")],
         }
-        shared, updated = merge_shared_steerpoints(flight_sps)
-        assert "shared_steerpoint_id" in updated["F1"][0]
-        assert updated["F1"][0]["shared_steerpoint_id"] == "SSP-1"
+        shared, updated = merge_steerpoints(flight_sps)
+        assert "id" in updated["F1"][0]
+        assert updated["F1"][0]["id"] == "SSP-1"
 
     def test_non_special_preserved(self):
         flight_sps = {
@@ -181,10 +182,30 @@ class TestMergeSharedSteerpoints:
             ],
             "F2": [self._make_sp("ip")],
         }
-        shared, updated = merge_shared_steerpoints(flight_sps)
+        shared, updated = merge_steerpoints(flight_sps)
         assert len(updated["F1"]) == 2
-        # First entry should not have shared_steerpoint_id
-        assert "shared_steerpoint_id" not in updated["F1"][0]
+        # First entry should not have an id ref (it is a plain inline steerpoint)
+        assert "id" not in updated["F1"][0]
+
+    def test_higher_altitude_picked(self):
+        """When merging, the maximum altitude of the cluster is kept."""
+        flight_sps = {
+            "F1": [self._make_sp("ip", alt=10000)],
+            "F2": [self._make_sp("ip", alt=15000)],
+        }
+        shared, _ = merge_steerpoints(flight_sps)
+        assert shared[0]["altitude_ft"] == 15000
+
+    def test_altitude_ignored_for_distance(self):
+        """Altitude difference should not prevent merging within 2D threshold."""
+        # Same 2D position but very different altitudes — should still merge
+        flight_sps = {
+            "F1": [self._make_sp("ip", x=0, y=0, alt=5000)],
+            "F2": [self._make_sp("ip", x=0, y=0, alt=50000)],
+        }
+        shared, _ = merge_steerpoints(flight_sps)
+        assert len(shared) == 1
+        assert shared[0]["altitude_ft"] == 50000
 
 
 class TestBuildMissions:

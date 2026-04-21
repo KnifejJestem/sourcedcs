@@ -32,6 +32,7 @@ var REGISTRY_CATEGORIES = {
     fields: [
       { key: 'name',            label: 'Name',            placeholder: 'e.g. USS ROOSEVELT' },
       { key: 'callsign',        label: 'Callsign',        placeholder: 'e.g. ROUGH RIDER' },
+      { key: 'brc',             label: 'BRC (°)',         type: 'number', placeholder: '045' },
       { key: 'deploy_coords',   label: 'Deploy Coords',   placeholder: "N24°30'00\" E059°15'00\"", coordPick: true },
       { key: 'recovery_coords', label: 'Recovery Coords',  placeholder: "N24°45'00\" E059°30'00\"", coordPick: true },
     ],
@@ -41,10 +42,8 @@ var REGISTRY_CATEGORIES = {
     idLabel: 'ID',
     fields: [
       { key: 'callsign',           label: 'Callsign',           placeholder: 'e.g. ARCO4' },
-      { key: 'ar_track',           label: 'AR Track',           placeholder: 'e.g. AR394' },
-      { key: 'altitude',           label: 'Altitude',           placeholder: 'e.g. FL240' },
+      { key: 'altitude_ft',        label: 'Altitude (ft)',      type: 'number', placeholder: '24000' },
       { key: 'tacan',              label: 'TACAN',              placeholder: 'e.g. 39X' },
-      { key: 'tacan_role',         label: 'TACAN Role',         placeholder: 'e.g. REFUELING' },
       { key: 'freq_mhz',           label: 'Freq (MHz)',         type: 'number', placeholder: '251.0' },
       { key: 'speed_kts',          label: 'Speed (kts)',        type: 'number', placeholder: '300' },
       { key: 'orbit_anchor_coords', label: 'Orbit Anchor',     placeholder: "N24°30'00\" E055°30'00\"", coordPick: true },
@@ -58,12 +57,10 @@ var REGISTRY_CATEGORIES = {
     label: 'TARGETS', tab: 'TARGETS',
     idLabel: 'ID',
     fields: [
-      { key: 'name',               label: 'Name',               placeholder: 'e.g. SA-2 Guideline' },
-      { key: 'type',               label: 'Type',               placeholder: 'SAM / EWR / BUILDING' },
-      { key: 'coords',             label: 'Coordinates',        placeholder: "N26°30'00\" E056°20'00\"", coordPick: true },
-      { key: 'elevation',          label: 'Elevation',          placeholder: '150ft' },
-      { key: 'engagement_range_nm', label: 'Engagement Range (NM)', type: 'number' },
-      { key: 'max_alt_ft',         label: 'Max Altitude (ft)',  type: 'number' },
+      { key: 'name',     label: 'Name',        placeholder: 'e.g. SA-2 Guideline' },
+      { key: 'type',     label: 'SAM Type',    placeholder: 'e.g. SA-2, PATRIOT — keys sam_database.json' },
+      { key: 'coords',   label: 'Coordinates', placeholder: "N26°30'00\" E056°20'00\"", coordPick: true },
+      { key: 'elevation', label: 'Elevation',  placeholder: '150ft' },
     ],
   },
   reference_points: {
@@ -74,19 +71,15 @@ var REGISTRY_CATEGORIES = {
       { key: 'type',     label: 'Type',     type: 'select', options: [{ value: '', label: '— select type —' }, 'bullseye'] },
       { key: 'coords',   label: 'Coordinates', placeholder: "N26°51'19\" E056°21'37\"", coordPick: true },
       { key: 'altitude', label: 'Altitude', placeholder: 'FL250' },
-      { key: 'time_on_station',  label: 'Time On Station',  placeholder: '2030' },
-      { key: 'time_off_station', label: 'Time Off Station', placeholder: '2230' },
     ],
   },
   control_agencies: {
     label: 'CONTROL AGENCIES', tab: 'CTRL',
     idLabel: 'ID',
     fields: [
-      { key: 'type',              label: 'Type',            placeholder: 'AWACS / CRC' },
-      { key: 'callsign',          label: 'Callsign',        placeholder: 'e.g. SCREWTOP' },
-      { key: 'platform',          label: 'Platform',        placeholder: 'e.g. E-3' },
-      { key: 'primary_freq_mhz',  label: 'Primary Freq (MHz)',   placeholder: '260.0' },
-      { key: 'secondary_freq_mhz', label: 'Secondary Freq (MHz)', placeholder: '134.0' },
+      { key: 'type',             label: 'Type',            placeholder: 'AWACS / CRC' },
+      { key: 'callsign',         label: 'Callsign',        placeholder: 'e.g. SCREWTOP' },
+      { key: 'primary_freq_mhz', label: 'Primary Freq (MHz)', placeholder: '260.0' },
     ],
   },
   frequencies: {
@@ -275,7 +268,7 @@ function deleteRegistryItem(catKey, id) {
     if (reg[catKey]) delete reg[catKey][id];
   }
 
-  // Cascade: remove all references to the deleted item in missions & global_control
+  // Cascade: remove all references to the deleted item in missions
   _cascadeRegistryDelete(catKey, id);
 
   editorReRender();
@@ -305,24 +298,10 @@ function _cascadeRegistryDelete(catKey, id) {
       });
     });
   } else if (catKey === 'control_agencies') {
-    // Clear global_control reference
-    var gc = ato.global_control;
-    if (gc && gc.agency_id === id) {
-      gc.agency_id = undefined;
-      gc.controlling_unit = undefined;
-      gc.aircraft_type = undefined;
-      gc.primary_freq_mhz = undefined;
-    }
     // Clear per-mission control references
     missions.forEach(function (m) {
       if (m.control && m.control.agency_id === id) delete m.control;
     });
-  } else if (catKey === 'reference_points') {
-    // Clear bullseye if it references the deleted point
-    var globalControl = ato.global_control;
-    if (globalControl && globalControl.bullseye && typeof globalControl.bullseye === 'object' && globalControl.bullseye.name === id) {
-      globalControl.bullseye = undefined;
-    }
   }
 }
 

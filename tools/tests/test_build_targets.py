@@ -48,7 +48,7 @@ class TestBuildTargets:
         assert len(result) == 1
         key = list(result.keys())[0]
         assert key.startswith("SAM-")
-        assert result[key]["type"] == "SAM"
+        assert result[key]["type"] == "SA-10"  # short NATO designation
 
     def test_tgt_prefix(self):
         g = Group(name="TGT FACTORY", x=100, y=200, lat=36.0, lon=37.0, units=[])

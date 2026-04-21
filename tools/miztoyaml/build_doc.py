@@ -29,10 +29,6 @@ def build_carriers_registry(carriers: list[Carrier]) -> dict:
     return result
 
 
-def build_carriers_ato(carriers: list[Carrier]) -> list[dict]:
-    return [{"id": c.id} for c in carriers]
-
-
 def build_callsigns_registry(flights: list[Flight]) -> dict | None:
     """Build a callsigns registry from the extracted flights (excluding AWACS)."""
     result: dict = {}
@@ -80,7 +76,6 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
         entry: dict = {"callsign": f.name}
         if alt_ft is not None:
             entry["altitude_ft"] = alt_ft
-            entry["altitude"]    = f"FL{round(alt_ft / 100):03d}"
         if speed_kts is not None:
             entry["speed_kts"] = speed_kts
         if orbit_anchor_coords is not None:
@@ -92,6 +87,7 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
         if orbit_width_nm is not None:
             entry["orbit_width_nm"] = orbit_width_nm
         entry["orbit_direction"] = orbit_direction
+        # Remove deprecated fields (ar_track, altitude) — not stored in registry
         result.append(entry)
     return result or None
 
@@ -108,68 +104,10 @@ def build_control_agencies(flights: list[Flight]) -> dict | None:
         ac_base  = f.aircraft_type.split('_')[0]
         platform = re.sub(r'[^A-Z0-9\-]', '', ac_base.upper())
         result[f.name] = {
-            "type":              "AWACS",
-            "callsign":          f.name,
-            "platform":          platform,
-            "primary_freq_mhz":  str(round(f.freq_mhz, 3)),
+            "type":             "AWACS",
+            "callsign":         f.name,
+            "primary_freq_mhz": str(round(f.freq_mhz, 3)),
         }
-    return result or None
-
-
-def build_support_flights(flights: list[Flight]) -> list[dict] | None:
-    """
-    Build the ato.support_flights section for AWACS, tanker, and other
-    support flights — completely separate from player/strike missions.
-    """
-    result = []
-    for f in flights:
-        if not f.is_tanker and not f.is_awacs:
-            continue
-
-        ac_base  = f.aircraft_type.split('_')[0]
-        ac_type  = re.sub(r'[^A-Z0-9]', '', ac_base.upper())
-        flight_type = "TANKER" if f.is_tanker else "AWACS"
-
-        entry: dict = {
-            "callsign":      f.name,
-            "type":          flight_type,
-            "aircraft_type": ac_type,
-            "freq_mhz":     round(f.freq_mhz, 3),
-            "count":         len(f.units),
-        }
-
-        for wp in f.waypoints:
-            if wp.is_orbit:
-                orbit: dict = {
-                    "anchor_point": dms(wp.lat, wp.lon),
-                }
-                if wp.orbit_alt_ft is not None:
-                    orbit["altitude_ft"] = wp.orbit_alt_ft
-                if wp.orbit_speed_kts is not None:
-                    orbit["speed_kts"] = wp.orbit_speed_kts
-                if wp.orbit_leg_nm is not None:
-                    orbit["leg_nm"] = wp.orbit_leg_nm
-                if wp.orbit_heading_deg is not None:
-                    orbit["heading_deg"] = wp.orbit_heading_deg
-                if wp.orbit_width_nm is not None:
-                    orbit["width_nm"] = wp.orbit_width_nm
-                orbit["direction"] = "cw" if wp.orbit_cw else "ccw"
-                entry["orbit"] = orbit
-                break
-
-        route_wps = []
-        for wp in f.waypoints:
-            wp_entry: dict = {"coords": dms(wp.lat, wp.lon)}
-            if wp.name:
-                wp_entry["name"] = wp.name
-            if wp.alt_ft is not None:
-                wp_entry["altitude_ft"] = wp.alt_ft
-            route_wps.append(wp_entry)
-        if route_wps:
-            entry["route"] = route_wps
-
-        result.append(entry)
-
     return result or None
 
 
@@ -429,12 +367,6 @@ def build_doc(*, mission_name, mission_date, theatre,
 
     msn_start = 1000 + int(hashlib.md5(mission_name.encode()).hexdigest()[:4], 16) % 8000
 
-    # Bullseye name references registry.reference_points (first bullseye entry)
-    bullseye_key = next(
-        (v["name"] for v in ref_pts.values() if v.get("type") == "bullseye"),
-        list(ref_pts.keys())[0] if ref_pts else None,
-    )
-
     airfields = build_airfields_registry(flights, carriers, theatre)
 
     # Build missions — also mutates ref_pts to add marshal points found in routes.
@@ -445,20 +377,12 @@ def build_doc(*, mission_name, mission_date, theatre,
         dtcs=dtcs or {},
         theatre=theatre)
     missions = missions_result[0] or None
-    shared_steerpoints = missions_result[1] or None
-    msn_numbers = [m["mission_number"] for m in missions] if missions else []
-
-    # Build support flights (AWACS, tankers) — separate from player missions
-    support_flights = build_support_flights(flights)
-
-    ato_airfields = [{"icao": icao, "role": "deploy"} for icao in airfields] or None
+    steerpoints = missions_result[1] or None
 
     flight_comms = build_flight_comms(flights, dtcs or {})
     frequencies = build_frequencies_registry(flight_comms or [])
 
     control_agencies = build_control_agencies(flights)
-    # If there is exactly one AWACS, set it as the default global_control agency
-    awacs_agency_id = next(iter(control_agencies or {}), None)
 
     return {
         "schema_version": "1.0",
@@ -474,8 +398,9 @@ def build_doc(*, mission_name, mission_date, theatre,
             "airfields":        airfields or None,
             "carriers":         build_carriers_registry(carriers) or None,
             "tankers":          build_tankers_list(flights),
-            "targets":          targets   or None,
+            "targets":          targets or None,
             "reference_points": list(ref_pts.values()) or None,
+            "steerpoints":      steerpoints,
             "control_agencies": control_agencies,
             "frequencies":      frequencies,
         },
@@ -486,23 +411,13 @@ def build_doc(*, mission_name, mission_date, theatre,
             "ingame_start_time":  ingame_start_zulu,
             "ingame_start_local": ingame_start_local,
             "local_offset_hours": local_offset_hours,
-            "ae_flags":           ["IRL", "INGAME"],
-            "global_control": {
-                "agency_id": awacs_agency_id,
-                "bullseye":  bullseye_key,
-            },
-            "airfields": ato_airfields,
-            "carriers":           build_carriers_ato(carriers) or None,
-            "shared_steerpoints": shared_steerpoints,
-            "support_flights":    support_flights,
             "missions":           missions,
         },
 
         "aco": {
-            "id":                  f"ACO-{year}-{month:02d}",
-            "timezone":            "UTC",
-            "distributing_agency": "AUTO-EXTRACTED",
-            "acms":                acms or None,
+            "id":       f"ACO-{year}-{month:02d}",
+            "timezone": "UTC",
+            "acms":     acms or None,
         },
 
         "spins": {
@@ -521,8 +436,6 @@ def build_doc(*, mission_name, mission_date, theatre,
             "valid_to":   "2359Z",
             "metars":     [metar] + (extra_metars or []),
             "tafs":       extra_tafs or None,
-            "mission_wx": [{"mission_ref": msn, "notes": "No significant weather impact."}
-                           for msn in msn_numbers] or None,
         },
 
         "_meta": {
@@ -533,8 +446,7 @@ def build_doc(*, mission_name, mission_date, theatre,
             "missions":    len([f for f in flights if not f.is_tanker and not f.is_awacs]),
             "tankers":     len([f for f in flights if f.is_tanker]),
             "awacs":       len([f for f in flights if f.is_awacs]),
-            "support_flights":    len([f for f in flights if f.is_tanker or f.is_awacs]),
-            "shared_steerpoints": len(shared_steerpoints) if shared_steerpoints else 0,
-            "airfields":          len(airfields),
+            "steerpoints": len(steerpoints) if steerpoints else 0,
+            "airfields":   len(airfields),
         },
     }

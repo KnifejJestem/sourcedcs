@@ -1,0 +1,11 @@
+{
+  "SA-5":    { "range_nm": 100, "max_alt_ft": 80000 },
+  "SA-10":   { "range_nm": 60,  "max_alt_ft": 90000 },
+  "SA-17":   { "range_nm": 20,  "max_alt_ft": 50000 },
+  "SA-11":   { "range_nm": 16,  "max_alt_ft": 46000 },
+  "PATRIOT": { "range_nm": 60,  "max_alt_ft": 80000 },
+  "HAWK":    { "range_nm": 25,  "max_alt_ft": 45000 },
+  "SA-2":    { "range_nm": 28,  "max_alt_ft": 60000 },
+  "SA-3":    { "range_nm": 15,  "max_alt_ft": 45000 },
+  "SA-6":    { "range_nm": 15,  "max_alt_ft": 40000 }
+}

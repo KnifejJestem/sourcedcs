@@ -4,14 +4,12 @@ import pytest
 
 from tools.miztoyaml.build_doc import (
     build_callsigns_registry,
-    build_carriers_ato,
     build_carriers_registry,
     build_control_agencies,
     build_doc,
     build_flight_comms,
     build_frequencies_registry,
     build_spins_sections,
-    build_support_flights,
     build_tankers_list,
 )
 from tools.miztoyaml.models import Carrier, Flight, FlightUnit, Waypoint
@@ -45,13 +43,6 @@ class TestBuildCarriersRegistry:
 
     def test_empty(self):
         assert build_carriers_registry([]) == {}
-
-
-class TestBuildCarriersAto:
-    def test_basic(self):
-        c = _make_carrier()
-        result = build_carriers_ato([c])
-        assert result == [{"id": "CVN-1"}]
 
 
 class TestBuildCallsignsRegistry:
@@ -115,23 +106,6 @@ class TestBuildControlAgencies:
     def test_no_awacs(self):
         f = _make_flight("VIPER-1")
         assert build_control_agencies([f]) is None
-
-
-class TestBuildSupportFlights:
-    def test_tanker(self):
-        f = _make_flight("SHELL-1", task="TANKER", is_tanker=True)
-        result = build_support_flights([f])
-        assert result is not None
-        assert result[0]["type"] == "TANKER"
-
-    def test_awacs(self):
-        f = _make_flight("MAGIC-1", task="AWACS", is_awacs=True)
-        result = build_support_flights([f])
-        assert result[0]["type"] == "AWACS"
-
-    def test_player_excluded(self):
-        f = _make_flight("VIPER-1")
-        assert build_support_flights([f]) is None
 
 
 class TestBuildFlightComms:

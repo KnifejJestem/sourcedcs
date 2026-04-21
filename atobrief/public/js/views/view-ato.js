@@ -84,7 +84,7 @@ function renderIntelStrip(ato) {
     ]),
   ];
 
-  // Bullseye now lives in registry.bullseye (v2.0)
+  // Bullseye lives in registry.bullseye
   var bullseye = ato._bullseye || (STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.bullseye);
   if (bullseye) {
     var bsParsed = parseCoord(bullseye.coords);
@@ -96,6 +96,17 @@ function renderIntelStrip(ato) {
       ['BULLSEYE', bullseye.name || '—'],
       ['COORDS',   bsCoords, 'coords'],
     ]));
+  }
+
+  // Control agencies — one item per agency in registry.control_agencies
+  var agencies = STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.control_agencies;
+  if (agencies && Object.keys(agencies).length) {
+    var agencyItems = [];
+    Object.values(agencies).forEach(function (ag) {
+      var freq = ag.primary_freq_mhz ? ag.primary_freq_mhz + ' MHz' : null;
+      agencyItems.push([ag.type || 'CTRL', (ag.callsign || '—') + (freq ? ' / ' + freq : '')]);
+    });
+    sections.push(buildIntelSection(agencyItems));
   }
 
   var row = document.getElementById(DOM_IDS.intelRow);
@@ -112,9 +123,9 @@ function renderIntelStrip(ato) {
   timesBtn.addEventListener('click', openTimesEditor);
   row.appendChild(timesBtn);
 
-  // Shared steerpoints edit button (visible in edit mode)
-  var sspBtn = el('button', 'editor-btn', '✎ SHARED PTS');
-  sspBtn.addEventListener('click', openSharedSteerpointsEditor);
+  // Steerpoints edit button (visible in edit mode)
+  var sspBtn = el('button', 'editor-btn', '✎ STEER PTS');
+  sspBtn.addEventListener('click', openSteerpointsEditor);
   row.appendChild(sspBtn);
 }
 
@@ -124,7 +135,7 @@ function renderIntelStrip(ato) {
 
 /**
  * Render tanker cards from registry.tankers into #tankers-row.
- * Shows: callsign, AR track, altitude, TACAN, orbit info.
+ * Shows: callsign, altitude (FL-format), TACAN, speed, orbit info.
  */
 function renderTankers(tankers) {
   var row = document.getElementById('tankers-row');
@@ -156,7 +167,6 @@ function renderTankers(tankers) {
     head.appendChild(el('span', 'tanker-callsign', t.callsign || '—'));
     if (t.tacan) {
       var tacanBadge = el('span', 'tanker-tacan', t.tacan);
-      if (t.tacan_role) { tacanBadge.title = t.tacan_role; }
       head.appendChild(tacanBadge);
     }
     var editBtn = el('button', 'editor-btn tanker-edit-btn', '✎');
@@ -168,14 +178,12 @@ function renderTankers(tankers) {
     head.appendChild(editBtn);
     card.appendChild(head);
 
-    // Body: AR track, altitude, speed, frequency
+    // Body: altitude, speed, frequency
     var body = el('div', 'tanker-card-body');
 
-    if (t.ar_track) {
-      body.appendChild(_tankerRow('TRACK', t.ar_track));
-    }
-    if (t.altitude) {
-      body.appendChild(_tankerRow('ALT', t.altitude));
+    if (t.altitude_ft != null) {
+      var altStr = 'FL' + String(Math.round(t.altitude_ft / 100)).padStart(3, '0');
+      body.appendChild(_tankerRow('ALT', altStr));
     }
     if (t.speed_kts) {
       body.appendChild(_tankerRow('SPD', t.speed_kts + 'kt'));
@@ -299,8 +307,8 @@ function renderMissionCards(missions) {
     if (m.takeoff_time) {
       body.appendChild(buildCardRow('T/O', fmtTime(m.takeoff_time), 'time'));
     }
-    if (m.marshal_time) {
-      body.appendChild(buildCardRow('MARSHAL', fmtTime(m.marshal_time), 'time'));
+    if (m._marshal_time) {
+      body.appendChild(buildCardRow('MARSHAL', fmtTime(m._marshal_time), 'time'));
     }
     if (m.control && m.control.primary_freq_mhz) {
       body.appendChild(buildCardRow('PFREQ', m.control.primary_freq_mhz + ' MHz', 'freq'));
@@ -349,10 +357,10 @@ function collectMissionTimes(m) {
   });
   times.push(
     toMins(m.takeoff_time),
-    toMins(m.marshal_time),
+    toMins(m._marshal_time),
     toMins(m.recovery_time),
-    toMins(m.vul_start),
-    toMins(m.vul_end)
+    toMins(m._vul_start),
+    toMins(m._vul_end)
   );
   return times;
 }
@@ -521,15 +529,15 @@ function addBarIfValid(track, missionIdx, opts) {
  * Add the vulnerability window bar (semi-transparent hatched overlay).
  */
 function addVulnerabilityBar(track, m, range) {
-  var vulStart = normMins(m.vul_start, range);
-  var vulEnd   = normMins(m.vul_end,   range);
+  var vulStart = normMins(m._vul_start, range);
+  var vulEnd   = normMins(m._vul_end,   range);
   if (vulStart == null || vulEnd == null) { return; }
 
   var span     = range.max - range.min;
   var leftPct  = timeToLeftPct(vulStart, range.min, span);
   var widthPct = timeSpanToWidthPct(vulStart, vulEnd, span);
   var title    = m.callsign + ' VUL · '
-               + fmtTime(m.vul_start) + ' – ' + fmtTime(m.vul_end);
+               + fmtTime(m._vul_start) + ' – ' + fmtTime(m._vul_end);
 
   var bar = el('div', 'tl-bar vul');
   bar.style.left  = leftPct + '%';
@@ -646,9 +654,9 @@ function buildMissionRow(m, missionIdx, range) {
   addVulnerabilityBar(track, m, range);
   addMissionBars(track, m, missionIdx, range);
   addRefuelBar(track, m, range);
-  addTimeMarker(track, m.takeoff_time,  'takeoff',  'T/O', range);
-  addTimeMarker(track, m.marshal_time,  'marshal',  'MSH', range);
-  addTimeMarker(track, m.recovery_time, 'recovery', 'REC', range);
+  addTimeMarker(track, m.takeoff_time,   'takeoff',  'T/O', range);
+  addTimeMarker(track, m._marshal_time,  'marshal',  'MSH', range);
+  addTimeMarker(track, m.recovery_time,  'recovery', 'REC', range);
   row.appendChild(track);
 
   return row;
@@ -767,10 +775,10 @@ function buildAimPointEntry(point) {
   if (ref) {
     entry.prepend(el('span', 'target-type-badge', ref.type));
 
-    if (ref.type === 'SAM' || ref.type === 'EWR') {
+    if (window.SAM_DB && window.SAM_DB[ref.type]) {
       var samParts = [];
-      if (ref.engagement_range_nm) { samParts.push('ER: ' + ref.engagement_range_nm + 'nm'); }
-      if (ref.max_alt_ft)          { samParts.push('Max Alt: ' + ref.max_alt_ft + 'ft'); }
+      if (ref._engagement_range_nm) { samParts.push('ER: ' + ref._engagement_range_nm + 'nm'); }
+      if (ref._max_alt_ft)          { samParts.push('Max Alt: ' + ref._max_alt_ft + 'ft'); }
       if (samParts.length) {
         entry.appendChild(el('div', 'sam-info', samParts.join(' · ')));
       }
@@ -825,12 +833,12 @@ function selectMission(idx) {
     detailField(col, 'AIRCRAFT',
       m.aircraft ? m.aircraft.count + '× ' + m.aircraft.type : '—');
 
-    if (m.takeoff_time)  { detailField(col, 'TAKEOFF',  fmtTime(m.takeoff_time), 'time'); }
-    if (m.marshal_time)  { detailField(col, 'MARSHAL',  fmtTime(m.marshal_time), 'time'); }
-    if (m.recovery_time) { detailField(col, 'RECOVERY', fmtTime(m.recovery_time), 'time'); }
+    if (m.takeoff_time)   { detailField(col, 'TAKEOFF',  fmtTime(m.takeoff_time), 'time'); }
+    if (m._marshal_time)  { detailField(col, 'MARSHAL',  fmtTime(m._marshal_time), 'time'); }
+    if (m.recovery_time)  { detailField(col, 'RECOVERY', fmtTime(m.recovery_time), 'time'); }
 
-    if (m.vul_start || m.vul_end) {
-      detailTimePair(col, 'VULNERABILITY WINDOW', m.vul_start, m.vul_end, 'START', 'END');
+    if (m._vul_start || m._vul_end) {
+      detailTimePair(col, 'VULNERABILITY WINDOW', m._vul_start, m._vul_end, 'START', 'END');
     }
 
     if (m.coordination && m.coordination.length) {
@@ -867,8 +875,17 @@ function selectMission(idx) {
         if (targets.length > 1) {
           col.appendChild(el('div', 'dk', 'TARGET ' + (ti + 1)));
         }
-        detailField(col, 'TARGET', target._name || target.target_id || '—');
-        detailField(col, 'ALTITUDE', target.altitude || '—');
+        var tgtRef = target._name || target.target_id || '—';
+        var tgtType = target.type || '';
+        detailField(col, 'TARGET', tgtRef + (tgtType ? ' (' + tgtType + ')' : ''));
+
+        // SAM threat data resolved from sam_database.json at load time
+        if (target._engagement_range_nm || target._max_alt_ft) {
+          var samParts = [];
+          if (target._engagement_range_nm) samParts.push('ER: ' + target._engagement_range_nm + 'nm');
+          if (target._max_alt_ft)          samParts.push('Max Alt: ' + target._max_alt_ft + 'ft');
+          if (samParts.length) detailField(col, 'THREAT', samParts.join(' · '), 'sm');
+        }
 
         var hasTOT = target.tot_net || target.tot_nlt;
         var hasTOS = target.tos || target.toffs;
@@ -880,16 +897,6 @@ function selectMission(idx) {
           if (hasTOS) {
             detailTimePair(col, 'TIME ON STATION (TOS)', target.tos, target.toffs, 'TOS', 'TOFFS');
           }
-        }
-
-        var aimPoints = target.aim_points;
-        if (aimPoints && aimPoints.length) {
-          var apField = el('div', 'detail-field');
-          apField.appendChild(el('div', 'dk', 'AIM POINTS (' + aimPoints.length + ')'));
-          aimPoints.forEach(function (p) {
-            apField.appendChild(buildAimPointEntry(p));
-          });
-          col.appendChild(apField);
         }
       });
     }
@@ -904,8 +911,7 @@ function selectMission(idx) {
     m.refuel.forEach(function (ref, ri) {
       if (m.refuel.length > 1) { col.appendChild(el('div', 'dk', 'AAR ' + (ri + 1))); }
       detailField(col, 'TANKER',   ref._tanker_callsign || ref.tanker_id || '—');
-      detailField(col, 'AR TRACK', ref._ar_track  || '—');
-      detailField(col, 'ALTITUDE', ref._altitude  || '—');
+      detailField(col, 'ALTITUDE', ref._altitude || '—');
       detailTimePair(col, 'AAR WINDOW', ref.time_from, ref.time_to);
     });
   }));
@@ -917,14 +923,10 @@ function selectMission(idx) {
       detailField(col, 'CONTROL AGENCY', (agency.type || '') + ' — ' + (agency.callsign || '—'));
     }
 
-    var primaryFreq   = m.control && m.control.primary_freq_mhz
+    var primaryFreq = m.control && m.control.primary_freq_mhz
       ? m.control.primary_freq_mhz + ' MHz' : '—';
-    var secondaryFreq = m.control && m.control.secondary_freq_mhz
-      ? m.control.secondary_freq_mhz + ' MHz' : '—';
 
-    detailField(col, 'PRIMARY FREQ',   primaryFreq,   'freq');
-    detailField(col, 'SECONDARY FREQ', secondaryFreq, 'freq');
-    detailField(col, 'NET', m.control ? m.control.net_name || '—' : '—');
+    detailField(col, 'PRIMARY FREQ', primaryFreq, 'freq');
   }));
 }
 

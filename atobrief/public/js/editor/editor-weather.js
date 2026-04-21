@@ -42,23 +42,6 @@ function openWeatherEditor() {
       hint: 'One TAF per line (join continuation lines)',
     });
 
-    // Mission weather notes
-    editorSectionTitle(body, 'MISSION WEATHER NOTES');
-    var msnWx = (wx.mission_wx || []).map(function (mw) { return Object.assign({}, mw); });
-    body._msnWx = msnWx;
-
-    var listEl = el('div', 'ef-list-items');
-    body._wxListEl = listEl;
-    _renderMsnWxList(listEl, msnWx);
-    body.appendChild(listEl);
-
-    var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD NOTE');
-    addBtn.addEventListener('click', function () {
-      msnWx.push({ mission_ref: '', notes: '' });
-      _renderMsnWxList(listEl, msnWx);
-    });
-    body.appendChild(addBtn);
-
     body._wxFields = { metars: fMetars, tafs: fTafs };
 
   }, function () {
@@ -78,39 +61,7 @@ function openWeatherEditor() {
     // Parse TAFs
     wx.tafs = f.tafs.value.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
 
-    // Mission weather
-    wx.mission_wx = body._msnWx.filter(function (mw) { return mw.mission_ref || mw.notes; });
-
     editorReRender('weather');
   });
 }
 
-function _renderMsnWxList(container, msnWx) {
-  container.innerHTML = '';
-  msnWx.forEach(function (mw, i) {
-    var row = el('div', 'ef-ap-row');
-
-    var refInput = el('input', 'ef-input ef-input-sm');
-    refInput.placeholder = 'Mission Ref';
-    refInput.value = mw.mission_ref || '';
-    refInput.addEventListener('input', function () { mw.mission_ref = this.value; });
-
-    var noteInput = el('input', 'ef-input');
-    noteInput.placeholder = 'Notes';
-    noteInput.value = mw.notes || '';
-    noteInput.addEventListener('input', function () { mw.notes = this.value; });
-
-    var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '\u2715');
-    (function (idx) {
-      delBtn.addEventListener('click', function () {
-        msnWx.splice(idx, 1);
-        _renderMsnWxList(container, msnWx);
-      });
-    })(i);
-
-    row.appendChild(refInput);
-    row.appendChild(noteInput);
-    row.appendChild(delBtn);
-    container.appendChild(row);
-  });
-}

@@ -63,11 +63,10 @@ function renderACO(aco) {
   }
 
   docHeader(div, [
-    ['OPERATION',   aco.operation],
-    ['ATO DAY',     aco.ato_day],
-    ['ACO ID',      aco.id],
-    ['TIMEZONE',    aco.timezone],
-    ['DIST AGENCY', aco.distributing_agency],
+    ['OPERATION', aco.operation],
+    ['ATO DAY',   aco.ato_day],
+    ['ACO ID',    aco.id],
+    ['TIMEZONE',  aco.timezone],
   ]);
 
   if (!aco.acms?.length) {
@@ -75,9 +74,12 @@ function renderACO(aco) {
     return;
   }
 
+  // Build agency lookup from registry for control_agency resolution
+  const agencyDict = (STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.control_agencies) || {};
+
   // ACM table — one row per airspace control measure
   const { table: tbl, tbody } = docTable(
-    ['NAME', 'TYPE', 'GEOMETRY', 'MISSIONS', 'ALTITUDE', `WINDOW (${STATE.display.timeMode})`, 'CONTROL AGENCY', 'FREQ', 'NOTES']
+    ['NAME', 'TYPE', 'GEOMETRY', 'MISSIONS', 'ALTITUDE', `WINDOW (${STATE.display.timeMode})`, 'CONTROL AGENCY', 'NOTES']
   );
 
   aco.acms.forEach(acm => {
@@ -89,15 +91,22 @@ function renderACO(aco) {
       tr.insertCell().appendChild(el('span', cls, String(text)));
     }
 
+    // Resolve control agency callsign from registry using agency_id reference
+    var agencyDisplay = '—';
+    if (acm.control_agency) {
+      const ag = agencyDict[acm.control_agency];
+      agencyDisplay = ag ? (ag.callsign || acm.control_agency) : acm.control_agency;
+      if (ag && ag.primary_freq_mhz) agencyDisplay += ' / ' + ag.primary_freq_mhz + ' MHz';
+    }
+
     tr.insertCell().appendChild(el('strong', '', acm.name || '—'));
     tr.insertCell().appendChild(el('span', `acm-badge ${typeKey}`, typeKey));
     tr.insertCell().appendChild(buildGeoCell(acm.geometry || {}));
 
     spanCell('aco-msns', (acm.missions || []).join(', ') || '—');
-    spanCell('aco-alt',  `${acm.alt_lower || '?'} → ${acm.alt_upper || 'FL660'}`);
+    spanCell('aco-alt',  `${acm.alt_lower || 'SFC'} → ${acm.alt_upper || 'UNL'}`);
     spanCell('aco-time', `${fmtTime(acm.time_from) || '—'} – ${fmtTime(acm.time_to) || '—'}`);
-    spanCell('aco-ctrl', acm.control_agency || '—');
-    spanCell('aco-ctrl', acm.control_freq_mhz ? acm.control_freq_mhz + ' MHz' : '—');
+    spanCell('aco-ctrl', agencyDisplay);
     spanCell('aco-note', acm.notes || '—');
   });
 

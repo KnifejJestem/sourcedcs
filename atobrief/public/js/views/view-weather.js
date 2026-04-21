@@ -672,18 +672,4 @@ function renderWEATHER(wx) {
     });
   }
 
-  // ── Mission-specific weather notes ─────────────────────────
-  const msnWx = wx.mission_wx || [];
-  if (msnWx.length > 0) {
-    docSection(div, 'MISSION WEATHER NOTES', s => {
-      msnWx.forEach(mw => {
-        const row = el('div', 'wx-msn-row');
-        row.appendChild(el('span', 'wx-msn-ref', mw.mission_ref || '—'));
-        const note = el('span', 'wx-msn-note', mw.notes || '');
-        if (mw.style) note.style.color = `var(--${mw.style})`;
-        row.appendChild(note);
-        s.appendChild(row);
-      });
-    });
-  }
 }

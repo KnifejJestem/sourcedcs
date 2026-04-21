@@ -649,19 +649,6 @@ function _buildWeatherSection() {
     tafs.forEach(raw => { html += _buildTafBlock(String(raw)); });
   }
 
-  // Mission weather notes
-  const msnWx = wx.mission_wx || [];
-  if (msnWx.length > 0) {
-    html += '<div class="pdf-wx-subsec">MISSION WEATHER NOTES</div>\n';
-    html += '<div class="pdf-wx-block">\n';
-    msnWx.forEach(mw => {
-      html += `<div class="pdf-wx-msn-row">` +
-              `<span class="pdf-wx-msn-ref">${_escHtml(String(mw.mission_ref || '—'))}</span>` +
-              `<span>${_escHtml(String(mw.notes || ''))}</span></div>\n`;
-    });
-    html += '</div>\n';
-  }
-
   html += '</div>';
   return html;
 }

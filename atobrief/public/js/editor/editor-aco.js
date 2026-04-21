@@ -17,12 +17,11 @@ function openACOEditor() {
 
   openEditorDialog('EDIT ACO', function (body) {
     editorSectionTitle(body, 'HEADER');
-    var fOp   = editorField(body, 'Operation',           aco.operation);
-    var fId   = editorField(body, 'ACO ID',              aco.id);
-    var fTz   = editorField(body, 'Timezone',             aco.timezone);
-    var fDist = editorField(body, 'Distributing Agency', aco.distributing_agency);
+    var fOp = editorField(body, 'Operation', aco.operation);
+    var fId = editorField(body, 'ACO ID',    aco.id);
+    var fTz = editorField(body, 'Timezone',  aco.timezone);
 
-    body._acoHeader = { op: fOp, id: fId, tz: fTz, dist: fDist };
+    body._acoHeader = { op: fOp, id: fId, tz: fTz };
 
     // ACMs list
     var acms = (aco.acms || []).map(function (a) { return Object.assign({}, a); });
@@ -47,11 +46,10 @@ function openACOEditor() {
     var h = body._acoHeader;
     var aco = editorEnsureSection('aco');
 
-    aco.operation           = h.op.value || undefined;
-    aco.id                  = h.id.value || undefined;
-    aco.timezone            = h.tz.value || undefined;
-    aco.distributing_agency = h.dist.value || undefined;
-    aco.acms                = body._acoAcms;
+    aco.operation = h.op.value || undefined;
+    aco.id        = h.id.value || undefined;
+    aco.timezone  = h.tz.value || undefined;
+    aco.acms      = body._acoAcms;
 
     editorReRender('aco');
   });
@@ -104,13 +102,19 @@ function _editAcm(acms, index) {
     // Parameters
     editorSectionTitle(body, 'PARAMETERS');
     var fMsns    = editorField(body, 'Missions (comma-sep)', (acm.missions || []).join(', '));
-    var fAltLo   = editorField(body, 'Alt Lower', acm.alt_lower, { placeholder: 'FL200' });
-    var fAltHi   = editorField(body, 'Alt Upper', acm.alt_upper, { placeholder: 'FL260' });
+    var fAltLo   = editorField(body, 'Alt Lower', acm.alt_lower, { placeholder: 'SFC' });
+    var fAltHi   = editorField(body, 'Alt Upper', acm.alt_upper, { placeholder: 'UNL' });
     var fTimeFrom = editorField(body, 'Time From', acm.time_from, { placeholder: '2000' });
     var fTimeTo   = editorField(body, 'Time To', acm.time_to, { placeholder: '2300' });
-    var fCtrl    = editorField(body, 'Control Agency', acm.control_agency);
-    var fFreq    = editorField(body, 'Control Freq (MHz)', acm.control_freq_mhz);
-    var fNotes   = editorField(body, 'Notes', acm.notes, { type: 'textarea', rows: 2 });
+    var ctrlOpts  = [{ value: '', label: '— none —' }].concat(
+      Object.keys((STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.control_agencies) || {}).map(function (id) {
+        var ag = STATE.pkg.registry.control_agencies[id];
+        return { value: id, label: id + (ag.callsign ? ' \u2014 ' + ag.callsign : '') };
+      })
+    );
+    var fCtrl  = editorField(body, 'Control Agency', acm.control_agency, { type: 'select', options: ctrlOpts });
+    if (acm.control_agency) fCtrl.value = acm.control_agency;
+    var fNotes = editorField(body, 'Notes', acm.notes, { type: 'textarea', rows: 2 });
 
     body._acmFields = {
       name: fName, type: fType,
@@ -120,7 +124,7 @@ function _editAcm(acms, index) {
       center: geoFields.center, radius: geoFields.radius,
       msns: fMsns, altLo: fAltLo, altHi: fAltHi,
       timeFrom: fTimeFrom, timeTo: fTimeTo,
-      ctrl: fCtrl, freq: fFreq, notes: fNotes
+      ctrl: fCtrl, notes: fNotes
     };
     body._acmAcms  = acms;
     body._acmIndex = index;
@@ -226,7 +230,6 @@ function _saveAcmFromForm(acms) {
   acm.time_from = f.timeFrom.value || undefined;
   acm.time_to   = f.timeTo.value || undefined;
   acm.control_agency = f.ctrl.value || undefined;
-  acm.control_freq_mhz = f.freq.value ? parseFloat(f.freq.value) : undefined;
   acm.notes = f.notes.value || undefined;
 
   editorEnsureSection('aco').acms = acms;

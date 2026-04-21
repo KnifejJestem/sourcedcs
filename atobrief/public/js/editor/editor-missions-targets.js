@@ -17,7 +17,7 @@ var _msnNav = null; // { title, m, onSave }
 function _renderTargetsList(listEl, targets, msnTitle, onSave) {
   listEl.innerHTML = '';
   targets.forEach(function (tgt, i) {
-    var label = tgt.location || (tgt.target_id ? '\u2192 ' + tgt.target_id : 'TARGET ' + (i + 1));
+    var label = tgt.target_id ? '\u2192 ' + tgt.target_id : 'TARGET ' + (i + 1);
     editorItemRow(listEl, label,
       function () { _editTarget(targets, i, msnTitle, onSave); },
       function () {
@@ -64,10 +64,7 @@ function _editTarget(targets, index, msnTitle, onSave) {
       input.addEventListener('change', function () { tgt[key] = this.value || undefined; });
     }
 
-    bind(editorField(body, 'Location', tgt.location, { placeholder: 'e.g. KHASAB' }), 'location');
-    bind(editorField(body, 'Altitude', tgt.altitude, { placeholder: 'e.g. E73FT' }), 'altitude');
     bindSel(editorField(body, 'Target', tgt.target_id, { type: 'select', options: tgtOpts }), 'target_id');
-    bind(editorField(body, 'Mission Type Override', tgt.mission_type_override, { placeholder: 'e.g. AIRDEF' }), 'mission_type_override');
     bind(editorField(body, 'TOT NET', tgt.tot_net, { placeholder: '2046' }), 'tot_net');
     bind(editorField(body, 'TOT NLT', tgt.tot_nlt, { placeholder: '2111' }), 'tot_nlt');
     bind(editorField(body, 'TOS', tgt.tos, { placeholder: '2040' }), 'tos');
@@ -82,22 +79,31 @@ function _editTarget(targets, index, msnTitle, onSave) {
 function _renderSteerPointsList(container, steerPts) {
   container.innerHTML = '';
   steerPts.forEach(function (sp, i) {
-    // Shared steerpoint reference — render as a read-only row with a delete button.
-    if (sp && sp.shared_steerpoint_id) {
+    // Registry steerpoint reference — render with optional time input and delete button.
+    if (sp && sp.id) {
       var ato = STATE.pkg && STATE.pkg.ato;
-      var sspList = (ato && ato.shared_steerpoints) || [];
-      var ssp = sspList.find(function (s) { return s.id === sp.shared_steerpoint_id; });
+      var sspList = (ato && ato._steerpoints) || [];
+      var ssp = sspList.find(function (s) { return s.id === sp.id; });
       var sspLabel = ssp
         ? [((ssp.type || '').toUpperCase()), ssp.name].filter(Boolean).join(' ') || ssp.id
-        : sp.shared_steerpoint_id;
+        : sp.id;
 
       var row = el('div', 'ef-ap-row');
       var badge = el('span', 'ef-ssp-badge', '◈ ' + sspLabel);
-      badge.title = 'Shared steer point (managed in SHARED PTS editor)';
+      badge.title = 'Registry steerpoint (managed in STEERPOINTS editor)';
       row.appendChild(badge);
 
+      var timeInput = el('input', 'ef-input ef-input-sm');
+      timeInput.placeholder = 'Time (e.g. 2046)';
+      timeInput.value = sp.time || '';
+      timeInput.title = 'Optional time for this steerpoint (required for ip/ep/marshal)';
+      (function (point) {
+        timeInput.addEventListener('input', function () { point.time = this.value || undefined; });
+      })(sp);
+      row.appendChild(timeInput);
+
       var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '\u2715');
-      delBtn.title = 'Remove shared steerpoint reference from this mission';
+      delBtn.title = 'Remove steerpoint reference from this mission';
       (function (idx) {
         delBtn.addEventListener('click', function () {
           steerPts.splice(idx, 1);
