@@ -34,9 +34,11 @@ function jwtSub(token) {
 
 /* ── State ──────────────────────────────────────────────── */
 var _tree     = null;
-var _grades   = {};   /* { [moduleId]: { grade, notes, graded_at, graded_by } } */
+var _grades   = {};
 var _requests = [];
 var _mySub    = null;
+var _openMods = {};  /* { [moduleId]: bool } — expanded detail rows */
+var _openCats = {};  /* { [catId]: bool } — collapsed categories (true = collapsed) */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 (function () {
@@ -45,17 +47,15 @@ var _mySub    = null;
   var btn  = document.getElementById('loginBtn');
 
   if (tok && user) {
-    /* Logged in */
     if (btn) {
       btn.textContent = (user.name || 'USER').toUpperCase() + ' \u23FB';
-      btn.title   = 'Click to log out';
+      btn.title = 'Click to log out';
       btn.classList.add('login-btn--logout');
       btn.onclick = logout;
     }
     _mySub = jwtSub(tok);
     loadAll(tok);
   } else {
-    /* Not logged in */
     document.getElementById('loginPrompt').style.display = '';
     if (btn) { btn.textContent = 'LOGIN'; btn.onclick = loginWithCasdoor; }
   }
@@ -64,19 +64,15 @@ var _mySub    = null;
 /* ── Data loading ───────────────────────────────────────── */
 function loadAll(tok) {
   var headers = { 'Authorization': 'Bearer ' + tok };
-
   Promise.all([
     fetch('/api/skill-tree').then(function (r) { return r.json(); }),
     fetch('/api/skill-grades', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/grading-requests', { headers: headers }).then(function (r) { return r.json(); }),
   ]).then(function (results) {
     _tree = results[0];
-
     var gradesMap = results[1];
-    _grades = (_mySub && gradesMap[_mySub]) ? gradesMap[_mySub] : {};
-
+    _grades   = (_mySub && gradesMap[_mySub]) ? gradesMap[_mySub] : {};
     _requests = Array.isArray(results[2]) ? results[2] : [];
-
     render();
   }).catch(function (err) {
     console.error('[skills] load failed:', err);
@@ -84,7 +80,7 @@ function loadAll(tok) {
   });
 }
 
-/* ── Module state ───────────────────────────────────────── */
+/* ── Module state (matches test/skill-logic.js) ─────────── */
 function gradeValue(g) { return (g != null && GRADE_VALUES[g] != null) ? GRADE_VALUES[g] : -1; }
 
 function moduleState(mod) {
@@ -100,14 +96,12 @@ function moduleState(mod) {
   return 'in-progress';
 }
 
-/* ── Score computation ──────────────────────────────────── */
+/* ── Score (completion-based, matches test/skill-logic.js) ─ */
 function categoryScore(cat) {
-  if (!cat.modules || !cat.modules.length) return 0;
-  var total = cat.modules.reduce(function (s, mod) {
-    var g = _grades[mod.id] ? _grades[mod.id].grade : null;
-    return s + (g != null ? (GRADE_VALUES[g] || 0) : 0);
-  }, 0);
-  return total / (cat.modules.length * 3);
+  var mods = cat.modules || [];
+  if (!mods.length) return 0;
+  var completed = mods.filter(function (m) { return moduleState(m) === 'completed'; }).length;
+  return completed / mods.length;
 }
 
 function overallScore() {
@@ -120,19 +114,11 @@ function overallScore() {
 /* ── Render ─────────────────────────────────────────────── */
 function render() {
   if (!_tree) return;
-
   renderScoreBar();
-
-  var treeEl = document.getElementById('skillsTree');
-  treeEl.innerHTML = '';
-  (_tree.categories || []).forEach(function (cat) {
-    treeEl.appendChild(buildCategoryEl(cat));
-  });
-
+  renderTree();
   renderRequests();
-
-  document.getElementById('scoreBar').style.display    = '';
-  document.getElementById('skillsBody').style.display  = '';
+  document.getElementById('scoreBar').style.display   = '';
+  document.getElementById('skillsBody').style.display = '';
   document.getElementById('loginPrompt').style.display = 'none';
 }
 
@@ -144,126 +130,229 @@ function renderScoreBar() {
   catsEl.innerHTML = '';
   (_tree.categories || []).forEach(function (cat) {
     var score = Math.round(categoryScore(cat) * 100);
+    var mods  = cat.modules || [];
+    var done  = mods.filter(function (m) { return moduleState(m) === 'completed'; }).length;
+
     var div = document.createElement('div');
     div.className = 'score-cat';
     div.innerHTML =
       '<div class="score-cat-name">' + esc(cat.name) +
         ' <span style="color:var(--text-3)">' + cat.weight + '%</span></div>' +
       '<div class="score-cat-bar"><div class="score-cat-fill" style="width:' + score + '%"></div></div>' +
-      '<div class="score-cat-pct">' + score + '%</div>';
+      '<div class="score-cat-pct">' + done + '/' + mods.length + ' &nbsp; ' + score + '%</div>';
     catsEl.appendChild(div);
   });
 }
 
-function buildCategoryEl(cat) {
-  var section = document.createElement('div');
-  section.className = 'skill-category';
+/* ── List view ──────────────────────────────────────────── */
+function renderTree() {
+  var el = document.getElementById('skillsTree');
+  el.innerHTML = '';
 
-  var header = document.createElement('div');
-  header.className = 'skill-cat-header';
-  header.innerHTML =
-    '<span class="skill-cat-name">' + esc(cat.name) + '</span>' +
-    '<span class="skill-cat-weight">Weight: ' + cat.weight + '%</span>';
-  section.appendChild(header);
-
-  var grid = document.createElement('div');
-  grid.className = 'skill-modules';
-  (cat.modules || []).forEach(function (mod) {
-    grid.appendChild(buildModuleEl(mod));
-  });
-  section.appendChild(grid);
-  return section;
-}
-
-function buildModuleEl(mod) {
-  var state    = moduleState(mod);
-  var gradeRec = _grades[mod.id] || null;
   var myOpenReq = _requests.find(function (r) {
     return r.pilot_id === _mySub && (r.status === 'open' || r.status === 'claimed');
   }) || null;
 
-  var card = document.createElement('div');
-  card.className = 'skill-module state-' + state;
-
-  var BADGE_CLASS = {
-    'locked':      'badge-locked',
-    'not-started': 'badge-not-started',
-    'in-progress': 'badge-in-progress',
-    'completed':   'badge-completed',
-  };
-  var badgeClass = BADGE_CLASS[state] || 'badge-not-started';
-  var badgeText  = state.replace('-', ' ').toUpperCase();
-
-  /* Prerequisites */
-  var prereqHtml = '';
-  if (mod.prerequisites && mod.prerequisites.length) {
-    var parts = (mod.prerequisites || []).map(function (p) {
-      return p.module_id + ' (' + (p.min_grade || '?') + '+)';
-    });
-    prereqHtml = '<div class="skill-mod-prereqs">Requires: ' + esc(parts.join(', ')) + '</div>';
-  }
-
-  /* Grade block */
-  var gradeHtml = '';
-  if (gradeRec) {
-    var gradeClass = 'grade-' + gradeRec.grade;
-    var gradedAt   = gradeRec.graded_at ? new Date(gradeRec.graded_at).toLocaleDateString() : '';
-    gradeHtml =
-      '<div class="skill-mod-grade">' +
-        '<div>' +
-          '<span class="skill-mod-grade-val ' + gradeClass + '">' + esc(gradeRec.grade) + '</span>' +
-          ' <span style="font-size:9px;color:var(--text-2)">' + esc(GRADE_NAMES[gradeRec.grade] || '') + '</span>' +
-        '</div>' +
-        '<div class="skill-mod-grade-meta">' +
-          (gradeRec.graded_by ? esc(gradeRec.graded_by) + '<br>' : '') + esc(gradedAt) +
-        '</div>' +
-      '</div>';
-    if (gradeRec.notes) {
-      gradeHtml += '<div class="skill-mod-grade-notes">' + esc(gradeRec.notes) + '</div>';
-    }
-  }
-
-  card.innerHTML =
-    '<div class="skill-mod-top">' +
-      '<div class="skill-mod-title">' + esc(mod.title) + '</div>' +
-      '<div class="skill-mod-badge ' + badgeClass + '">' + badgeText + '</div>' +
-    '</div>' +
-    '<div class="skill-mod-desc">' + esc(mod.description || '') + '</div>' +
-    prereqHtml +
-    gradeHtml;
-
-  /* Action area */
-  if (state !== 'locked') {
-    var actDiv = document.createElement('div');
-    actDiv.className = 'skill-mod-actions';
-
-    if (myOpenReq) {
-      var pendingSpan = document.createElement('span');
-      pendingSpan.className = 'grading-pending-notice';
-      pendingSpan.textContent = 'GRADING REQUEST PENDING';
-      actDiv.appendChild(pendingSpan);
-
-      var cancelBtn = document.createElement('button');
-      cancelBtn.className = 'btn-cancel-request';
-      cancelBtn.textContent = 'CANCEL';
-      (function (reqId) {
-        cancelBtn.addEventListener('click', function () { cancelRequest(reqId); });
-      })(myOpenReq.id);
-      actDiv.appendChild(cancelBtn);
-    } else {
-      var reqBtn = document.createElement('button');
-      reqBtn.className = 'btn-request-grading';
-      reqBtn.textContent = 'REQUEST GRADING';
-      reqBtn.addEventListener('click', requestGrading);
-      actDiv.appendChild(reqBtn);
-    }
-    card.appendChild(actDiv);
-  }
-
-  return card;
+  (_tree.categories || []).forEach(function (cat) {
+    el.appendChild(buildCatSection(cat, myOpenReq));
+  });
 }
 
-/* ── Grading requests ───────────────────────────────────── */
+function buildCatSection(cat, myOpenReq) {
+  var mods      = cat.modules || [];
+  var done      = mods.filter(function (m) { return moduleState(m) === 'completed'; }).length;
+  var score     = Math.round(categoryScore(cat) * 100);
+  var collapsed = !!_openCats[cat.id];
+
+  var section = document.createElement('div');
+  section.className = 'skill-list-category';
+
+  /* Header row (click to collapse) */
+  var hdr = document.createElement('div');
+  hdr.className = 'skill-list-cat-header';
+  hdr.setAttribute('role', 'button');
+  hdr.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+
+  var toggle = document.createElement('span');
+  toggle.className   = 'slc-toggle';
+  toggle.textContent = collapsed ? '▶' : '▼';
+
+  var name = document.createElement('span');
+  name.className   = 'slc-name';
+  name.textContent = cat.name;
+
+  var count = document.createElement('span');
+  count.className   = 'slc-count';
+  count.textContent = done + ' / ' + mods.length + ' PASSED';
+
+  var barWrap = document.createElement('div');
+  barWrap.className = 'slc-bar';
+  var barFill = document.createElement('div');
+  barFill.className = 'slc-bar-fill';
+  barFill.style.width = score + '%';
+  barWrap.appendChild(barFill);
+
+  var pct = document.createElement('span');
+  pct.className   = 'slc-pct';
+  pct.textContent = score + '%';
+
+  hdr.appendChild(toggle);
+  hdr.appendChild(name);
+  hdr.appendChild(count);
+  hdr.appendChild(barWrap);
+  hdr.appendChild(pct);
+
+  (function (catId) {
+    hdr.addEventListener('click', function () {
+      _openCats[catId] = !_openCats[catId];
+      render();
+    });
+  })(cat.id);
+
+  section.appendChild(hdr);
+
+  /* Modules list */
+  if (!collapsed) {
+    var modList = document.createElement('div');
+    modList.className = 'skill-list-modules';
+
+    mods.forEach(function (mod) {
+      var state    = moduleState(mod);
+      var gradeRec = _grades[mod.id] || null;
+      var isOpen   = !!_openMods[mod.id];
+
+      /* ── Main row ── */
+      var row = document.createElement('div');
+      row.className = 'skill-list-mod-row state-' + state;
+
+      /* Icon */
+      var icon = document.createElement('span');
+      icon.className = 'slm-icon';
+      var ICONS = { locked: '—', 'not-started': '○', 'in-progress': '◑', completed: '✓' };
+      icon.textContent = ICONS[state] || '○';
+
+      /* Title */
+      var title = document.createElement('span');
+      title.className   = 'slm-title';
+      title.textContent = mod.title;
+
+      row.appendChild(icon);
+      row.appendChild(title);
+
+      /* Grade badge if graded */
+      if (gradeRec) {
+        var gBadge = document.createElement('span');
+        gBadge.className   = 'slm-grade-badge grade-' + gradeRec.grade;
+        gBadge.textContent = gradeRec.grade;
+        var gName = document.createElement('span');
+        gName.className   = 'slm-grade-name';
+        gName.textContent = GRADE_NAMES[gradeRec.grade] || '';
+        row.appendChild(gBadge);
+        row.appendChild(gName);
+      } else if (state !== 'locked') {
+        var noGrade = document.createElement('span');
+        noGrade.className   = 'slm-grade-name';
+        noGrade.textContent = state === 'not-started' ? 'Not started' : 'In progress';
+        row.appendChild(noGrade);
+      }
+
+      /* Expand toggle (not for locked modules) */
+      if (state !== 'locked') {
+        var chevron = document.createElement('span');
+        chevron.className   = 'slm-chevron';
+        chevron.textContent = isOpen ? '▲' : '▼';
+        row.appendChild(chevron);
+
+        (function (mid) {
+          row.addEventListener('click', function () {
+            _openMods[mid] = !_openMods[mid];
+            render();
+          });
+        })(mod.id);
+      }
+
+      modList.appendChild(row);
+
+      /* ── Detail panel ── */
+      if (isOpen && state !== 'locked') {
+        var detail = document.createElement('div');
+        detail.className = 'skill-list-mod-detail';
+
+        /* Description */
+        if (mod.description) {
+          var desc = document.createElement('p');
+          desc.className   = 'slm-desc';
+          desc.textContent = mod.description;
+          detail.appendChild(desc);
+        }
+
+        /* Pass requirement */
+        var req = document.createElement('div');
+        req.className   = 'slm-prereqs';
+        req.textContent = 'Pass requirement: ' + (mod.min_pass_grade || 'G') + ' — ' + (GRADE_NAMES[mod.min_pass_grade] || '');
+        detail.appendChild(req);
+
+        /* Prerequisites */
+        if (mod.prerequisites && mod.prerequisites.length) {
+          var preDiv = document.createElement('div');
+          preDiv.className = 'slm-prereqs';
+          var preParts = (mod.prerequisites || []).map(function (p) {
+            return p.module_id + ' (' + (p.min_grade || 'G') + '+)';
+          });
+          preDiv.textContent = 'Requires: ' + preParts.join(', ');
+          detail.appendChild(preDiv);
+        }
+
+        /* Grade record */
+        if (gradeRec) {
+          if (gradeRec.notes) {
+            var notes = document.createElement('div');
+            notes.className   = 'slm-notes';
+            notes.textContent = '"' + gradeRec.notes + '"';
+            detail.appendChild(notes);
+          }
+          var gradedBy = document.createElement('div');
+          gradedBy.className = 'slm-graded-by';
+          var dStr = gradeRec.graded_at ? ' on ' + new Date(gradeRec.graded_at).toLocaleDateString() : '';
+          gradedBy.textContent = 'Graded by ' + (gradeRec.graded_by || '—') + dStr;
+          detail.appendChild(gradedBy);
+        }
+
+        /* Action */
+        var actDiv = document.createElement('div');
+        actDiv.style.marginTop = '10px';
+
+        if (myOpenReq) {
+          var pendingSpan = document.createElement('span');
+          pendingSpan.className   = 'grading-pending-notice';
+          pendingSpan.textContent = 'GRADING REQUEST ' + myOpenReq.status.toUpperCase();
+          var cancelBtn = document.createElement('button');
+          cancelBtn.className   = 'btn-cancel-request';
+          cancelBtn.textContent = 'CANCEL REQUEST';
+          cancelBtn.style.marginLeft = '10px';
+          (function (id) { cancelBtn.addEventListener('click', function () { cancelRequest(id); }); })(myOpenReq.id);
+          actDiv.appendChild(pendingSpan);
+          actDiv.appendChild(cancelBtn);
+        } else {
+          var reqBtn = document.createElement('button');
+          reqBtn.className   = 'btn-request-grading';
+          reqBtn.textContent = 'REQUEST GRADING';
+          reqBtn.addEventListener('click', requestGrading);
+          actDiv.appendChild(reqBtn);
+        }
+
+        detail.appendChild(actDiv);
+        modList.appendChild(detail);
+      }
+    });
+
+    section.appendChild(modList);
+  }
+
+  return section;
+}
+
+/* ── Requests section ───────────────────────────────────── */
 function renderRequests() {
   var myReqs  = _requests.filter(function (r) { return r.pilot_id === _mySub; });
   var section = document.getElementById('requestsSection');
@@ -277,19 +366,22 @@ function renderRequests() {
     var row = document.createElement('div');
     row.className = 'request-row';
     var STATUS_CLASS = { open: 'req-open', claimed: 'req-claimed', closed: 'req-closed' };
-    var statusClass = STATUS_CLASS[req.status] || 'req-closed';
-    var date        = req.requested_at ? new Date(req.requested_at).toLocaleDateString() : '';
-    var claimInfo   = (req.status === 'claimed' && req.claimed_by_name)
-      ? 'Claimed by ' + esc(req.claimed_by_name) : '';
+    var date = req.requested_at ? new Date(req.requested_at).toLocaleDateString() : '';
 
     row.innerHTML =
-      '<span class="request-status ' + statusClass + '">' + esc(req.status.toUpperCase()) + '</span>' +
+      '<span class="request-status ' + (STATUS_CLASS[req.status] || 'req-closed') + '">' +
+        esc(req.status.toUpperCase()) + '</span>' +
       '<span class="request-date">' + esc(date) + '</span>' +
-      (claimInfo ? '<span class="request-claim-info">' + claimInfo + '</span>' : '');
+      (req.status === 'claimed' && req.claimed_by_name
+        ? '<span class="request-claim-info">Claimed by ' + esc(req.claimed_by_name) + '</span>'
+        : '') +
+      (!req.discord_message_id && (req.status === 'open' || req.status === 'claimed')
+        ? '<span style="font-size:8px;color:var(--text-3)">(Discord not notified)</span>'
+        : '');
 
     if (req.status === 'open') {
       var btn = document.createElement('button');
-      btn.className = 'btn-cancel-request';
+      btn.className   = 'btn-cancel-request';
       btn.textContent = 'CANCEL';
       (function (id) { btn.addEventListener('click', function () { cancelRequest(id); }); })(req.id);
       row.appendChild(btn);
@@ -314,15 +406,18 @@ function requestGrading() {
   }).then(function (req) {
     if (!req) return;
     _requests.push(req);
+    if (!req.discord_message_id) {
+      showToast('Request submitted (check GRADING_CHANNEL_ID env var — Discord was not notified)');
+    } else {
+      showToast('Grading request submitted — instructors notified');
+    }
     render();
-    showToast('Grading request submitted');
   }).catch(function (err) { showToast('Error: ' + err.message, true); });
 }
 
 function cancelRequest(id) {
   var tok = getToken();
   if (!tok) return;
-
   fetch('/api/grading-requests/' + id, {
     method:  'DELETE',
     headers: { 'Authorization': 'Bearer ' + tok },
@@ -348,5 +443,5 @@ function showToast(msg, isErr) {
   el.textContent = msg;
   el.className = 'skills-toast visible' + (isErr ? ' err' : '');
   if (_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(function () { el.className = 'skills-toast'; }, 3000);
+  _toastTimer = setTimeout(function () { el.className = 'skills-toast'; }, 4000);
 }

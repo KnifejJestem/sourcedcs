@@ -26,12 +26,14 @@ function logout() {
 }
 
 /* ── State ──────────────────────────────────────────────── */
-var _tree       = null;
-var _treeEditor = null;  /* working copy mutated by the GUI editor */
-var _allGrades  = {};    /* { [sub]: { [moduleId]: gradeRec } } */
-var _pilots     = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
-var _requests   = [];
-var _activeSub  = null;
+var _tree           = null;
+var _treeEditor     = null;  /* working copy mutated by the GUI editor */
+var _allGrades      = {};    /* { [sub]: { [moduleId]: gradeRec } } */
+var _pilots         = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
+var _requests       = [];
+var _activeSub      = null;
+var _editorCollapsed = {};   /* { [catId]: bool } collapse state for tree editor */
+var _detailCollapsed = {};   /* { [catId]: bool } collapse state for pilot detail */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 (function () {
@@ -104,10 +106,10 @@ function pilotOverallScore(sub) {
   var grades = _allGrades[sub] || {};
   return _tree.categories.reduce(function (s, cat) {
     if (!cat.modules || !cat.modules.length) return s;
-    var catScore = cat.modules.reduce(function (cs, mod) {
-      var g = grades[mod.id] ? grades[mod.id].grade : null;
-      return cs + (g != null ? (GRADE_VALUES[g] || 0) : 0);
-    }, 0) / (cat.modules.length * 3);
+    var completed = cat.modules.filter(function (mod) {
+      return moduleState(mod, grades) === 'completed';
+    }).length;
+    var catScore = completed / cat.modules.length;
     return s + (cat.weight || 0) * catScore;
   }, 0) / 100;
 }
@@ -128,14 +130,23 @@ function renderGradingQueue() {
     row.className = 'req-queue-row';
     var statusClass = req.status === 'claimed' ? 'req-claimed' : 'req-open';
     var time = req.requested_at ? new Date(req.requested_at).toLocaleDateString() : '';
+    var discordOk = req.discord_message_id ? '' :
+      '<span style="font-size:7px;color:var(--text-3);display:block">no discord</span>';
 
-    row.innerHTML =
-      '<span class="request-status ' + statusClass + '">' + esc(req.status.toUpperCase()) + '</span>' +
-      '<span class="req-queue-callsign">' + esc(req.pilot_callsign || req.pilot_name || req.pilot_id) + '</span>' +
-      '<span class="req-queue-time">' + esc(time) + '</span>';
+    /* Left: status + name + date stacked */
+    var infoDiv = document.createElement('div');
+    infoDiv.style.cssText = 'flex:1;min-width:0';
+    infoDiv.innerHTML =
+      '<div style="display:flex;align-items:center;gap:6px">' +
+        '<span class="request-status ' + statusClass + '">' + esc(req.status.toUpperCase()) + '</span>' +
+        '<span class="req-queue-callsign">' + esc(req.pilot_callsign || req.pilot_name || req.pilot_id) + '</span>' +
+      '</div>' +
+      '<div class="req-queue-time">' + esc(time) + discordOk + '</div>';
+    row.appendChild(infoDiv);
 
+    /* Right: buttons stacked vertically */
     var actDiv = document.createElement('div');
-    actDiv.style.cssText = 'display:flex;gap:4px;flex-shrink:0';
+    actDiv.style.cssText = 'display:flex;flex-direction:column;gap:3px;flex-shrink:0';
 
     if (req.status === 'open') {
       var claimBtn = document.createElement('button');
@@ -153,7 +164,7 @@ function renderGradingQueue() {
 
     var delBtn = document.createElement('button');
     delBtn.className = 'btn-sm btn-sm-danger';
-    delBtn.textContent = 'X';
+    delBtn.textContent = 'DELETE';
     (function (id) { delBtn.addEventListener('click', function () { deleteRequest(id); }); })(req.id);
     actDiv.appendChild(delBtn);
 
@@ -215,22 +226,42 @@ function selectPilot(sub) {
   el.appendChild(hdr);
 
   (_tree.categories || []).forEach(function (cat) {
-    var catSection = document.createElement('div');
-    catSection.className = 'skill-category';
+    var catSection  = document.createElement('div');
+    catSection.className = 'skill-list-category';
+    var mods        = cat.modules || [];
+    var completed   = mods.filter(function (m) { return moduleState(m, grades) === 'completed'; }).length;
+    var score       = Math.round(completed / (mods.length || 1) * 100);
+    var collapsed   = !!_detailCollapsed[cat.id];
 
+    /* Collapsible header */
     var catHdr = document.createElement('div');
-    catHdr.className = 'skill-cat-header';
+    catHdr.className = 'skill-list-cat-header';
+    catHdr.style.cursor = 'pointer';
     catHdr.innerHTML =
-      '<span class="skill-cat-name">' + esc(cat.name) + '</span>' +
-      '<span class="skill-cat-weight">Weight: ' + cat.weight + '%</span>';
+      '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
+      '<span class="slc-name">' + esc(cat.name) + '</span>' +
+      '<span class="slc-count">' + completed + ' / ' + mods.length + ' PASSED</span>' +
+      '<div class="slc-bar"><div class="slc-bar-fill" style="width:' + score + '%"></div></div>' +
+      '<span class="slc-pct">' + score + '%</span>';
+
+    (function (catId) {
+      catHdr.addEventListener('click', function () {
+        _detailCollapsed[catId] = !_detailCollapsed[catId];
+        selectPilot(sub);
+      });
+    })(cat.id);
     catSection.appendChild(catHdr);
 
-    var grid = document.createElement('div');
-    grid.className = 'skill-modules';
-    (cat.modules || []).forEach(function (mod) {
-      grid.appendChild(buildAdminModuleEl(mod, grades, sub));
-    });
-    catSection.appendChild(grid);
+    if (!collapsed) {
+      var grid = document.createElement('div');
+      grid.className = 'skill-modules';
+      grid.style.cssText = 'padding:10px;gap:10px';
+      mods.forEach(function (mod) {
+        grid.appendChild(buildAdminModuleEl(mod, grades, sub));
+      });
+      catSection.appendChild(grid);
+    }
+
     el.appendChild(catSection);
   });
 }
@@ -276,34 +307,33 @@ function buildAdminModuleEl(mod, grades, sub) {
     '<div class="skill-mod-desc">' + esc(mod.description || '') + '</div>' +
     gradeInfoHtml;
 
-  /* Grade controls */
-  var controls = document.createElement('div');
-  controls.className = 'admin-grade-row';
+  /* Grade controls — two rows to avoid overflow */
+  var ctrlWrap = document.createElement('div');
+  ctrlWrap.style.cssText = 'padding:6px 0 2px;display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--border);margin-top:6px';
+
+  /* Row 1: grade select + action buttons */
+  var row1 = document.createElement('div');
+  row1.style.cssText = 'display:flex;gap:5px;align-items:center;flex-wrap:wrap';
 
   var sel = document.createElement('select');
   sel.className = 'grade-select';
-  var opts = '<option value="">—</option>';
+  var opts = '<option value="">— GRADE —</option>';
   ['U', 'F', 'G', 'E'].forEach(function (g) {
     var selected = (gradeRec && gradeRec.grade === g) ? ' selected' : '';
-    opts += '<option value="' + g + '"' + selected + '>' + g + ' — ' + GRADE_NAMES[g] + '</option>';
+    opts += '<option value="' + g + '"' + selected + '>' + g + ' · ' + GRADE_NAMES[g] + '</option>';
   });
   sel.innerHTML = opts;
-
-  var notesInput = document.createElement('input');
-  notesInput.className   = 'grade-notes-input';
-  notesInput.type        = 'text';
-  notesInput.placeholder = 'Notes (optional)';
-  notesInput.value       = gradeRec ? (gradeRec.notes || '') : '';
 
   var saveBtn = document.createElement('button');
   saveBtn.className   = 'btn-save-grade';
   saveBtn.textContent = 'SAVE';
-  (function (s, mid, selEl, notesEl) {
+  (function (s, mid, selEl) {
     saveBtn.addEventListener('click', function () {
       if (!selEl.value) { showToast('Select a grade first', true); return; }
-      saveGrade(s, mid, selEl.value, notesEl.value);
+      var notesEl = selEl.parentElement.parentElement.querySelector('.grade-notes-input');
+      saveGrade(s, mid, selEl.value, notesEl ? notesEl.value : '');
     });
-  })(sub, mod.id, sel, notesInput);
+  })(sub, mod.id, sel);
 
   var clearBtn = document.createElement('button');
   clearBtn.className   = 'btn-clear-grade';
@@ -313,11 +343,24 @@ function buildAdminModuleEl(mod, grades, sub) {
     clearBtn.addEventListener('click', function () { clearGrade(s, mid); });
   })(sub, mod.id);
 
-  controls.appendChild(sel);
-  controls.appendChild(notesInput);
-  controls.appendChild(saveBtn);
-  controls.appendChild(clearBtn);
-  card.appendChild(controls);
+  row1.appendChild(sel);
+  row1.appendChild(saveBtn);
+  row1.appendChild(clearBtn);
+
+  /* Row 2: notes input (full width) */
+  var row2 = document.createElement('div');
+  var notesInput = document.createElement('input');
+  notesInput.className   = 'grade-notes-input';
+  notesInput.type        = 'text';
+  notesInput.placeholder = 'Notes (optional)';
+  notesInput.value       = gradeRec ? (gradeRec.notes || '') : '';
+  notesInput.style.width = '100%';
+  notesInput.style.boxSizing = 'border-box';
+  row2.appendChild(notesInput);
+
+  ctrlWrap.appendChild(row1);
+  ctrlWrap.appendChild(row2);
+  card.appendChild(ctrlWrap);
   return card;
 }
 
@@ -516,6 +559,17 @@ function buildCatCard(cat, ci, totalCats, allMods) {
   var ctrlDiv = document.createElement('div');
   ctrlDiv.style.cssText = 'display:flex;gap:4px;margin-left:auto;flex-shrink:0';
 
+  var collapseBtn = document.createElement('button');
+  collapseBtn.className   = 'btn-sm';
+  collapseBtn.title       = 'Collapse / expand';
+  collapseBtn.textContent = _editorCollapsed[cat.id] ? '▶' : '▼';
+  (function (catId) {
+    collapseBtn.addEventListener('click', function () {
+      _editorCollapsed[catId] = !_editorCollapsed[catId];
+      renderTreeEditor();
+    });
+  })(cat.id);
+
   var upBtn = document.createElement('button');
   upBtn.className   = 'btn-sm';
   upBtn.textContent = '↑';
@@ -537,7 +591,7 @@ function buildCatCard(cat, ci, totalCats, allMods) {
     });
   })(ci, cat.name);
 
-  ctrlDiv.appendChild(upBtn); ctrlDiv.appendChild(dnBtn); ctrlDiv.appendChild(delBtn);
+  ctrlDiv.appendChild(collapseBtn); ctrlDiv.appendChild(upBtn); ctrlDiv.appendChild(dnBtn); ctrlDiv.appendChild(delBtn);
   hdr.appendChild(nameInput); hdr.appendChild(wLabel); hdr.appendChild(weightInput);
   hdr.appendChild(pct); hdr.appendChild(ctrlDiv);
   card.appendChild(hdr);
@@ -545,21 +599,27 @@ function buildCatCard(cat, ci, totalCats, allMods) {
   /* ── Category ID row ── */
   card.appendChild(buildIdRow(cat, 'category-id'));
 
-  /* ── Module list ── */
-  var modList = document.createElement('div');
-  modList.className = 'tree-mod-list';
-  (cat.modules || []).forEach(function (mod, mi) {
-    modList.appendChild(buildModCard(mod, mi, (cat.modules || []).length, ci, allMods));
-  });
-  card.appendChild(modList);
+  /* ── Module list + add button (hidden when collapsed) ── */
+  if (!_editorCollapsed[cat.id]) {
+    var modList = document.createElement('div');
+    modList.className = 'tree-mod-list';
+    (cat.modules || []).forEach(function (mod, mi) {
+      modList.appendChild(buildModCard(mod, mi, (cat.modules || []).length, ci, allMods));
+    });
+    card.appendChild(modList);
 
-  /* ── Add module button ── */
-  var addModBtn = document.createElement('button');
-  addModBtn.className   = 'btn-sm';
-  addModBtn.textContent = '+ ADD MODULE';
-  addModBtn.style.cssText = 'margin: 4px 10px 10px';
-  (function (i) { addModBtn.addEventListener('click', function () { addModule(i); }); })(ci);
-  card.appendChild(addModBtn);
+    var addModBtn = document.createElement('button');
+    addModBtn.className   = 'btn-sm';
+    addModBtn.textContent = '+ ADD MODULE';
+    addModBtn.style.cssText = 'margin: 4px 10px 10px';
+    (function (i) { addModBtn.addEventListener('click', function () { addModule(i); }); })(ci);
+    card.appendChild(addModBtn);
+  } else {
+    var collapsedNote = document.createElement('div');
+    collapsedNote.style.cssText = 'padding:6px 10px 8px;font-size:8px;color:var(--text-3)';
+    collapsedNote.textContent   = (cat.modules || []).length + ' module(s) — click ▶ to expand';
+    card.appendChild(collapsedNote);
+  }
 
   return card;
 }
