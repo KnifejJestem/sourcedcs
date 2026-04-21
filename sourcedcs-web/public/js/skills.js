@@ -328,7 +328,10 @@ function buildCatSection(cat, myOpenReq) {
         var actDiv = document.createElement('div');
         actDiv.style.marginTop = '10px';
 
-        if (myOpenReq) {
+        /* Show the pending notice only on the module the request was filed for.
+           If the request has no module_id (legacy), show it everywhere. */
+        var isThisModuleReq = myOpenReq && (!myOpenReq.module_id || myOpenReq.module_id === mod.id);
+        if (isThisModuleReq) {
           var pendingSpan = document.createElement('span');
           pendingSpan.className   = 'grading-pending-notice';
           pendingSpan.textContent = 'GRADING REQUEST ' + myOpenReq.status.toUpperCase();
@@ -414,11 +417,9 @@ function requestGrading(moduleId, moduleTitle) {
   }).then(function (req) {
     if (!req) return;
     _requests.push(req);
-    if (!req.discord_message_id) {
-      showToast('Request submitted (check GRADING_CHANNEL_ID env var — Discord was not notified)');
-    } else {
-      showToast('Grading request submitted — instructors notified');
-    }
+    showToast(req.discord_message_id
+      ? 'Grading request submitted — instructors notified'
+      : 'Grading request submitted (Discord notification skipped — check server config)');
     render();
   }).catch(function (err) { showToast('Error: ' + err.message, true); });
 }

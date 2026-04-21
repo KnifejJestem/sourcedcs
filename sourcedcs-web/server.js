@@ -388,6 +388,35 @@ async function sendGradingRequestToDiscord(request) {
   return msg && msg.id ? msg.id : null;
 }
 
+/* DELETE a Discord message */
+function discordDelete(apiPath) {
+  console.debug('[discord] DELETE /api/v10' + apiPath);
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'discord.com',
+      path:     '/api/v10' + apiPath,
+      method:   'DELETE',
+      headers: {
+        'Authorization': 'Bot ' + DISCORD_BOT_TOKEN,
+        'User-Agent':    'SourceDCS-Web/1.0 (https://github.com/NikNam3/sourcedcs)',
+      },
+    };
+    const req = https.request(options, (res) => {
+      res.resume(); /* drain */
+      res.on('end', () => {
+        console.debug('[discord] DELETE /api/v10' + apiPath + ' → HTTP ' + res.statusCode);
+        if (res.statusCode === 204 || (res.statusCode >= 200 && res.statusCode < 300)) {
+          resolve();
+        } else {
+          reject(new Error('Discord API DELETE ' + res.statusCode));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 /* Edit an existing Discord message to reflect the current request state */
 async function updateGradingRequestOnDiscord(request) {
   if (!DISCORD_BOT_TOKEN || !GRADING_CHANNEL_ID || !request.discord_message_id) return;
@@ -1080,7 +1109,7 @@ api.get('/grading-requests', requireAuth, (req, res) => {
 const MAX_PILOT_NAME_LEN     = 64;
 const MAX_PILOT_CALLSIGN_LEN = 32;
 const MAX_MODULE_TITLE_LEN   = 128;
-api.post('/grading-requests', writeOpsLimiter, requireAuth, (req, res) => {
+api.post('/grading-requests', writeOpsLimiter, requireAuth, async (req, res) => {
   const sub = req.user.sub;
   if (!sub) return res.status(401).json({ error: 'User sub claim missing from token' });
 
@@ -1113,15 +1142,16 @@ api.post('/grading-requests', writeOpsLimiter, requireAuth, (req, res) => {
   gradingRequests.push(request);
   saveJSON(GRADING_REQS_FILE, gradingRequests);
 
-  /* Fire-and-forget Discord notification */
-  sendGradingRequestToDiscord(request).then(msgId => {
+  /* Await Discord so the message ID is included in the 201 response */
+  try {
+    const msgId = await sendGradingRequestToDiscord(request);
     if (msgId) {
       request.discord_message_id = msgId;
       saveJSON(GRADING_REQS_FILE, gradingRequests);
     }
-  }).catch(err => {
+  } catch (err) {
     console.error('[grading] Discord post failed:', err.message);
-  });
+  }
 
   res.status(201).json(request);
 });
@@ -1188,9 +1218,17 @@ api.delete('/grading-requests/:id', writeOpsLimiter, requireAuth, (req, res) => 
     return res.status(403).json({ error: 'You can only delete your own grading requests' });
   }
 
+  const msgId   = request.discord_message_id;
   gradingRequests.splice(idx, 1);
   saveJSON(GRADING_REQS_FILE, gradingRequests);
   res.json({ ok: true });
+
+  /* Delete the Discord message after responding */
+  if (msgId && DISCORD_BOT_TOKEN && GRADING_CHANNEL_ID) {
+    discordDelete('/channels/' + GRADING_CHANNEL_ID + '/messages/' + msgId).catch(err => {
+      console.error('[grading] Discord message delete failed:', err.message);
+    });
+  }
 });
 
 app.use('/api', api);
