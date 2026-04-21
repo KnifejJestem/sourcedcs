@@ -164,6 +164,12 @@ function buildCatSection(cat, myOpenReq) {
   var score     = Math.round(categoryScore(cat) * 100);
   var collapsed = !!_openCats[cat.id];
 
+  /* Flat id → title map for prereq display */
+  var modTitleMap = {};
+  (_tree.categories || []).forEach(function (c) {
+    (c.modules || []).forEach(function (m) { modTitleMap[m.id] = m.title; });
+  });
+
   var section = document.createElement('div');
   section.className = 'skill-list-category';
 
@@ -297,7 +303,7 @@ function buildCatSection(cat, myOpenReq) {
           var preDiv = document.createElement('div');
           preDiv.className = 'slm-prereqs';
           var preParts = (mod.prerequisites || []).map(function (p) {
-            return p.module_id + ' (' + (p.min_grade || 'G') + '+)';
+            return (modTitleMap[p.module_id] || p.module_id) + ' (' + (p.min_grade || 'G') + '+)';
           });
           preDiv.textContent = 'Requires: ' + preParts.join(', ');
           detail.appendChild(preDiv);
