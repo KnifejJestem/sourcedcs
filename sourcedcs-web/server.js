@@ -1101,9 +1101,26 @@ api.delete('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, req
   res.json({ ok: true });
 });
 
-/* ── Pilot Registry (admin read) ── */
+/* ── Pilot Registry (admin read / delete) ── */
 api.get('/skill-pilots', requireAuth, requireSkillAdmin, (_req, res) => {
   res.json(pilotRegistry);
+});
+
+api.delete('/skill-pilots/:sub', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const sub = req.params.sub;
+  if (!pilotRegistry[sub]) return res.status(404).json({ error: 'Pilot not found' });
+
+  delete pilotRegistry[sub];
+  delete skillGrades[sub];
+
+  const before = gradingRequests.length;
+  gradingRequests = gradingRequests.filter(r => r.pilot_id !== sub);
+  if (gradingRequests.length !== before) saveJSON(GRADING_REQS_FILE, gradingRequests);
+
+  saveJSON(PILOT_REGISTRY_FILE, pilotRegistry);
+  saveJSON(SKILL_GRADES_FILE,   skillGrades);
+
+  res.json({ ok: true });
 });
 
 /* ── Grading Requests ── */

@@ -231,14 +231,31 @@ function selectPilot(sub) {
   /* Header */
   var hdr = document.createElement('div');
   hdr.style.cssText = 'display:flex;align-items:baseline;gap:16px;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid var(--border)';
-  hdr.innerHTML =
-    '<span style="font-family:Orbitron,monospace;font-weight:900;font-size:16px;letter-spacing:3px">' +
-      esc(pilot.callsign || pilot.name || sub) +
-    '</span>' +
-    '<span style="font-size:10px;color:var(--text-3)">' + esc(pilot.name || '') + '</span>' +
-    '<span style="font-family:Orbitron,monospace;font-weight:700;font-size:20px;color:var(--green);margin-left:auto">' +
-      score + '%' +
-    '</span>';
+
+  var callsignSpan = document.createElement('span');
+  callsignSpan.style.cssText = 'font-family:Orbitron,monospace;font-weight:900;font-size:16px;letter-spacing:3px';
+  callsignSpan.textContent = pilot.callsign || pilot.name || sub;
+
+  var nameSpan = document.createElement('span');
+  nameSpan.style.cssText = 'font-size:10px;color:var(--text-3)';
+  nameSpan.textContent = pilot.name || '';
+
+  var scoreSpan = document.createElement('span');
+  scoreSpan.style.cssText = 'font-family:Orbitron,monospace;font-weight:700;font-size:20px;color:var(--green);margin-left:auto';
+  scoreSpan.textContent = score + '%';
+
+  var delPilotBtn = document.createElement('button');
+  delPilotBtn.className   = 'btn-sm btn-sm-danger';
+  delPilotBtn.textContent = 'DELETE PILOT';
+  delPilotBtn.title       = 'Permanently remove this pilot and all their grades';
+  (function (s, callsign) {
+    delPilotBtn.addEventListener('click', function () { deletePilot(s, callsign); });
+  })(sub, pilot.callsign || pilot.name || sub);
+
+  hdr.appendChild(callsignSpan);
+  hdr.appendChild(nameSpan);
+  hdr.appendChild(scoreSpan);
+  hdr.appendChild(delPilotBtn);
   el.appendChild(hdr);
 
   (_tree.categories || []).forEach(function (cat) {
@@ -378,6 +395,38 @@ function buildAdminModuleEl(mod, grades, sub) {
   ctrlWrap.appendChild(row2);
   card.appendChild(ctrlWrap);
   return card;
+}
+
+/* ── Pilot delete ───────────────────────────────────────── */
+function deletePilot(sub, callsign) {
+  var confirm1 = confirm(
+    'DELETE PILOT: ' + callsign + '\n\n' +
+    'This will permanently remove the pilot and ALL their skill grades and grading requests.\n\n' +
+    'This cannot be undone. Are you sure?'
+  );
+  if (!confirm1) return;
+
+  var typed = prompt('Type the callsign "' + callsign + '" to confirm deletion:');
+  if (typed === null) return;
+  if (typed.trim() !== callsign) { showToast('Callsign did not match — pilot not deleted', true); return; }
+
+  var tok = getToken();
+  fetch('/api/skill-pilots/' + encodeURIComponent(sub), {
+    method:  'DELETE',
+    headers: { 'Authorization': 'Bearer ' + tok },
+  }).then(function (r) {
+    if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || String(r.status)); });
+    return r.json();
+  }).then(function () {
+    delete _pilots[sub];
+    delete _allGrades[sub];
+    _requests = _requests.filter(function (r) { return r.pilot_id !== sub; });
+    _activeSub = null;
+    document.getElementById('pilotDetail').innerHTML = '';
+    renderPilotList();
+    renderGradingQueue();
+    showToast('Pilot deleted');
+  }).catch(function (err) { showToast('Error: ' + err.message, true); });
 }
 
 /* ── Grade API calls ────────────────────────────────────── */
