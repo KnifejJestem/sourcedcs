@@ -208,9 +208,7 @@ services:
   # Main - Website (Node.js / Express)
   # ─────────────────────────────────────────
   main-website:
-    build:
-      context: ../sourcedcs-web
-      dockerfile: Dockerfile
+    image: ghcr.io/niknam3/sourcedcs/sourcedcs-web:latest
     container_name: main-website
     restart: unless-stopped
     environment:
@@ -239,9 +237,7 @@ services:
   # ATO BRIEF (Node.js / Express + Socket.IO)
   # ─────────────────────────────────────────
   atobrief:
-    build:
-      context: ../atobrief
-      dockerfile: Dockerfile
+    image: ghcr.io/niknam3/sourcedcs/atobrief:latest
     container_name: atobrief
     restart: unless-stopped
     environment:
