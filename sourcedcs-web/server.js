@@ -464,6 +464,10 @@ const authLimiter = rateLimit({
 /* ─── Body parsing ──────────────────────────────────────── */
 app.use(express.json({ limit: '50kb' }));
 
+/* ─── App config (config.json) ──────────────────────────── */
+const appConfig       = loadJSON(path.join(__dirname, 'config.json'), {});
+const SKILL_ADMIN_ROLES = Array.isArray(appConfig.skillAdminRoles) ? appConfig.skillAdminRoles : ['admin'];
+
 /* ─── Casdoor config (read from env) ────────────────────── */
 const CASDOOR_CLIENT_ID     = process.env.CASDOOR_CLIENT_ID;
 const CASDOOR_CLIENT_SECRET = process.env.CASDOOR_CLIENT_SECRET;
@@ -551,6 +555,13 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function requireSkillAdmin(req, res, next) {
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  const ok = roles.some(r => SKILL_ADMIN_ROLES.includes(typeof r === 'string' ? r : (r?.name || '')));
+  if (!ok) return res.status(403).json({ error: 'Skill admin access required' });
+  next();
+}
+
 /* ─── Dynamic config for client ─────────────────────────── */
 /* Serves Casdoor connection settings as a JS file so the client reads
    them from environment variables rather than hardcoded values. */
@@ -558,14 +569,15 @@ app.get('/js/config.js', (_req, res) => {
   res.set('Content-Type', 'application/javascript; charset=utf-8');
   res.set('Cache-Control', 'no-store');
   res.send(
-    'var CASDOOR_CLIENT_ID = ' + JSON.stringify(CASDOOR_CLIENT_ID) + ';\n' +
-    'var CASDOOR_ENDPOINT  = ' + JSON.stringify(CASDOOR_ENDPOINT)  + ';\n' +
-    'var DISCORD_URL = '       + JSON.stringify(DISCORD_URL)        + ';\n' +
-    'var WIKI_URL    = '       + JSON.stringify(WIKI_URL)           + ';\n' +
-    'var ATO_URL     = '       + JSON.stringify(ATO_URL)            + ';\n' +
-    'var OLYMPUS_URL = '       + JSON.stringify(OLYMPUS_URL)        + ';\n' +
-    'var ASACS_URL   = '       + JSON.stringify(ASACS_URL)          + ';\n' +
-    'var GITHUB_URL  = '       + JSON.stringify(GITHUB_URL)         + ';\n'
+    'var CASDOOR_CLIENT_ID   = ' + JSON.stringify(CASDOOR_CLIENT_ID)   + ';\n' +
+    'var CASDOOR_ENDPOINT    = ' + JSON.stringify(CASDOOR_ENDPOINT)    + ';\n' +
+    'var DISCORD_URL         = ' + JSON.stringify(DISCORD_URL)         + ';\n' +
+    'var WIKI_URL            = ' + JSON.stringify(WIKI_URL)            + ';\n' +
+    'var ATO_URL             = ' + JSON.stringify(ATO_URL)             + ';\n' +
+    'var OLYMPUS_URL         = ' + JSON.stringify(OLYMPUS_URL)         + ';\n' +
+    'var ASACS_URL           = ' + JSON.stringify(ASACS_URL)           + ';\n' +
+    'var GITHUB_URL          = ' + JSON.stringify(GITHUB_URL)          + ';\n' +
+    'var SKILL_ADMIN_ROLES   = ' + JSON.stringify(SKILL_ADMIN_ROLES)   + ';\n'
   );
 });
 
@@ -1001,7 +1013,7 @@ api.get('/skill-tree', (_req, res) => {
   res.json(skillTree);
 });
 
-api.put('/skill-tree', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+api.put('/skill-tree', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
   const tree = req.body;
   if (!tree || !Array.isArray(tree.categories)) {
     return res.status(400).json({ error: 'categories array required' });
@@ -1035,7 +1047,7 @@ api.put('/skill-tree', writeOpsLimiter, requireAuth, requireAdmin, (req, res) =>
 api.get('/skill-grades', requireAuth, (req, res) => {
   const sub   = req.user.sub;
   const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
-  const isAdm = roles.some(r => (typeof r === 'string' ? r : (r?.name || '')) === 'admin');
+  const isAdm = roles.some(r => SKILL_ADMIN_ROLES.includes(typeof r === 'string' ? r : (r?.name || '')));
 
   /* Auto-register pilot on first access */
   if (sub && !pilotRegistry[sub]) {
@@ -1052,12 +1064,12 @@ api.get('/skill-grades', requireAuth, (req, res) => {
   }
 });
 
-api.get('/skill-grades/:pilotId', requireAuth, requireAdmin, (req, res) => {
+api.get('/skill-grades/:pilotId', requireAuth, requireSkillAdmin, (req, res) => {
   res.json(skillGrades[req.params.pilotId] || {});
 });
 
 const MAX_GRADE_NOTES_LEN = 500;
-api.put('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+api.put('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
   const { pilotId, moduleId } = req.params;
   const { grade, notes } = req.body;
 
@@ -1079,7 +1091,7 @@ api.put('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requir
   res.json(skillGrades[pilotId][moduleId]);
 });
 
-api.delete('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+api.delete('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
   const { pilotId, moduleId } = req.params;
   if (!skillGrades[pilotId] || !skillGrades[pilotId][moduleId]) {
     return res.status(404).json({ error: 'Grade not found' });
@@ -1090,7 +1102,7 @@ api.delete('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, req
 });
 
 /* ── Pilot Registry (admin read) ── */
-api.get('/skill-pilots', requireAuth, requireAdmin, (_req, res) => {
+api.get('/skill-pilots', requireAuth, requireSkillAdmin, (_req, res) => {
   res.json(pilotRegistry);
 });
 
@@ -1098,7 +1110,7 @@ api.get('/skill-pilots', requireAuth, requireAdmin, (_req, res) => {
 api.get('/grading-requests', requireAuth, (req, res) => {
   const sub   = req.user.sub;
   const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
-  const isAdm = roles.some(r => (typeof r === 'string' ? r : (r?.name || '')) === 'admin');
+  const isAdm = roles.some(r => SKILL_ADMIN_ROLES.includes(typeof r === 'string' ? r : (r?.name || '')));
   if (isAdm) {
     res.json(gradingRequests);
   } else {
@@ -1156,7 +1168,7 @@ api.post('/grading-requests', writeOpsLimiter, requireAuth, async (req, res) => 
   res.status(201).json(request);
 });
 
-api.put('/grading-requests/:id/claim', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+api.put('/grading-requests/:id/claim', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
   const id  = Number(req.params.id);
   const idx = gradingRequests.findIndex(r => r.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Grading request not found' });
@@ -1180,7 +1192,7 @@ api.put('/grading-requests/:id/claim', writeOpsLimiter, requireAuth, requireAdmi
   res.json(gradingRequests[idx]);
 });
 
-api.put('/grading-requests/:id/unclaim', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+api.put('/grading-requests/:id/unclaim', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
   const id  = Number(req.params.id);
   const idx = gradingRequests.findIndex(r => r.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Grading request not found' });
@@ -1208,7 +1220,7 @@ api.delete('/grading-requests/:id', writeOpsLimiter, requireAuth, (req, res) => 
   const id    = Number(req.params.id);
   const sub   = req.user.sub;
   const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
-  const isAdm = roles.some(r => (typeof r === 'string' ? r : (r?.name || '')) === 'admin');
+  const isAdm = roles.some(r => SKILL_ADMIN_ROLES.includes(typeof r === 'string' ? r : (r?.name || '')));
 
   const idx = gradingRequests.findIndex(r => r.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Grading request not found' });

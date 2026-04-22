@@ -52,7 +52,7 @@ var _detailCollapsed = {};   /* { [catId]: bool } collapse state for pilot detai
     if (btn) { btn.textContent = 'LOGIN'; btn.onclick = loginWithCasdoor; }
   }
 
-  if (!tok || !isAdminRole(tok)) {
+  if (!tok || !isSkillAdminRole(tok)) {
     document.getElementById('accessDenied').style.display = '';
     return;
   }

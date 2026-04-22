@@ -36,6 +36,23 @@ function isAdminRole(token) {
   } catch(e) { return false; }
 }
 
+/* Returns true if the token grants skill-admin access.
+   Allowed roles are configured in config.json and exposed to the client
+   as window.SKILL_ADMIN_ROLES via /js/config.js. */
+function isSkillAdminRole(token) {
+  if (!token) return false;
+  try {
+    var parts = token.split('.');
+    if (parts.length !== 3) return false;
+    var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    var userRoles = payload.roles || [];
+    var allowed = (typeof SKILL_ADMIN_ROLES !== 'undefined') ? SKILL_ADMIN_ROLES : ['admin'];
+    return Array.isArray(userRoles) && userRoles.some(function(r) {
+      return allowed.indexOf(typeof r === 'string' ? r : (r && r.name) || '') !== -1;
+    });
+  } catch(e) { return false; }
+}
+
 /* Returns true if the given JWT contains at least one role in its roles claim. */
 function hasAnyRole(token) {
   if (!token) return false;
