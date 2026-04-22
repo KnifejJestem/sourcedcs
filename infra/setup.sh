@@ -45,7 +45,7 @@ echo "==> Issuing SSL certificates..."
 echo "  Make sure DNS A records point to this server first!"
 echo ""
 read -p "Enter your email for Let's Encrypt: " LE_EMAIL
-read -p "Enter your main domain (e.g. yourdomain.com): " DOMAIN
+read -p "Enter your main domain (e.g. sourcedcs.page): " DOMAIN
 
 echo "==> Issuing SSL certificates..."
 docker compose run --rm --entrypoint certbot certbot certonly \
@@ -53,7 +53,10 @@ docker compose run --rm --entrypoint certbot certbot certonly \
   --email "$LE_EMAIL" \
   --agree-tos --no-eff-email \
   -d "wiki.$DOMAIN" \
-  -d "auth.$DOMAIN"
+  -d "auth.$DOMAIN" \
+  -d "ato.$DOMAIN" \
+  -d "asacs.$DOMAIN" \
+  -d "$DOMAIN"
 
 echo "==> Reloading nginx with SSL..."
 docker compose exec nginx nginx -s reload
@@ -66,8 +69,11 @@ docker compose exec nginx nginx -s reload
 
 echo ""
 echo "✅ Stack is up!"
+echo "   Main:     https://$DOMAIN"
 echo "   Wiki:     https://wiki.$DOMAIN"
 echo "   Auth:     https://auth.$DOMAIN"
+echo "   ATO:      https://ato.$DOMAIN"
+echo "   ASACS:    https://asacs.$DOMAIN"
 echo ""
 echo "Next steps:"
 echo "  1. Visit https://wiki.$DOMAIN to run MediaWiki web installer"

@@ -101,26 +101,7 @@ services:
           proxy_set_header Connection \$$connection_upgrade;
           proxy_set_header X-Forwarded-Proto https; }
       }
-      server {
-        listen 80;
-        server_name '$$ASACS_DOMAIN';
-        location /.well-known/acme-challenge/ { root /var/www/certbot; }
-        location / { return 301 https://\$$host\$$request_uri; }
-      }
-      server {
-        listen 443 ssl;
-        server_name '$$ASACS_DOMAIN';
-        ssl_certificate /etc/letsencrypt/live/'$$ASACS_DOMAIN'/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/'$$ASACS_DOMAIN'/privkey.pem;
-        location / {
-          set \$$upstream asacs-link;
-          proxy_pass http://\$$upstream:3000;
-          proxy_set_header Host $$host;
-          proxy_set_header X-Real-IP $$remote_addr;
-          proxy_set_header Upgrade \$$http_upgrade;
-          proxy_set_header Connection \$$connection_upgrade;
-          proxy_set_header X-Forwarded-Proto https; }
-      }' > /etc/nginx/conf.d/default.conf
+      ' > /etc/nginx/conf.d/default.conf
       && nginx -g 'daemon off;'"
     depends_on:
       - mediawiki
