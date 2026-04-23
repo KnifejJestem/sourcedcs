@@ -10,8 +10,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch == 'main' && 'production' || (github.event.workflow_run.head_branch == 'dev' && 'development' || 'production')) || 'production' }}
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: |
+      (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'dev')) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'dev'))
+    environment: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'production' || 'development' }}
     
     steps:
       - name: Deploy via SSH
@@ -24,6 +26,6 @@ jobs:
           script: |
             cd ${{ secrets.PATH }}
             cd infra
-            export TAG=${{ github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch == 'dev' && 'dev' || 'latest') || 'latest' }}
+            export TAG=${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'dev' && 'dev' || 'latest' }}
             docker compose pull
             docker compose up -d
