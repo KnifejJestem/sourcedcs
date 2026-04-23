@@ -385,7 +385,7 @@ function buildAdminModuleEl(mod, grades, sub) {
   var notesInput = document.createElement('input');
   notesInput.className   = 'grade-notes-input';
   notesInput.type        = 'text';
-  notesInput.placeholder = 'Notes (optional)';
+  notesInput.placeholder = 'Comment / grade justification (optional)';
   notesInput.value       = gradeRec ? (gradeRec.notes || '') : '';
   notesInput.style.width = '100%';
   notesInput.style.boxSizing = 'border-box';
@@ -442,7 +442,12 @@ function saveGrade(sub, moduleId, grade, notes) {
   }).then(function (gradeRec) {
     if (!_allGrades[sub]) _allGrades[sub] = {};
     _allGrades[sub][moduleId] = gradeRec;
+    /* Remove any grading requests for this pilot+module (server already deleted them) */
+    _requests = _requests.filter(function (r) {
+      return !(r.pilot_id === sub && (r.module_id === moduleId || !r.module_id));
+    });
     renderPilotList();
+    renderGradingQueue();
     selectPilot(sub);
     showToast('Grade saved');
   }).catch(function (err) { showToast('Error: ' + err.message, true); });

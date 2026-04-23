@@ -314,7 +314,7 @@ function buildCatSection(cat, myOpenReq) {
           if (gradeRec.notes) {
             var notes = document.createElement('div');
             notes.className   = 'slm-notes';
-            notes.textContent = '"' + gradeRec.notes + '"';
+            notes.textContent = 'Grader\'s comment: "' + gradeRec.notes + '"';
             detail.appendChild(notes);
           }
           var gradedBy = document.createElement('div');
@@ -342,7 +342,7 @@ function buildCatSection(cat, myOpenReq) {
           (function (id) { cancelBtn.addEventListener('click', function () { cancelRequest(id); }); })(myOpenReq.id);
           actDiv.appendChild(pendingSpan);
           actDiv.appendChild(cancelBtn);
-        } else {
+        } else if (!gradeRec || gradeRec.grade !== 'E') {
           var reqBtn = document.createElement('button');
           reqBtn.className   = 'btn-request-grading';
           reqBtn.textContent = 'REQUEST GRADING';

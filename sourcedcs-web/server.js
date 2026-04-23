@@ -1088,6 +1088,26 @@ api.put('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requir
     graded_by: graderName,
   };
   saveJSON(SKILL_GRADES_FILE, skillGrades);
+
+  /* Auto-remove any open/claimed grading requests for this pilot+module */
+  const removedReqs = [];
+  gradingRequests = gradingRequests.filter(r => {
+    if (r.pilot_id === pilotId && (r.module_id === moduleId || !r.module_id)) {
+      removedReqs.push(r);
+      return false;
+    }
+    return true;
+  });
+  if (removedReqs.length) {
+    saveJSON(GRADING_REQS_FILE, gradingRequests);
+    removedReqs.forEach(r => {
+      if (r.discord_message_id && DISCORD_BOT_TOKEN && GRADING_CHANNEL_ID) {
+        discordDelete('/channels/' + GRADING_CHANNEL_ID + '/messages/' + r.discord_message_id)
+          .catch(err => console.error('[grading] Discord message delete failed:', err.message));
+      }
+    });
+  }
+
   res.json(skillGrades[pilotId][moduleId]);
 });
 
