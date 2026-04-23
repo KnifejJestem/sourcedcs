@@ -1,4 +1,4 @@
-name: Deploy to Production
+name: Deploy
 
 on:
   workflow_run:
@@ -10,18 +10,20 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch == 'main' && 'production' || (github.event.workflow_run.head_branch == 'dev' && 'development' || 'production')) || 'production' }}
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USERNAME }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          port: ${{ secrets.PROD_PORT || 22 }}
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT || 22 }}
           script: |
-            cd ${{ secrets.PROD_PATH }}
+            cd ${{ secrets.PATH }}
             cd infra
+            export TAG=${{ github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch == 'dev' && 'dev' || 'latest') || 'latest' }}
             docker compose pull
             docker compose up -d

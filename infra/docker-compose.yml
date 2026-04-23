@@ -189,7 +189,7 @@ services:
   # Main - Website (Node.js / Express)
   # ─────────────────────────────────────────
   main-website:
-    image: ghcr.io/niknam3/sourcedcs/sourcedcs-web:latest
+    image: ghcr.io/niknam3/sourcedcs/sourcedcs-web:${TAG:-latest}
     container_name: main-website
     restart: unless-stopped
     environment:
@@ -218,7 +218,7 @@ services:
   # ATO BRIEF (Node.js / Express + Socket.IO)
   # ─────────────────────────────────────────
   atobrief:
-    image: ghcr.io/niknam3/sourcedcs/atobrief:latest
+    image: ghcr.io/niknam3/sourcedcs/atobrief:${TAG:-latest}
     container_name: atobrief
     restart: unless-stopped
     environment:
