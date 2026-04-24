@@ -1,6 +1,14 @@
 #!/bin/sh
-if [ ! -f /conf/app.conf ]; then
-  cat > /conf/app.conf <<EOF
+set -e
+
+echo "Starting Casdoor Entrypoint..."
+
+# Create directory if it doesn't exist
+mkdir -p /conf
+
+# Generate the config
+echo "Generating /conf/app.conf..."
+cat > /conf/app.conf <<EOF
 appname = casdoor
 httpport = 8000
 runmode = prod
@@ -13,6 +21,11 @@ logPostOnly = true
 origin = https://${AUTH_DOMAIN}
 staticBaseUrl = https://cdn.casbin.org
 EOF
-fi
 
-/server
+# Also try putting it in /app/conf/app.conf or ./conf/app.conf
+# Casdoor often looks for it relative to the binary
+mkdir -p /conf
+cp /conf/app.conf /app.conf
+
+echo "Starting Casdoor server..."
+exec /server

@@ -101,6 +101,24 @@ services:
           proxy_set_header Connection \$$connection_upgrade;
           proxy_set_header X-Forwarded-Proto https; }
       }
+      server {
+        listen 80;
+        server_name '$$ASACS_DOMAIN';
+        location /.well-known/acme-challenge/ { root /var/www/certbot; }
+        location / { return 301 https://\$$host\$$request_uri; }
+      }
+      server {
+        listen 443 ssl;
+        server_name '$$ASACS_DOMAIN';
+        ssl_certificate /etc/letsencrypt/live/'$$ASACS_DOMAIN'/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/'$$ASACS_DOMAIN'/privkey.pem;
+        location / {
+          set \$$upstream asacs-link;
+          proxy_pass http://\$$upstream:3000;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-Proto https; }
+      }
       ' > /etc/nginx/conf.d/default.conf
       && nginx -g 'daemon off;'"
     depends_on:
@@ -132,12 +150,15 @@ services:
     container_name: mariadb
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MARIADB_DATABASE: casdoor
+      MARIADB_USER: ${CASDOOR_DB_USER}
+      MARIADB_PASSWORD: ${CASDOOR_DB_PASSWORD}
+      WIKI_DB_USER: ${WIKI_DB_USER}
       WIKI_DB_PASSWORD: ${WIKI_DB_PASSWORD}
-      CASDOOR_DB_PASSWORD: ${CASDOOR_DB_PASSWORD}
     volumes:
       - mariadb-data:/var/lib/mysql
-      - ./mariadb/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      - ./init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     networks:
       - internal
     healthcheck:
@@ -153,6 +174,11 @@ services:
     build: ./mediawiki
     container_name: mediawiki
     restart: unless-stopped
+    environment:
+      - MW_DB_SERVER=mariadb
+      - MW_DB_NAME=wiki
+      - MW_DB_USER=${WIKI_DB_USER}
+      - MW_DB_PASSWORD=${WIKI_DB_PASSWORD}
     volumes:
       - mediawiki-images:/var/www/html/images
       - ./mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro
@@ -174,9 +200,11 @@ services:
       - casdoor-conf:/conf
       - ./casdoor_entrypoint.sh:/casdoor_entrypoint.sh:ro
     environment:
-      CASDOOR_DB_USER: ${CASDOOR_DB_USER}
-      CASDOOR_DB_PASSWORD: ${CASDOOR_DB_PASSWORD}
-      AUTH_DOMAIN: ${AUTH_DOMAIN}
+      - CASDOOR_DB_USER=${CASDOOR_DB_USER}
+      - CASDOOR_DB_PASSWORD=${CASDOOR_DB_PASSWORD}
+      - AUTH_DOMAIN=${AUTH_DOMAIN}
+      - driverName=mysql
+      - dataSourceName=${CASDOOR_DB_USER}:${CASDOOR_DB_PASSWORD}@tcp(mariadb:3306)/casdoor
     entrypoint: [ "/bin/sh", "/casdoor_entrypoint.sh" ]
     depends_on:
       mariadb:
