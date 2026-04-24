@@ -106,7 +106,9 @@ function moduleState(mod, grades) {
 
 function pilotOverallScore(sub) {
   if (!_tree || !_tree.categories) return 0;
-  var grades = _allGrades[sub] || {};
+  var grades      = _allGrades[sub] || {};
+  var totalWeight = _tree.categories.reduce(function (s, c) { return s + (c.weight || 0); }, 0);
+  if (!totalWeight) return 0;
   return _tree.categories.reduce(function (s, cat) {
     if (!cat.modules || !cat.modules.length) return s;
     var completed = cat.modules.filter(function (mod) {
@@ -114,7 +116,7 @@ function pilotOverallScore(sub) {
     }).length;
     var catScore = completed / cat.modules.length;
     return s + (cat.weight || 0) * catScore;
-  }, 0) / 100;
+  }, 0) / totalWeight;
 }
 
 /* ── Grading queue ──────────────────────────────────────── */
@@ -548,7 +550,6 @@ function renderTreeEditor() {
 
   var cats        = _treeEditor.categories || [];
   var totalWeight = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
-  var weightOk    = Math.abs(totalWeight - 100) <= 0.01;
   var allMods     = flatModules();
 
   /* Weight indicator */
@@ -558,8 +559,8 @@ function renderTreeEditor() {
   wLabel.className   = 'tree-field-label';
   wLabel.textContent = 'TOTAL WEIGHT';
   var wTotal = document.createElement('span');
-  wTotal.className   = 'tree-weight-total ' + (weightOk ? 'ok' : 'err');
-  wTotal.textContent = totalWeight + ' / 100';
+  wTotal.className   = 'tree-weight-total ok';
+  wTotal.textContent = totalWeight;
   weightBar.appendChild(wLabel);
   weightBar.appendChild(wTotal);
   el.appendChild(weightBar);
@@ -607,9 +608,8 @@ function renderTreeEditor() {
 function updateWeightBar() {
   var cats  = _treeEditor.categories || [];
   var total = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
-  var ok    = Math.abs(total - 100) <= 0.01;
   var el    = document.querySelector('.tree-weight-total');
-  if (el) { el.textContent = total + ' / 100'; el.className = 'tree-weight-total ' + (ok ? 'ok' : 'err'); }
+  if (el) { el.textContent = total; el.className = 'tree-weight-total ok'; }
 }
 
 function buildCatCard(cat, ci, totalCats, allMods) {
