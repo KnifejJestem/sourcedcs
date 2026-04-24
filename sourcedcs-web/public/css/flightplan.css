@@ -104,6 +104,20 @@
 .fp-add-btn:hover { border-color: var(--text); color: var(--text); }
 :root.movie .fp-add-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+/* ── Required field marker ──────────────────────────────── */
+.fp-req {
+  color: var(--red);
+  font-style: normal;
+  margin-left: 2px;
+}
+:root.movie .fp-req { color: var(--red); }
+
+/* In table headers the marker should be same style */
+.fp-legs-table th .fp-req,
+.fp-crew-table th .fp-req {
+  color: var(--red);
+}
+
 /* ── Form fields ────────────────────────────────────────── */
 .fp-row {
   display: flex;
@@ -417,6 +431,39 @@ textarea.fp-cell { resize: none; min-height: 42px; display: block; }
 .fp-detail-table td:last-child { border-right: none; }
 .fp-detail-table tr:last-child td { border-bottom: none; }
 .fp-detail-route { white-space: pre-wrap; word-break: break-all; }
+
+/* ── Admin config panel ─────────────────────────────────── */
+.fp-admin-panel {
+  border: 1px solid var(--blue);
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+:root.movie .fp-admin-panel { border-color: var(--blue); }
+.fp-admin-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--blue);
+  text-transform: uppercase;
+  padding: 8px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+:root.movie .fp-admin-label { color: var(--blue); }
+.fp-admin-body { padding: 16px 14px; }
+.fp-admin-desc {
+  font-size: 10px;
+  color: var(--text-2);
+  letter-spacing: 0.5px;
+  margin-bottom: 14px;
+  line-height: 1.6;
+}
+.fp-admin-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
 
 /* ════════════════════════════════════════════════════════════
    PRINT STYLES

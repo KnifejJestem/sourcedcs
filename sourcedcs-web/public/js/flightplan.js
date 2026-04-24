@@ -22,6 +22,24 @@ function logout() {
   location.reload();
 }
 
+/* ════════════════════════════════════════════════════════════
+   COUNTERS + CONSTANTS — must be before auth IIFE
+════════════════════════════════════════════════════════════ */
+var fpLegCounter  = 0;
+var fpCrewCounter = 0;
+
+var FP_DUTY_POSITIONS = [
+  'PILOT IN COMMAND', 'CP', 'CE', 'TO', 'N', 'CDR', 'PASSENGER', 'OTHER'
+];
+
+/* Squadron config (populated after fetching /api/flight-plans/config) */
+var fpControllerSquadron  = '';   /* which squadron has controller access */
+var fpAvailableSquadrons  = [];   /* all configured squadrons */
+var fpUserIsController    = false; /* is the current user in the controller squadron */
+
+/* ════════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════════ */
 var currentToken = getToken();
 
 (function() {
@@ -42,7 +60,7 @@ var currentToken = getToken();
     document.getElementById('fpMain').style.display = '';
     fpAddLeg();
     fpAddCrew();
-    fpLoadPlans();
+    fpLoadConfig();   /* loads config, then loads plans */
   }
 })();
 
@@ -67,13 +85,100 @@ var currentToken = getToken();
 })();
 
 /* ════════════════════════════════════════════════════════════
+   SQUADRON CONFIG
+════════════════════════════════════════════════════════════ */
+function fpLoadConfig() {
+  fetch('/api/flight-plans/config', {
+    headers: currentToken ? { 'Authorization': 'Bearer ' + currentToken } : {},
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(cfg) {
+    fpControllerSquadron = cfg.controllerSquadron || '';
+    fpAvailableSquadrons = cfg.availableSquadrons || [];
+    fpUserIsController   = Boolean(cfg.isController);
+    fpRenderAdminPanel();
+    fpLoadPlans();
+  })
+  .catch(function() {
+    fpLoadPlans(); /* load plans even if config fails */
+  });
+}
+
+function fpRenderAdminPanel() {
+  var panel = document.getElementById('fpAdminPanel');
+  if (!panel) return;
+
+  var isAdm = isAdminRole(currentToken);
+  if (!isAdm) { panel.style.display = 'none'; return; }
+
+  panel.style.display = '';
+
+  var opts = ['<option value="">— NONE (ADMIN ONLY) —</option>'];
+  fpAvailableSquadrons.forEach(function(sq) {
+    opts.push('<option value="' + esc(sq) + '"' + (sq === fpControllerSquadron ? ' selected' : '') + '>' + esc(sq) + '</option>');
+  });
+  if (fpAvailableSquadrons.length === 0) {
+    opts.push('<option value="" disabled>No squadrons configured in discord-roles.json</option>');
+  }
+
+  panel.innerHTML =
+    '<div class="fp-admin-label">ADMIN — CONTROLLER SQUADRON</div>' +
+    '<div class="fp-admin-body">' +
+      '<div class="fp-admin-desc">Select which squadron can view all submitted flight plans and enter Base Ops data. All users can always view their own submissions.</div>' +
+      '<div class="fp-admin-row">' +
+        '<div class="fp-field" style="flex:1;min-width:200px">' +
+          '<label class="fp-label" for="fpControllerSqSelect">CONTROLLER SQUADRON</label>' +
+          '<select class="fp-input" id="fpControllerSqSelect">' + opts.join('') + '</select>' +
+        '</div>' +
+        '<div style="align-self:flex-end">' +
+          '<button class="btn btn-primary" style="font-size:9px;padding:6px 16px" onclick="fpSaveConfig()">SAVE</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="fp-msg fp-error"  id="fpAdminError"   style="display:none;margin-top:8px"></div>' +
+      '<div class="fp-msg fp-success" id="fpAdminSuccess" style="display:none;margin-top:8px"></div>' +
+    '</div>';
+}
+
+function fpSaveConfig() {
+  var sel   = document.getElementById('fpControllerSqSelect');
+  var errEl = document.getElementById('fpAdminError');
+  var okEl  = document.getElementById('fpAdminSuccess');
+  if (!sel) return;
+
+  errEl.style.display = 'none';
+  okEl.style.display  = 'none';
+
+  fetch('/api/flight-plans/config', {
+    method:  'PUT',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': 'Bearer ' + (currentToken || ''),
+    },
+    body: JSON.stringify({ controllerSquadron: sel.value }),
+  })
+  .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
+  .then(function(res) {
+    if (!res.ok) {
+      errEl.textContent   = res.body.error || 'Save failed.';
+      errEl.style.display = '';
+      return;
+    }
+    fpControllerSquadron = res.body.controllerSquadron || '';
+    okEl.textContent   = 'Controller squadron updated.';
+    okEl.style.display = '';
+  })
+  .catch(function() {
+    errEl.textContent   = 'Network error — please try again.';
+    errEl.style.display = '';
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
    LEG MANAGEMENT
 ════════════════════════════════════════════════════════════ */
-var fpLegCounter = 0;
-
 function fpAddLeg() {
   fpLegCounter++;
-  var id   = fpLegCounter;
+  var id    = fpLegCounter;
   var tbody = document.getElementById('fpLegsTbody');
   var tr    = document.createElement('tr');
   tr.id = 'fpLeg-' + id;
@@ -103,12 +208,6 @@ function fpRemoveLeg(id) {
 /* ════════════════════════════════════════════════════════════
    CREW MANAGEMENT
 ════════════════════════════════════════════════════════════ */
-var fpCrewCounter = 0;
-
-var FP_DUTY_POSITIONS = [
-  'PILOT IN COMMAND', 'CP', 'CE', 'TO', 'N', 'CDR', 'PASSENGER', 'OTHER'
-];
-
 function fpAddCrew() {
   fpCrewCounter++;
   var id    = fpCrewCounter;
@@ -139,19 +238,19 @@ function fpRemoveCrew(id) {
 function fpCollect() {
   var errors = [];
 
-  var date         = document.getElementById('fpDate').value.trim();
-  var callSign     = document.getElementById('fpCallSign').value.trim().toUpperCase();
+  var date          = document.getElementById('fpDate').value.trim();
+  var callSign      = document.getElementById('fpCallSign').value.trim().toUpperCase();
   var aircraftDesig = document.getElementById('fpAircraftDesig').value.trim().toUpperCase();
-  var authority    = document.getElementById('fpAuthority').value.trim().toUpperCase();
+  var authority     = document.getElementById('fpAuthority').value.trim().toUpperCase();
 
-  if (!date)         errors.push('Date (Field 1) is required.');
-  if (!callSign)     errors.push('Aircraft Call Sign (Field 2) is required.');
+  if (!date)          errors.push('Date (Field 1) is required.');
+  if (!callSign)      errors.push('Aircraft Call Sign (Field 2) is required.');
   if (!aircraftDesig) errors.push('Aircraft Designation (Field 3) is required.');
 
   var legs = [];
   document.querySelectorAll('#fpLegsTbody tr').forEach(function(tr) {
     legs.push({
-      flightRules:   (tr.querySelector('[name=flightRules]').value || 'I'),
+      flightRules:   tr.querySelector('[name=flightRules]').value || 'I',
       trueAirspeed:  tr.querySelector('[name=trueAirspeed]').value.trim(),
       departure:     tr.querySelector('[name=departure]').value.trim().toUpperCase(),
       departureTime: tr.querySelector('[name=departureTime]').value.trim(),
@@ -175,21 +274,21 @@ function fpCollect() {
   });
 
   var data = {
-    date:          date,
-    callSign:      callSign,
-    aircraftDesig: aircraftDesig,
-    authority:     authority,
-    legs:          legs,
-    remarks:       document.getElementById('fpRemarks').value.trim(),
-    rankHonorCode: document.getElementById('fpRankHonor').value.trim().toUpperCase(),
-    fuelOnBoard:   document.getElementById('fpFuel').value.trim(),
+    date:             date,
+    callSign:         callSign,
+    aircraftDesig:    aircraftDesig,
+    authority:        authority,
+    legs:             legs,
+    remarks:          document.getElementById('fpRemarks').value.trim(),
+    rankHonorCode:    document.getElementById('fpRankHonor').value.trim().toUpperCase(),
+    fuelOnBoard:      document.getElementById('fpFuel').value.trim(),
     alternateAirfield: document.getElementById('fpAlternate').value.trim().toUpperCase(),
-    eteToAlternate: document.getElementById('fpEteAltn').value.trim(),
-    notamsChecked: document.getElementById('fpNotams').checked,
-    weatherBrief:  document.getElementById('fpWeather').value.trim().toUpperCase(),
-    weightBalance: document.getElementById('fpWtBal').value.trim().toUpperCase(),
-    aircraftSerial: document.getElementById('fpAcSerial').value.trim().toUpperCase(),
-    crew:          crew,
+    eteToAlternate:   document.getElementById('fpEteAltn').value.trim(),
+    notamsChecked:    document.getElementById('fpNotams').checked,
+    weatherBrief:     document.getElementById('fpWeather').value.trim().toUpperCase(),
+    weightBalance:    document.getElementById('fpWtBal').value.trim().toUpperCase(),
+    aircraftSerial:   document.getElementById('fpAcSerial').value.trim().toUpperCase(),
+    crew:             crew,
   };
 
   return { data: data, errors: errors };
@@ -199,9 +298,9 @@ function fpCollect() {
    SUBMIT
 ════════════════════════════════════════════════════════════ */
 function fpSubmit() {
-  var errEl  = document.getElementById('fpError');
-  var okEl   = document.getElementById('fpSuccess');
-  var btn    = document.getElementById('fpSubmitBtn');
+  var errEl = document.getElementById('fpError');
+  var okEl  = document.getElementById('fpSuccess');
+  var btn   = document.getElementById('fpSubmitBtn');
 
   errEl.style.display = 'none';
   okEl.style.display  = 'none';
@@ -260,12 +359,22 @@ function fpLoadPlans() {
     fpAllPlans = Array.isArray(plans) ? plans : [];
     fpRenderPlans();
   })
-  .catch(function() { /* silently fail — not critical */ });
+  .catch(function() {});
 }
 
 function fpRenderPlans() {
   var el = document.getElementById('fpPlansList');
   if (!el) return;
+
+  /* Update section label to clarify scope */
+  var lbl = document.getElementById('fpPlansLabel');
+  if (lbl) {
+    var isAdm = isAdminRole(currentToken);
+    lbl.textContent = (isAdm || fpUserIsController)
+      ? 'ALL SUBMITTED FLIGHT PLANS'
+      : 'YOUR SUBMITTED FLIGHT PLANS';
+  }
+
   if (!fpAllPlans.length) {
     el.innerHTML = '<div class="fp-plans-empty">No flight plans submitted yet.</div>';
     return;
@@ -276,14 +385,15 @@ function fpRenderPlans() {
   el.innerHTML = sorted.map(function(p) {
     var firstLeg = p.legs && p.legs[0];
     var lastLeg  = p.legs && p.legs[p.legs.length - 1];
-    var route    = firstLeg ? (firstLeg.departure + ' &rarr; ' + lastLeg.destination) : '—';
+    var route    = firstLeg ? (esc(firstLeg.departure) + ' &rarr; ' + esc(lastLeg.destination)) : '&mdash;';
     var status   = p.status || 'submitted';
     var dt       = p.submittedAt ? new Date(p.submittedAt) : null;
-    var dateStr  = dt ? (dt.toISOString().slice(0,10)) : '—';
+    var dateStr  = dt ? dt.toISOString().slice(0, 10) : '&mdash;';
+    var byStr    = (p.submittedBy && p.submittedBy.name) ? ' &middot; ' + esc(p.submittedBy.name) : '';
     return '<div class="fp-plan-card" onclick="fpOpenPlan(' + p.id + ')">' +
       '<div class="fp-plan-meta">' +
-        '<div class="fp-plan-id">FP-' + p.id + ' &middot; ' + dateStr + ' Z</div>' +
-        '<div class="fp-plan-callsign">' + esc(p.callSign || '—') + '</div>' +
+        '<div class="fp-plan-id">FP-' + p.id + ' &middot; ' + dateStr + ' Z' + byStr + '</div>' +
+        '<div class="fp-plan-callsign">' + esc(p.callSign || '&mdash;') + '</div>' +
         '<div class="fp-plan-route">' + route + '</div>' +
       '</div>' +
       '<span class="fp-plan-status fp-plan-status--' + esc(status) + '">' + esc(status.toUpperCase()) + '</span>' +
@@ -305,18 +415,18 @@ function fpShowDetailOverlay(plan) {
   overlay.className = 'fp-detail-overlay';
   overlay.id = 'fpDetailOverlay';
 
-  var isAdmin = isAdminRole(currentToken);
+  var canBaseOps = isAdminRole(currentToken) || fpUserIsController;
   overlay.innerHTML =
     '<div class="fp-detail-box">' +
       '<div class="fp-detail-header">' +
-        '<div class="fp-detail-title">FLIGHT PLAN — FP-' + plan.id + ' &middot; ' + esc(plan.callSign || '—') + '</div>' +
+        '<div class="fp-detail-title">FP-' + plan.id + ' &mdash; ' + esc(plan.callSign || '&mdash;') + '</div>' +
         '<div style="display:flex;gap:8px;align-items:center">' +
           '<button class="btn btn-ghost" style="font-size:9px;padding:4px 10px" onclick="fpPrintPlan(' + plan.id + ')">PRINT</button>' +
           '<button class="fp-detail-close" onclick="fpCloseDetail()">&times;</button>' +
         '</div>' +
       '</div>' +
       '<div class="fp-detail-body">' +
-        fpBuildDetailHTML(plan, isAdmin) +
+        fpBuildDetailHTML(plan, canBaseOps) +
       '</div>' +
     '</div>';
 
@@ -331,7 +441,7 @@ function fpCloseDetail() {
   if (el) el.remove();
 }
 
-function fpBuildDetailHTML(plan, isAdmin) {
+function fpBuildDetailHTML(plan, canBaseOps) {
   var html = '';
 
   /* Header */
@@ -359,7 +469,7 @@ function fpBuildDetailHTML(plan, isAdmin) {
         '<td>' + esc(leg.flightRules)   + '</td>' +
         '<td>' + esc(leg.trueAirspeed)  + '</td>' +
         '<td>' + esc(leg.departure)     + '</td>' +
-        '<td>' + esc(leg.departureTime) + '</td>' +
+        '<td>' + esc(leg.departureTime) + 'Z</td>' +
         '<td>' + esc(leg.altitude)      + '</td>' +
         '<td class="fp-detail-route">' + esc(leg.route) + '</td>' +
         '<td>' + esc(leg.destination)   + '</td>' +
@@ -367,8 +477,6 @@ function fpBuildDetailHTML(plan, isAdmin) {
       '</tr>';
     });
     html += '</tbody></table></div>';
-  } else {
-    html += '<div class="fp-plans-empty">No legs recorded.</div>';
   }
   html += '</div>';
 
@@ -377,16 +485,16 @@ function fpBuildDetailHTML(plan, isAdmin) {
     '<div class="fp-detail-section">' +
     '<div class="fp-detail-section-label">ADMINISTRATIVE DATA</div>' +
     '<div class="fp-detail-grid">' +
-      fpDvField('14. FUEL ON BD', plan.fuelOnBoard) +
-      fpDvField('15. ALTN AIRFIELD', plan.alternateAirfield) +
-      fpDvField('16. ETE TO ALTN', plan.eteToAlternate) +
-      fpDvField('17. NOTAMS', plan.notamsChecked ? 'REVIEWED ✓' : '—') +
-      fpDvField('18. WEATHER', plan.weatherBrief) +
-      fpDvField('19. WT &amp; BALANCE', plan.weightBalance) +
+      fpDvField('14. FUEL ON BD',        plan.fuelOnBoard) +
+      fpDvField('15. ALTN AIRFIELD',     plan.alternateAirfield) +
+      fpDvField('16. ETE TO ALTN',       plan.eteToAlternate) +
+      fpDvField('17. NOTAMS',            plan.notamsChecked ? 'REVIEWED &#x2713;' : '&mdash;') +
+      fpDvField('18. WEATHER',           plan.weatherBrief) +
+      fpDvField('19. WT &amp; BALANCE',  plan.weightBalance) +
     '</div>' +
     '<div class="fp-detail-grid" style="margin-top:8px">' +
-      fpDvField('20. AIRCRAFT SERIAL / UNIT / STATION', plan.aircraftSerial) +
-      fpDvField('13. RANK / HONOR CODE', plan.rankHonorCode) +
+      fpDvField('20. SERIAL / UNIT / STATION', plan.aircraftSerial) +
+      fpDvField('13. RANK / HONOR CODE',       plan.rankHonorCode) +
     '</div>';
   if (plan.remarks) {
     html += '<div class="fp-dv-field" style="margin-top:8px">' +
@@ -413,12 +521,12 @@ function fpBuildDetailHTML(plan, isAdmin) {
     html += '</tbody></table></div>';
   }
 
-  /* Base Ops section — admin only */
-  if (isAdmin) {
+  /* Base Ops — controller squadron or admin only */
+  if (canBaseOps) {
     var bo = plan.baseOps || {};
     html +=
       '<div class="fp-baseops-panel">' +
-      '<div class="fp-baseops-label">BASE OPS — RESTRICTED ACCESS</div>' +
+      '<div class="fp-baseops-label">BASE OPS &#x2014; RESTRICTED</div>' +
       '<div class="fp-panel-body">' +
         '<div class="fp-row">' +
           '<div class="fp-field" style="flex:2">' +
@@ -434,7 +542,8 @@ function fpBuildDetailHTML(plan, isAdmin) {
             '<label class="fp-check-label"><input type="checkbox" id="bopsCrewList"' + (bo.crewListAttached ? ' checked' : '') + '> ATTACHED</label>' +
           '</div>' +
         '</div>' +
-        '<div class="fp-row" style="justify-content:flex-end;margin-top:12px">' +
+        '<div class="fp-msg fp-error" id="bopsError" style="display:none;margin-top:8px"></div>' +
+        '<div style="display:flex;justify-content:flex-end;margin-top:12px">' +
           '<button class="btn btn-primary" style="font-size:9px" onclick="fpSaveBaseOps(' + plan.id + ')">SAVE BASE OPS DATA</button>' +
         '</div>' +
       '</div></div>';
@@ -446,7 +555,7 @@ function fpBuildDetailHTML(plan, isAdmin) {
 function fpDvField(label, value) {
   return '<div class="fp-dv-field">' +
     '<div class="fp-dv-label">' + label + '</div>' +
-    '<div class="fp-dv-val">'   + esc(value || '—') + '</div>' +
+    '<div class="fp-dv-val">'   + (value || '&mdash;') + '</div>' +
   '</div>';
 }
 
@@ -457,6 +566,8 @@ function fpSaveBaseOps(planId) {
   var sig      = document.getElementById('bopsSig').value.trim().toUpperCase();
   var depTime  = document.getElementById('bopsDepTime').value.trim();
   var attached = document.getElementById('bopsCrewList').checked;
+  var errEl    = document.getElementById('bopsError');
+  errEl.style.display = 'none';
 
   fetch('/api/flight-plans/' + planId + '/baseops', {
     method:  'PATCH',
@@ -472,14 +583,20 @@ function fpSaveBaseOps(planId) {
   })
   .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
   .then(function(res) {
-    if (!res.ok) { alert(res.body.error || 'Save failed.'); return; }
-    /* Update local copy */
+    if (!res.ok) {
+      errEl.textContent   = res.body.error || 'Save failed.';
+      errEl.style.display = '';
+      return;
+    }
     var idx = fpAllPlans.findIndex(function(p) { return p.id === planId; });
     if (idx !== -1) fpAllPlans[idx] = res.body;
     fpCloseDetail();
     fpRenderPlans();
   })
-  .catch(function() { alert('Network error — please try again.'); });
+  .catch(function() {
+    errEl.textContent   = 'Network error — please try again.';
+    errEl.style.display = '';
+  });
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -487,15 +604,7 @@ function fpSaveBaseOps(planId) {
 ════════════════════════════════════════════════════════════ */
 function fpPrint() {
   var result = fpCollect();
-  var data = result.data;
-  /* Build a temporary plan object for printing */
-  var plan = {
-    id: 'DRAFT',
-    submittedAt: new Date().toISOString(),
-    baseOps: {},
-    status: 'draft',
-  };
-  Object.assign(plan, data);
+  var plan   = Object.assign({ id: 'DRAFT', submittedAt: new Date().toISOString(), baseOps: {}, status: 'draft' }, result.data);
   fpRenderPrintView(plan);
   window.print();
 }
@@ -509,12 +618,11 @@ function fpPrintPlan(id) {
 }
 
 function fpRenderPrintView(plan) {
-  var el = document.getElementById('fpPrintView');
-  el.innerHTML = fpBuildPrintHTML(plan);
+  document.getElementById('fpPrintView').innerHTML = fpBuildPrintHTML(plan);
 }
 
 function fpBuildPrintHTML(plan) {
-  var bo = plan.baseOps || {};
+  var bo   = plan.baseOps || {};
   var legs = plan.legs || [];
   var crew = plan.crew || [];
 
@@ -543,35 +651,22 @@ function fpBuildPrintHTML(plan) {
 
   return '<div class="fp-print">' +
     '<div class="fp-print-form">' +
-
-      /* Title */
       '<div class="fp-print-title-row">DD FORM 175 &mdash; MILITARY FLIGHT PLAN</div>' +
       '<div class="fp-print-sub-row">AUTHORITY: ' + esc(plan.authority || '10 USC 8012 AND EO 9397') + ' &nbsp;&nbsp; PRINCIPAL PURPOSE: TO AID IN ACCURATE IDENTIFICATION OF PERSONNEL</div>' +
-
-      /* Header row */
       '<div class="fp-print-hdr">' +
         '<div class="fp-print-cell"><span class="fp-print-cell-lbl">1. DATE</span><span class="fp-print-cell-val">' + esc(plan.date || '') + '</span></div>' +
         '<div class="fp-print-cell"><span class="fp-print-cell-lbl">2. AIRCRAFT CALL SIGN</span><span class="fp-print-cell-val">' + esc(plan.callSign || '') + '</span></div>' +
         '<div class="fp-print-cell"><span class="fp-print-cell-lbl">3. AIRCRAFT DESG AND TO CODE</span><span class="fp-print-cell-val">' + esc(plan.aircraftDesig || '') + '</span></div>' +
         '<div class="fp-print-cell"><span class="fp-print-cell-lbl">FP ID</span><span class="fp-print-cell-val">FP-' + esc(String(plan.id)) + '</span></div>' +
       '</div>' +
-
-      /* Legs table */
       '<table class="fp-print-legs-tbl">' +
         '<thead><tr>' +
-          '<th>4. TYPE FLT PLAN</th>' +
-          '<th>5. TRUE AIRSPEED (KT)</th>' +
-          '<th>6. POINT OF DEPARTURE</th>' +
-          '<th>7. PROPOSED DEP TIME (Z)</th>' +
-          '<th>8. ALTITUDE</th>' +
-          '<th>9. ROUTE OF FLIGHT</th>' +
-          '<th>10. TO</th>' +
-          '<th>11. ETE</th>' +
+          '<th>4. TYPE FLT PLAN</th><th>5. TRUE AIRSPEED (KT)</th><th>6. POINT OF DEPARTURE</th>' +
+          '<th>7. PROPOSED DEP TIME (Z)</th><th>8. ALTITUDE</th><th>9. ROUTE OF FLIGHT</th>' +
+          '<th>10. TO</th><th>11. ETE</th>' +
         '</tr></thead>' +
         '<tbody>' + (legsRows || '<tr><td colspan="8">&nbsp;</td></tr>') + '</tbody>' +
       '</table>' +
-
-      /* Admin block */
       '<div class="fp-print-admin">' +
         '<div class="fp-print-admin-cell"><b style="font-size:6pt">12. REMARKS</b><br>' + esc(plan.remarks || '') + '</div>' +
         '<div class="fp-print-admin-cell"><b style="font-size:6pt">13. RANK/HONOR CODE</b><br>' + esc(plan.rankHonorCode || '') + '</div>' +
@@ -585,16 +680,12 @@ function fpBuildPrintHTML(plan) {
         '<div class="fp-print-admin-cell" style="grid-column:span 2"><b style="font-size:6pt">19. WT AND BALANCE</b><br>' + esc(plan.weightBalance || '') + '</div>' +
       '</div>' +
       '<div class="fp-print-admin-full"><b style="font-size:6pt">20. AIRCRAFT SERIAL NUMBER, UNIT, AND HOME STATION</b>&nbsp;&nbsp;' + esc(plan.aircraftSerial || '') + '</div>' +
-
-      /* Crew table */
-      (crewRows ? (
+      (crewRows ?
         '<table class="fp-print-crew-tbl">' +
           '<thead><tr><th>24. DUTY</th><th>25. NAME AND INITIALS</th><th>26. RANK</th><th>27. SSN / MEMBER ID</th><th>28. ORGANIZATION AND LOCATION</th></tr></thead>' +
           '<tbody>' + crewRows + '</tbody>' +
         '</table>'
-      ) : '') +
-
-      /* Base Ops signature block */
+      : '') +
       '<div class="fp-print-baseops">' +
         '<div class="fp-print-baseops-cell">' +
           '<div style="font-size:6pt;margin-bottom:2pt">21. SIGNATURE OF APPROVAL AUTHORITY</div>' +
@@ -610,7 +701,6 @@ function fpBuildPrintHTML(plan) {
           '<div style="font-size:8pt">' + (bo.crewListAttached ? '&#x2713; ATTACHED' : '&#x25A1; ATTACHED') + '</div>' +
         '</div>' +
       '</div>' +
-
     '</div></div>';
 }
 

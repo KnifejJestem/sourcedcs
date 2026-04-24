@@ -74,15 +74,15 @@
       <div class="fp-panel-body">
         <div class="fp-row">
           <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpDate">1. DATE <span class="fp-hint">(DD MON YY)</span></label>
+            <label class="fp-label" for="fpDate">1. DATE <span class="fp-hint">(DD MON YY)</span> <span class="fp-req">*</span></label>
             <input class="fp-input" id="fpDate" type="text" maxlength="12" placeholder="24 APR 26" autocomplete="off">
           </div>
           <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpCallSign">2. AIRCRAFT CALL SIGN</label>
+            <label class="fp-label" for="fpCallSign">2. AIRCRAFT CALL SIGN <span class="fp-req">*</span></label>
             <input class="fp-input fp-upper" id="fpCallSign" type="text" maxlength="16" placeholder="HAWK 11" autocomplete="off">
           </div>
           <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpAircraftDesig">3. AIRCRAFT DESG AND TO CODE</label>
+            <label class="fp-label" for="fpAircraftDesig">3. AIRCRAFT DESG AND TO CODE <span class="fp-req">*</span></label>
             <input class="fp-input fp-upper" id="fpAircraftDesig" type="text" maxlength="32" placeholder="F-16C/B" autocomplete="off">
           </div>
           <div class="fp-field" style="flex:1">
@@ -104,14 +104,14 @@
           <table class="fp-legs-table">
             <thead>
               <tr>
-                <th style="width:52px">4. TYPE</th>
+                <th style="width:52px">4. TYPE <span class="fp-req">*</span></th>
                 <th style="width:70px">5. TAS (KT)</th>
-                <th style="width:80px">6. DEPARTURE</th>
-                <th style="width:80px">7. DEP TIME (Z)</th>
+                <th style="width:80px">6. DEPARTURE <span class="fp-req">*</span></th>
+                <th style="width:80px">7. DEP TIME (Z) <span class="fp-req">*</span></th>
                 <th style="width:80px">8. ALT (FT&times;100)</th>
                 <th>9. ROUTE OF FLIGHT</th>
-                <th style="width:80px">10. DEST</th>
-                <th style="width:70px">11. ETE</th>
+                <th style="width:80px">10. DEST <span class="fp-req">*</span></th>
+                <th style="width:70px">11. ETE <span class="fp-req">*</span></th>
                 <th style="width:32px"></th>
               </tr>
             </thead>
@@ -207,9 +207,14 @@
 
   </div><!-- /fpFormSection -->
 
+  <!-- ── Admin: controller squadron config ─────────────── -->
+  <div class="fp-container fp-plans-section" style="padding-bottom:0">
+    <div id="fpAdminPanel" class="fp-admin-panel" style="display:none"></div>
+  </div>
+
   <!-- ── Submitted Plans ─────────────────────────────────── -->
   <div class="fp-container fp-plans-section">
-    <div class="fp-section-divider">SUBMITTED FLIGHT PLANS</div>
+    <div class="fp-section-divider" id="fpPlansLabel">SUBMITTED FLIGHT PLANS</div>
     <div id="fpPlansList"></div>
   </div>
 

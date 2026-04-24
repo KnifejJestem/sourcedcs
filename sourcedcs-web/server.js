@@ -23,6 +23,7 @@ const SKILL_GRADES_FILE     = path.join(DATA_DIR, 'skill-grades.json');
 const GRADING_REQS_FILE     = path.join(DATA_DIR, 'grading-requests.json');
 const PILOT_REGISTRY_FILE   = path.join(DATA_DIR, 'pilot-registry.json');
 const FLIGHT_PLANS_FILE     = path.join(DATA_DIR, 'flight-plans.json');
+const FLIGHT_PLANS_CFG_FILE = path.join(DATA_DIR, 'flight-plans-config.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
 if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
@@ -86,7 +87,8 @@ let gradingRequests = loadJSON(GRADING_REQS_FILE,   []);
 let pilotRegistry   = loadJSON(PILOT_REGISTRY_FILE, {});
 let nextGradingReqId = gradingRequests.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
 
-let flightPlans = loadJSON(FLIGHT_PLANS_FILE, []);
+let flightPlans    = loadJSON(FLIGHT_PLANS_FILE,     []);
+let fpConfig       = loadJSON(FLIGHT_PLANS_CFG_FILE, { controllerSquadron: '' });
 let nextFlightPlanId = flightPlans.reduce((m, fp) => Math.max(m, fp.id || 0), 0) + 1;
 const VALID_GRADES  = new Set(['U', 'F', 'G', 'E']);
 
@@ -1357,8 +1359,66 @@ api.delete('/grading-requests/:id', writeOpsLimiter, requireAuth, (req, res) => 
 const FP_MAX_LEGS = 20;
 const FP_MAX_CREW = 50;
 
-api.get('/flight-plans', requireAuth, (_req, res) => {
-  res.json(flightPlans);
+/* Returns unique squadron names from the discord-roles config */
+function fpAvailableSquadrons() {
+  const seen = new Set();
+  for (const v of Object.values(discordRoles)) {
+    if (v.squadron) seen.add(v.squadron);
+  }
+  return [...seen].sort();
+}
+
+/* Best-effort: match a JWT user to their squadron via the roster cache */
+function fpUserSquadron(userName) {
+  if (!rosterCache || !userName) return null;
+  const lower = String(userName).toLowerCase().trim();
+  const member = rosterCache.find(m =>
+    m.callsign.toLowerCase() === lower ||
+    m.username.toLowerCase() === lower
+  );
+  return member ? member.squadron : null;
+}
+
+function fpIsControllerUser(req) {
+  const cs = fpConfig.controllerSquadron;
+  if (!cs) return false;
+  return fpUserSquadron(req.user.name || '') === cs;
+}
+
+function fpIsAdminUser(req) {
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  return roles.some(r => (typeof r === 'string' ? r : (r?.name || '')) === 'admin');
+}
+
+/* GET /api/flight-plans/config — public, returns config + isController for authed users */
+api.get('/flight-plans/config', (req, res) => {
+  const auth    = req.headers.authorization || '';
+  const token   = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  const payload = token ? decodeJWT(token) : null;
+  const isCtrl  = payload ? fpIsControllerUser({ user: payload }) : false;
+  res.json({
+    controllerSquadron: fpConfig.controllerSquadron || '',
+    availableSquadrons: fpAvailableSquadrons(),
+    isController:       isCtrl,
+  });
+});
+
+/* PUT /api/flight-plans/config — admin only */
+api.put('/flight-plans/config', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const sq = sanitizeStr((req.body || {}).controllerSquadron, 64);
+  fpConfig.controllerSquadron = sq;
+  saveJSON(FLIGHT_PLANS_CFG_FILE, fpConfig);
+  console.debug('[flight-plans] Controller squadron set to:', sq || '(none)');
+  res.json({ controllerSquadron: fpConfig.controllerSquadron });
+});
+
+/* GET /api/flight-plans — returns all plans for admin/controller, own plans otherwise */
+api.get('/flight-plans', requireAuth, (req, res) => {
+  if (fpIsAdminUser(req) || fpIsControllerUser(req)) {
+    return res.json(flightPlans);
+  }
+  const sub = req.user.sub;
+  res.json(flightPlans.filter(fp => fp.submittedBy && fp.submittedBy.sub === sub));
 });
 
 api.post('/flight-plans', writeOpsLimiter, requireAuth, (req, res) => {
@@ -1434,7 +1494,10 @@ api.post('/flight-plans', writeOpsLimiter, requireAuth, (req, res) => {
   res.status(201).json(plan);
 });
 
-api.patch('/flight-plans/:id/baseops', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+api.patch('/flight-plans/:id/baseops', writeOpsLimiter, requireAuth, (req, res) => {
+  if (!fpIsAdminUser(req) && !fpIsControllerUser(req)) {
+    return res.status(403).json({ error: 'Controller squadron or admin access required' });
+  }
   const id  = Number(req.params.id);
   const idx = flightPlans.findIndex(fp => fp.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Flight plan not found' });
