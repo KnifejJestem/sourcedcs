@@ -32,6 +32,7 @@ var _allGrades      = {};    /* { [sub]: { [moduleId]: gradeRec } } */
 var _pilots         = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
 var _requests       = [];
 var _squadrons      = [];    /* squadron list from /api/squadrons */
+var _roster         = [];    /* roster entries — used to resolve pilot squadron */
 var _activeSub      = null;
 var _editorCollapsed = {};   /* { [catId]: bool } collapse state for tree editor */
 var _detailCollapsed = {};   /* { [catId]: bool } collapse state for pilot detail */
@@ -72,12 +73,14 @@ function loadAll(tok) {
     fetch('/api/skill-pilots', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/grading-requests', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/squadrons').then(function (r) { return r.json(); }).catch(function () { return []; }),
+    fetch('/api/roster').then(function (r) { return r.json(); }).catch(function () { return []; }),
   ]).then(function (results) {
     _tree      = results[0];
     _allGrades = results[1] || {};
     _pilots    = results[2] || {};
     _requests  = Array.isArray(results[3]) ? results[3] : [];
     _squadrons = Array.isArray(results[4]) ? results[4] : [];
+    _roster    = Array.isArray(results[5]) ? results[5] : [];
 
     renderGradingQueue();
     renderPilotList();
@@ -105,11 +108,12 @@ function moduleState(mod, grades) {
 }
 
 function pilotOverallScore(sub) {
-  if (!_tree || !_tree.categories) return 0;
+  var cats   = categoriesForPilot(sub);
+  if (!cats.length) return 0;
   var grades      = _allGrades[sub] || {};
-  var totalWeight = _tree.categories.reduce(function (s, c) { return s + (c.weight || 0); }, 0);
+  var totalWeight = cats.reduce(function (s, c) { return s + (c.weight || 0); }, 0);
   if (!totalWeight) return 0;
-  return _tree.categories.reduce(function (s, cat) {
+  return cats.reduce(function (s, cat) {
     if (!cat.modules || !cat.modules.length) return s;
     var completed = cat.modules.filter(function (mod) {
       return moduleState(mod, grades) === 'completed';
@@ -219,6 +223,26 @@ function renderPilotList() {
   });
 }
 
+/* ── Squadron filtering (mirrors skills.js visibleCategories) ── */
+function pilotSquadron(sub) {
+  var pilot = _pilots[sub];
+  if (!pilot || !pilot.callsign) return null;
+  var callsign = pilot.callsign.toLowerCase();
+  var entry = _roster.find(function (r) { return r.callsign && r.callsign.toLowerCase() === callsign; });
+  return entry ? (entry.squadron || null) : null;
+}
+
+function categoriesForPilot(sub) {
+  if (!_tree || !_tree.categories) return [];
+  var sq = pilotSquadron(sub);
+  return _tree.categories.filter(function (cat) {
+    var sqs = cat.squadrons;
+    if (!sqs || !sqs.length) return true;
+    if (!sq) return false;
+    return sqs.indexOf(sq) !== -1;
+  });
+}
+
 /* ── Pilot detail ───────────────────────────────────────── */
 function selectPilot(sub) {
   _activeSub = sub;
@@ -263,7 +287,7 @@ function selectPilot(sub) {
   hdr.appendChild(delPilotBtn);
   el.appendChild(hdr);
 
-  (_tree.categories || []).forEach(function (cat) {
+  categoriesForPilot(sub).forEach(function (cat) {
     var catSection  = document.createElement('div');
     catSection.className = 'skill-list-category';
     var mods        = cat.modules || [];
