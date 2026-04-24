@@ -275,9 +275,11 @@ async function buildRosterFromDiscord() {
     const callsign = parseCallsign(nick);
 
     roster.push({
-      id:       member.user.id,
+      id:         member.user.id,
       callsign,
-      role:     roleLabel,
+      username:   (member.user.username   || '').toLowerCase(),  /* discord @username — always lowercase */
+      globalName: (member.user.global_name || ''),               /* discord display name */
+      role:       roleLabel,
       squadron,
     });
   }
@@ -833,7 +835,9 @@ api.get('/roster', async (_req, res) => {
   } else {
     console.debug('[roster] Serving from cache (' + rosterCache.length + ' entries, age ' + Math.round((now - rosterCacheAt) / 1000) + 's)');
   }
-  res.json(rosterCache);
+  res.json(rosterCache.map(function(e) {
+    return { id: e.id, callsign: e.callsign, role: e.role, squadron: e.squadron };
+  }));
 });
 
 /* Admin: force-refresh the roster cache */
@@ -1008,11 +1012,37 @@ api.delete('/squadrons/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, r
   res.json({ ok: true });
 });
 
+/* Finds a roster entry that matches a pilot by any of:
+   - their parsed callsign (from server nickname)
+   - their Discord @username
+   - their Discord global display name
+   The pilot arg has { callsign, name } both coming from the Casdoor JWT name,
+   which is usually the Discord username or global_name — NOT the server nickname. */
+function findRosterEntry(pilot) {
+  if (!rosterCache) return null;
+  const candidates = [
+    (pilot.callsign || '').toLowerCase(),
+    (pilot.name     || '').toLowerCase(),
+  ].filter(Boolean);
+
+  for (const entry of rosterCache) {
+    const rosterCallsign   = (entry.callsign   || '').toLowerCase();
+    const rosterUsername   = (entry.username   || '').toLowerCase();  /* already stored lowercase */
+    const rosterGlobalName = (entry.globalName || '').toLowerCase();
+    for (const c of candidates) {
+      if (c && (c === rosterCallsign || c === rosterUsername || c === rosterGlobalName)) {
+        return entry;
+      }
+    }
+  }
+  return null;
+}
+
 /* ── My squadron (resolves the logged-in pilot's squadron from the roster) ── */
 api.get('/my-squadron', requireAuth, async (req, res) => {
   const sub   = req.user.sub;
   const pilot = pilotRegistry[sub];
-  if (!pilot || !pilot.callsign) return res.json({ squadron: null });
+  if (!pilot) return res.json({ squadron: null });
 
   /* Ensure roster is loaded (re-use the shared cache) */
   const now = Date.now();
@@ -1026,8 +1056,7 @@ api.get('/my-squadron', requireAuth, async (req, res) => {
     }
   }
 
-  const callsign = pilot.callsign.toLowerCase();
-  const entry    = rosterCache.find(p => p.callsign && p.callsign.toLowerCase() === callsign);
+  const entry = findRosterEntry(pilot);
   res.json({ squadron: entry ? (entry.squadron || null) : null });
 });
 
@@ -1146,7 +1175,7 @@ api.get('/skill-pilots', requireAuth, requireSkillAdmin, (_req, res) => {
 });
 
 /* Returns { [sub]: squadronId | null } — resolves each registered pilot's squadron
-   from the roster cache using callsign matching (same logic as /my-squadron). */
+   from the roster cache using multi-field matching (same logic as /my-squadron). */
 api.get('/skill-pilots-squadrons', requireAuth, requireSkillAdmin, async (_req, res) => {
   const now = Date.now();
   if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
@@ -1158,14 +1187,10 @@ api.get('/skill-pilots-squadrons', requireAuth, requireSkillAdmin, async (_req, 
       return res.json({});
     }
   }
-  const callsignMap = {};
-  for (const entry of rosterCache) {
-    if (entry.callsign) callsignMap[entry.callsign.toLowerCase()] = entry.squadron || null;
-  }
   const result = {};
   for (const [sub, pilot] of Object.entries(pilotRegistry)) {
-    const cs = (pilot.callsign || '').toLowerCase();
-    result[sub] = callsignMap[cs] || null;
+    const entry  = findRosterEntry(pilot);
+    result[sub]  = entry ? (entry.squadron || null) : null;
   }
   res.json(result);
 });
