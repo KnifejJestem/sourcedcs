@@ -548,21 +548,47 @@ function renderTreeEditor() {
   if (!el) return;
   el.innerHTML = '';
 
-  var cats        = _treeEditor.categories || [];
-  var totalWeight = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
-  var allMods     = flatModules();
+  var cats    = _treeEditor.categories || [];
+  var allMods = flatModules();
 
-  /* Weight indicator */
+  /* Weight indicator — per squadron */
   var weightBar = document.createElement('div');
   weightBar.className = 'tree-weight-bar';
   var wLabel = document.createElement('span');
   wLabel.className   = 'tree-field-label';
-  wLabel.textContent = 'TOTAL WEIGHT';
-  var wTotal = document.createElement('span');
-  wTotal.className   = 'tree-weight-total ok';
-  wTotal.textContent = totalWeight;
+  wLabel.textContent = 'WEIGHT BY SQUADRON';
   weightBar.appendChild(wLabel);
-  weightBar.appendChild(wTotal);
+
+  if (!_squadrons.length) {
+    var totalWeight = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
+    var wTotal = document.createElement('span');
+    wTotal.className   = 'tree-weight-total ok';
+    wTotal.textContent = totalWeight;
+    weightBar.appendChild(wTotal);
+  } else {
+    var sqWeightsWrap = document.createElement('div');
+    sqWeightsWrap.className = 'tree-sq-weights';
+    _squadrons.forEach(function (sq) {
+      var sqTotal = cats.reduce(function (s, c) {
+        var sqList = c.squadrons || [];
+        if (!sqList.length || sqList.indexOf(sq.id) !== -1) return s + (Number(c.weight) || 0);
+        return s;
+      }, 0);
+      var chip = document.createElement('span');
+      chip.className = 'tree-sq-weight-chip';
+      var nameEl = document.createElement('span');
+      nameEl.className   = 'tree-sq-weight-name';
+      nameEl.textContent = (sq.designator || sq.name);
+      var valEl = document.createElement('span');
+      valEl.className = 'tree-weight-total ok';
+      valEl.id        = 'sq-weight-' + sq.id;
+      valEl.textContent = sqTotal;
+      chip.appendChild(nameEl);
+      chip.appendChild(valEl);
+      sqWeightsWrap.appendChild(chip);
+    });
+    weightBar.appendChild(sqWeightsWrap);
+  }
   el.appendChild(weightBar);
 
   /* Category cards */
@@ -606,10 +632,22 @@ function renderTreeEditor() {
 }
 
 function updateWeightBar() {
-  var cats  = _treeEditor.categories || [];
-  var total = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
-  var el    = document.querySelector('.tree-weight-total');
-  if (el) { el.textContent = total; el.className = 'tree-weight-total ok'; }
+  var cats = _treeEditor.categories || [];
+  if (!_squadrons.length) {
+    var total = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
+    var el = document.querySelector('.tree-weight-total');
+    if (el) el.textContent = total;
+    return;
+  }
+  _squadrons.forEach(function (sq) {
+    var total = cats.reduce(function (s, c) {
+      var sqList = c.squadrons || [];
+      if (!sqList.length || sqList.indexOf(sq.id) !== -1) return s + (Number(c.weight) || 0);
+      return s;
+    }, 0);
+    var el = document.getElementById('sq-weight-' + sq.id);
+    if (el) el.textContent = total;
+  });
 }
 
 function buildCatCard(cat, ci, totalCats, allMods) {
@@ -849,6 +887,7 @@ function buildSquadronRow(cat) {
           } else {
             cat.squadrons = cat.squadrons.filter(function (id) { return id !== sqId; });
           }
+          updateWeightBar();
         });
       })(sq.id, cb);
 

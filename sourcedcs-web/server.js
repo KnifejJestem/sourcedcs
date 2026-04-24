@@ -1057,10 +1057,6 @@ api.put('/skill-tree', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, re
       }
     }
   }
-  const totalWeight = tree.categories.reduce((s, c) => s + (Number(c.weight) || 0), 0);
-  if (Math.abs(totalWeight - 100) > 0.01) {
-    return res.status(400).json({ error: 'Category weights must sum to 100 (got ' + totalWeight + ')' });
-  }
   skillTree = tree;
   saveJSON(SKILL_TREE_FILE, skillTree);
   res.json(skillTree);

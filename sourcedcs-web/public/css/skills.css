@@ -545,12 +545,29 @@
 /* Weight indicator */
 .tree-weight-bar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 8px 12px;
   background: var(--bg2);
   border: 1px solid var(--border);
   margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.tree-sq-weights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tree-sq-weight-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tree-sq-weight-name {
+  font-size: 9px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 .tree-weight-total {
   font-family: 'Orbitron', monospace;
