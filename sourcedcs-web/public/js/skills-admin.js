@@ -31,6 +31,7 @@ var _treeEditor     = null;  /* working copy mutated by the GUI editor */
 var _allGrades      = {};    /* { [sub]: { [moduleId]: gradeRec } } */
 var _pilots         = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
 var _requests       = [];
+var _squadrons      = [];    /* squadron list from /api/squadrons */
 var _activeSub      = null;
 var _editorCollapsed = {};   /* { [catId]: bool } collapse state for tree editor */
 var _detailCollapsed = {};   /* { [catId]: bool } collapse state for pilot detail */
@@ -70,11 +71,13 @@ function loadAll(tok) {
     fetch('/api/skill-grades', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/skill-pilots', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/grading-requests', { headers: headers }).then(function (r) { return r.json(); }),
+    fetch('/api/squadrons').then(function (r) { return r.json(); }).catch(function () { return []; }),
   ]).then(function (results) {
     _tree      = results[0];
     _allGrades = results[1] || {};
     _pilots    = results[2] || {};
     _requests  = Array.isArray(results[3]) ? results[3] : [];
+    _squadrons = Array.isArray(results[4]) ? results[4] : [];
 
     renderGradingQueue();
     renderPilotList();
@@ -685,6 +688,9 @@ function buildCatCard(cat, ci, totalCats, allMods) {
 
   /* ── Category ID row ── */
   card.appendChild(buildIdRow(cat, 'category-id'));
+
+  /* ── Squadron visibility row ── */
+  card.appendChild(buildSquadronRow(cat));
 
   /* ── Module list + add button (hidden when collapsed) ── */
   if (!_editorCollapsed[cat.id]) {

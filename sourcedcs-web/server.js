@@ -1008,6 +1008,29 @@ api.delete('/squadrons/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, r
   res.json({ ok: true });
 });
 
+/* ── My squadron (resolves the logged-in pilot's squadron from the roster) ── */
+api.get('/my-squadron', requireAuth, async (req, res) => {
+  const sub   = req.user.sub;
+  const pilot = pilotRegistry[sub];
+  if (!pilot || !pilot.callsign) return res.json({ squadron: null });
+
+  /* Ensure roster is loaded (re-use the shared cache) */
+  const now = Date.now();
+  if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
+    try {
+      rosterCache   = await buildRosterFromDiscord();
+      rosterCacheAt = now;
+    } catch (err) {
+      console.error('[my-squadron] roster fetch failed:', err.message);
+      return res.json({ squadron: null });
+    }
+  }
+
+  const callsign = pilot.callsign.toLowerCase();
+  const entry    = rosterCache.find(p => p.callsign && p.callsign.toLowerCase() === callsign);
+  res.json({ squadron: entry ? (entry.squadron || null) : null });
+});
+
 /* ── Skill Tree (public read, admin write) ── */
 api.get('/skill-tree', (_req, res) => {
   res.json(skillTree);

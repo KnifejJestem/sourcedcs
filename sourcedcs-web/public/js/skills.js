@@ -33,12 +33,13 @@ function jwtSub(token) {
 }
 
 /* ── State ──────────────────────────────────────────────── */
-var _tree     = null;
-var _grades   = {};
-var _requests = [];
-var _mySub    = null;
-var _openMods = {};  /* { [moduleId]: bool } — expanded detail rows */
-var _openCats = {};  /* { [catId]: bool } — collapsed categories (true = collapsed) */
+var _tree        = null;
+var _grades      = {};
+var _requests    = [];
+var _mySub       = null;
+var _mySquadron  = null;  /* squadron ID from roster, or null */
+var _openMods    = {};  /* { [moduleId]: bool } — expanded detail rows */
+var _openCats    = {};  /* { [catId]: bool } — collapsed categories (true = collapsed) */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 (function () {
@@ -68,15 +69,31 @@ function loadAll(tok) {
     fetch('/api/skill-tree').then(function (r) { return r.json(); }),
     fetch('/api/skill-grades', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/grading-requests', { headers: headers }).then(function (r) { return r.json(); }),
+    fetch('/api/my-squadron', { headers: headers }).then(function (r) { return r.json(); }).catch(function () { return { squadron: null }; }),
   ]).then(function (results) {
     _tree = results[0];
     var gradesMap = results[1];
-    _grades   = (_mySub && gradesMap[_mySub]) ? gradesMap[_mySub] : {};
-    _requests = Array.isArray(results[2]) ? results[2] : [];
+    _grades      = (_mySub && gradesMap[_mySub]) ? gradesMap[_mySub] : {};
+    _requests    = Array.isArray(results[2]) ? results[2] : [];
+    _mySquadron  = (results[3] && results[3].squadron) ? results[3].squadron : null;
     render();
   }).catch(function (err) {
     console.error('[skills] load failed:', err);
     showToast('Failed to load skill data', true);
+  });
+}
+
+/* ── Squadron filtering ─────────────────────────────────── */
+/* Returns only the categories visible to the current pilot.
+   A category with an empty/missing squadrons array is shown to everyone.
+   A pilot with no squadron sees only those "all" categories. */
+function visibleCategories() {
+  if (!_tree || !_tree.categories) return [];
+  return _tree.categories.filter(function (cat) {
+    var sqs = cat.squadrons;
+    if (!sqs || !sqs.length) return true;          /* visible to all */
+    if (!_mySquadron) return false;                /* no squadron → only "all" cats */
+    return sqs.indexOf(_mySquadron) !== -1;
   });
 }
 
@@ -105,10 +122,14 @@ function categoryScore(cat) {
 }
 
 function overallScore() {
-  if (!_tree || !_tree.categories || !_tree.categories.length) return 0;
-  return _tree.categories.reduce(function (s, cat) {
+  var cats = visibleCategories();
+  if (!cats.length) return 0;
+  /* Normalise by the sum of visible category weights (not always 100 when filtered) */
+  var totalWeight = cats.reduce(function (s, c) { return s + (c.weight || 0); }, 0);
+  if (!totalWeight) return 0;
+  return cats.reduce(function (s, cat) {
     return s + (cat.weight || 0) * categoryScore(cat);
-  }, 0) / 100;
+  }, 0) / totalWeight;
 }
 
 /* ── Render ─────────────────────────────────────────────── */
@@ -128,7 +149,7 @@ function renderScoreBar() {
 
   var catsEl = document.getElementById('scoreCats');
   catsEl.innerHTML = '';
-  (_tree.categories || []).forEach(function (cat) {
+  visibleCategories().forEach(function (cat) {
     var score = Math.round(categoryScore(cat) * 100);
     var mods  = cat.modules || [];
     var done  = mods.filter(function (m) { return moduleState(m) === 'completed'; }).length;
@@ -153,7 +174,7 @@ function renderTree() {
     return r.pilot_id === _mySub && (r.status === 'open' || r.status === 'claimed');
   }) || null;
 
-  (_tree.categories || []).forEach(function (cat) {
+  visibleCategories().forEach(function (cat) {
     el.appendChild(buildCatSection(cat, myOpenReq));
   });
 }
