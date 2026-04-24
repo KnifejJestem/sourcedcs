@@ -22,6 +22,7 @@ const SKILL_TREE_FILE       = path.join(DATA_DIR, 'skill-tree.json');
 const SKILL_GRADES_FILE     = path.join(DATA_DIR, 'skill-grades.json');
 const GRADING_REQS_FILE     = path.join(DATA_DIR, 'grading-requests.json');
 const PILOT_REGISTRY_FILE   = path.join(DATA_DIR, 'pilot-registry.json');
+const FLIGHT_PLANS_FILE     = path.join(DATA_DIR, 'flight-plans.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
 if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
@@ -84,6 +85,9 @@ let skillGrades     = loadJSON(SKILL_GRADES_FILE,   {});
 let gradingRequests = loadJSON(GRADING_REQS_FILE,   []);
 let pilotRegistry   = loadJSON(PILOT_REGISTRY_FILE, {});
 let nextGradingReqId = gradingRequests.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
+
+let flightPlans = loadJSON(FLIGHT_PLANS_FILE, []);
+let nextFlightPlanId = flightPlans.reduce((m, fp) => Math.max(m, fp.id || 0), 0) + 1;
 const VALID_GRADES  = new Set(['U', 'F', 'G', 'E']);
 
 /* Load discord role → squadron mapping (role names as keys) */
@@ -1347,6 +1351,104 @@ api.delete('/grading-requests/:id', writeOpsLimiter, requireAuth, (req, res) => 
       console.error('[grading] Discord message delete failed:', err.message);
     });
   }
+});
+
+/* ─── Flight Plans ──────────────────────────────────────── */
+const FP_MAX_LEGS = 20;
+const FP_MAX_CREW = 50;
+
+api.get('/flight-plans', requireAuth, (_req, res) => {
+  res.json(flightPlans);
+});
+
+api.post('/flight-plans', writeOpsLimiter, requireAuth, (req, res) => {
+  const b = req.body;
+  if (!b || typeof b !== 'object') return res.status(400).json({ error: 'Invalid request body' });
+
+  const date          = sanitizeStr(b.date,          12);
+  const callSign      = sanitizeStr(b.callSign,       16);
+  const aircraftDesig = sanitizeStr(b.aircraftDesig,  32);
+  const authority     = sanitizeStr(b.authority,      64);
+
+  if (!date || !callSign || !aircraftDesig) {
+    return res.status(400).json({ error: 'date, callSign, and aircraftDesig are required' });
+  }
+
+  if (!Array.isArray(b.legs) || !b.legs.length) {
+    return res.status(400).json({ error: 'At least one route leg is required' });
+  }
+  if (b.legs.length > FP_MAX_LEGS) {
+    return res.status(400).json({ error: 'Too many legs (max ' + FP_MAX_LEGS + ')' });
+  }
+
+  const legs = b.legs.map(leg => ({
+    flightRules:   sanitizeStr(leg.flightRules,   1),
+    trueAirspeed:  sanitizeStr(leg.trueAirspeed,  6),
+    departure:     sanitizeStr(leg.departure,     4),
+    departureTime: sanitizeStr(leg.departureTime, 4),
+    altitude:      sanitizeStr(leg.altitude,      6),
+    route:         sanitizeStr(leg.route,         500),
+    destination:   sanitizeStr(leg.destination,   4),
+    ete:           sanitizeStr(leg.ete,           5),
+  }));
+
+  const crew = Array.isArray(b.crew) ? b.crew.slice(0, FP_MAX_CREW).map(c => ({
+    dutyPosition: sanitizeStr(c.dutyPosition, 32),
+    nameInitials: sanitizeStr(c.nameInitials, 32),
+    rank:         sanitizeStr(c.rank,         8),
+    memberId:     sanitizeStr(c.memberId,     32),
+    orgStation:   sanitizeStr(c.orgStation,   64),
+  })) : [];
+
+  const plan = {
+    id:           nextFlightPlanId++,
+    submittedAt:  new Date().toISOString(),
+    submittedBy:  { sub: req.user.sub, name: req.user.name || req.user.sub },
+    date,
+    callSign,
+    aircraftDesig,
+    authority,
+    legs,
+    remarks:          sanitizeStr(b.remarks,          1000),
+    rankHonorCode:    sanitizeStr(b.rankHonorCode,    32),
+    fuelOnBoard:      sanitizeStr(b.fuelOnBoard,      5),
+    alternateAirfield: sanitizeStr(b.alternateAirfield, 4),
+    eteToAlternate:   sanitizeStr(b.eteToAlternate,   5),
+    notamsChecked:    Boolean(b.notamsChecked),
+    weatherBrief:     sanitizeStr(b.weatherBrief,     64),
+    weightBalance:    sanitizeStr(b.weightBalance,    64),
+    aircraftSerial:   sanitizeStr(b.aircraftSerial,   128),
+    crew,
+    baseOps: {
+      approvalSignature:   '',
+      actualDepartureTime: '',
+      crewListAttached:    false,
+      approvedAt:          null,
+    },
+    status: 'submitted',
+  };
+
+  flightPlans.push(plan);
+  saveJSON(FLIGHT_PLANS_FILE, flightPlans);
+  console.debug('[flight-plans] Plan ' + plan.id + ' submitted by ' + plan.submittedBy.name);
+  res.status(201).json(plan);
+});
+
+api.patch('/flight-plans/:id/baseops', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const id  = Number(req.params.id);
+  const idx = flightPlans.findIndex(fp => fp.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Flight plan not found' });
+
+  const b = req.body || {};
+  flightPlans[idx].baseOps = {
+    approvalSignature:   sanitizeStr(b.approvalSignature,   64),
+    actualDepartureTime: sanitizeStr(b.actualDepartureTime, 4),
+    crewListAttached:    Boolean(b.crewListAttached),
+    approvedAt:          new Date().toISOString(),
+  };
+  if (b.approvalSignature) flightPlans[idx].status = 'approved';
+  saveJSON(FLIGHT_PLANS_FILE, flightPlans);
+  res.json(flightPlans[idx]);
 });
 
 app.use('/api', api);
