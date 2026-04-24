@@ -396,8 +396,8 @@
 }
 .pilot-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 6px;
   padding: 10px 16px;
   cursor: pointer;
   border-bottom: 1px solid var(--border);
@@ -412,12 +412,38 @@
   letter-spacing: 1.5px;
   color: var(--text);
 }
+.pilot-row-squadron {
+  font-size: 7.5px;
+  color: var(--text-2);
+  letter-spacing: 0.5px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pilot-row-squadron--none { color: var(--text-3); }
 .pilot-row-score {
   font-size: 8px;
   color: var(--green);
   letter-spacing: 1px;
+  flex-shrink: 0;
 }
 :root.movie .pilot-row-score { color: var(--accent); }
+
+/* ── Pilot detail: squadron badge ───────────────────────── */
+.pilot-detail-squadron {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  padding: 2px 7px;
+  text-transform: uppercase;
+}
+.pilot-detail-squadron--none {
+  color: var(--text-3);
+  border-color: var(--border);
+}
 
 /* ── Admin: request queue ───────────────────────────────── */
 .req-queue-row {

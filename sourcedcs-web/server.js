@@ -1145,6 +1145,31 @@ api.get('/skill-pilots', requireAuth, requireSkillAdmin, (_req, res) => {
   res.json(pilotRegistry);
 });
 
+/* Returns { [sub]: squadronId | null } — resolves each registered pilot's squadron
+   from the roster cache using callsign matching (same logic as /my-squadron). */
+api.get('/skill-pilots-squadrons', requireAuth, requireSkillAdmin, async (_req, res) => {
+  const now = Date.now();
+  if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
+    try {
+      rosterCache   = await buildRosterFromDiscord();
+      rosterCacheAt = now;
+    } catch (err) {
+      console.error('[skill-pilots-squadrons] roster fetch failed:', err.message);
+      return res.json({});
+    }
+  }
+  const callsignMap = {};
+  for (const entry of rosterCache) {
+    if (entry.callsign) callsignMap[entry.callsign.toLowerCase()] = entry.squadron || null;
+  }
+  const result = {};
+  for (const [sub, pilot] of Object.entries(pilotRegistry)) {
+    const cs = (pilot.callsign || '').toLowerCase();
+    result[sub] = callsignMap[cs] || null;
+  }
+  res.json(result);
+});
+
 api.delete('/skill-pilots/:sub', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
   const sub = req.params.sub;
   if (!pilotRegistry[sub]) return res.status(404).json({ error: 'Pilot not found' });

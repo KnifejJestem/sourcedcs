@@ -26,16 +26,16 @@ function logout() {
 }
 
 /* ── State ──────────────────────────────────────────────── */
-var _tree           = null;
-var _treeEditor     = null;  /* working copy mutated by the GUI editor */
-var _allGrades      = {};    /* { [sub]: { [moduleId]: gradeRec } } */
-var _pilots         = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
-var _requests       = [];
-var _squadrons      = [];    /* squadron list from /api/squadrons */
-var _roster         = [];    /* roster entries — used to resolve pilot squadron */
-var _activeSub      = null;
-var _editorCollapsed = {};   /* { [catId]: bool } collapse state for tree editor */
-var _detailCollapsed = {};   /* { [catId]: bool } collapse state for pilot detail */
+var _tree             = null;
+var _treeEditor       = null;  /* working copy mutated by the GUI editor */
+var _allGrades        = {};    /* { [sub]: { [moduleId]: gradeRec } } */
+var _pilots           = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
+var _requests         = [];
+var _squadrons        = [];    /* squadron list from /api/squadrons */
+var _pilotSquadrons   = {};    /* { [sub]: squadronId | null } — server-resolved */
+var _activeSub        = null;
+var _editorCollapsed  = {};    /* { [catId]: bool } collapse state for tree editor */
+var _detailCollapsed  = {};    /* { [catId]: bool } collapse state for pilot detail */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 (function () {
@@ -73,14 +73,14 @@ function loadAll(tok) {
     fetch('/api/skill-pilots', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/grading-requests', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/squadrons').then(function (r) { return r.json(); }).catch(function () { return []; }),
-    fetch('/api/roster').then(function (r) { return r.json(); }).catch(function () { return []; }),
+    fetch('/api/skill-pilots-squadrons', { headers: headers }).then(function (r) { return r.json(); }).catch(function () { return {}; }),
   ]).then(function (results) {
-    _tree      = results[0];
-    _allGrades = results[1] || {};
-    _pilots    = results[2] || {};
-    _requests  = Array.isArray(results[3]) ? results[3] : [];
-    _squadrons = Array.isArray(results[4]) ? results[4] : [];
-    _roster    = Array.isArray(results[5]) ? results[5] : [];
+    _tree            = results[0];
+    _allGrades       = results[1] || {};
+    _pilots          = results[2] || {};
+    _requests        = Array.isArray(results[3]) ? results[3] : [];
+    _squadrons       = Array.isArray(results[4]) ? results[4] : [];
+    _pilotSquadrons  = (results[5] && typeof results[5] === 'object') ? results[5] : {};
 
     renderGradingQueue();
     renderPilotList();
@@ -210,26 +210,31 @@ function renderPilotList() {
 
   el.innerHTML = '';
   subs.forEach(function (sub) {
-    var pilot = _pilots[sub];
-    var score = Math.round(pilotOverallScore(sub) * 100);
-    var row   = document.createElement('div');
+    var pilot  = _pilots[sub];
+    var score  = Math.round(pilotOverallScore(sub) * 100);
+    var sqId   = pilotSquadron(sub);
+    var sqName = squadronDisplayName(sqId);
+    var row    = document.createElement('div');
     row.className = 'pilot-row' + (sub === _activeSub ? ' active' : '');
     row.setAttribute('data-sub', sub);
     row.innerHTML =
       '<span class="pilot-row-callsign">' + esc(pilot.callsign || pilot.name || sub) + '</span>' +
+      (sqName ? '<span class="pilot-row-squadron">' + esc(sqName) + '</span>' : '<span class="pilot-row-squadron pilot-row-squadron--none">—</span>') +
       '<span class="pilot-row-score">' + score + '%</span>';
     (function (s) { row.addEventListener('click', function () { selectPilot(s); }); })(sub);
     el.appendChild(row);
   });
 }
 
-/* ── Squadron filtering (mirrors skills.js visibleCategories) ── */
+/* ── Squadron helpers ───────────────────────────────────────── */
 function pilotSquadron(sub) {
-  var pilot = _pilots[sub];
-  if (!pilot || !pilot.callsign) return null;
-  var callsign = pilot.callsign.toLowerCase();
-  var entry = _roster.find(function (r) { return r.callsign && r.callsign.toLowerCase() === callsign; });
-  return entry ? (entry.squadron || null) : null;
+  return _pilotSquadrons[sub] || null;
+}
+
+function squadronDisplayName(sqId) {
+  if (!sqId) return null;
+  var sq = _squadrons.find(function (s) { return s.id === sqId; });
+  return sq ? (sq.designator + ' ' + sq.name) : sqId;
 }
 
 function categoriesForPilot(sub) {
@@ -251,15 +256,17 @@ function selectPilot(sub) {
     r.classList.toggle('active', r.getAttribute('data-sub') === sub);
   });
 
-  var pilot  = _pilots[sub] || { sub: sub, name: sub, callsign: sub };
-  var grades = _allGrades[sub] || {};
-  var score  = Math.round(pilotOverallScore(sub) * 100);
-  var el     = document.getElementById('pilotDetail');
+  var pilot   = _pilots[sub] || { sub: sub, name: sub, callsign: sub };
+  var grades  = _allGrades[sub] || {};
+  var score   = Math.round(pilotOverallScore(sub) * 100);
+  var sqId    = pilotSquadron(sub);
+  var sqName  = squadronDisplayName(sqId);
+  var el      = document.getElementById('pilotDetail');
   el.innerHTML = '';
 
   /* Header */
   var hdr = document.createElement('div');
-  hdr.style.cssText = 'display:flex;align-items:baseline;gap:16px;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid var(--border)';
+  hdr.style.cssText = 'display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid var(--border)';
 
   var callsignSpan = document.createElement('span');
   callsignSpan.style.cssText = 'font-family:Orbitron,monospace;font-weight:900;font-size:16px;letter-spacing:3px';
@@ -268,6 +275,10 @@ function selectPilot(sub) {
   var nameSpan = document.createElement('span');
   nameSpan.style.cssText = 'font-size:10px;color:var(--text-3)';
   nameSpan.textContent = pilot.name || '';
+
+  var sqBadge = document.createElement('span');
+  sqBadge.className = sqName ? 'pilot-detail-squadron' : 'pilot-detail-squadron pilot-detail-squadron--none';
+  sqBadge.textContent = sqName || 'NO SQUADRON';
 
   var scoreSpan = document.createElement('span');
   scoreSpan.style.cssText = 'font-family:Orbitron,monospace;font-weight:700;font-size:20px;color:var(--green);margin-left:auto';
@@ -283,6 +294,7 @@ function selectPilot(sub) {
 
   hdr.appendChild(callsignSpan);
   hdr.appendChild(nameSpan);
+  hdr.appendChild(sqBadge);
   hdr.appendChild(scoreSpan);
   hdr.appendChild(delPilotBtn);
   el.appendChild(hdr);
