@@ -810,6 +810,59 @@ function buildIdRow(obj, placeholder) {
   return row;
 }
 
+/* Squadron visibility selector for a category card */
+function buildSquadronRow(cat) {
+  if (!cat.squadrons) cat.squadrons = [];
+
+  var row = document.createElement('div');
+  row.className = 'tree-id-row';
+  row.style.cssText = 'flex-wrap:wrap;gap:6px;align-items:flex-start';
+
+  var lbl = document.createElement('span');
+  lbl.className   = 'tree-field-label';
+  lbl.textContent = 'VISIBLE TO';
+
+  var note = document.createElement('span');
+  note.style.cssText = 'font-size:9px;color:var(--text-3);flex-shrink:0';
+  note.textContent   = _squadrons.length ? '(none checked = ALL squadrons)' : '(no squadrons configured)';
+
+  row.appendChild(lbl);
+  row.appendChild(note);
+
+  if (_squadrons.length) {
+    var checksWrap = document.createElement('div');
+    checksWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;width:100%';
+
+    _squadrons.forEach(function (sq) {
+      var label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:9px;cursor:pointer;user-select:none';
+
+      var cb  = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value   = sq.id;
+      cb.checked = cat.squadrons.indexOf(sq.id) !== -1;
+
+      (function (sqId, checkbox) {
+        checkbox.addEventListener('change', function () {
+          if (checkbox.checked) {
+            if (cat.squadrons.indexOf(sqId) === -1) cat.squadrons.push(sqId);
+          } else {
+            cat.squadrons = cat.squadrons.filter(function (id) { return id !== sqId; });
+          }
+        });
+      })(sq.id, cb);
+
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(sq.designator + ' ' + sq.name));
+      checksWrap.appendChild(label);
+    });
+
+    row.appendChild(checksWrap);
+  }
+
+  return row;
+}
+
 function buildPrereqSection(mod, ci, mi, allMods) {
   var section = document.createElement('div');
   section.className = 'tree-prereq-section';
