@@ -220,7 +220,7 @@ function fpAddCrew() {
   tr.innerHTML =
     '<td><select class="fp-cell" name="dutyPosition">' + dutyOpts + '</select></td>' +
     '<td><input class="fp-cell fp-upper" type="text" name="nameInitials" maxlength="32" placeholder="SMITH, J.R." autocomplete="off"></td>' +
-    '<td><input class="fp-cell fp-upper" type="text" name="rank" maxlength="8" placeholder="CPT" autocomplete="off"></td>' +
+    '<td><input class="fp-cell fp-upper" type="text" name="rank" maxlength="8" placeholder="CPT" value="CPT" autocomplete="off"></td>' +
     '<td><input class="fp-cell" type="text" name="memberId" maxlength="32" placeholder="###-##-####" autocomplete="off"></td>' +
     '<td><input class="fp-cell fp-upper" type="text" name="orgStation" maxlength="64" placeholder="VIPER SQDN / UGKO" autocomplete="off"></td>' +
     '<td><button class="fp-del-btn" onclick="fpRemoveCrew(' + id + ')" title="Remove row">&times;</button></td>';
@@ -416,12 +416,14 @@ function fpShowDetailOverlay(plan) {
   overlay.id = 'fpDetailOverlay';
 
   var canBaseOps = isAdminRole(currentToken) || fpUserIsController;
+  var canDelete  = isAdminRole(currentToken) || fpUserIsController;
   overlay.innerHTML =
     '<div class="fp-detail-box">' +
       '<div class="fp-detail-header">' +
         '<div class="fp-detail-title">FP-' + plan.id + ' &mdash; ' + esc(plan.callSign || '&mdash;') + '</div>' +
         '<div style="display:flex;gap:8px;align-items:center">' +
           '<button class="btn btn-ghost" style="font-size:9px;padding:4px 10px" onclick="fpPrintPlan(' + plan.id + ')">PRINT</button>' +
+          (canDelete ? '<button class="btn btn-ghost fp-delete-btn" style="font-size:9px;padding:4px 10px" onclick="fpDeletePlan(' + plan.id + ')">DELETE</button>' : '') +
           '<button class="fp-detail-close" onclick="fpCloseDetail()">&times;</button>' +
         '</div>' +
       '</div>' +
@@ -439,6 +441,23 @@ function fpShowDetailOverlay(plan) {
 function fpCloseDetail() {
   var el = document.getElementById('fpDetailOverlay');
   if (el) el.remove();
+}
+
+function fpDeletePlan(id) {
+  if (!confirm('Delete flight plan FP-' + id + '? This cannot be undone.')) return;
+
+  fetch('/api/flight-plans/' + id, {
+    method:  'DELETE',
+    headers: { 'Authorization': 'Bearer ' + (currentToken || '') },
+  })
+  .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
+  .then(function(res) {
+    if (!res.ok) { alert(res.body.error || 'Delete failed.'); return; }
+    fpAllPlans = fpAllPlans.filter(function(p) { return p.id !== id; });
+    fpCloseDetail();
+    fpRenderPlans();
+  })
+  .catch(function() { alert('Network error — please try again.'); });
 }
 
 function fpBuildDetailHTML(plan, canBaseOps) {
