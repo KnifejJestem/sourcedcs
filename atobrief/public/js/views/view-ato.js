@@ -693,31 +693,23 @@ function updateTimelineHeader(range) {
 }
 
 /**
- * Build a codewords row above the mission rows.
- * Each codeword is a labeled vertical marker on the track.
+ * Build a full-height overlay that places codeword lines across all mission rows.
  */
-function buildCodewordsRow(codewords, range) {
-  var row   = el('div', 'tl-row tl-codeword-row');
-  var label = el('div', 'tl-label');
-  label.appendChild(el('div', 'tl-label-callsign', 'CODEWORDS'));
-  row.appendChild(label);
-
-  var track = el('div', 'tl-track');
-  addGridLines(track, range);
+function buildCodewordsOverlay(codewords, range) {
+  var overlay = el('div', 'tl-codeword-overlay');
 
   var span = range.max - range.min;
   codewords.forEach(function (cw) {
     var mins = normMins(cw.time, range);
     if (mins == null) { return; }
     var marker = el('div', 'tl-codeword');
-    marker.style.left  = timeToLeftPct(mins, range.min, span) + '%';
-    marker.dataset.word = (cw.word || '?') + '\u00A0' + fmtTime(cw.time);
+    marker.style.left   = timeToLeftPct(mins, range.min, span) + '%';
+    marker.dataset.word = cw.word || '?';
     marker.title        = (cw.word || '?') + ' · ' + fmtTime(cw.time);
-    track.appendChild(marker);
+    overlay.appendChild(marker);
   });
 
-  row.appendChild(track);
-  return row;
+  return overlay;
 }
 
 function renderTimeline(missions, codewords) {
@@ -734,13 +726,13 @@ function renderTimeline(missions, codewords) {
   updateTimelineHeader(range);
   canvas.appendChild(buildTicksRow(range));
 
-  if (codewords.length) {
-    canvas.appendChild(buildCodewordsRow(codewords, range));
-  }
-
   missions.forEach(function (m, i) {
     canvas.appendChild(buildMissionRow(m, i, range));
   });
+
+  if (codewords.length) {
+    canvas.appendChild(buildCodewordsOverlay(codewords, range));
+  }
 }
 
 // ═════════════════════════════════════════════════════════════

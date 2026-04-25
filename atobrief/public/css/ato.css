@@ -427,28 +427,28 @@
   color: #7ec8e3;
 }
 
-/* Codewords row */
-.tl-codeword-row { margin-bottom: 14px; }
-.tl-codeword-row .tl-label-callsign {
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--amber);
+/* Codewords overlay — spans all mission rows */
+.tl-codeword-overlay {
+  position: absolute;
+  top: 0;
+  left: 110px;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 3;
 }
-.tl-codeword-row .tl-track { height: 28px; }
 .tl-codeword {
   position: absolute;
   top: 0;
-  height: 100%;
+  bottom: 0;
   width: 1px;
   background: var(--amber);
   transform: translateX(-50%);
-  z-index: 3;
 }
 .tl-codeword::before {
   content: attr(data-word);
   position: absolute;
-  bottom: calc(100% + 2px);
+  top: 2px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 8px;
