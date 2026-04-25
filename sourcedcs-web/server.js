@@ -1396,21 +1396,83 @@ api.get('/flight-plans/config', (req, res) => {
   const token   = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   const payload = token ? decodeJWT(token) : null;
   const isCtrl  = payload ? fpIsControllerUser({ user: payload }) : false;
-  res.json({
+  const isAdm   = payload ? fpIsAdminUser({ user: payload }) : false;
+  const out = {
     controllerSquadron: fpConfig.controllerSquadron || '',
     availableSquadrons: fpAvailableSquadrons(),
     isController:       isCtrl,
-  });
+  };
+  if (isAdm) out.notifyChannelId = fpConfig.notifyChannelId || '';
+  res.json(out);
 });
 
 /* PUT /api/flight-plans/config — admin only */
 api.put('/flight-plans/config', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
-  const sq = sanitizeStr((req.body || {}).controllerSquadron, 64);
+  const b  = req.body || {};
+  const sq = sanitizeStr(b.controllerSquadron, 64);
+  const ch = sanitizeStr(b.notifyChannelId,    32).replace(/\D/g, ''); /* digits only */
   fpConfig.controllerSquadron = sq;
+  fpConfig.notifyChannelId    = ch;
   saveJSON(FLIGHT_PLANS_CFG_FILE, fpConfig);
   console.debug('[flight-plans] Controller squadron set to:', sq || '(none)');
-  res.json({ controllerSquadron: fpConfig.controllerSquadron });
+  console.debug('[flight-plans] Notify channel set to:', ch || '(none)');
+  res.json({ controllerSquadron: fpConfig.controllerSquadron, notifyChannelId: fpConfig.notifyChannelId });
 });
+
+/* Send a submitted flight plan as a Discord embed to the configured notify channel */
+async function sendFlightPlanToDiscord(plan) {
+  if (!DISCORD_BOT_TOKEN) {
+    console.warn('[flight-plans] DISCORD_BOT_TOKEN not set — skipping Discord notify');
+    return;
+  }
+  const chId = fpConfig.notifyChannelId;
+  if (!chId) return;
+
+  const legsText = (plan.legs || []).map((leg, i) =>
+    'Leg ' + (i + 1) + ': ' + (leg.departure || '?') + ' → ' + (leg.destination || '?') +
+    ' | ' + (leg.flightRules || '—') +
+    ' | TAS ' + (leg.trueAirspeed || '—') +
+    ' | ' + (leg.departureTime || '—') + 'Z' +
+    ' | Alt ' + (leg.altitude || '—') +
+    ' | ETE ' + (leg.ete || '—') +
+    (leg.route ? '\n  ' + leg.route : '')
+  ).join('\n');
+
+  const crewText = (plan.crew || []).filter(c => c.nameInitials).map(c =>
+    (c.rank ? c.rank + ' ' : '') + c.nameInitials +
+    ' — ' + (c.dutyPosition || '—') +
+    (c.orgStation ? ' / ' + c.orgStation : '') +
+    (c.memberId ? ' (' + c.memberId + ')' : '')
+  ).join('\n');
+
+  const fields = [
+    { name: '1. Date',             value: plan.date          || '—', inline: true },
+    { name: '2. Call Sign',        value: plan.callSign      || '—', inline: true },
+    { name: '3. Aircraft',         value: plan.aircraftDesig || '—', inline: true },
+    { name: '13. Rank/Honor Code', value: plan.rankHonorCode || '—', inline: true },
+    { name: '14. Fuel on Board',   value: plan.fuelOnBoard   || '—', inline: true },
+    { name: '15. Alt Airfield',    value: plan.alternateAirfield || '—', inline: true },
+    { name: '16. ETE to Altn',     value: plan.eteToAlternate    || '—', inline: true },
+    { name: '17. NOTAMs',          value: plan.notamsChecked ? '✅ Reviewed' : '—', inline: true },
+    { name: '18. Weather',         value: plan.weatherBrief  || '—', inline: true },
+    { name: '19. Wt & Balance',    value: plan.weightBalance || '—', inline: true },
+    { name: '20. A/C Serial / Unit / Station', value: plan.aircraftSerial || '—', inline: false },
+  ];
+  if (plan.remarks)  fields.push({ name: '12. Remarks',         value: plan.remarks.slice(0, 1024),  inline: false });
+  if (legsText)      fields.push({ name: '9. Route of Flight',  value: legsText.slice(0, 1024),      inline: false });
+  if (crewText)      fields.push({ name: 'Crew / Passengers',   value: crewText.slice(0, 1024),      inline: false });
+
+  const embed = {
+    title:     '✈️ Flight Plan FP-' + plan.id + ' — ' + (plan.callSign || ''),
+    color:     0x2b6cb0,
+    fields,
+    timestamp: plan.submittedAt,
+    footer:    { text: 'Submitted by ' + (plan.submittedBy && plan.submittedBy.name ? plan.submittedBy.name : 'Unknown') + ' · ' + (plan.authority || '10 USC 8012 AND EO 9397') },
+  };
+
+  await discordPost('/channels/' + chId + '/messages', { embeds: [embed] });
+  console.debug('[flight-plans] FP-' + plan.id + ' posted to Discord channel ' + chId);
+}
 
 /* GET /api/flight-plans — returns all plans for admin/controller, own plans otherwise */
 api.get('/flight-plans', requireAuth, (req, res) => {
@@ -1492,6 +1554,10 @@ api.post('/flight-plans', writeOpsLimiter, requireAuth, (req, res) => {
   saveJSON(FLIGHT_PLANS_FILE, flightPlans);
   console.debug('[flight-plans] Plan ' + plan.id + ' submitted by ' + plan.submittedBy.name);
   res.status(201).json(plan);
+
+  sendFlightPlanToDiscord(plan).catch(err =>
+    console.error('[flight-plans] Discord notify failed:', err.message)
+  );
 });
 
 api.patch('/flight-plans/:id/baseops', writeOpsLimiter, requireAuth, (req, res) => {

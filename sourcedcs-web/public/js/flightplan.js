@@ -36,6 +36,7 @@ var FP_DUTY_POSITIONS = [
 var fpControllerSquadron  = '';   /* which squadron has controller access */
 var fpAvailableSquadrons  = [];   /* all configured squadrons */
 var fpUserIsController    = false; /* is the current user in the controller squadron */
+var fpNotifyChannelId     = '';   /* Discord channel ID for flight plan notifications (admin only) */
 
 /* ════════════════════════════════════════════════════════════
    INIT
@@ -96,6 +97,7 @@ function fpLoadConfig() {
     fpControllerSquadron = cfg.controllerSquadron || '';
     fpAvailableSquadrons = cfg.availableSquadrons || [];
     fpUserIsController   = Boolean(cfg.isController);
+    fpNotifyChannelId    = cfg.notifyChannelId    || '';
     fpRenderAdminPanel();
     fpLoadPlans();
   })
@@ -122,13 +124,17 @@ function fpRenderAdminPanel() {
   }
 
   panel.innerHTML =
-    '<div class="fp-admin-label">ADMIN — CONTROLLER SQUADRON</div>' +
+    '<div class="fp-admin-label">ADMIN — CONTROLLER SQUADRON &amp; NOTIFICATIONS</div>' +
     '<div class="fp-admin-body">' +
       '<div class="fp-admin-desc">Select which squadron can view all submitted flight plans and enter Base Ops data. All users can always view their own submissions.</div>' +
       '<div class="fp-admin-row">' +
         '<div class="fp-field" style="flex:1;min-width:200px">' +
           '<label class="fp-label" for="fpControllerSqSelect">CONTROLLER SQUADRON</label>' +
           '<select class="fp-input" id="fpControllerSqSelect">' + opts.join('') + '</select>' +
+        '</div>' +
+        '<div class="fp-field" style="flex:1;min-width:180px">' +
+          '<label class="fp-label" for="fpNotifyChInput">DISCORD NOTIFY CHANNEL ID</label>' +
+          '<input class="fp-input" id="fpNotifyChInput" type="text" maxlength="32" placeholder="e.g. 123456789012345678" value="' + esc(fpNotifyChannelId) + '" autocomplete="off">' +
         '</div>' +
         '<div style="align-self:flex-end">' +
           '<button class="btn btn-primary" style="font-size:9px;padding:6px 16px" onclick="fpSaveConfig()">SAVE</button>' +
@@ -141,6 +147,7 @@ function fpRenderAdminPanel() {
 
 function fpSaveConfig() {
   var sel   = document.getElementById('fpControllerSqSelect');
+  var chEl  = document.getElementById('fpNotifyChInput');
   var errEl = document.getElementById('fpAdminError');
   var okEl  = document.getElementById('fpAdminSuccess');
   if (!sel) return;
@@ -154,7 +161,10 @@ function fpSaveConfig() {
       'Content-Type':  'application/json',
       'Authorization': 'Bearer ' + (currentToken || ''),
     },
-    body: JSON.stringify({ controllerSquadron: sel.value }),
+    body: JSON.stringify({
+      controllerSquadron: sel.value,
+      notifyChannelId:    chEl ? chEl.value.trim() : '',
+    }),
   })
   .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
   .then(function(res) {
@@ -164,7 +174,8 @@ function fpSaveConfig() {
       return;
     }
     fpControllerSquadron = res.body.controllerSquadron || '';
-    okEl.textContent   = 'Controller squadron updated.';
+    fpNotifyChannelId    = res.body.notifyChannelId    || '';
+    okEl.textContent   = 'Config saved.';
     okEl.style.display = '';
   })
   .catch(function() {
