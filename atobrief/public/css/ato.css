@@ -427,6 +427,37 @@
   color: #7ec8e3;
 }
 
+/* Codewords row */
+.tl-codeword-row { margin-bottom: 14px; }
+.tl-codeword-row .tl-label-callsign {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--amber);
+}
+.tl-codeword-row .tl-track { height: 28px; }
+.tl-codeword {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 1px;
+  background: var(--amber);
+  transform: translateX(-50%);
+  z-index: 3;
+}
+.tl-codeword::before {
+  content: attr(data-word);
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--amber);
+  white-space: nowrap;
+  letter-spacing: .5px;
+}
+
 /* Detail panel */
 .detail-panel {
   display: none;

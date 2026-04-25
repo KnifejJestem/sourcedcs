@@ -49,3 +49,76 @@ function openTimesEditor() {
     editorReRender('ato');
   });
 }
+
+// ═════════════════════════════════════════════════════════════
+// CODEWORDS EDITOR
+// ═════════════════════════════════════════════════════════════
+
+function openCodewordsEditor() {
+  var ato = editorEnsureSection('ato');
+  if (!Array.isArray(ato.codewords)) { ato.codewords = []; }
+
+  openEditorDialog('EDIT CODEWORDS', function (body) {
+    editorSectionTitle(body, 'CODEWORDS — shown as markers on the timeline');
+
+    var listEl = el('div', '');
+    body._cwListEl = listEl;
+
+    function appendCwRow(word, time) {
+      var row = el('div', 'ef-codeword-row');
+
+      var fWord = editorField(row, 'Codeword', word, { placeholder: 'BRAVE SWORD' });
+      var fTime = editorField(row, 'Time (Zulu)', time, {
+        placeholder: '2040',
+        hint: 'Z is added automatically',
+      });
+      row._cwWord = fWord;
+      row._cwTime = fTime;
+
+      // DEL button aligned with inputs
+      var delWrap = el('div', 'ef-group');
+      delWrap.appendChild(el('label', 'ef-label', '\u00A0'));
+      var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', 'DEL');
+      delBtn.type = 'button';
+      delBtn.addEventListener('click', function () { row.remove(); });
+      delWrap.appendChild(delBtn);
+      row.appendChild(delWrap);
+
+      listEl.appendChild(row);
+    }
+
+    ato.codewords.forEach(function (cw) {
+      appendCwRow(cw.word || '', (cw.time || '').replace(/Z$/i, ''));
+    });
+    body.appendChild(listEl);
+
+    var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD CODEWORD');
+    addBtn.type = 'button';
+    addBtn.addEventListener('click', function () { appendCwRow('', ''); });
+    body.appendChild(addBtn);
+
+  }, function () {
+    var ato  = editorEnsureSection('ato');
+    var body = document.getElementById('editorBody');
+    var listEl = body._cwListEl;
+    if (!listEl) { return; }
+
+    var codewords = [];
+    listEl.querySelectorAll('.ef-codeword-row').forEach(function (row) {
+      var word    = row._cwWord ? row._cwWord.value.trim().toUpperCase() : '';
+      var rawTime = row._cwTime ? row._cwTime.value.replace(/[ZL]$/i, '').trim() : '';
+      if (!word && !rawTime) { return; }
+      var entry = {};
+      if (word)    { entry.word = word; }
+      if (rawTime) { entry.time = rawTime + 'Z'; }
+      codewords.push(entry);
+    });
+
+    if (codewords.length) {
+      ato.codewords = codewords;
+    } else {
+      delete ato.codewords;
+    }
+    editorReRender('ato');
+  });
+}
