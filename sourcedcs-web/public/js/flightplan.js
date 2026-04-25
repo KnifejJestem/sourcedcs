@@ -184,10 +184,10 @@ function fpAddLeg() {
   tr.id = 'fpLeg-' + id;
   tr.innerHTML =
     '<td><select class="fp-cell" name="flightRules">' +
-      '<option value="I">I — IFR</option>' +
-      '<option value="V">V — VFR</option>' +
-      '<option value="Y">Y — IFR→VFR</option>' +
-      '<option value="Z">Z — VFR→IFR</option>' +
+      '<option value="I">I</option>' +
+      '<option value="V">V</option>' +
+      '<option value="Y">Y</option>' +
+      '<option value="Z">Z</option>' +
     '</select></td>' +
     '<td><input class="fp-cell" type="text" name="trueAirspeed" maxlength="6" placeholder="450" autocomplete="off"></td>' +
     '<td><input class="fp-cell fp-upper" type="text" name="departure" maxlength="4" placeholder="ICAO" autocomplete="off"></td>' +
