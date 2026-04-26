@@ -441,8 +441,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 1px;
-  background: var(--amber);
+  width: 0;
   transform: translateX(-50%);
 }
 .tl-codeword::before {
@@ -456,6 +455,16 @@
   color: var(--amber);
   white-space: nowrap;
   letter-spacing: .5px;
+}
+.tl-codeword::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--amber);
+  transform: translateX(-50%);
 }
 
 /* Detail panel */
