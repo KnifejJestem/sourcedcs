@@ -47,18 +47,11 @@ function fetchAndRenderRooms() {
 
 function _renderRoomCards(rooms) {
   const grid = document.getElementById('roomsGrid');
-  const panel = document.getElementById('roomsPanel');
-  if (!grid || !panel) return;
-
-  panel.style.display = '';
-
-  if (!rooms || rooms.length === 0) {
-    grid.innerHTML = '<div class="rooms-empty">NO ACTIVE ROOMS</div>';
-    return;
-  }
+  if (!grid) return;
 
   grid.innerHTML = '';
-  rooms.forEach(room => {
+
+  (rooms || []).forEach(room => {
     const badges = [];
     if (room.hasPackage)      badges.push('<span class="room-badge pkg">PKG LOADED</span>');
     if (room.presenterActive) badges.push('<span class="room-badge live">PRESENTER LIVE</span>');
@@ -75,6 +68,16 @@ function _renderRoomCards(rooms) {
       '<button class="room-card-join" onclick="quickJoin(\'' + _escHtml(room.id) + '\')">JOIN ROOM</button>';
     grid.appendChild(card);
   });
+
+  // Always append the load card at the end
+  const loadCard = document.createElement('div');
+  loadCard.className = 'room-card load-card';
+  loadCard.onclick = () => document.getElementById('fileInput').click();
+  loadCard.innerHTML =
+    '<div class="load-card-icon">&#x2295;</div>' +
+    '<div class="load-card-label">LOAD ATO PACKAGE</div>' +
+    '<div class="load-card-sub">Drop a <strong>.yaml</strong> package here,<br>or click to browse</div>';
+  grid.appendChild(loadCard);
 }
 
 function _escHtml(s) {
@@ -82,19 +85,28 @@ function _escHtml(s) {
 }
 
 function _showRoomsPanel(visible) {
-  const panel = document.getElementById('roomsPanel');
-  if (!panel) return;
   if (visible) {
     fetchAndRenderRooms();
-    // Periodic refresh while the upload screen is showing
     if (!_roomsRefreshTimer) {
       _roomsRefreshTimer = setInterval(fetchAndRenderRooms, 10000);
     }
   } else {
-    panel.style.display = 'none';
     if (_roomsRefreshTimer) {
       clearInterval(_roomsRefreshTimer);
       _roomsRefreshTimer = null;
+    }
+    // Presenter is in a room but no package loaded — show just the load card
+    const grid = document.getElementById('roomsGrid');
+    if (grid) {
+      grid.innerHTML = '';
+      const loadCard = document.createElement('div');
+      loadCard.className = 'room-card load-card';
+      loadCard.onclick = () => document.getElementById('fileInput').click();
+      loadCard.innerHTML =
+        '<div class="load-card-icon">&#x2295;</div>' +
+        '<div class="load-card-label">LOAD ATO PACKAGE</div>' +
+        '<div class="load-card-sub">Drop a <strong>.yaml</strong> package here,<br>or click to browse</div>';
+      grid.appendChild(loadCard);
     }
   }
 }
@@ -331,7 +343,7 @@ function _showRoomButtons(inRoom) {
 }
 
 // Apply presentee restrictions: hide LOAD PACKAGE + EDIT buttons,
-// disable file input, replace drop zone with a waiting message.
+// disable file input, show waiting card in the landing grid.
 function applyPresenteeUI() {
   const loadPkgBtn = document.getElementById('loadPackageBtn');
   if (loadPkgBtn) loadPkgBtn.style.display = 'none';
@@ -342,13 +354,14 @@ function applyPresenteeUI() {
   const fileInput = document.getElementById('fileInput');
   if (fileInput) fileInput.disabled = true;
 
-  const dropZone = document.getElementById('dropZone');
-  if (dropZone) {
-    dropZone.innerHTML =
-      '<div class="drop-icon">\u23F3</div>' +
-      '<div class="drop-label">WAITING FOR PRESENTER</div>' +
-      '<div class="drop-sub">The presenter will load the briefing package.</div>';
-    dropZone.style.pointerEvents = 'none';
+  const grid = document.getElementById('roomsGrid');
+  if (grid) {
+    grid.innerHTML =
+      '<div class="room-card waiting-card">' +
+      '<div class="load-card-icon">\u23F3</div>' +
+      '<div class="load-card-label">WAITING FOR PRESENTER</div>' +
+      '<div class="load-card-sub">The presenter will load the briefing package.</div>' +
+      '</div>';
   }
 }
 
@@ -362,17 +375,7 @@ function _restoreDefaultUI() {
 
   const fileInput = document.getElementById('fileInput');
   if (fileInput) fileInput.disabled = false;
-
-  const dropZone = document.getElementById('dropZone');
-  if (dropZone) {
-    dropZone.innerHTML =
-      '<div class="drop-icon">\u2295</div>' +
-      '<div class="drop-label">LOAD ATO PACKAGE</div>' +
-      '<div class="drop-sub">Drop a <strong>package.yaml</strong> here, or click to browse.<br>' +
-      'Top-level keys: <code>ato</code>, <code>aco</code>, <code>spins</code>, <code>comms</code>, <code>weather</code></div>' +
-      '<div class="drop-hint">Try: <code>demo-package.yaml</code></div>';
-    dropZone.style.pointerEvents = '';
-  }
+  // Landing grid is repopulated by the _showRoomsPanel(true) call that follows
 }
 
 function showSessionIndicator(sessionId, role) {

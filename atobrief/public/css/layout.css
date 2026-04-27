@@ -119,62 +119,30 @@ header {
 .upload-screen {
   flex: 1;
   display: flex;
-  overflow: hidden;
-}
-
-/* Rooms panel (left side) */
-.rooms-panel {
-  flex: 1;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 48px 40px;
   overflow-y: auto;
-  padding: 28px 32px;
-  border-right: 1px solid var(--border-strong);
-  min-width: 0;
 }
-.rooms-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18px;
-}
-.rooms-panel-title {
-  font-size: 9px;
-  letter-spacing: 3px;
-  color: var(--text-3);
-  font-weight: 600;
-}
-.rooms-refresh-btn {
-  border: none;
-  background: transparent;
-  color: var(--text-3);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 2px 6px;
-  line-height: 1;
-  transition: color .15s;
-}
-.rooms-refresh-btn:hover { color: var(--text); }
-:root.movie .rooms-refresh-btn:hover { color: var(--cap); }
 
-.rooms-grid {
+.landing-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-}
-.rooms-empty {
-  font-size: 10px;
-  color: var(--text-3);
-  letter-spacing: 1px;
-  padding: 12px 0;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 320px));
+  gap: 16px;
+  justify-content: center;
+  width: 100%;
+  max-width: 1280px;
 }
 
 /* Room card */
 .room-card {
   border: 1px solid var(--border-strong);
   background: var(--bg-card);
-  padding: 16px 18px;
+  padding: 28px 26px;
+  min-height: 180px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   transition: border-color .15s, background .15s;
 }
 .room-card:hover {
@@ -186,7 +154,7 @@ header {
   background: rgba(57,255,122,.04);
 }
 .room-card-id {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 1.5px;
   color: var(--text);
@@ -213,6 +181,7 @@ header {
   font-size: 9px;
   letter-spacing: 0.5px;
   color: var(--text-3);
+  margin-top: auto;
 }
 .room-card-join {
   align-self: flex-start;
@@ -222,7 +191,7 @@ header {
   font-family: var(--font-mono);
   font-size: 8px;
   letter-spacing: 1.5px;
-  padding: 5px 14px;
+  padding: 6px 16px;
   cursor: pointer;
   transition: background .15s, color .15s, border-color .15s;
 }
@@ -237,38 +206,38 @@ header {
   border-color: var(--cap);
 }
 
-/* Load panel (right side / centered when no rooms) */
-.load-panel {
-  flex: 0 0 420px;
-  display: flex;
+/* Load card — same grid cell, dashed border, clickable */
+.load-card {
+  border-style: dashed;
+  cursor: pointer;
   align-items: center;
   justify-content: center;
-  padding: 40px;
-}
-/* When rooms panel is hidden, load panel fills full width */
-#roomsPanel[style*="display: none"] + .load-panel {
-  flex: 1;
-}
-
-.drop-zone {
-  border: 1px dashed var(--border-strong);
-  padding: 56px 96px;
   text-align: center;
-  cursor: pointer;
   background: var(--bg2);
-  transition: border-color .15s, background .15s;
 }
-.drop-zone:hover, .drop-zone.over {
+.load-card:hover {
   border-color: var(--text);
   background: var(--bg3);
 }
-:root.movie .drop-zone:hover, :root.movie .drop-zone.over {
+:root.movie .load-card:hover {
   border-color: var(--cap);
   background: rgba(57,255,122,.03);
 }
-.drop-icon { font-size: 32px; color: var(--text-3); margin-bottom: 16px; }
-.drop-label { font-size: 11px; letter-spacing: 3px; color: var(--text-2); margin-bottom: 8px; }
-.drop-sub { font-size: 10px; color: var(--text-3); line-height: 1.6; }
+.load-card-icon { font-size: 28px; color: var(--text-3); margin-bottom: 4px; }
+.load-card-label { font-size: 10px; letter-spacing: 3px; color: var(--text-2); margin-bottom: 6px; }
+.load-card-sub { font-size: 9px; color: var(--text-3); line-height: 1.6; }
+
+/* Waiting card — same as load card but non-interactive */
+.waiting-card {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: default;
+}
+.waiting-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-card);
+}
 
 /* ── Main content ────────────────────────────────────────── */
 .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }

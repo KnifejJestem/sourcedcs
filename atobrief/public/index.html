@@ -55,20 +55,7 @@
   <div class="body">
 
     <div class="upload-screen" id="upload-screen">
-      <div class="rooms-panel" id="roomsPanel" style="display:none">
-        <div class="rooms-panel-header">
-          <span class="rooms-panel-title">ACTIVE BRIEFING ROOMS</span>
-          <button class="rooms-refresh-btn" onclick="fetchAndRenderRooms()" title="Refresh rooms">&#x21BB;</button>
-        </div>
-        <div class="rooms-grid" id="roomsGrid"></div>
-      </div>
-      <div class="load-panel" id="loadPanel">
-        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-          <div class="drop-icon">&#x2295;</div>
-          <div class="drop-label">LOAD ATO PACKAGE</div>
-          <div class="drop-sub">Drop a <strong>.yaml</strong> package here, or click to browse</div>
-        </div>
-      </div>
+      <div class="landing-grid" id="roomsGrid"></div>
     </div>
 
     <div class="main-content" id="main-content" style="display:none">
