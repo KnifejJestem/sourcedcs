@@ -408,3 +408,15 @@
   border-color: var(--amber);
   color: var(--amber);
 }
+
+/* Codeword editor rows */
+.ef-codeword-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.ef-codeword-row .ef-group { flex: 1; margin-bottom: 0; }
+.ef-codeword-row .ef-group:last-child { flex: 0 0 auto; }

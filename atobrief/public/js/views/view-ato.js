@@ -23,13 +23,14 @@ var DOM_IDS = {
 // Public entry point — called by app.js on load / re-render
 // ═════════════════════════════════════════════════════════════
 function renderATO(ato) {
-  var missions = ato.missions || [];
-  var prevIdx  = STATE.selectedIdx;
+  var missions  = ato.missions  || [];
+  var codewords = ato.codewords || [];
+  var prevIdx   = STATE.selectedIdx;
 
   renderIntelStrip(ato);
   renderTankers((STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.tankers) || []);
   renderMissionCards(missions);
-  renderTimeline(missions);
+  renderTimeline(missions, codewords);
 
   // Restore previously-open detail panel after DOM rebuild
   if (prevIdx >= 0) {
@@ -127,6 +128,11 @@ function renderIntelStrip(ato) {
   var sspBtn = el('button', 'editor-btn', '✎ STEER PTS');
   sspBtn.addEventListener('click', openSteerpointsEditor);
   row.appendChild(sspBtn);
+
+  // Codewords edit button (visible in edit mode)
+  var cwBtn = el('button', 'editor-btn', '✎ CODEWORDS');
+  cwBtn.addEventListener('click', openCodewordsEditor);
+  row.appendChild(cwBtn);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -374,13 +380,18 @@ function collectMissionTimes(m) {
  * pivot > 0 means some times crossed midnight and were shifted +1440 to
  * keep them chronological; normMins() must be used when placing bars.
  */
-function computeTimeRange(missions) {
+function computeTimeRange(missions, codewords) {
   var allTimes = [];
 
   missions.forEach(function (m) {
     collectMissionTimes(m).forEach(function (t) {
       if (t != null) allTimes.push(t);
     });
+  });
+
+  (codewords || []).forEach(function (cw) {
+    var t = toMins(cw.time);
+    if (t != null) allTimes.push(t);
   });
 
   if (!allTimes.length) { return null; }
@@ -681,11 +692,32 @@ function updateTimelineHeader(range) {
   }
 }
 
-function renderTimeline(missions) {
+/**
+ * Build a full-height overlay that places codeword lines across all mission rows.
+ */
+function buildCodewordsOverlay(codewords, range) {
+  var overlay = el('div', 'tl-codeword-overlay');
+
+  var span = range.max - range.min;
+  codewords.forEach(function (cw) {
+    var mins = normMins(cw.time, range);
+    if (mins == null) { return; }
+    var marker = el('div', 'tl-codeword');
+    marker.style.left   = timeToLeftPct(mins, range.min, span) + '%';
+    marker.dataset.word = cw.word || '?';
+    marker.title        = (cw.word || '?') + ' · ' + fmtTime(cw.time);
+    overlay.appendChild(marker);
+  });
+
+  return overlay;
+}
+
+function renderTimeline(missions, codewords) {
   var canvas = document.getElementById(DOM_IDS.tlCanvas);
   canvas.innerHTML = '';
+  codewords = codewords || [];
 
-  var range = computeTimeRange(missions);
+  var range = computeTimeRange(missions, codewords);
   if (!range) {
     canvas.appendChild(el('div', 'empty-state', 'NO TIME DATA'));
     return;
@@ -697,6 +729,10 @@ function renderTimeline(missions) {
   missions.forEach(function (m, i) {
     canvas.appendChild(buildMissionRow(m, i, range));
   });
+
+  if (codewords.length) {
+    canvas.appendChild(buildCodewordsOverlay(codewords, range));
+  }
 }
 
 // ═════════════════════════════════════════════════════════════

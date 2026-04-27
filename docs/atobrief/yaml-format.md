@@ -428,6 +428,27 @@ The same IDs are used in:
 | `irl_time_zulu` | string | Real-world start time in Zulu (`HHMMz`) |
 | `ingame_start_time` | string | In-game mission start in Zulu (`HHMMz`) |
 | `local_offset_hours` | number | UTC offset for the theater (e.g. `4` for UTC+4). Used by the renderer to convert Zulu times to local for display. |
+| `codewords` | list | Optional list of time-tagged codewords shown as labeled markers on the timeline (see below) |
+
+### `codewords:` (list)
+
+A list of codewords tied to specific times in the ATO window.  Each codeword
+is displayed as a labeled vertical marker on the timeline.  `miztoyaml` leaves
+this list absent (blank by default); fill it in manually or via the editor.
+
+```yaml
+ato:
+  codewords:
+    - word: BRAVE SWORD
+      time: '2040Z'
+    - word: ANVIL
+      time: '2115Z'
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `word` | string | Codeword (displayed on the timeline marker) |
+| `time` | time string | Time the codeword is executed (`HHMMz` Zulu) |
 
 > **Note:** Airfields, carriers, tankers, and control agencies are all read directly from
 > `registry.*` — there are no separate `ato.airfields`, `ato.carriers`, or `ato.support_flights`

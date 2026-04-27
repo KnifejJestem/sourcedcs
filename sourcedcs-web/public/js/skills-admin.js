@@ -26,14 +26,16 @@ function logout() {
 }
 
 /* ── State ──────────────────────────────────────────────── */
-var _tree           = null;
-var _treeEditor     = null;  /* working copy mutated by the GUI editor */
-var _allGrades      = {};    /* { [sub]: { [moduleId]: gradeRec } } */
-var _pilots         = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
-var _requests       = [];
-var _activeSub      = null;
-var _editorCollapsed = {};   /* { [catId]: bool } collapse state for tree editor */
-var _detailCollapsed = {};   /* { [catId]: bool } collapse state for pilot detail */
+var _tree             = null;
+var _treeEditor       = null;  /* working copy mutated by the GUI editor */
+var _allGrades        = {};    /* { [sub]: { [moduleId]: gradeRec } } */
+var _pilots           = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
+var _requests         = [];
+var _squadrons        = [];    /* squadron list from /api/squadrons */
+var _pilotSquadrons   = {};    /* { [sub]: squadronId | null } — server-resolved */
+var _activeSub        = null;
+var _editorCollapsed  = {};    /* { [catId]: bool } collapse state for tree editor */
+var _detailCollapsed  = {};    /* { [catId]: bool } collapse state for pilot detail */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 (function () {
@@ -70,11 +72,15 @@ function loadAll(tok) {
     fetch('/api/skill-grades', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/skill-pilots', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/grading-requests', { headers: headers }).then(function (r) { return r.json(); }),
+    fetch('/api/squadrons').then(function (r) { return r.json(); }).catch(function () { return []; }),
+    fetch('/api/skill-pilots-squadrons', { headers: headers }).then(function (r) { return r.json(); }).catch(function () { return {}; }),
   ]).then(function (results) {
-    _tree      = results[0];
-    _allGrades = results[1] || {};
-    _pilots    = results[2] || {};
-    _requests  = Array.isArray(results[3]) ? results[3] : [];
+    _tree            = results[0];
+    _allGrades       = results[1] || {};
+    _pilots          = results[2] || {};
+    _requests        = Array.isArray(results[3]) ? results[3] : [];
+    _squadrons       = Array.isArray(results[4]) ? results[4] : [];
+    _pilotSquadrons  = (results[5] && typeof results[5] === 'object') ? results[5] : {};
 
     renderGradingQueue();
     renderPilotList();
@@ -102,16 +108,19 @@ function moduleState(mod, grades) {
 }
 
 function pilotOverallScore(sub) {
-  if (!_tree || !_tree.categories) return 0;
-  var grades = _allGrades[sub] || {};
-  return _tree.categories.reduce(function (s, cat) {
+  var cats   = categoriesForPilot(sub);
+  if (!cats.length) return 0;
+  var grades      = _allGrades[sub] || {};
+  var totalWeight = cats.reduce(function (s, c) { return s + (c.weight || 0); }, 0);
+  if (!totalWeight) return 0;
+  return cats.reduce(function (s, cat) {
     if (!cat.modules || !cat.modules.length) return s;
     var completed = cat.modules.filter(function (mod) {
       return moduleState(mod, grades) === 'completed';
     }).length;
     var catScore = completed / cat.modules.length;
     return s + (cat.weight || 0) * catScore;
-  }, 0) / 100;
+  }, 0) / totalWeight;
 }
 
 /* ── Grading queue ──────────────────────────────────────── */
@@ -201,16 +210,41 @@ function renderPilotList() {
 
   el.innerHTML = '';
   subs.forEach(function (sub) {
-    var pilot = _pilots[sub];
-    var score = Math.round(pilotOverallScore(sub) * 100);
-    var row   = document.createElement('div');
+    var pilot  = _pilots[sub];
+    var score  = Math.round(pilotOverallScore(sub) * 100);
+    var sqId   = pilotSquadron(sub);
+    var sqName = squadronDisplayName(sqId);
+    var row    = document.createElement('div');
     row.className = 'pilot-row' + (sub === _activeSub ? ' active' : '');
     row.setAttribute('data-sub', sub);
     row.innerHTML =
       '<span class="pilot-row-callsign">' + esc(pilot.callsign || pilot.name || sub) + '</span>' +
+      (sqName ? '<span class="pilot-row-squadron">' + esc(sqName) + '</span>' : '<span class="pilot-row-squadron pilot-row-squadron--none">—</span>') +
       '<span class="pilot-row-score">' + score + '%</span>';
     (function (s) { row.addEventListener('click', function () { selectPilot(s); }); })(sub);
     el.appendChild(row);
+  });
+}
+
+/* ── Squadron helpers ───────────────────────────────────────── */
+function pilotSquadron(sub) {
+  return _pilotSquadrons[sub] || null;
+}
+
+function squadronDisplayName(sqId) {
+  if (!sqId) return null;
+  var sq = _squadrons.find(function (s) { return s.id === sqId; });
+  return sq ? (sq.designator + ' ' + sq.name) : sqId;
+}
+
+function categoriesForPilot(sub) {
+  if (!_tree || !_tree.categories) return [];
+  var sq = pilotSquadron(sub);
+  return _tree.categories.filter(function (cat) {
+    var sqs = cat.squadrons;
+    if (!sqs || !sqs.length) return true;
+    if (!sq) return false;
+    return sqs.indexOf(sq) !== -1;
   });
 }
 
@@ -222,15 +256,17 @@ function selectPilot(sub) {
     r.classList.toggle('active', r.getAttribute('data-sub') === sub);
   });
 
-  var pilot  = _pilots[sub] || { sub: sub, name: sub, callsign: sub };
-  var grades = _allGrades[sub] || {};
-  var score  = Math.round(pilotOverallScore(sub) * 100);
-  var el     = document.getElementById('pilotDetail');
+  var pilot   = _pilots[sub] || { sub: sub, name: sub, callsign: sub };
+  var grades  = _allGrades[sub] || {};
+  var score   = Math.round(pilotOverallScore(sub) * 100);
+  var sqId    = pilotSquadron(sub);
+  var sqName  = squadronDisplayName(sqId);
+  var el      = document.getElementById('pilotDetail');
   el.innerHTML = '';
 
   /* Header */
   var hdr = document.createElement('div');
-  hdr.style.cssText = 'display:flex;align-items:baseline;gap:16px;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid var(--border)';
+  hdr.style.cssText = 'display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid var(--border)';
 
   var callsignSpan = document.createElement('span');
   callsignSpan.style.cssText = 'font-family:Orbitron,monospace;font-weight:900;font-size:16px;letter-spacing:3px';
@@ -239,6 +275,10 @@ function selectPilot(sub) {
   var nameSpan = document.createElement('span');
   nameSpan.style.cssText = 'font-size:10px;color:var(--text-3)';
   nameSpan.textContent = pilot.name || '';
+
+  var sqBadge = document.createElement('span');
+  sqBadge.className = sqName ? 'pilot-detail-squadron' : 'pilot-detail-squadron pilot-detail-squadron--none';
+  sqBadge.textContent = sqName || 'NO SQUADRON';
 
   var scoreSpan = document.createElement('span');
   scoreSpan.style.cssText = 'font-family:Orbitron,monospace;font-weight:700;font-size:20px;color:var(--green);margin-left:auto';
@@ -254,11 +294,12 @@ function selectPilot(sub) {
 
   hdr.appendChild(callsignSpan);
   hdr.appendChild(nameSpan);
+  hdr.appendChild(sqBadge);
   hdr.appendChild(scoreSpan);
   hdr.appendChild(delPilotBtn);
   el.appendChild(hdr);
 
-  (_tree.categories || []).forEach(function (cat) {
+  categoriesForPilot(sub).forEach(function (cat) {
     var catSection  = document.createElement('div');
     catSection.className = 'skill-list-category';
     var mods        = cat.modules || [];
@@ -543,22 +584,47 @@ function renderTreeEditor() {
   if (!el) return;
   el.innerHTML = '';
 
-  var cats        = _treeEditor.categories || [];
-  var totalWeight = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
-  var weightOk    = Math.abs(totalWeight - 100) <= 0.01;
-  var allMods     = flatModules();
+  var cats    = _treeEditor.categories || [];
+  var allMods = flatModules();
 
-  /* Weight indicator */
+  /* Weight indicator — per squadron */
   var weightBar = document.createElement('div');
   weightBar.className = 'tree-weight-bar';
   var wLabel = document.createElement('span');
   wLabel.className   = 'tree-field-label';
-  wLabel.textContent = 'TOTAL WEIGHT';
-  var wTotal = document.createElement('span');
-  wTotal.className   = 'tree-weight-total ' + (weightOk ? 'ok' : 'err');
-  wTotal.textContent = totalWeight + ' / 100';
+  wLabel.textContent = 'WEIGHT BY SQUADRON';
   weightBar.appendChild(wLabel);
-  weightBar.appendChild(wTotal);
+
+  if (!_squadrons.length) {
+    var totalWeight = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
+    var wTotal = document.createElement('span');
+    wTotal.className   = 'tree-weight-total ok';
+    wTotal.textContent = totalWeight;
+    weightBar.appendChild(wTotal);
+  } else {
+    var sqWeightsWrap = document.createElement('div');
+    sqWeightsWrap.className = 'tree-sq-weights';
+    _squadrons.forEach(function (sq) {
+      var sqTotal = cats.reduce(function (s, c) {
+        var sqList = c.squadrons || [];
+        if (!sqList.length || sqList.indexOf(sq.id) !== -1) return s + (Number(c.weight) || 0);
+        return s;
+      }, 0);
+      var chip = document.createElement('span');
+      chip.className = 'tree-sq-weight-chip';
+      var nameEl = document.createElement('span');
+      nameEl.className   = 'tree-sq-weight-name';
+      nameEl.textContent = (sq.designator || sq.name);
+      var valEl = document.createElement('span');
+      valEl.className = 'tree-weight-total ok';
+      valEl.id        = 'sq-weight-' + sq.id;
+      valEl.textContent = sqTotal;
+      chip.appendChild(nameEl);
+      chip.appendChild(valEl);
+      sqWeightsWrap.appendChild(chip);
+    });
+    weightBar.appendChild(sqWeightsWrap);
+  }
   el.appendChild(weightBar);
 
   /* Category cards */
@@ -602,11 +668,22 @@ function renderTreeEditor() {
 }
 
 function updateWeightBar() {
-  var cats  = _treeEditor.categories || [];
-  var total = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
-  var ok    = Math.abs(total - 100) <= 0.01;
-  var el    = document.querySelector('.tree-weight-total');
-  if (el) { el.textContent = total + ' / 100'; el.className = 'tree-weight-total ' + (ok ? 'ok' : 'err'); }
+  var cats = _treeEditor.categories || [];
+  if (!_squadrons.length) {
+    var total = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
+    var el = document.querySelector('.tree-weight-total');
+    if (el) el.textContent = total;
+    return;
+  }
+  _squadrons.forEach(function (sq) {
+    var total = cats.reduce(function (s, c) {
+      var sqList = c.squadrons || [];
+      if (!sqList.length || sqList.indexOf(sq.id) !== -1) return s + (Number(c.weight) || 0);
+      return s;
+    }, 0);
+    var el = document.getElementById('sq-weight-' + sq.id);
+    if (el) el.textContent = total;
+  });
 }
 
 function buildCatCard(cat, ci, totalCats, allMods) {
@@ -685,6 +762,9 @@ function buildCatCard(cat, ci, totalCats, allMods) {
 
   /* ── Category ID row ── */
   card.appendChild(buildIdRow(cat, 'category-id'));
+
+  /* ── Squadron visibility row ── */
+  card.appendChild(buildSquadronRow(cat));
 
   /* ── Module list + add button (hidden when collapsed) ── */
   if (!_editorCollapsed[cat.id]) {
@@ -801,6 +881,60 @@ function buildIdRow(obj, placeholder) {
   inp.value = obj.id || '';
   inp.addEventListener('input', function () { obj.id = this.value; });
   row.appendChild(lbl); row.appendChild(inp);
+  return row;
+}
+
+/* Squadron visibility selector for a category card */
+function buildSquadronRow(cat) {
+  if (!cat.squadrons) cat.squadrons = [];
+
+  var row = document.createElement('div');
+  row.className = 'tree-id-row';
+  row.style.cssText = 'flex-wrap:wrap;gap:6px;align-items:flex-start';
+
+  var lbl = document.createElement('span');
+  lbl.className   = 'tree-field-label';
+  lbl.textContent = 'VISIBLE TO';
+
+  var note = document.createElement('span');
+  note.style.cssText = 'font-size:9px;color:var(--text-3);flex-shrink:0';
+  note.textContent   = _squadrons.length ? '(none checked = ALL squadrons)' : '(no squadrons configured)';
+
+  row.appendChild(lbl);
+  row.appendChild(note);
+
+  if (_squadrons.length) {
+    var checksWrap = document.createElement('div');
+    checksWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;width:100%';
+
+    _squadrons.forEach(function (sq) {
+      var label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:9px;cursor:pointer;user-select:none';
+
+      var cb  = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value   = sq.id;
+      cb.checked = cat.squadrons.indexOf(sq.id) !== -1;
+
+      (function (sqId, checkbox) {
+        checkbox.addEventListener('change', function () {
+          if (checkbox.checked) {
+            if (cat.squadrons.indexOf(sqId) === -1) cat.squadrons.push(sqId);
+          } else {
+            cat.squadrons = cat.squadrons.filter(function (id) { return id !== sqId; });
+          }
+          updateWeightBar();
+        });
+      })(sq.id, cb);
+
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(sq.designator + ' ' + sq.name));
+      checksWrap.appendChild(label);
+    });
+
+    row.appendChild(checksWrap);
+  }
+
   return row;
 }
 

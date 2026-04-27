@@ -22,6 +22,8 @@ const SKILL_TREE_FILE       = path.join(DATA_DIR, 'skill-tree.json');
 const SKILL_GRADES_FILE     = path.join(DATA_DIR, 'skill-grades.json');
 const GRADING_REQS_FILE     = path.join(DATA_DIR, 'grading-requests.json');
 const PILOT_REGISTRY_FILE   = path.join(DATA_DIR, 'pilot-registry.json');
+const FLIGHT_PLANS_FILE     = path.join(DATA_DIR, 'flight-plans.json');
+const FLIGHT_PLANS_CFG_FILE = path.join(DATA_DIR, 'flight-plans-config.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
 if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
@@ -84,6 +86,10 @@ let skillGrades     = loadJSON(SKILL_GRADES_FILE,   {});
 let gradingRequests = loadJSON(GRADING_REQS_FILE,   []);
 let pilotRegistry   = loadJSON(PILOT_REGISTRY_FILE, {});
 let nextGradingReqId = gradingRequests.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
+
+let flightPlans    = loadJSON(FLIGHT_PLANS_FILE,     []);
+let fpConfig       = loadJSON(FLIGHT_PLANS_CFG_FILE, { controllerSquadron: '' });
+let nextFlightPlanId = flightPlans.reduce((m, fp) => Math.max(m, fp.id || 0), 0) + 1;
 const VALID_GRADES  = new Set(['U', 'F', 'G', 'E']);
 
 /* Load discord role → squadron mapping (role names as keys) */
@@ -275,9 +281,11 @@ async function buildRosterFromDiscord() {
     const callsign = parseCallsign(nick);
 
     roster.push({
-      id:       member.user.id,
+      id:         member.user.id,
       callsign,
-      role:     roleLabel,
+      username:   (member.user.username   || '').toLowerCase(),  /* discord @username — always lowercase */
+      globalName: (member.user.global_name || ''),               /* discord display name */
+      role:       roleLabel,
       squadron,
     });
   }
@@ -833,7 +841,9 @@ api.get('/roster', async (_req, res) => {
   } else {
     console.debug('[roster] Serving from cache (' + rosterCache.length + ' entries, age ' + Math.round((now - rosterCacheAt) / 1000) + 's)');
   }
-  res.json(rosterCache);
+  res.json(rosterCache.map(function(e) {
+    return { id: e.id, callsign: e.callsign, role: e.role, squadron: e.squadron };
+  }));
 });
 
 /* Admin: force-refresh the roster cache */
@@ -1008,6 +1018,54 @@ api.delete('/squadrons/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, r
   res.json({ ok: true });
 });
 
+/* Finds a roster entry that matches a pilot by any of:
+   - their parsed callsign (from server nickname)
+   - their Discord @username
+   - their Discord global display name
+   The pilot arg has { callsign, name } both coming from the Casdoor JWT name,
+   which is usually the Discord username or global_name — NOT the server nickname. */
+function findRosterEntry(pilot) {
+  if (!rosterCache) return null;
+  const candidates = [
+    (pilot.callsign || '').toLowerCase(),
+    (pilot.name     || '').toLowerCase(),
+  ].filter(Boolean);
+
+  for (const entry of rosterCache) {
+    const rosterCallsign   = (entry.callsign   || '').toLowerCase();
+    const rosterUsername   = (entry.username   || '').toLowerCase();  /* already stored lowercase */
+    const rosterGlobalName = (entry.globalName || '').toLowerCase();
+    for (const c of candidates) {
+      if (c && (c === rosterCallsign || c === rosterUsername || c === rosterGlobalName)) {
+        return entry;
+      }
+    }
+  }
+  return null;
+}
+
+/* ── My squadron (resolves the logged-in pilot's squadron from the roster) ── */
+api.get('/my-squadron', requireAuth, async (req, res) => {
+  const sub   = req.user.sub;
+  const pilot = pilotRegistry[sub];
+  if (!pilot) return res.json({ squadron: null });
+
+  /* Ensure roster is loaded (re-use the shared cache) */
+  const now = Date.now();
+  if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
+    try {
+      rosterCache   = await buildRosterFromDiscord();
+      rosterCacheAt = now;
+    } catch (err) {
+      console.error('[my-squadron] roster fetch failed:', err.message);
+      return res.json({ squadron: null });
+    }
+  }
+
+  const entry = findRosterEntry(pilot);
+  res.json({ squadron: entry ? (entry.squadron || null) : null });
+});
+
 /* ── Skill Tree (public read, admin write) ── */
 api.get('/skill-tree', (_req, res) => {
   res.json(skillTree);
@@ -1033,10 +1091,6 @@ api.put('/skill-tree', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, re
         return res.status(400).json({ error: 'Invalid min_pass_grade: ' + mod.min_pass_grade });
       }
     }
-  }
-  const totalWeight = tree.categories.reduce((s, c) => s + (Number(c.weight) || 0), 0);
-  if (Math.abs(totalWeight - 100) > 0.01) {
-    return res.status(400).json({ error: 'Category weights must sum to 100 (got ' + totalWeight + ')' });
   }
   skillTree = tree;
   saveJSON(SKILL_TREE_FILE, skillTree);
@@ -1124,6 +1178,27 @@ api.delete('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, req
 /* ── Pilot Registry (admin read / delete) ── */
 api.get('/skill-pilots', requireAuth, requireSkillAdmin, (_req, res) => {
   res.json(pilotRegistry);
+});
+
+/* Returns { [sub]: squadronId | null } — resolves each registered pilot's squadron
+   from the roster cache using multi-field matching (same logic as /my-squadron). */
+api.get('/skill-pilots-squadrons', requireAuth, requireSkillAdmin, async (_req, res) => {
+  const now = Date.now();
+  if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
+    try {
+      rosterCache   = await buildRosterFromDiscord();
+      rosterCacheAt = now;
+    } catch (err) {
+      console.error('[skill-pilots-squadrons] roster fetch failed:', err.message);
+      return res.json({});
+    }
+  }
+  const result = {};
+  for (const [sub, pilot] of Object.entries(pilotRegistry)) {
+    const entry  = findRosterEntry(pilot);
+    result[sub]  = entry ? (entry.squadron || null) : null;
+  }
+  res.json(result);
 });
 
 api.delete('/skill-pilots/:sub', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
@@ -1278,6 +1353,244 @@ api.delete('/grading-requests/:id', writeOpsLimiter, requireAuth, (req, res) => 
       console.error('[grading] Discord message delete failed:', err.message);
     });
   }
+});
+
+/* ─── Flight Plans ──────────────────────────────────────── */
+const FP_MAX_LEGS = 20;
+const FP_MAX_CREW = 50;
+
+/* Returns unique squadron names from the discord-roles config */
+function fpAvailableSquadrons() {
+  const seen = new Set();
+  for (const v of Object.values(discordRoles)) {
+    if (v.squadron) seen.add(v.squadron);
+  }
+  return [...seen].sort();
+}
+
+/* Best-effort: match a JWT user to their squadron via the roster cache */
+function fpUserSquadron(userName) {
+  if (!rosterCache || !userName) return null;
+  const lower = String(userName).toLowerCase().trim();
+  const member = rosterCache.find(m =>
+    m.callsign.toLowerCase() === lower ||
+    m.username.toLowerCase() === lower
+  );
+  return member ? member.squadron : null;
+}
+
+function fpIsControllerUser(req) {
+  const cs = fpConfig.controllerSquadron;
+  if (!cs) return false;
+  return fpUserSquadron(req.user.name || '') === cs;
+}
+
+function fpIsAdminUser(req) {
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  return roles.some(r => (typeof r === 'string' ? r : (r?.name || '')) === 'admin');
+}
+
+/* GET /api/flight-plans/config — public, returns config + isController for authed users */
+api.get('/flight-plans/config', (req, res) => {
+  const auth    = req.headers.authorization || '';
+  const token   = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  const payload = token ? decodeJWT(token) : null;
+  const isCtrl  = payload ? fpIsControllerUser({ user: payload }) : false;
+  const isAdm   = payload ? fpIsAdminUser({ user: payload }) : false;
+  const out = {
+    controllerSquadron: fpConfig.controllerSquadron || '',
+    availableSquadrons: fpAvailableSquadrons(),
+    isController:       isCtrl,
+  };
+  if (isAdm) out.notifyChannelId = fpConfig.notifyChannelId || '';
+  res.json(out);
+});
+
+/* PUT /api/flight-plans/config — admin only */
+api.put('/flight-plans/config', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  const b  = req.body || {};
+  const sq = sanitizeStr(b.controllerSquadron, 64);
+  const ch = sanitizeStr(b.notifyChannelId,    32).replace(/\D/g, ''); /* digits only */
+  fpConfig.controllerSquadron = sq;
+  fpConfig.notifyChannelId    = ch;
+  saveJSON(FLIGHT_PLANS_CFG_FILE, fpConfig);
+  console.debug('[flight-plans] Controller squadron set to:', sq || '(none)');
+  console.debug('[flight-plans] Notify channel set to:', ch || '(none)');
+  res.json({ controllerSquadron: fpConfig.controllerSquadron, notifyChannelId: fpConfig.notifyChannelId });
+});
+
+/* Send a submitted flight plan as a Discord embed to the configured notify channel */
+async function sendFlightPlanToDiscord(plan) {
+  if (!DISCORD_BOT_TOKEN) {
+    console.warn('[flight-plans] DISCORD_BOT_TOKEN not set — skipping Discord notify');
+    return;
+  }
+  const chId = fpConfig.notifyChannelId;
+  if (!chId) return;
+
+  const legsText = (plan.legs || []).map((leg, i) =>
+    'Leg ' + (i + 1) + ': ' + (leg.departure || '?') + ' → ' + (leg.destination || '?') +
+    ' | ' + (leg.flightRules || '—') +
+    ' | TAS ' + (leg.trueAirspeed || '—') +
+    ' | ' + (leg.departureTime || '—') + 'Z' +
+    ' | Alt ' + (leg.altitude || '—') +
+    ' | ETE ' + (leg.ete || '—') +
+    (leg.route ? '\n  ' + leg.route : '')
+  ).join('\n');
+
+  const crewText = (plan.crew || []).filter(c => c.nameInitials).map(c =>
+    (c.rank ? c.rank + ' ' : '') + c.nameInitials +
+    ' — ' + (c.dutyPosition || '—') +
+    (c.orgStation ? ' / ' + c.orgStation : '') +
+    (c.memberId ? ' (' + c.memberId + ')' : '')
+  ).join('\n');
+
+  const fields = [
+    { name: '1. Date',             value: plan.date          || '—', inline: true },
+    { name: '2. Call Sign',        value: plan.callSign      || '—', inline: true },
+    { name: '3. Aircraft',         value: plan.aircraftDesig || '—', inline: true },
+    { name: '13. Rank/Honor Code', value: plan.rankHonorCode || '—', inline: true },
+    { name: '14. Fuel on Board',   value: plan.fuelOnBoard   || '—', inline: true },
+    { name: '15. Alt Airfield',    value: plan.alternateAirfield || '—', inline: true },
+    { name: '16. ETE to Altn',     value: plan.eteToAlternate    || '—', inline: true },
+    { name: '17. NOTAMs',          value: plan.notamsChecked ? '✅ Reviewed' : '—', inline: true },
+    { name: '18. Weather',         value: plan.weatherBrief  || '—', inline: true },
+    { name: '19. Wt & Balance',    value: plan.weightBalance || '—', inline: true },
+    { name: '20. A/C Serial / Unit / Station', value: plan.aircraftSerial || '—', inline: false },
+  ];
+  if (plan.remarks)  fields.push({ name: '12. Remarks',         value: plan.remarks.slice(0, 1024),  inline: false });
+  if (legsText)      fields.push({ name: '9. Route of Flight',  value: legsText.slice(0, 1024),      inline: false });
+  if (crewText)      fields.push({ name: 'Crew / Passengers',   value: crewText.slice(0, 1024),      inline: false });
+
+  const embed = {
+    title:     '✈️ Flight Plan FP-' + plan.id + ' — ' + (plan.callSign || ''),
+    color:     0x2b6cb0,
+    fields,
+    timestamp: plan.submittedAt,
+    footer:    { text: 'Submitted by ' + (plan.submittedBy && plan.submittedBy.name ? plan.submittedBy.name : 'Unknown') + ' · ' + (plan.authority || '10 USC 8012 AND EO 9397') },
+  };
+
+  await discordPost('/channels/' + chId + '/messages', { embeds: [embed] });
+  console.debug('[flight-plans] FP-' + plan.id + ' posted to Discord channel ' + chId);
+}
+
+/* GET /api/flight-plans — returns all plans for admin/controller, own plans otherwise */
+api.get('/flight-plans', requireAuth, (req, res) => {
+  if (fpIsAdminUser(req) || fpIsControllerUser(req)) {
+    return res.json(flightPlans);
+  }
+  const sub = req.user.sub;
+  res.json(flightPlans.filter(fp => fp.submittedBy && fp.submittedBy.sub === sub));
+});
+
+api.post('/flight-plans', writeOpsLimiter, requireAuth, (req, res) => {
+  const b = req.body;
+  if (!b || typeof b !== 'object') return res.status(400).json({ error: 'Invalid request body' });
+
+  const date          = sanitizeStr(b.date,          12);
+  const callSign      = sanitizeStr(b.callSign,       16);
+  const aircraftDesig = sanitizeStr(b.aircraftDesig,  32);
+  const authority     = sanitizeStr(b.authority,      64);
+
+  if (!date || !callSign || !aircraftDesig) {
+    return res.status(400).json({ error: 'date, callSign, and aircraftDesig are required' });
+  }
+
+  if (!Array.isArray(b.legs) || !b.legs.length) {
+    return res.status(400).json({ error: 'At least one route leg is required' });
+  }
+  if (b.legs.length > FP_MAX_LEGS) {
+    return res.status(400).json({ error: 'Too many legs (max ' + FP_MAX_LEGS + ')' });
+  }
+
+  const legs = b.legs.map(leg => ({
+    flightRules:   sanitizeStr(leg.flightRules,   1),
+    trueAirspeed:  sanitizeStr(leg.trueAirspeed,  6),
+    departure:     sanitizeStr(leg.departure,     4),
+    departureTime: sanitizeStr(leg.departureTime, 4),
+    altitude:      sanitizeStr(leg.altitude,      6),
+    route:         sanitizeStr(leg.route,         500),
+    destination:   sanitizeStr(leg.destination,   4),
+    ete:           sanitizeStr(leg.ete,           5),
+  }));
+
+  const crew = Array.isArray(b.crew) ? b.crew.slice(0, FP_MAX_CREW).map(c => ({
+    dutyPosition: sanitizeStr(c.dutyPosition, 32),
+    nameInitials: sanitizeStr(c.nameInitials, 32),
+    rank:         sanitizeStr(c.rank,         8),
+    memberId:     sanitizeStr(c.memberId,     32),
+    orgStation:   sanitizeStr(c.orgStation,   64),
+  })) : [];
+
+  const plan = {
+    id:           nextFlightPlanId++,
+    submittedAt:  new Date().toISOString(),
+    submittedBy:  { sub: req.user.sub, name: req.user.name || req.user.sub },
+    date,
+    callSign,
+    aircraftDesig,
+    authority,
+    legs,
+    remarks:          sanitizeStr(b.remarks,          1000),
+    rankHonorCode:    sanitizeStr(b.rankHonorCode,    32),
+    fuelOnBoard:      sanitizeStr(b.fuelOnBoard,      5),
+    alternateAirfield: sanitizeStr(b.alternateAirfield, 4),
+    eteToAlternate:   sanitizeStr(b.eteToAlternate,   5),
+    notamsChecked:    Boolean(b.notamsChecked),
+    weatherBrief:     sanitizeStr(b.weatherBrief,     64),
+    weightBalance:    sanitizeStr(b.weightBalance,    64),
+    aircraftSerial:   sanitizeStr(b.aircraftSerial,   128),
+    crew,
+    baseOps: {
+      approvalSignature:   '',
+      actualDepartureTime: '',
+      crewListAttached:    false,
+      approvedAt:          null,
+    },
+    status: 'submitted',
+  };
+
+  flightPlans.push(plan);
+  saveJSON(FLIGHT_PLANS_FILE, flightPlans);
+  console.debug('[flight-plans] Plan ' + plan.id + ' submitted by ' + plan.submittedBy.name);
+  res.status(201).json(plan);
+
+  sendFlightPlanToDiscord(plan).catch(err =>
+    console.error('[flight-plans] Discord notify failed:', err.message)
+  );
+});
+
+api.patch('/flight-plans/:id/baseops', writeOpsLimiter, requireAuth, (req, res) => {
+  if (!fpIsAdminUser(req) && !fpIsControllerUser(req)) {
+    return res.status(403).json({ error: 'Controller squadron or admin access required' });
+  }
+  const id  = Number(req.params.id);
+  const idx = flightPlans.findIndex(fp => fp.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Flight plan not found' });
+
+  const b = req.body || {};
+  flightPlans[idx].baseOps = {
+    approvalSignature:   sanitizeStr(b.approvalSignature,   64),
+    actualDepartureTime: sanitizeStr(b.actualDepartureTime, 4),
+    crewListAttached:    Boolean(b.crewListAttached),
+    approvedAt:          new Date().toISOString(),
+  };
+  if (b.approvalSignature) flightPlans[idx].status = 'approved';
+  saveJSON(FLIGHT_PLANS_FILE, flightPlans);
+  res.json(flightPlans[idx]);
+});
+
+api.delete('/flight-plans/:id', writeOpsLimiter, requireAuth, (req, res) => {
+  if (!fpIsAdminUser(req) && !fpIsControllerUser(req)) {
+    return res.status(403).json({ error: 'Controller squadron or admin access required' });
+  }
+  const id  = Number(req.params.id);
+  const idx = flightPlans.findIndex(fp => fp.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Flight plan not found' });
+  flightPlans.splice(idx, 1);
+  saveJSON(FLIGHT_PLANS_FILE, flightPlans);
+  console.debug('[flight-plans] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));
+  res.json({ ok: true });
 });
 
 app.use('/api', api);

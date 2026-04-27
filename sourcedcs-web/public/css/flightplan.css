@@ -1,0 +1,607 @@
+/* ═══════════════════════════════════════════════════════════
+   FLIGHT PLAN PAGE STYLES
+   Imports all tokens from css/style.css (loaded first)
+═══════════════════════════════════════════════════════════ */
+
+/* Active nav link */
+.active-nav {
+  color: var(--text) !important;
+  border-color: var(--border-strong) !important;
+}
+:root.movie .active-nav { color: var(--accent) !important; }
+
+/* ── Hero ───────────────────────────────────────────────── */
+.fp-hero {
+  border-bottom: 1px solid var(--border);
+  padding: 56px 24px 48px;
+  background: var(--bg2);
+}
+.fp-hero-inner { max-width: 960px; margin: 0 auto; }
+.fp-title {
+  font-family: 'Orbitron', monospace;
+  font-weight: 900;
+  font-size: clamp(18px, 3.5vw, 32px);
+  letter-spacing: 4px;
+  color: var(--text);
+  margin: 12px 0 10px;
+}
+:root.movie .fp-title { color: var(--accent); text-shadow: 0 0 20px rgba(57,255,122,.3); }
+.fp-sub { font-size: 10px; letter-spacing: 1.5px; color: var(--text-3); }
+
+/* ── Login prompt ───────────────────────────────────────── */
+.fp-login-prompt {
+  max-width: 960px;
+  margin: 48px auto;
+  padding: 0 24px;
+  text-align: center;
+  color: var(--text-2);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.fp-login-prompt p { margin-bottom: 20px; }
+
+/* ── Container ──────────────────────────────────────────── */
+.fp-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+.fp-plans-section { padding-top: 0; }
+
+/* ── Form header ────────────────────────────────────────── */
+.fp-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--border-strong);
+}
+.fp-form-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--text);
+}
+:root.movie .fp-form-title { color: var(--accent); }
+.fp-form-sub { font-size: 9px; letter-spacing: 1px; color: var(--text-3); }
+
+/* ── Panel ──────────────────────────────────────────────── */
+.fp-panel {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.fp-panel-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding: 8px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.fp-panel-body { padding: 16px 14px; }
+.fp-panel-body--flush { padding: 0; }
+
+/* ── Add row button (in panel label) ───────────────────── */
+.fp-add-btn {
+  background: none;
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.fp-add-btn:hover { border-color: var(--text); color: var(--text); }
+:root.movie .fp-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Required field marker ──────────────────────────────── */
+.fp-req {
+  color: var(--red);
+  font-style: normal;
+  margin-left: 2px;
+}
+:root.movie .fp-req { color: var(--red); }
+
+/* In table headers the marker should be same style */
+.fp-legs-table th .fp-req,
+.fp-crew-table th .fp-req {
+  color: var(--red);
+}
+
+/* ── Form fields ────────────────────────────────────────── */
+.fp-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.fp-row:last-child { margin-bottom: 0; }
+.fp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 100px;
+}
+.fp-field--check { justify-content: flex-start; }
+.fp-label {
+  font-size: 7.5px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.fp-hint { font-size: 7px; opacity: .7; }
+.fp-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+  transition: border-color .15s;
+  width: 100%;
+}
+.fp-input:focus { border-color: var(--border-strong); }
+:root.movie .fp-input:focus { border-color: var(--accent); }
+.fp-textarea { resize: vertical; min-height: 60px; }
+.fp-upper { text-transform: uppercase; }
+.fp-check-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-2);
+  cursor: pointer;
+  padding-top: 4px;
+}
+
+/* ── Tables (legs + crew) ───────────────────────────────── */
+.fp-table-scroll { overflow-x: auto; }
+.fp-legs-table,
+.fp-crew-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.fp-legs-table th,
+.fp-crew-table th {
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border-strong);
+  border-right: 1px solid var(--border);
+  background: var(--bg2);
+  text-align: left;
+  white-space: nowrap;
+}
+.fp-legs-table th:last-child,
+.fp-crew-table th:last-child { border-right: none; }
+.fp-legs-table td,
+.fp-crew-table td {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 0;
+  vertical-align: middle;
+}
+.fp-legs-table td:last-child,
+.fp-crew-table td:last-child { border-right: none; }
+.fp-legs-table tr:last-child td,
+.fp-crew-table tr:last-child td { border-bottom: none; }
+
+/* Inputs inside table cells */
+.fp-cell {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 8px;
+  width: 100%;
+  outline: none;
+}
+.fp-cell:focus { background: var(--bg2); }
+:root.movie .fp-cell:focus { background: var(--bg3); }
+select.fp-cell { cursor: pointer; }
+textarea.fp-cell { resize: none; min-height: 42px; display: block; }
+
+/* Delete-row button */
+.fp-del-btn {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+  width: 100%;
+  display: block;
+  transition: color .15s;
+}
+.fp-del-btn:hover { color: var(--red); }
+
+/* ── Actions bar ────────────────────────────────────────── */
+.fp-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.fp-actions-row {
+  display: flex;
+  gap: 10px;
+}
+.fp-msg {
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 8px 12px;
+  border: 1px solid;
+  width: 100%;
+}
+.fp-error   { color: var(--red);   border-color: var(--red);   background: transparent; }
+.fp-success { color: var(--green); border-color: var(--green); background: transparent; }
+:root.movie .fp-error   { color: var(--red);   border-color: var(--red); }
+:root.movie .fp-success { color: var(--accent); border-color: var(--accent); }
+
+/* ── Submitted plans list ───────────────────────────────── */
+.fp-section-divider {
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.fp-plan-card {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.fp-plan-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+.fp-plan-meta { display: flex; flex-direction: column; gap: 3px; }
+.fp-plan-id {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  margin-bottom: 2px;
+}
+.fp-plan-callsign {
+  font-family: 'Orbitron', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+:root.movie .fp-plan-callsign { color: var(--accent); }
+.fp-plan-route { font-size: 11px; color: var(--text-2); }
+.fp-plan-date { font-size: 9px; color: var(--text-3); white-space: nowrap; }
+.fp-plan-status {
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  padding: 2px 8px;
+  border: 1px solid;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.fp-plan-status--submitted { color: var(--amber); border-color: var(--amber); }
+.fp-plan-status--approved  { color: var(--green); border-color: var(--green); }
+:root.movie .fp-plan-status--approved { color: var(--accent); border-color: var(--accent); }
+
+.fp-plans-empty {
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: 1px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* ── Base Ops section (admin-only, shown inside plan detail) */
+.fp-baseops-panel {
+  border: 1px solid var(--amber);
+  background: var(--bg-card);
+  margin-top: 20px;
+  box-shadow: var(--shadow);
+}
+.fp-baseops-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--amber);
+  padding: 8px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Plan detail modal overlay ──────────────────────────── */
+.fp-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px;
+  overflow-y: auto;
+}
+.fp-detail-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md);
+  width: 100%;
+  max-width: 900px;
+  position: relative;
+}
+.fp-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg2);
+}
+.fp-detail-title {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+.fp-delete-btn { color: var(--red) !important; border-color: var(--red) !important; }
+.fp-delete-btn:hover { background: var(--red) !important; color: var(--text-inv) !important; }
+
+.fp-detail-close {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color .15s;
+}
+.fp-detail-close:hover { color: var(--text); }
+.fp-detail-body { padding: 20px; }
+
+/* Detail view table */
+.fp-detail-section { margin-bottom: 20px; }
+.fp-detail-section-label {
+  font-size: 7.5px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.fp-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
+.fp-dv-field { display: flex; flex-direction: column; gap: 2px; }
+.fp-dv-label { font-size: 7.5px; letter-spacing: 1.5px; color: var(--text-3); text-transform: uppercase; }
+.fp-dv-val   { font-size: 12px; color: var(--text); font-family: var(--font-mono); }
+
+.fp-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  margin-top: 8px;
+}
+.fp-detail-table th {
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-strong);
+  border-right: 1px solid var(--border);
+  background: var(--bg2);
+  text-align: left;
+  white-space: nowrap;
+}
+.fp-detail-table th:last-child { border-right: none; }
+.fp-detail-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: top;
+}
+.fp-detail-table td:last-child { border-right: none; }
+.fp-detail-table tr:last-child td { border-bottom: none; }
+.fp-detail-route { white-space: pre-wrap; word-break: break-all; }
+
+/* ── Admin config panel ─────────────────────────────────── */
+.fp-admin-panel {
+  border: 1px solid var(--blue);
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+:root.movie .fp-admin-panel { border-color: var(--blue); }
+.fp-admin-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--blue);
+  text-transform: uppercase;
+  padding: 8px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+:root.movie .fp-admin-label { color: var(--blue); }
+.fp-admin-body { padding: 16px 14px; }
+.fp-admin-desc {
+  font-size: 10px;
+  color: var(--text-2);
+  letter-spacing: 0.5px;
+  margin-bottom: 14px;
+  line-height: 1.6;
+}
+.fp-admin-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+/* ════════════════════════════════════════════════════════════
+   PRINT STYLES
+   Only #fpPrintView is shown. Everything else is hidden.
+════════════════════════════════════════════════════════════ */
+@media print {
+  header, footer, .fp-hero, .fp-container,
+  .fp-detail-overlay, .scanline { display: none !important; }
+
+  #fpPrintView { display: block !important; }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 9pt;
+    font-family: 'Courier New', Courier, monospace;
+  }
+
+  .fp-print { page-break-inside: avoid; }
+
+  /* Outer form border */
+  .fp-print-form {
+    border: 2px solid #000;
+    width: 100%;
+    font-family: 'Courier New', Courier, monospace;
+  }
+
+  /* Header row */
+  .fp-print-hdr {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1.5fr;
+    border-bottom: 1px solid #000;
+  }
+  .fp-print-cell {
+    border-right: 1px solid #000;
+    padding: 4pt 6pt;
+  }
+  .fp-print-cell:last-child { border-right: none; }
+  .fp-print-cell-lbl { font-size: 6pt; color: #555; display: block; margin-bottom: 2pt; }
+  .fp-print-cell-val { font-size: 10pt; font-weight: bold; }
+
+  /* Title row */
+  .fp-print-title-row {
+    text-align: center;
+    font-size: 11pt;
+    font-weight: bold;
+    letter-spacing: 2pt;
+    padding: 4pt;
+    border-bottom: 1px solid #000;
+    background: #eee;
+  }
+  .fp-print-sub-row {
+    text-align: center;
+    font-size: 7pt;
+    padding: 2pt;
+    border-bottom: 1px solid #000;
+    color: #444;
+  }
+
+  /* Legs table */
+  .fp-print-legs-tbl {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .fp-print-legs-tbl th {
+    font-size: 6pt;
+    font-weight: bold;
+    border: 1px solid #000;
+    padding: 3pt 4pt;
+    text-align: left;
+    background: #f0f0f0;
+  }
+  .fp-print-legs-tbl td {
+    font-size: 8pt;
+    border: 1px solid #000;
+    padding: 3pt 4pt;
+    vertical-align: top;
+  }
+
+  /* Admin section */
+  .fp-print-admin {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    border-top: 1px solid #000;
+  }
+  .fp-print-admin-cell {
+    border-right: 1px solid #000;
+    padding: 3pt 5pt;
+    font-size: 8pt;
+  }
+  .fp-print-admin-cell:last-child { border-right: none; }
+  .fp-print-admin-full {
+    padding: 3pt 5pt;
+    font-size: 8pt;
+    border-top: 1px solid #000;
+  }
+
+  /* Crew table */
+  .fp-print-crew-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    border-top: 1px solid #000;
+  }
+  .fp-print-crew-tbl th {
+    font-size: 6pt;
+    font-weight: bold;
+    border: 1px solid #000;
+    padding: 2pt 4pt;
+    text-align: left;
+    background: #f0f0f0;
+  }
+  .fp-print-crew-tbl td {
+    font-size: 8pt;
+    border: 1px solid #000;
+    padding: 2pt 4pt;
+  }
+
+  /* Base Ops signature block */
+  .fp-print-baseops {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    border-top: 2px solid #000;
+  }
+  .fp-print-baseops-cell {
+    border-right: 1px solid #000;
+    padding: 4pt 6pt;
+    font-size: 8pt;
+  }
+  .fp-print-baseops-cell:last-child { border-right: none; }
+  .fp-print-sig-line {
+    border-bottom: 1px solid #000;
+    height: 22pt;
+    margin-bottom: 2pt;
+  }
+}
+
+/* Hide print view on screen */
+#fpPrintView { display: none; }

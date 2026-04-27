@@ -427,6 +427,46 @@
   color: #7ec8e3;
 }
 
+/* Codewords overlay — spans all mission rows */
+.tl-codeword-overlay {
+  position: absolute;
+  top: 0;
+  left: 110px;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.tl-codeword {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  transform: translateX(-50%);
+}
+.tl-codeword::before {
+  content: attr(data-word);
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--amber);
+  white-space: nowrap;
+  letter-spacing: .5px;
+}
+.tl-codeword::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--amber);
+  transform: translateX(-50%);
+}
+
 /* Detail panel */
 .detail-panel {
   display: none;

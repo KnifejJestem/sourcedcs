@@ -49,12 +49,15 @@ function categoryScore(cat, grades) {
 }
 
 /**
- * Overall score: weighted sum of category scores / 100.
+ * Overall score: weighted average of category scores relative to active category weights.
+ * Weights are relative — they do not need to sum to 100.
  */
 function overallScore(tree, grades) {
   const cats = tree.categories || [];
   if (!cats.length) return 0;
-  return cats.reduce((s, cat) => s + (cat.weight || 0) * categoryScore(cat, grades), 0) / 100;
+  const totalWeight = cats.reduce((s, cat) => s + (cat.weight || 0), 0);
+  if (!totalWeight) return 0;
+  return cats.reduce((s, cat) => s + (cat.weight || 0) * categoryScore(cat, grades), 0) / totalWeight;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -270,19 +273,32 @@ test('overall: empty tree → 0%', () => {
   assert.strictEqual(overallScore({ categories: [] }, {}), 0);
 });
 
-test('overall: partial completion across multiple categories', () => {
+test('overall: partial completion across multiple categories (weights sum to 100)', () => {
   const tree = {
     categories: [
-      { weight: 25, modules: [mod('a'), mod('b')] },     // 1/2 = 50% → contributes 12.5%
-      { weight: 30, modules: [mod('c'), mod('d'), mod('e')] }, // 3/3 = 100% → contributes 30%
-      { weight: 25, modules: [mod('f')] },                // 0/1 = 0% → contributes 0%
-      { weight: 20, modules: [mod('g')] },                // 1/1 = 100% → contributes 20%
+      { weight: 25, modules: [mod('a'), mod('b')] },     // 1/2 = 50%
+      { weight: 30, modules: [mod('c'), mod('d'), mod('e')] }, // 3/3 = 100%
+      { weight: 25, modules: [mod('f')] },                // 0/1 = 0%
+      { weight: 20, modules: [mod('g')] },                // 1/1 = 100%
     ],
   };
   const grades = { a: graded('G'), c: graded('E'), d: graded('G'), e: graded('G'), g: graded('G') };
   const score  = overallScore(tree, grades);
   const expected = (25 * 0.5 + 30 * 1 + 25 * 0 + 20 * 1) / 100; // 0.625
   assert.ok(Math.abs(score - expected) < 0.001, 'expected ' + expected + ', got ' + score);
+});
+
+test('overall: weights do not sum to 100 — score is relative to active weights', () => {
+  // Squadron only uses two categories with arbitrary weights
+  const tree = {
+    categories: [
+      { weight: 3, modules: [mod('a')] }, // completed
+      { weight: 1, modules: [mod('b')] }, // not started
+    ],
+  };
+  const score = overallScore(tree, { a: graded('G') });
+  // weighted average: (3*1 + 1*0) / (3+1) = 0.75
+  assert.ok(Math.abs(score - 0.75) < 0.001, 'expected 0.75, got ' + score);
 });
 
 /* ══════════════════════════════════════════════════════════
