@@ -55,6 +55,16 @@ var _openCats    = {};  /* { [catId]: bool } — collapsed categories (true = co
       btn.onclick = logout;
     }
     _mySub = jwtSub(tok);
+    if (isSkillAdminRole(tok)) {
+      var nav = document.getElementById('mainNav');
+      if (nav && !nav.querySelector('.nav-link-admin')) {
+        var adminLink = document.createElement('a');
+        adminLink.className = 'nav-link nav-link-admin';
+        adminLink.href      = 'skills-admin.html';
+        adminLink.textContent = 'ADMIN';
+        nav.appendChild(adminLink);
+      }
+    }
     loadAll(tok);
   } else {
     document.getElementById('loginPrompt').style.display = '';

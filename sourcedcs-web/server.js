@@ -22,8 +22,9 @@ const SKILL_TREE_FILE       = path.join(DATA_DIR, 'skill-tree.json');
 const SKILL_GRADES_FILE     = path.join(DATA_DIR, 'skill-grades.json');
 const GRADING_REQS_FILE     = path.join(DATA_DIR, 'grading-requests.json');
 const PILOT_REGISTRY_FILE   = path.join(DATA_DIR, 'pilot-registry.json');
-const FLIGHT_PLANS_FILE     = path.join(DATA_DIR, 'flight-plans.json');
-const FLIGHT_PLANS_CFG_FILE = path.join(DATA_DIR, 'flight-plans-config.json');
+const FLIGHT_PLANS_FILE          = path.join(DATA_DIR, 'flight-plans.json');
+const FLIGHT_PLANS_CFG_FILE      = path.join(DATA_DIR, 'flight-plans-config.json');
+const PILOT_SQ_OVERRIDES_FILE    = path.join(DATA_DIR, 'pilot-squadron-overrides.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
 if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
@@ -83,8 +84,9 @@ let squadrons = loadJSON(SQUADRONS_FILE, []);
 /* Skill tracker */
 let skillTree       = loadJSON(SKILL_TREE_FILE,     { categories: [] });
 let skillGrades     = loadJSON(SKILL_GRADES_FILE,   {});
-let gradingRequests = loadJSON(GRADING_REQS_FILE,   []);
-let pilotRegistry   = loadJSON(PILOT_REGISTRY_FILE, {});
+let gradingRequests     = loadJSON(GRADING_REQS_FILE,        []);
+let pilotRegistry       = loadJSON(PILOT_REGISTRY_FILE,     {});
+let pilotSqOverrides    = loadJSON(PILOT_SQ_OVERRIDES_FILE, {});
 let nextGradingReqId = gradingRequests.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
 
 let flightPlans    = loadJSON(FLIGHT_PLANS_FILE,     []);
@@ -1195,10 +1197,31 @@ api.get('/skill-pilots-squadrons', requireAuth, requireSkillAdmin, async (_req, 
   }
   const result = {};
   for (const [sub, pilot] of Object.entries(pilotRegistry)) {
-    const entry  = findRosterEntry(pilot);
-    result[sub]  = entry ? (entry.squadron || null) : null;
+    if (Object.prototype.hasOwnProperty.call(pilotSqOverrides, sub)) {
+      result[sub] = pilotSqOverrides[sub];
+    } else {
+      const entry = findRosterEntry(pilot);
+      result[sub] = entry ? (entry.squadron || null) : null;
+    }
   }
   res.json(result);
+});
+
+api.get('/skill-pilots-squadron-overrides', requireAuth, requireSkillAdmin, (_req, res) => {
+  res.json(pilotSqOverrides);
+});
+
+api.put('/skill-pilots/:sub/squadron', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const sub = req.params.sub;
+  if (!pilotRegistry[sub]) return res.status(404).json({ error: 'Pilot not found' });
+  const sqId = req.body.squadron_id !== undefined ? req.body.squadron_id : null;
+  if (sqId === null || sqId === '') {
+    delete pilotSqOverrides[sub];
+  } else {
+    pilotSqOverrides[sub] = String(sqId);
+  }
+  saveJSON(PILOT_SQ_OVERRIDES_FILE, pilotSqOverrides);
+  res.json({ sub, squadron_id: pilotSqOverrides[sub] || null });
 });
 
 api.delete('/skill-pilots/:sub', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
@@ -1310,6 +1333,9 @@ api.put('/grading-requests/:id/unclaim', writeOpsLimiter, requireAuth, requireSk
   if (idx === -1) return res.status(404).json({ error: 'Grading request not found' });
   if (gradingRequests[idx].status !== 'claimed') {
     return res.status(400).json({ error: 'Request is not currently claimed' });
+  }
+  if (gradingRequests[idx].claimed_by !== req.user.sub) {
+    return res.status(403).json({ error: 'Only the person who claimed this request can unclaim it' });
   }
 
   gradingRequests[idx] = {
