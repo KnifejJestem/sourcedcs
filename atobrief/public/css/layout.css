@@ -119,7 +119,6 @@ header {
 .upload-screen {
   flex: 1;
   display: flex;
-  justify-content: center;
   align-items: flex-start;
   padding: 48px 40px;
   overflow-y: auto;
@@ -127,19 +126,35 @@ header {
 
 .landing-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 320px));
-  gap: 16px;
-  justify-content: center;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 400px));
+  gap: 20px;
+  align-content: start;
   width: 100%;
-  max-width: 1280px;
 }
+
+/* Solo state — single centered load card (presenter in room, no package) */
+.landing-grid.solo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  align-self: stretch;
+}
+.landing-grid.solo .load-card {
+  width: 420px;
+  min-height: 280px;
+  font-size: 1.1em;
+}
+.landing-grid.solo .load-card-icon { font-size: 40px; }
+.landing-grid.solo .load-card-label { font-size: 12px; letter-spacing: 4px; }
+.landing-grid.solo .load-card-sub { font-size: 10px; }
 
 /* Room card */
 .room-card {
   border: 1px solid var(--border-strong);
   background: var(--bg-card);
-  padding: 28px 26px;
-  min-height: 180px;
+  padding: 32px 30px;
+  min-height: 220px;
   display: flex;
   flex-direction: column;
   gap: 12px;

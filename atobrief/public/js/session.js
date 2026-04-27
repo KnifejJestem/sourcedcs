@@ -49,6 +49,7 @@ function _renderRoomCards(rooms) {
   const grid = document.getElementById('roomsGrid');
   if (!grid) return;
 
+  grid.className = 'landing-grid';
   grid.innerHTML = '';
 
   (rooms || []).forEach(room => {
@@ -95,9 +96,10 @@ function _showRoomsPanel(visible) {
       clearInterval(_roomsRefreshTimer);
       _roomsRefreshTimer = null;
     }
-    // Presenter is in a room but no package loaded — show just the load card
+    // Presenter is in a room but no package loaded — big centered load card
     const grid = document.getElementById('roomsGrid');
     if (grid) {
+      grid.className = 'landing-grid solo';
       grid.innerHTML = '';
       const loadCard = document.createElement('div');
       loadCard.className = 'room-card load-card';

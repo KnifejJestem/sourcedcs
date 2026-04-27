@@ -359,6 +359,9 @@ function selectPilot(sub) {
   el.appendChild(sqOverrideRow);
 
   categoriesForPilot(sub).forEach(function (cat) {
+    if (!Object.prototype.hasOwnProperty.call(_detailCollapsed, cat.id)) {
+      _detailCollapsed[cat.id] = true;
+    }
     var catSection  = document.createElement('div');
     catSection.className = 'skill-list-category';
     var mods        = cat.modules || [];
@@ -663,6 +666,11 @@ function deleteRequest(id) {
 
 function initTreeEditor() {
   _treeEditor = JSON.parse(JSON.stringify(_tree || { categories: [] }));
+  (_treeEditor.categories || []).forEach(function (cat) {
+    if (!Object.prototype.hasOwnProperty.call(_editorCollapsed, cat.id)) {
+      _editorCollapsed[cat.id] = true;
+    }
+  });
   renderTreeEditor();
 }
 
