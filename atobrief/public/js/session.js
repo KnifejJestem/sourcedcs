@@ -244,6 +244,23 @@ function joinSession(sessionId, role, password) {
     console.warn('[SESSION] Presenter disconnected');
   });
 
+  SESSION.socket.on('room-closed', () => {
+    SESSION.socket.disconnect();
+    SESSION.socket    = null;
+    SESSION.connected = false;
+    SESSION.role      = null;
+    SESSION.sessionId = null;
+    if (_origLoadPackage) window.loadPackage = _origLoadPackage;
+    const existing = document.querySelector('.session-indicator');
+    if (existing) existing.remove();
+    const presenceEl = document.querySelector('.presence-indicator');
+    if (presenceEl) presenceEl.remove();
+    _restoreDefaultUI();
+    _showRoomButtons(false);
+    unloadPackage();
+    _showRoomsPanel(true);
+  });
+
   // ── Room presence updates ─────────────────────────────────
   SESSION.socket.on('room-presence', (presence) => {
     updatePresenceIndicator(presence);
@@ -252,6 +269,12 @@ function joinSession(sessionId, role, password) {
   SESSION.socket.on('disconnect', () => {
     SESSION.connected = false;
   });
+}
+
+// ── Close a room (presenter only) ───────────────────────────
+function closeRoom() {
+  if (!SESSION.socket || SESSION.role !== 'presenter') return;
+  SESSION.socket.emit('close-room');
 }
 
 // ── Leave a session ──────────────────────────────────────────
@@ -297,12 +320,14 @@ function leaveSession() {
 
 // ── UI helpers ───────────────────────────────────────────────
 
-// Toggle JOIN ROOM / LEAVE ROOM button visibility.
+// Toggle JOIN ROOM / LEAVE ROOM / CLOSE ROOM button visibility.
 function _showRoomButtons(inRoom) {
   const joinBtn   = document.getElementById('joinRoomBtn');
   const leaveBtn  = document.getElementById('leaveRoomBtn');
+  const closeBtn  = document.getElementById('closeRoomBtn');
   if (joinBtn)   joinBtn.style.display   = inRoom ? 'none' : '';
   if (leaveBtn)  leaveBtn.style.display  = inRoom ? ''     : 'none';
+  if (closeBtn)  closeBtn.style.display  = (inRoom && SESSION.role === 'presenter') ? '' : 'none';
 }
 
 // Apply presentee restrictions: hide LOAD PACKAGE + EDIT buttons,
