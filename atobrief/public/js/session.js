@@ -35,6 +35,77 @@ const SESSION = {
 // each user navigates independently.
 let _origLoadPackage = null;
 
+// ── Rooms panel ──────────────────────────────────────────────
+let _roomsRefreshTimer = null;
+
+function fetchAndRenderRooms() {
+  fetch('/api/rooms')
+    .then(r => r.json())
+    .then(({ rooms }) => _renderRoomCards(rooms))
+    .catch(() => _renderRoomCards([]));
+}
+
+function _renderRoomCards(rooms) {
+  const grid = document.getElementById('roomsGrid');
+  const panel = document.getElementById('roomsPanel');
+  if (!grid || !panel) return;
+
+  panel.style.display = '';
+
+  if (!rooms || rooms.length === 0) {
+    grid.innerHTML = '<div class="rooms-empty">NO ACTIVE ROOMS</div>';
+    return;
+  }
+
+  grid.innerHTML = '';
+  rooms.forEach(room => {
+    const badges = [];
+    if (room.hasPackage)      badges.push('<span class="room-badge pkg">PKG LOADED</span>');
+    if (room.presenterActive) badges.push('<span class="room-badge live">PRESENTER LIVE</span>');
+    const p = room.members;
+    const counts = p.presenter + ' presenter' + (p.presenter !== 1 ? 's' : '') +
+                   ' · ' + p.presentee + ' presentee' + (p.presentee !== 1 ? 's' : '');
+
+    const card = document.createElement('div');
+    card.className = 'room-card';
+    card.innerHTML =
+      '<div class="room-card-id">' + _escHtml(room.id) + '</div>' +
+      '<div class="room-card-badges">' + (badges.join('') || '<span class="room-badge">EMPTY</span>') + '</div>' +
+      '<div class="room-card-counts">' + counts + '</div>' +
+      '<button class="room-card-join" onclick="quickJoin(\'' + _escHtml(room.id) + '\')">JOIN ROOM</button>';
+    grid.appendChild(card);
+  });
+}
+
+function _escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function _showRoomsPanel(visible) {
+  const panel = document.getElementById('roomsPanel');
+  if (!panel) return;
+  if (visible) {
+    fetchAndRenderRooms();
+    // Periodic refresh while the upload screen is showing
+    if (!_roomsRefreshTimer) {
+      _roomsRefreshTimer = setInterval(fetchAndRenderRooms, 10000);
+    }
+  } else {
+    panel.style.display = 'none';
+    if (_roomsRefreshTimer) {
+      clearInterval(_roomsRefreshTimer);
+      _roomsRefreshTimer = null;
+    }
+  }
+}
+
+// Pre-fill the join dialog with a room id and open it.
+function quickJoin(roomId) {
+  openJoinDialog();
+  const input = document.getElementById('joinRoomId');
+  if (input) input.value = roomId;
+}
+
 // ── Dialog helpers (global, called from onclick in HTML) ─────
 function openJoinDialog() {
   const d = document.getElementById('joinDialog');
@@ -142,6 +213,12 @@ function joinSession(sessionId, role, password) {
     // the presenter can load one; presentees see the waiting message.
     unloadPackage();
 
+    // Presenter with no package loaded yet → hide rooms panel so the
+    // upload screen shows only the LOAD PACKAGE drop zone.
+    if (SESSION.role === 'presenter') {
+      _showRoomsPanel(false);
+    }
+
     if (SESSION.role === 'presentee') {
       applyPresenteeUI();
     }
@@ -202,6 +279,8 @@ function leaveSession() {
   _restoreDefaultUI();
   _showRoomButtons(false);
   unloadPackage();
+  // Refresh the rooms panel so the user can see current active rooms
+  _showRoomsPanel(true);
 }
 
 // ── Auto-join from URL parameters (backwards compatible) ─────
@@ -210,6 +289,9 @@ function leaveSession() {
   const sessionId = params.get('session');
   if (sessionId) {
     joinSession(sessionId, params.get('role') || 'presentee', '');
+  } else {
+    // No auto-join — show active rooms on the landing screen
+    _showRoomsPanel(true);
   }
 })();
 

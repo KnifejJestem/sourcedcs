@@ -119,9 +119,137 @@ header {
 .upload-screen {
   flex: 1;
   display: flex;
+  overflow: hidden;
+}
+
+/* Rooms panel (left side) */
+.rooms-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
+  border-right: 1px solid var(--border-strong);
+  min-width: 0;
+}
+.rooms-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.rooms-panel-title {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.rooms-refresh-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+  transition: color .15s;
+}
+.rooms-refresh-btn:hover { color: var(--text); }
+:root.movie .rooms-refresh-btn:hover { color: var(--cap); }
+
+.rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.rooms-empty {
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 1px;
+  padding: 12px 0;
+}
+
+/* Room card */
+.room-card {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color .15s, background .15s;
+}
+.room-card:hover {
+  border-color: var(--text);
+  background: var(--bg3);
+}
+:root.movie .room-card:hover {
+  border-color: var(--cap);
+  background: rgba(57,255,122,.04);
+}
+.room-card-id {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--text);
+  word-break: break-all;
+}
+:root.movie .room-card-id { color: var(--cap); }
+.room-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.room-badge {
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+}
+.room-badge.pkg    { border-color: var(--green); color: var(--green); }
+.room-badge.live   { border-color: var(--blue);  color: var(--blue); }
+:root.movie .room-badge.pkg  { border-color: var(--cap);  color: var(--cap); }
+:root.movie .room-badge.live { border-color: var(--blue); color: var(--blue); }
+.room-card-counts {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+}
+.room-card-join {
+  align-self: flex-start;
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.room-card-join:hover {
+  background: var(--text);
+  color: var(--text-inv);
+  border-color: var(--text);
+}
+:root.movie .room-card-join:hover {
+  background: var(--cap);
+  color: #000;
+  border-color: var(--cap);
+}
+
+/* Load panel (right side / centered when no rooms) */
+.load-panel {
+  flex: 0 0 420px;
+  display: flex;
   align-items: center;
   justify-content: center;
+  padding: 40px;
 }
+/* When rooms panel is hidden, load panel fills full width */
+#roomsPanel[style*="display: none"] + .load-panel {
+  flex: 1;
+}
+
 .drop-zone {
   border: 1px dashed var(--border-strong);
   padding: 56px 96px;

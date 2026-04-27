@@ -318,6 +318,22 @@ io.on('connection', (socket) => {
   });
 });
 
+// ── Active rooms list ────────────────────────────────────────
+app.get('/api/rooms', (_req, res) => {
+  const rooms = [];
+  sessions.forEach((session, id) => {
+    if (session.members.size === 0) return;
+    rooms.push({
+      id,
+      hasPackage:      session.packageYaml !== null,
+      presenterActive: session.presenterId !== null &&
+                       !!(io.sockets.sockets.get(session.presenterId)?.connected),
+      members:         buildPresence(session),
+    });
+  });
+  res.json({ rooms });
+});
+
 // ── Start ────────────────────────────────────────────────────
 const PORT = process.env.PORT || 4000;
 
