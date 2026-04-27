@@ -34,18 +34,12 @@ function logoutCasdoor() {
   var name = (user && user.name) ? user.name.toUpperCase() : 'USER';
   var btn = document.getElementById('loginBtn');
   if (btn) { btn.textContent = name + ' \u23FB'; btn.title = 'Click to log out'; btn.classList.add('login-btn--logout'); btn.onclick = logoutCasdoor; }
-  /* Only show member portal and hub button if user has at least one role */
+  /* Only show hub button if user has at least one role */
   if (!hasAnyRole(token)) return;
   var hero = document.getElementById('heroMemberBtn');
   if (hero) {
     hero.textContent = '\u2192 MEMBER HUB';
-    hero.onclick = function() { document.getElementById('memberPortal').scrollIntoView({ behavior: 'smooth' }); };
-  }
-  var portal = document.getElementById('memberPortal');
-  if (portal) {
-    portal.style.display = '';
-    var wel = document.getElementById('memberWelcome');
-    if (wel) wel.textContent = 'WELCOME BACK, ' + name;
+    hero.onclick = function() { window.location.href = 'hub.html'; };
   }
 })();
 

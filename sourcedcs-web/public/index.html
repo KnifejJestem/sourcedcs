@@ -13,16 +13,40 @@
 <div class="scanline"></div>
 
 <header>
-  <a class="header-logo-link" href="/">
-    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
-    <div class="header-title">SOURCEDCS</div>
-  </a>
+  <div class="header-brand">
+    <a class="header-logo-link" href="/">
+      <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    </a>
+    <div class="brand-dropdown" id="brandDropdown">
+      <button class="brand-toggle" id="brandToggle" aria-haspopup="true" aria-expanded="false">
+        SOURCEDCS <span class="brand-arrow"></span>
+      </button>
+      <div class="brand-menu" id="brandMenu">
+        <div class="brand-menu-header">SOURCE DCS ECOSYSTEM</div>
+        <a class="brand-item active" href="/">
+          <div class="brand-item-title">SQUADRON HOME</div>
+          <div class="brand-item-desc">Public website & roster</div>
+        </a>
+        <a class="brand-item" id="navAtoLink" href="#">
+          <div class="brand-item-title">ATO BRIEF</div>
+          <div class="brand-item-desc">Tactical mission briefing tool</div>
+        </a>
+        <a class="brand-item" id="navAsacsLink" href="#">
+          <div class="brand-item-title">ASACS LINK</div>
+          <div class="brand-item-desc">Live GCI & telemetry map</div>
+        </a>
+        <a class="brand-item" id="navWikiLink" href="#" target="_blank">
+          <div class="brand-item-title">SOP WIKI</div>
+          <div class="brand-item-desc">Standard Operating Procedures</div>
+        </a>
+      </div>
+    </div>
+  </div>
   <nav class="header-nav" id="mainNav" aria-label="Main navigation">
     <a class="nav-link" href="#about">ABOUT</a>
     <a class="nav-link" href="gallery.html">GALLERY</a>
     <a class="nav-link" href="#subsquadrons">WINGS</a>
     <a class="nav-link" href="schedule.html">SCHEDULE</a>
-    <a class="nav-link" href="skills.html">TRAINING</a>
     <a class="nav-link" href="#join">JOIN</a>
   </nav>
   <div class="header-spacer"></div>
@@ -49,7 +73,7 @@
   <p class="hero-desc">SOURCE is a group of aviation enthusiasts who want to do things properly. We are a community of sim pilots who hang out daily, share the passion, but lock in and fly organized, professional operations. We value mutual respect, real-life inspired procedures, and the tools we built ourselves.</p>
   <div class="hero-actions">
     <a class="btn btn-primary" href="#join"><span class="btn-icon">&#x2295;</span> JOIN THE SQUADRON</a>
-    <button class="btn btn-secondary" id="heroMemberBtn" onclick="loginWithCasdoor()"><span class="btn-icon">&rarr;</span> MEMBER LOGIN</button>
+    <button class="btn btn-secondary" id="heroMemberBtn" onclick="loginWithCasdoor('hub.html')"><span class="btn-icon">&rarr;</span> MEMBER LOGIN</button>
   </div>
 
   <!-- Hero gallery preview — two random shots from the flight gallery -->
@@ -65,37 +89,6 @@
   </div>
   <a href="gallery.html" class="hero-gallery-cta-link">&#x25A0; FLIGHT GALLERY &mdash; VIEW ALL SHOTS &rarr;</a>
 
-</section>
-
-<!-- MEMBER PORTAL — hidden until logged in -->
-<section class="member-portal" id="memberPortal" style="display:none">
-  <div class="section-container">
-    <div class="section-label">MEMBER HUB</div>
-    <p class="member-welcome" id="memberWelcome">WELCOME BACK, USER</p>
-    <div class="member-tools-grid">
-      <a class="member-tool-card" id="toolWikiLink" href="#" target="_blank" rel="noopener">
-        <div class="mtc-icon">&#x2261;</div><div class="mtc-title">WIKI</div><div class="mtc-desc">SOPs, procedures, airframe guides</div><div class="mtc-arrow">&rarr;</div>
-      </a>
-      <a class="member-tool-card" id="toolAtoLink" href="#" target="_blank" rel="noopener">
-        <div class="mtc-icon">&#x2291;</div><div class="mtc-title">ATO BRIEF</div><div class="mtc-desc">Load &amp; present mission briefings</div><div class="mtc-arrow">&rarr;</div>
-      </a>
-      <a class="member-tool-card" id="toolOlympusLink" href="#" target="_blank" rel="noopener">
-        <div class="mtc-icon">&#x25CE;</div><div class="mtc-title">OLYMPUS</div><div class="mtc-desc">Real-time DCS ground control station</div><div class="mtc-arrow">&rarr;</div>
-      </a>
-      <a class="member-tool-card" id="toolAsacsLink" href="#" target="_blank" rel="noopener">
-        <div class="mtc-icon">&#x25C9;</div><div class="mtc-title">ASACS LINK</div><div class="mtc-desc">Live GCI datalink picture</div><div class="mtc-arrow">&rarr;</div>
-      </a>
-      <a class="member-tool-card" href="schedule.html">
-        <div class="mtc-icon">&#x229E;</div><div class="mtc-title">SCHEDULE</div><div class="mtc-desc">Upcoming ops &amp; training sorties</div><div class="mtc-arrow">&rarr;</div>
-      </a>
-      <a class="member-tool-card" href="flightplan.html">
-        <div class="mtc-icon">&#x2395;</div><div class="mtc-title">FLIGHT PLAN</div><div class="mtc-desc">Submit DD Form 175 military flight plan</div><div class="mtc-arrow">&rarr;</div>
-      </a>
-      <a class="member-tool-card" id="toolDiscordLink" href="#" target="_blank" rel="noopener">
-        <div class="mtc-icon">&#x2295;</div><div class="mtc-title">DISCORD</div><div class="mtc-desc">Squadron comms &amp; coordination</div><div class="mtc-arrow">&rarr;</div>
-      </a>
-    </div>
-  </div>
 </section>
 
 <section id="about" class="content-section">

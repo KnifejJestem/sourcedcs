@@ -12,16 +12,40 @@
 <div class="scanline"></div>
 
 <header>
-  <a class="header-logo-link" href="/">
-    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
-    <div class="header-title">SOURCEDCS</div>
-  </a>
+  <div class="header-brand">
+    <a class="header-logo-link" href="/">
+      <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    </a>
+    <div class="brand-dropdown" id="brandDropdown">
+      <button class="brand-toggle" id="brandToggle" aria-haspopup="true" aria-expanded="false">
+        SOURCEDCS <span class="brand-arrow"></span>
+      </button>
+      <div class="brand-menu" id="brandMenu">
+        <div class="brand-menu-header">SOURCE DCS ECOSYSTEM</div>
+        <a class="brand-item active" href="/">
+          <div class="brand-item-title">SQUADRON HOME</div>
+          <div class="brand-item-desc">Public website & roster</div>
+        </a>
+        <a class="brand-item" id="navAtoLink" href="#">
+          <div class="brand-item-title">ATO BRIEF</div>
+          <div class="brand-item-desc">Tactical mission briefing tool</div>
+        </a>
+        <a class="brand-item" id="navAsacsLink" href="#">
+          <div class="brand-item-title">ASACS LINK</div>
+          <div class="brand-item-desc">Live GCI & telemetry map</div>
+        </a>
+        <a class="brand-item" id="navWikiLink" href="#" target="_blank">
+          <div class="brand-item-title">SOP WIKI</div>
+          <div class="brand-item-desc">Standard Operating Procedures</div>
+        </a>
+      </div>
+    </div>
+  </div>
   <nav class="header-nav" id="mainNav" aria-label="Main navigation">
     <a class="nav-link" href="/#about">ABOUT</a>
     <a class="nav-link" href="gallery.html">GALLERY</a>
     <a class="nav-link active-nav" href="/#subsquadrons">WINGS</a>
     <a class="nav-link" href="schedule.html">SCHEDULE</a>
-    <a class="nav-link" href="skills.html">TRAINING</a>
     <a class="nav-link" href="/#join">JOIN</a>
   </nav>
   <div class="header-spacer"></div>

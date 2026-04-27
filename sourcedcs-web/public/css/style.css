@@ -368,7 +368,6 @@ footer {
 .header-logo-link {
   display: flex;
   align-items: center;
-  gap: 10px;
   text-decoration: none;
   color: inherit;
 }
@@ -380,11 +379,116 @@ footer {
 }
 :root.movie .header-logo { filter: drop-shadow(0 0 6px rgba(57,255,122,.35)); }
 
+/* ── Brand Dropdown ── */
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.brand-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.brand-toggle {
+  background: none;
+  border: 1px solid transparent;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.brand-toggle:hover {
+  background: var(--bg3);
+}
+.brand-arrow {
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid var(--text-3);
+  margin-top: 2px;
+  transition: transform .2s;
+}
+.brand-dropdown.open .brand-arrow {
+  transform: rotate(180deg);
+}
+.brand-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  width: 260px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md);
+  z-index: 200;
+  padding: 8px 0;
+}
+.brand-dropdown.open .brand-menu {
+  display: block;
+}
+.brand-menu-header {
+  padding: 8px 16px 4px;
+  font-size: 8px;
+  color: var(--text-3);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.brand-item {
+  display: block;
+  padding: 10px 16px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background .15s;
+}
+.brand-item:hover {
+  background: var(--bg2);
+}
+.brand-item.active {
+  background: var(--bg3);
+  border-left: 2px solid var(--text);
+}
+.brand-item-title {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.brand-item-desc {
+  font-size: 9px;
+  color: var(--text-3);
+  line-height: 1.2;
+}
+
+:root.movie .brand-toggle { color: var(--accent); }
+:root.movie .brand-arrow { border-top-color: var(--accent); }
+:root.movie .brand-item.active { border-left-color: var(--accent); }
+:root.movie .brand-item-title { color: var(--accent); }
+:root.movie .brand-item-desc { color: var(--text-2); }
+
+@media (max-width: 640px) {
+  .brand-toggle {
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    padding: 2px 4px;
+  }
+  .brand-menu {
+    width: 220px;
+  }
+}
+
 .header-nav {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: 8px;
+  margin-left: 4px;
 }
 .nav-link {
   font-size: 8px;
