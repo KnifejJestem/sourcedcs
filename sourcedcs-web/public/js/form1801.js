@@ -129,10 +129,8 @@ function fpl1801BuildMessage() {
   if (f16alt2) field16 += ' ' + f16alt2;
 
   return [
-    '(FPL',
-    '-' + f7 + '-' + f8a + f8b,
-    '-' + f9n + '/' + f9t + '/' + f9w,
-    '-' + (f10a || 'N') + '/' + (f10b || 'N'),
+    '(FPL-' + f7 + '-' + f8a + f8b,
+    '-' + f9n + '/' + f9t + '/' + f9w + '-' + (f10a || 'N') + '/' + (f10b || 'N'),
     '-' + f13a + f13b,
     '-' + speedStr + levelStr + ' ' + f15r,
     '-' + field16,
@@ -152,6 +150,35 @@ function fpl1801AttachLivePreview() {
   if (!section) return;
   section.addEventListener('input',  fpl1801UpdatePreview);
   section.addEventListener('change', fpl1801UpdatePreview);
+
+  /* Update speed/level placeholders and maxlength when unit changes */
+  var speedUnitSel = document.getElementById('fpl15su');
+  var levelUnitSel = document.getElementById('fpl15lu');
+  if (speedUnitSel) speedUnitSel.addEventListener('change', fpl1801UpdateSpeedHint);
+  if (levelUnitSel) levelUnitSel.addEventListener('change', fpl1801UpdateLevelHint);
+}
+
+function fpl1801UpdateSpeedHint() {
+  var unit = fplVal('fpl15su');
+  var inp  = document.getElementById('fpl15sv');
+  if (!inp) return;
+  if (unit === 'M') {
+    inp.placeholder = '082';
+    inp.maxLength   = 3;
+  } else {
+    inp.placeholder = '0450';
+    inp.maxLength   = 4;
+  }
+}
+
+function fpl1801UpdateLevelHint() {
+  var unit = fplVal('fpl15lu');
+  var inp  = document.getElementById('fpl15lv');
+  if (!inp) return;
+  var hints = { F: '350', A: '080', S: '1130', M: '0820' };
+  var lens  = { F: 3, A: 3, S: 4, M: 4 };
+  inp.placeholder = hints[unit] || '350';
+  inp.maxLength   = lens[unit]  || 3;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -245,6 +272,13 @@ function fpl1801SaveConfig() {
 /* ════════════════════════════════════════════════════════════
    COLLECT + VALIDATE
 ════════════════════════════════════════════════════════════ */
+/* Parse HHMM string to total minutes; returns NaN if invalid */
+function fpl1801ParseHHMM(s) {
+  if (!s || !/^\d{3,4}$/.test(s.replace(/[^0-9]/g, ''))) return NaN;
+  var clean = s.replace(/[^0-9]/g, '').padStart(4, '0');
+  return parseInt(clean.slice(0, -2), 10) * 60 + parseInt(clean.slice(-2), 10);
+}
+
 function fpl1801Collect() {
   var errors = [];
 
@@ -268,11 +302,7 @@ function fpl1801Collect() {
   var f16alt1 = fplVal('fpl16alt1').trim().toUpperCase();
   var f16alt2 = fplVal('fpl16alt2').trim().toUpperCase();
   var f18   = fplVal('fpl18').trim().toUpperCase() || '0';
-  var wtEl  = document.getElementById('fplWorldTour');
-  var lsEl  = document.getElementById('fplLiveStreaming');
-  var wt    = wtEl ? wtEl.checked : false;
-  var ls    = lsEl ? lsEl.checked : false;
-  var f19e  = fplVal('fpl19e').trim() || '0000';
+  var f19e  = fplVal('fpl19e').trim();
   var f19p  = fplVal('fpl19p').trim() || '0';
   var f19c  = fplVal('fpl19c').trim().toUpperCase();
 
@@ -287,6 +317,13 @@ function fpl1801Collect() {
   if (!f15r)  errors.push('Field 15 (Route) is required — use DCT for direct.');
   if (!f16a)  errors.push('Field 16 (Destination Aerodrome) is required.');
   if (!f19c)  errors.push('Supplementary Field 19 (Pilot in Command) is required.');
+
+  /* EET must not exceed fuel endurance */
+  var eetMins = fpl1801ParseHHMM(f16e);
+  var endMins = fpl1801ParseHHMM(f19e);
+  if (!isNaN(eetMins) && !isNaN(endMins) && eetMins > endMins) {
+    errors.push('Total EET (' + f16e + ') exceeds fuel endurance (' + f19e + ') — check Fields 16 and 19.');
+  }
 
   var data = {
     aircraftId:    f7,
@@ -309,9 +346,7 @@ function fpl1801Collect() {
     altn1:         f16alt1,
     altn2:         f16alt2,
     otherInfo:     f18,
-    worldTour:     wt,
-    liveStreaming:  ls,
-    endurance:     f19e,
+    endurance:     f19e || '0000',
     pob:           f19p,
     pic:           f19c,
     fplMessage:    fpl1801BuildMessage(),
@@ -588,10 +623,8 @@ function fpl1801BuildMessageFromPlan(plan) {
   if (plan.altn2) field16 += ' ' + plan.altn2;
 
   return [
-    '(FPL',
-    '-' + (plan.aircraftId || '') + '-' + (plan.flightRules || 'I') + (plan.typeOfFlight || 'M'),
-    '-' + f9n + '/' + (plan.aircraftType || '') + '/' + (plan.wtc || 'M'),
-    '-' + (plan.equipment || 'N') + '/' + (plan.transponder || 'N'),
+    '(FPL-' + (plan.aircraftId || '') + '-' + (plan.flightRules || 'I') + (plan.typeOfFlight || 'M'),
+    '-' + f9n + '/' + (plan.aircraftType || '') + '/' + (plan.wtc || 'M') + '-' + (plan.equipment || 'N') + '/' + (plan.transponder || 'N'),
     '-' + (plan.depAerodrome || 'ZZZZ') + (plan.depTime || '0000'),
     '-' + speedStr + levelStr + ' ' + (plan.route || 'DCT'),
     '-' + field16,

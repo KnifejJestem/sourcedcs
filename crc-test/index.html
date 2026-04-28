@@ -24,119 +24,103 @@
         zoom: 7
     });
 
-    const COALITION = {
-        1: { color: '#888888', label: 'NEUTRAL' },
-        2: { color: '#cc4444', label: 'RED' },
-        3: { color: '#4488cc', label: 'BLUE' }
+    const COALITION_COLOR = {
+        1: '#888888',
+        2: '#cc4444',
+        3: '#4488cc'
     };
 
-    let units = {};
-    let markers = {};
-
-    function createMarkerEl(unit) {
-        const col = (COALITION[unit.coalition] || COALITION[1]).color;
-        const el = document.createElement('div');
-        el.style.cssText = `position:relative; cursor:pointer; width:24px; height:24px;`;
-
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('width', '24');
-        svg.setAttribute('height', '24');
-        svg.setAttribute('viewBox', '-12 -12 24 24');
-        svg.style.transform = `rotate(${unit.heading}deg)`;
-        svg.style.overflow = 'visible';
-
-        const shape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        shape.setAttribute('points', '0,-8 5,6 0,3 -5,6');
-        shape.setAttribute('fill', col + '44');
-        shape.setAttribute('stroke', col);
-        shape.setAttribute('stroke-width', '1.5');
-        svg.appendChild(shape);
-        el.appendChild(svg);
-
-        const label = document.createElement('div');
-        const callsign = unit.callsign || unit.name;
-        const alt = unit.alt ? Math.round(unit.alt / 30.48) / 10 + 'k' : '';
-        const spd = unit.speed ? Math.round(unit.speed * 1.944) + 'kt' : '';
-        label.innerHTML = `<span style="color:${col}">${callsign}</span><br><span style="color:${col}">${alt} ${spd}</span>`;
-        label.style.cssText = `
-        position: absolute;
-        left: 14px;
-        top: -6px;
-        font-size: 10px;
-        font-family: 'Courier New', monospace;
-        white-space: nowrap;
-        pointer-events: none;
-        text-shadow: 0 0 3px #000, 0 0 3px #000;
-      `;
-        el.appendChild(label);
-
-        return el;
+    function unitsToGeoJSON(units) {
+        return {
+            type: 'FeatureCollection',
+            features: units.filter(u => u.lat && u.lon).map(u => ({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [u.lon, u.lat] },
+                properties: {
+                    id: u.id,
+                    callsign: u.callsign || u.name,
+                    coalition: u.coalition,
+                    color: COALITION_COLOR[u.coalition] || '#888888',
+                    heading: u.heading || 0,
+                    alt: u.alt ? (Math.round(u.alt / 30.48) / 10) + 'k' : '',
+                    spd: u.speed ? Math.round(u.speed * 1.944) + 'kt' : '',
+                    type: u.type
+                }
+            }))
+        };
     }
 
-    function updateMarkers(newUnits) {
-        const incoming = {};
-        newUnits.forEach(u => incoming[u.id] = u);
+    map.on('load', () => {
+        map.addSource('units', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
 
-        // remove gone units
-        Object.keys(markers).forEach(id => {
-            if (!incoming[id]) {
-                markers[id].remove();
-                delete markers[id];
+        // track dot
+        map.addLayer({
+            id: 'unit-dots',
+            type: 'circle',
+            source: 'units',
+            paint: {
+                'circle-radius': 4,
+                'circle-color': ['get', 'color'],
+                'circle-opacity': 0.9,
+                'circle-stroke-width': 1,
+                'circle-stroke-color': ['get', 'color']
             }
         });
 
-        // add or update
-        newUnits.forEach(u => {
-            if (!u.lat || !u.lon) return;
-            if (markers[u.id]) {
-                // update position and heading
-                markers[u.id].setLngLat([u.lon, u.lat]);
-                const svg = markers[u.id].getElement().querySelector('svg');
-                if (svg) svg.style.transform = `rotate(${u.heading}deg)`;
-                const spans = markers[u.id].getElement().querySelectorAll('span');
-                if (spans.length >= 2) {
-                    const col = (COALITION[u.coalition] || COALITION[1]).color;
-                    const callsign = u.callsign || u.name;
-                    const alt = u.alt ? Math.round(u.alt / 30.48) / 10 + 'k' : '';
-                    const spd = u.speed ? Math.round(u.speed * 1.944) + 'kt' : '';
-                    spans[0].textContent = callsign;
-                    spans[1].textContent = `${alt} ${spd}`.trim();
-                }
-            } else {
-                const el = createMarkerEl(u);
-                const marker = new maplibregl.Marker({ element: el, anchor: 'center' ,pitchAlignment: 'map',
-                    rotationAlignment: 'map'})
-                    .setLngLat([u.lon, u.lat])
-                    .addTo(map);
-                markers[u.id] = marker;
+        // callsign label
+        map.addLayer({
+            id: 'unit-labels',
+            type: 'symbol',
+            source: 'units',
+            layout: {
+                'text-field': [
+                    'format',
+                    ['get', 'callsign'], { 'font-scale': 1.0 },
+                    '\n', {},
+                    ['concat', ['get', 'alt'], ' ', ['get', 'spd']], { 'font-scale': 0.8 }
+                ],
+                'text-font': ['Roboto Regular', 'Noto Sans Regular'],
+                'text-size': 11,
+                'text-anchor': 'left',
+                'text-offset': [0.8, 0],
+                'text-allow-overlap': true,
+                'text-ignore-placement': true,
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true
+            },
+            paint: {
+                'text-color': ['get', 'color'],
+                'text-halo-color': '#000000',
+                'text-halo-width': 1
             }
         });
 
+        connect();
+    });
+
+    function updateMap(units) {
+        const source = map.getSource('units');
+        if (source) source.setData(unitsToGeoJSON(units));
         document.getElementById('status').textContent =
-            `TRACKS: ${newUnits.length} | ${new Date().toUTCString().slice(17, 25)}Z`;
+            `TRACKS: ${units.length} | ${new Date().toUTCString().slice(17, 25)}Z`;
     }
 
     function connect() {
         const ws = new WebSocket('ws://localhost:3000');
-
-        ws.onopen = () => {
-            document.getElementById('status').textContent = 'CONNECTED';
-        };
-
+        ws.onopen = () => document.getElementById('status').textContent = 'CONNECTED';
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
-            if (msg.type === 'snapshot') updateMarkers(msg.units);
+            if (msg.type === 'snapshot') updateMap(msg.units);
         };
-
         ws.onclose = () => {
             document.getElementById('status').textContent = 'RECONNECTING...';
             setTimeout(connect, 2000);
         };
-
         ws.onerror = () => ws.close();
     }
-
-    map.on('idle', connect);
 </script>
 </body>
 </html>
