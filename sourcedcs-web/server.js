@@ -24,6 +24,7 @@ const GRADING_REQS_FILE     = path.join(DATA_DIR, 'grading-requests.json');
 const PILOT_REGISTRY_FILE   = path.join(DATA_DIR, 'pilot-registry.json');
 const FLIGHT_PLANS_FILE          = path.join(DATA_DIR, 'flight-plans.json');
 const FLIGHT_PLANS_CFG_FILE      = path.join(DATA_DIR, 'flight-plans-config.json');
+const FPL1801_FILE               = path.join(DATA_DIR, 'fpl1801.json');
 const PILOT_SQ_OVERRIDES_FILE    = path.join(DATA_DIR, 'pilot-squadron-overrides.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
@@ -92,6 +93,8 @@ let nextGradingReqId = gradingRequests.reduce((m, r) => Math.max(m, r.id || 0), 
 let flightPlans    = loadJSON(FLIGHT_PLANS_FILE,     []);
 let fpConfig       = loadJSON(FLIGHT_PLANS_CFG_FILE, { controllerSquadron: '' });
 let nextFlightPlanId = flightPlans.reduce((m, fp) => Math.max(m, fp.id || 0), 0) + 1;
+let fpl1801Plans   = loadJSON(FPL1801_FILE, []);
+let nextFpl1801Id  = fpl1801Plans.reduce((m, fp) => Math.max(m, fp.id || 0), 0) + 1;
 const VALID_GRADES  = new Set(['U', 'F', 'G', 'E']);
 
 /* Load discord role → squadron mapping (role names as keys) */
@@ -1616,6 +1619,79 @@ api.delete('/flight-plans/:id', writeOpsLimiter, requireAuth, (req, res) => {
   flightPlans.splice(idx, 1);
   saveJSON(FLIGHT_PLANS_FILE, flightPlans);
   console.debug('[flight-plans] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));
+  res.json({ ok: true });
+});
+
+/* ─── DD Form 1801 (ICAO IFR Flight Plan) ────────────────── */
+/* Config reuses fpConfig / fpIsControllerUser / fpIsAdminUser from the DD 175 section */
+
+/* GET /api/fpl1801 */
+api.get('/fpl1801', requireAuth, (req, res) => {
+  if (fpIsAdminUser(req) || fpIsControllerUser(req)) return res.json(fpl1801Plans);
+  const sub = req.user.sub;
+  res.json(fpl1801Plans.filter(fp => fp.submittedBy && fp.submittedBy.sub === sub));
+});
+
+/* POST /api/fpl1801 */
+api.post('/fpl1801', writeOpsLimiter, requireAuth, (req, res) => {
+  const b = req.body;
+  if (!b || typeof b !== 'object') return res.status(400).json({ error: 'Invalid request body' });
+
+  const aircraftId = sanitizeStr(b.aircraftId, 7).toUpperCase();
+  if (!aircraftId)       return res.status(400).json({ error: 'Field 7 (Aircraft Identification) is required.' });
+  if (!b.depAerodrome)   return res.status(400).json({ error: 'Field 13 (Departure Aerodrome) is required.' });
+  if (!b.destAerodrome)  return res.status(400).json({ error: 'Field 16 (Destination Aerodrome) is required.' });
+
+  const plan = {
+    id:            nextFpl1801Id++,
+    submittedAt:   new Date().toISOString(),
+    submittedBy:   { sub: req.user.sub, name: req.user.name || req.user.sub },
+    aircraftId,
+    flightRules:   sanitizeStr(b.flightRules,  1).toUpperCase() || 'I',
+    typeOfFlight:  sanitizeStr(b.typeOfFlight, 1).toUpperCase() || 'M',
+    numAircraft:   Math.max(1, Math.min(99, parseInt(b.numAircraft, 10) || 1)),
+    aircraftType:  sanitizeStr(b.aircraftType, 4).toUpperCase(),
+    wtc:           sanitizeStr(b.wtc, 1).toUpperCase() || 'M',
+    equipment:     sanitizeStr(b.equipment,   64).toUpperCase(),
+    transponder:   sanitizeStr(b.transponder,  8).toUpperCase(),
+    depAerodrome:  sanitizeStr(b.depAerodrome, 4).toUpperCase(),
+    depTime:       sanitizeStr(b.depTime,      4),
+    speedUnit:     sanitizeStr(b.speedUnit,    1).toUpperCase(),
+    speedValue:    sanitizeStr(b.speedValue,   4),
+    levelUnit:     sanitizeStr(b.levelUnit,    1).toUpperCase(),
+    levelValue:    sanitizeStr(b.levelValue,   4),
+    route:         sanitizeStr(b.route,     1000).toUpperCase(),
+    destAerodrome: sanitizeStr(b.destAerodrome, 4).toUpperCase(),
+    eet:           sanitizeStr(b.eet,          4),
+    altn1:         sanitizeStr(b.altn1,        4).toUpperCase(),
+    altn2:         sanitizeStr(b.altn2,        4).toUpperCase(),
+    otherInfo:     sanitizeStr(b.otherInfo,  500).toUpperCase(),
+    worldTour:     Boolean(b.worldTour),
+    liveStreaming:  Boolean(b.liveStreaming),
+    endurance:     sanitizeStr(b.endurance,    4),
+    pob:           sanitizeStr(b.pob,          8),
+    pic:           sanitizeStr(b.pic,         56).toUpperCase(),
+    fplMessage:    sanitizeStr(b.fplMessage, 2000),
+    status: 'submitted',
+  };
+
+  fpl1801Plans.push(plan);
+  saveJSON(FPL1801_FILE, fpl1801Plans);
+  console.debug('[fpl1801] Plan ' + plan.id + ' submitted by ' + plan.submittedBy.name);
+  res.status(201).json(plan);
+});
+
+/* DELETE /api/fpl1801/:id */
+api.delete('/fpl1801/:id', writeOpsLimiter, requireAuth, (req, res) => {
+  if (!fpIsAdminUser(req) && !fpIsControllerUser(req)) {
+    return res.status(403).json({ error: 'Controller squadron or admin access required' });
+  }
+  const id  = Number(req.params.id);
+  const idx = fpl1801Plans.findIndex(fp => fp.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Flight plan not found' });
+  fpl1801Plans.splice(idx, 1);
+  saveJSON(FPL1801_FILE, fpl1801Plans);
+  console.debug('[fpl1801] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));
   res.json({ ok: true });
 });
 

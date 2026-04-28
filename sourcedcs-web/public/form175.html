@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DD Form 175 — Military Flight Plan — SOURCE DCS</title>
+  <meta name="description" content="Submit a DD Form 175 military flight plan for SOURCE DCS operations.">
+  <link rel="icon" href="sourcelogobg.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/flightplan.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <a class="header-logo-link" href="/">
+    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    <div class="header-title">SOURCEDCS</div>
+  </a>
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
+    <a class="nav-link" href="/#about">ABOUT</a>
+    <a class="nav-link" href="/#subsquadrons">WINGS</a>
+    <a class="nav-link" href="/#join">JOIN</a>
+  </nav>
+  <div class="header-spacer"></div>
+  <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
+    <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
+    <div class="hdr-toggle-group">
+      <span class="hdr-toggle-label">DISPLAY</span>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="fp-hero">
+  <div class="fp-hero-inner">
+    <div class="section-label">FLIGHT OPERATIONS</div>
+    <h1 class="fp-title">DD FORM 175 — FLIGHT PLAN</h1>
+    <p class="fp-sub">Military flight plan &middot; All times Zulu (UTC) &middot; Log in to submit</p>
+  </div>
+</section>
+
+<!-- Not logged in -->
+<div id="fpLoginPrompt" class="fp-login-prompt" style="display:none">
+  <p>Log in to submit and view flight plans.</p>
+  <button class="btn btn-primary" onclick="loginWithCasdoor()">LOG IN</button>
+</div>
+
+<!-- Main content -->
+<div id="fpMain" style="display:none">
+
+  <!-- ── New Flight Plan Form ────────────────────────────── -->
+  <div class="fp-container" id="fpFormSection">
+
+    <div class="fp-form-header">
+      <div class="fp-form-title">NEW FLIGHT PLAN</div>
+      <div class="fp-form-sub">AUTHORITY: <span id="fpAuthorityDisplay">10 USC 8012 AND EO 9397</span></div>
+    </div>
+
+    <!-- Section 1: Document Header -->
+    <div class="fp-panel">
+      <div class="fp-panel-label">PART 1 — DOCUMENT HEADER</div>
+      <div class="fp-panel-body">
+        <div class="fp-row">
+          <div class="fp-field" style="flex:1">
+            <label class="fp-label" for="fpDate">1. DATE <span class="fp-hint">(DD MON YY)</span> <span class="fp-req">*</span></label>
+            <input class="fp-input" id="fpDate" type="text" maxlength="12" placeholder="24 APR 26" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1">
+            <label class="fp-label" for="fpCallSign">2. AIRCRAFT CALL SIGN <span class="fp-req">*</span></label>
+            <input class="fp-input fp-upper" id="fpCallSign" type="text" maxlength="16" placeholder="HAWK 11" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1">
+            <label class="fp-label" for="fpAircraftDesig">3. AIRCRAFT DESG AND TO CODE <span class="fp-req">*</span></label>
+            <input class="fp-input fp-upper" id="fpAircraftDesig" type="text" maxlength="32" placeholder="F-16C/B" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1">
+            <label class="fp-label" for="fpAuthority">AUTHORITY</label>
+            <input class="fp-input fp-upper" id="fpAuthority" type="text" maxlength="64" placeholder="10 USC 8012 AND EO 9397" value="10 USC 8012 AND EO 9397" autocomplete="off">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Route Legs -->
+    <div class="fp-panel">
+      <div class="fp-panel-label">
+        PART 2 — ROUTE OF FLIGHT
+        <button class="fp-add-btn" onclick="fpAddLeg()">+ ADD LEG</button>
+      </div>
+      <div class="fp-panel-body fp-panel-body--flush">
+        <div class="fp-table-scroll">
+          <table class="fp-legs-table">
+            <thead>
+              <tr>
+                <th style="width:32px">4. TYPE <span class="fp-req">*</span></th>
+                <th style="width:70px">5. TAS (KT)</th>
+                <th style="width:80px">6. DEPARTURE <span class="fp-req">*</span></th>
+                <th style="width:80px">7. DEP TIME (Z) <span class="fp-req">*</span></th>
+                <th style="width:80px">8. ALT (FT&times;100)</th>
+                <th>9. ROUTE OF FLIGHT</th>
+                <th style="width:80px">10. DEST <span class="fp-req">*</span></th>
+                <th style="width:70px">11. ETE <span class="fp-req">*</span></th>
+                <th style="width:32px"></th>
+              </tr>
+            </thead>
+            <tbody id="fpLegsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Administrative Fields -->
+    <div class="fp-panel">
+      <div class="fp-panel-label">PART 3 — ADMINISTRATIVE DATA</div>
+      <div class="fp-panel-body">
+        <div class="fp-field">
+          <label class="fp-label" for="fpRemarks">12. REMARKS</label>
+          <textarea class="fp-input fp-textarea" id="fpRemarks" rows="3" maxlength="1000" placeholder="e.g. KOZR-S, REQUEST RADAR DEPARTURE, PPR 0723..."></textarea>
+        </div>
+        <div class="fp-row">
+          <div class="fp-field" style="flex:1">
+            <label class="fp-label" for="fpRankHonor">13. RANK AND HONOR CODE</label>
+            <input class="fp-input fp-upper" id="fpRankHonor" type="text" maxlength="32" placeholder="CPT" value="CPT" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1">
+            <label class="fp-label" for="fpFuel">14. FUEL ON BD <span class="fp-hint">(H+MM)</span></label>
+            <input class="fp-input" id="fpFuel" type="text" maxlength="5" placeholder="4+30" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1">
+            <label class="fp-label" for="fpAlternate">15. ALTN AIRFIELD</label>
+            <input class="fp-input fp-upper" id="fpAlternate" type="text" maxlength="4" placeholder="KLSF" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1">
+            <label class="fp-label" for="fpEteAltn">16. ETE TO ALTN <span class="fp-hint">(H+MM)</span></label>
+            <input class="fp-input" id="fpEteAltn" type="text" maxlength="5" placeholder="0+50" autocomplete="off">
+          </div>
+        </div>
+        <div class="fp-row">
+          <div class="fp-field fp-field--check" style="flex:1">
+            <label class="fp-label">17. NOTAMS</label>
+            <label class="fp-check-label">
+              <input type="checkbox" id="fpNotams"> REVIEWED
+            </label>
+          </div>
+          <div class="fp-field" style="flex:1">
+            <label class="fp-label" for="fpWeather">18. WEATHER</label>
+            <input class="fp-input fp-upper" id="fpWeather" type="text" maxlength="64" placeholder="LS 18" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:2">
+            <label class="fp-label" for="fpWtBal">19. WT AND BALANCE</label>
+            <input class="fp-input fp-upper" id="fpWtBal" type="text" maxlength="64" placeholder="KOZR, 24 APR 26" autocomplete="off">
+          </div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="fpAcSerial">20. AIRCRAFT SERIAL NUMBER, UNIT, AND HOME STATION</label>
+          <input class="fp-input fp-upper" id="fpAcSerial" type="text" maxlength="128" placeholder="96-0001 / VIPER SQDN / UGKO" autocomplete="off">
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Crew / Passenger Manifest -->
+    <div class="fp-panel">
+      <div class="fp-panel-label">
+        PART 4 — CREW / PASSENGER MANIFEST
+        <button class="fp-add-btn" onclick="fpAddCrew()">+ ADD ROW</button>
+      </div>
+      <div class="fp-panel-body fp-panel-body--flush">
+        <div class="fp-table-scroll">
+          <table class="fp-crew-table">
+            <thead>
+              <tr>
+                <th style="width:160px">24. DUTY POSITION</th>
+                <th>25. NAME AND INITIALS</th>
+                <th style="width:70px">26. RANK</th>
+                <th style="width:110px">27. SSN / MEMBER ID</th>
+                <th>28. ORGANIZATION AND LOCATION</th>
+                <th style="width:32px"></th>
+              </tr>
+            </thead>
+            <tbody id="fpCrewTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="fp-actions">
+      <div class="fp-msg fp-error" id="fpError" style="display:none"></div>
+      <div class="fp-msg fp-success" id="fpSuccess" style="display:none"></div>
+      <div class="fp-actions-row">
+        <button class="btn btn-ghost" onclick="fpPrint()">PRINT PREVIEW</button>
+        <button class="btn btn-primary" id="fpSubmitBtn" onclick="fpSubmit()">SUBMIT FLIGHT PLAN</button>
+      </div>
+    </div>
+
+  </div><!-- /fpFormSection -->
+
+  <!-- ── Admin: controller squadron config ─────────────── -->
+  <div class="fp-container fp-plans-section" style="padding-bottom:0">
+    <div id="fpAdminPanel" class="fp-admin-panel" style="display:none"></div>
+  </div>
+
+  <!-- ── Submitted Plans ─────────────────────────────────── -->
+  <div class="fp-container fp-plans-section">
+    <div class="fp-section-divider" id="fpPlansLabel">SUBMITTED FLIGHT PLANS</div>
+    <div id="fpPlansList"></div>
+  </div>
+
+</div><!-- /fpMain -->
+
+<!-- ── Print view (rendered by JS, shown only during print) ── -->
+<div id="fpPrintView"></div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand-area"><img class="footer-logo" src="sourcelogobg.png" alt="SOURCE"><span class="footer-brand">SOURCEDCS</span></div>
+    <div class="footer-links-row">
+      <a class="footer-link" href="/">Home</a><span class="footer-sep">&middot;</span>
+      <a class="footer-link" id="footerDiscordLink" href="#" target="_blank" rel="noopener">Discord</a><span class="footer-sep">&middot;</span>
+      <a class="footer-link" id="footerWikiLink" href="#" target="_blank" rel="noopener">Wiki</a><span class="footer-sep">&middot;</span>
+      <a class="footer-link" id="footerGithubLink" href="#" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <div class="footer-copy"><span class="footer-text">&copy; 2025 SOURCEDCS</span><span class="footer-sep">&middot;</span><span class="footer-text">MIT License</span></div>
+  </div>
+</footer>
+
+<script src="/js/config.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/flightplan.js"></script>
+
+</body>
+</html>

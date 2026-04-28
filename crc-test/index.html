@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>CRC</title>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0d0d0d; font-family: 'Courier New', monospace; }
+        #map { width: 100vw; height: 100vh; }
+        #status { position: fixed; top: 8px; right: 8px; color: #4a6a4a; font-size: 11px; z-index: 10; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="status">CONNECTING...</div>
+
+<script>
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: './crc-scope-style.json',
+        center: [35.4258, 37.0021],
+        zoom: 7
+    });
+
+    const COALITION = {
+        1: { color: '#888888', label: 'NEUTRAL' },
+        2: { color: '#cc4444', label: 'RED' },
+        3: { color: '#4488cc', label: 'BLUE' }
+    };
+
+    let units = {};
+    let markers = {};
+
+    function createMarkerEl(unit) {
+        const col = (COALITION[unit.coalition] || COALITION[1]).color;
+        const el = document.createElement('div');
+        el.style.cssText = `position:relative; cursor:pointer; width:24px; height:24px;`;
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '24');
+        svg.setAttribute('height', '24');
+        svg.setAttribute('viewBox', '-12 -12 24 24');
+        svg.style.transform = `rotate(${unit.heading}deg)`;
+        svg.style.overflow = 'visible';
+
+        const shape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        shape.setAttribute('points', '0,-8 5,6 0,3 -5,6');
+        shape.setAttribute('fill', col + '44');
+        shape.setAttribute('stroke', col);
+        shape.setAttribute('stroke-width', '1.5');
+        svg.appendChild(shape);
+        el.appendChild(svg);
+
+        const label = document.createElement('div');
+        const callsign = unit.callsign || unit.name;
+        const alt = unit.alt ? Math.round(unit.alt / 30.48) / 10 + 'k' : '';
+        const spd = unit.speed ? Math.round(unit.speed * 1.944) + 'kt' : '';
+        label.innerHTML = `<span style="color:${col}">${callsign}</span><br><span style="color:${col}">${alt} ${spd}</span>`;
+        label.style.cssText = `
+        position: absolute;
+        left: 14px;
+        top: -6px;
+        font-size: 10px;
+        font-family: 'Courier New', monospace;
+        white-space: nowrap;
+        pointer-events: none;
+        text-shadow: 0 0 3px #000, 0 0 3px #000;
+      `;
+        el.appendChild(label);
+
+        return el;
+    }
+
+    function updateMarkers(newUnits) {
+        const incoming = {};
+        newUnits.forEach(u => incoming[u.id] = u);
+
+        // remove gone units
+        Object.keys(markers).forEach(id => {
+            if (!incoming[id]) {
+                markers[id].remove();
+                delete markers[id];
+            }
+        });
+
+        // add or update
+        newUnits.forEach(u => {
+            if (!u.lat || !u.lon) return;
+            if (markers[u.id]) {
+                // update position and heading
+                markers[u.id].setLngLat([u.lon, u.lat]);
+                const svg = markers[u.id].getElement().querySelector('svg');
+                if (svg) svg.style.transform = `rotate(${u.heading}deg)`;
+                const spans = markers[u.id].getElement().querySelectorAll('span');
+                if (spans.length >= 2) {
+                    const col = (COALITION[u.coalition] || COALITION[1]).color;
+                    const callsign = u.callsign || u.name;
+                    const alt = u.alt ? Math.round(u.alt / 30.48) / 10 + 'k' : '';
+                    const spd = u.speed ? Math.round(u.speed * 1.944) + 'kt' : '';
+                    spans[0].textContent = callsign;
+                    spans[1].textContent = `${alt} ${spd}`.trim();
+                }
+            } else {
+                const el = createMarkerEl(u);
+                const marker = new maplibregl.Marker({ element: el, anchor: 'center' ,pitchAlignment: 'map',
+                    rotationAlignment: 'map'})
+                    .setLngLat([u.lon, u.lat])
+                    .addTo(map);
+                markers[u.id] = marker;
+            }
+        });
+
+        document.getElementById('status').textContent =
+            `TRACKS: ${newUnits.length} | ${new Date().toUTCString().slice(17, 25)}Z`;
+    }
+
+    function connect() {
+        const ws = new WebSocket('ws://localhost:3000');
+
+        ws.onopen = () => {
+            document.getElementById('status').textContent = 'CONNECTED';
+        };
+
+        ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'snapshot') updateMarkers(msg.units);
+        };
+
+        ws.onclose = () => {
+            document.getElementById('status').textContent = 'RECONNECTING...';
+            setTimeout(connect, 2000);
+        };
+
+        ws.onerror = () => ws.close();
+    }
+
+    map.on('idle', connect);
+</script>
+</body>
+</html>
