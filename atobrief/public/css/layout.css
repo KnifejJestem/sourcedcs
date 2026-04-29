@@ -119,28 +119,140 @@ header {
 .upload-screen {
   flex: 1;
   display: flex;
+  align-items: flex-start;
+  padding: 48px 40px;
+  overflow-y: auto;
+}
+
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 400px));
+  gap: 20px;
+  align-content: start;
+  width: 100%;
+}
+
+/* Solo state — single centered load card (presenter in room, no package) */
+.landing-grid.solo {
+  display: flex;
   align-items: center;
   justify-content: center;
+  flex: 1;
+  align-self: stretch;
 }
-.drop-zone {
-  border: 1px dashed var(--border-strong);
-  padding: 56px 96px;
-  text-align: center;
-  cursor: pointer;
-  background: var(--bg2);
+.landing-grid.solo .load-card {
+  width: 420px;
+  min-height: 280px;
+  font-size: 1.1em;
+}
+.landing-grid.solo .load-card-icon { font-size: 40px; }
+.landing-grid.solo .load-card-label { font-size: 12px; letter-spacing: 4px; }
+.landing-grid.solo .load-card-sub { font-size: 10px; }
+
+/* Room card */
+.room-card {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  padding: 32px 30px;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   transition: border-color .15s, background .15s;
 }
-.drop-zone:hover, .drop-zone.over {
+.room-card:hover {
   border-color: var(--text);
   background: var(--bg3);
 }
-:root.movie .drop-zone:hover, :root.movie .drop-zone.over {
+:root.movie .room-card:hover {
+  border-color: var(--cap);
+  background: rgba(57,255,122,.04);
+}
+.room-card-id {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--text);
+  word-break: break-all;
+}
+:root.movie .room-card-id { color: var(--cap); }
+.room-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.room-badge {
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+}
+.room-badge.pkg    { border-color: var(--green); color: var(--green); }
+.room-badge.live   { border-color: var(--blue);  color: var(--blue); }
+:root.movie .room-badge.pkg  { border-color: var(--cap);  color: var(--cap); }
+:root.movie .room-badge.live { border-color: var(--blue); color: var(--blue); }
+.room-card-counts {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+  margin-top: auto;
+}
+.room-card-join {
+  align-self: flex-start;
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.room-card-join:hover {
+  background: var(--text);
+  color: var(--text-inv);
+  border-color: var(--text);
+}
+:root.movie .room-card-join:hover {
+  background: var(--cap);
+  color: #000;
+  border-color: var(--cap);
+}
+
+/* Load card — same grid cell, dashed border, clickable */
+.load-card {
+  border-style: dashed;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: var(--bg2);
+}
+.load-card:hover {
+  border-color: var(--text);
+  background: var(--bg3);
+}
+:root.movie .load-card:hover {
   border-color: var(--cap);
   background: rgba(57,255,122,.03);
 }
-.drop-icon { font-size: 32px; color: var(--text-3); margin-bottom: 16px; }
-.drop-label { font-size: 11px; letter-spacing: 3px; color: var(--text-2); margin-bottom: 8px; }
-.drop-sub { font-size: 10px; color: var(--text-3); line-height: 1.6; }
+.load-card-icon { font-size: 28px; color: var(--text-3); margin-bottom: 4px; }
+.load-card-label { font-size: 10px; letter-spacing: 3px; color: var(--text-2); margin-bottom: 6px; }
+.load-card-sub { font-size: 9px; color: var(--text-3); line-height: 1.6; }
+
+/* Waiting card — same as load card but non-interactive */
+.waiting-card {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: default;
+}
+.waiting-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-card);
+}
 
 /* ── Main content ────────────────────────────────────────── */
 .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }

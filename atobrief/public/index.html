@@ -44,6 +44,7 @@
       <button class="load-btn load-btn-primary" id="loadPackageBtn" onclick="document.getElementById('fileInput').click()">LOAD PACKAGE</button>
       <input type="file" id="fileInput" accept=".yaml,.yml" style="display:none">
       <button class="load-btn" id="exportYamlBtn" style="display:none" onclick="openExportDialog()">EXPORT</button>
+      <button class="load-btn" id="closeRoomBtn" style="display:none" onclick="closeRoom()">CLOSE ROOM</button>
       <button class="load-btn" id="leaveRoomBtn" style="display:none" onclick="leaveSession()">LEAVE ROOM</button>
       <button class="load-btn" id="joinRoomBtn" onclick="openJoinDialog()">JOIN ROOM</button>
       <div class="hdr-divider"></div>
@@ -54,11 +55,7 @@
   <div class="body">
 
     <div class="upload-screen" id="upload-screen">
-      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-        <div class="drop-icon">⊕</div>
-        <div class="drop-label">LOAD ATO PACKAGE</div>
-        <div class="drop-sub">Drop a <strong>.yaml</strong> package here, or click to browse</div>
-      </div>
+      <div class="landing-grid" id="roomsGrid"></div>
     </div>
 
     <div class="main-content" id="main-content" style="display:none">

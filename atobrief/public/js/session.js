@@ -35,6 +35,91 @@ const SESSION = {
 // each user navigates independently.
 let _origLoadPackage = null;
 
+// ── Rooms panel ──────────────────────────────────────────────
+let _roomsRefreshTimer = null;
+
+function fetchAndRenderRooms() {
+  fetch('/api/rooms')
+    .then(r => r.json())
+    .then(({ rooms }) => _renderRoomCards(rooms))
+    .catch(() => _renderRoomCards([]));
+}
+
+function _renderRoomCards(rooms) {
+  const grid = document.getElementById('roomsGrid');
+  if (!grid) return;
+
+  grid.className = 'landing-grid';
+  grid.innerHTML = '';
+
+  (rooms || []).forEach(room => {
+    const badges = [];
+    if (room.hasPackage)      badges.push('<span class="room-badge pkg">PKG LOADED</span>');
+    if (room.presenterActive) badges.push('<span class="room-badge live">PRESENTER LIVE</span>');
+    const p = room.members;
+    const counts = p.presenter + ' presenter' + (p.presenter !== 1 ? 's' : '') +
+                   ' · ' + p.presentee + ' presentee' + (p.presentee !== 1 ? 's' : '');
+
+    const card = document.createElement('div');
+    card.className = 'room-card';
+    card.innerHTML =
+      '<div class="room-card-id">' + _escHtml(room.id) + '</div>' +
+      '<div class="room-card-badges">' + (badges.join('') || '<span class="room-badge">EMPTY</span>') + '</div>' +
+      '<div class="room-card-counts">' + counts + '</div>' +
+      '<button class="room-card-join" onclick="quickJoin(\'' + _escHtml(room.id) + '\')">JOIN ROOM</button>';
+    grid.appendChild(card);
+  });
+
+  // Always append the load card at the end
+  const loadCard = document.createElement('div');
+  loadCard.className = 'room-card load-card';
+  loadCard.onclick = () => document.getElementById('fileInput').click();
+  loadCard.innerHTML =
+    '<div class="load-card-icon">&#x2295;</div>' +
+    '<div class="load-card-label">LOAD ATO PACKAGE</div>' +
+    '<div class="load-card-sub">Drop a <strong>.yaml</strong> package here,<br>or click to browse</div>';
+  grid.appendChild(loadCard);
+}
+
+function _escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function _showRoomsPanel(visible) {
+  if (visible) {
+    fetchAndRenderRooms();
+    if (!_roomsRefreshTimer) {
+      _roomsRefreshTimer = setInterval(fetchAndRenderRooms, 10000);
+    }
+  } else {
+    if (_roomsRefreshTimer) {
+      clearInterval(_roomsRefreshTimer);
+      _roomsRefreshTimer = null;
+    }
+    // Presenter is in a room but no package loaded — big centered load card
+    const grid = document.getElementById('roomsGrid');
+    if (grid) {
+      grid.className = 'landing-grid solo';
+      grid.innerHTML = '';
+      const loadCard = document.createElement('div');
+      loadCard.className = 'room-card load-card';
+      loadCard.onclick = () => document.getElementById('fileInput').click();
+      loadCard.innerHTML =
+        '<div class="load-card-icon">&#x2295;</div>' +
+        '<div class="load-card-label">LOAD ATO PACKAGE</div>' +
+        '<div class="load-card-sub">Drop a <strong>.yaml</strong> package here,<br>or click to browse</div>';
+      grid.appendChild(loadCard);
+    }
+  }
+}
+
+// Pre-fill the join dialog with a room id and open it.
+function quickJoin(roomId) {
+  openJoinDialog();
+  const input = document.getElementById('joinRoomId');
+  if (input) input.value = roomId;
+}
+
 // ── Dialog helpers (global, called from onclick in HTML) ─────
 function openJoinDialog() {
   const d = document.getElementById('joinDialog');
@@ -142,6 +227,12 @@ function joinSession(sessionId, role, password) {
     // the presenter can load one; presentees see the waiting message.
     unloadPackage();
 
+    // Presenter with no package loaded yet → hide rooms panel so the
+    // upload screen shows only the LOAD PACKAGE drop zone.
+    if (SESSION.role === 'presenter') {
+      _showRoomsPanel(false);
+    }
+
     if (SESSION.role === 'presentee') {
       applyPresenteeUI();
     }
@@ -167,6 +258,23 @@ function joinSession(sessionId, role, password) {
     console.warn('[SESSION] Presenter disconnected');
   });
 
+  SESSION.socket.on('room-closed', () => {
+    SESSION.socket.disconnect();
+    SESSION.socket    = null;
+    SESSION.connected = false;
+    SESSION.role      = null;
+    SESSION.sessionId = null;
+    if (_origLoadPackage) window.loadPackage = _origLoadPackage;
+    const existing = document.querySelector('.session-indicator');
+    if (existing) existing.remove();
+    const presenceEl = document.querySelector('.presence-indicator');
+    if (presenceEl) presenceEl.remove();
+    _restoreDefaultUI();
+    _showRoomButtons(false);
+    unloadPackage();
+    _showRoomsPanel(true);
+  });
+
   // ── Room presence updates ─────────────────────────────────
   SESSION.socket.on('room-presence', (presence) => {
     updatePresenceIndicator(presence);
@@ -175,6 +283,12 @@ function joinSession(sessionId, role, password) {
   SESSION.socket.on('disconnect', () => {
     SESSION.connected = false;
   });
+}
+
+// ── Close a room (presenter only) ───────────────────────────
+function closeRoom() {
+  if (!SESSION.socket || SESSION.role !== 'presenter') return;
+  SESSION.socket.emit('close-room');
 }
 
 // ── Leave a session ──────────────────────────────────────────
@@ -202,6 +316,8 @@ function leaveSession() {
   _restoreDefaultUI();
   _showRoomButtons(false);
   unloadPackage();
+  // Refresh the rooms panel so the user can see current active rooms
+  _showRoomsPanel(true);
 }
 
 // ── Auto-join from URL parameters (backwards compatible) ─────
@@ -210,21 +326,26 @@ function leaveSession() {
   const sessionId = params.get('session');
   if (sessionId) {
     joinSession(sessionId, params.get('role') || 'presentee', '');
+  } else {
+    // No auto-join — show active rooms on the landing screen
+    _showRoomsPanel(true);
   }
 })();
 
 // ── UI helpers ───────────────────────────────────────────────
 
-// Toggle JOIN ROOM / LEAVE ROOM button visibility.
+// Toggle JOIN ROOM / LEAVE ROOM / CLOSE ROOM button visibility.
 function _showRoomButtons(inRoom) {
   const joinBtn   = document.getElementById('joinRoomBtn');
   const leaveBtn  = document.getElementById('leaveRoomBtn');
+  const closeBtn  = document.getElementById('closeRoomBtn');
   if (joinBtn)   joinBtn.style.display   = inRoom ? 'none' : '';
   if (leaveBtn)  leaveBtn.style.display  = inRoom ? ''     : 'none';
+  if (closeBtn)  closeBtn.style.display  = (inRoom && SESSION.role === 'presenter') ? '' : 'none';
 }
 
 // Apply presentee restrictions: hide LOAD PACKAGE + EDIT buttons,
-// disable file input, replace drop zone with a waiting message.
+// disable file input, show waiting card in the landing grid.
 function applyPresenteeUI() {
   const loadPkgBtn = document.getElementById('loadPackageBtn');
   if (loadPkgBtn) loadPkgBtn.style.display = 'none';
@@ -235,13 +356,14 @@ function applyPresenteeUI() {
   const fileInput = document.getElementById('fileInput');
   if (fileInput) fileInput.disabled = true;
 
-  const dropZone = document.getElementById('dropZone');
-  if (dropZone) {
-    dropZone.innerHTML =
-      '<div class="drop-icon">\u23F3</div>' +
-      '<div class="drop-label">WAITING FOR PRESENTER</div>' +
-      '<div class="drop-sub">The presenter will load the briefing package.</div>';
-    dropZone.style.pointerEvents = 'none';
+  const grid = document.getElementById('roomsGrid');
+  if (grid) {
+    grid.innerHTML =
+      '<div class="room-card waiting-card">' +
+      '<div class="load-card-icon">\u23F3</div>' +
+      '<div class="load-card-label">WAITING FOR PRESENTER</div>' +
+      '<div class="load-card-sub">The presenter will load the briefing package.</div>' +
+      '</div>';
   }
 }
 
@@ -255,17 +377,7 @@ function _restoreDefaultUI() {
 
   const fileInput = document.getElementById('fileInput');
   if (fileInput) fileInput.disabled = false;
-
-  const dropZone = document.getElementById('dropZone');
-  if (dropZone) {
-    dropZone.innerHTML =
-      '<div class="drop-icon">\u2295</div>' +
-      '<div class="drop-label">LOAD ATO PACKAGE</div>' +
-      '<div class="drop-sub">Drop a <strong>package.yaml</strong> here, or click to browse.<br>' +
-      'Top-level keys: <code>ato</code>, <code>aco</code>, <code>spins</code>, <code>comms</code>, <code>weather</code></div>' +
-      '<div class="drop-hint">Try: <code>demo-package.yaml</code></div>';
-    dropZone.style.pointerEvents = '';
-  }
+  // Landing grid is repopulated by the _showRoomsPanel(true) call that follows
 }
 
 function showSessionIndicator(sessionId, role) {

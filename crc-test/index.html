@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>CRC</title>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0d0d0d; font-family: 'Courier New', monospace; }
+        #map { width: 100vw; height: 100vh; }
+        #status { position: fixed; top: 8px; right: 8px; color: #4a6a4a; font-size: 11px; z-index: 10; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="status">CONNECTING...</div>
+
+<script>
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: './crc-scope-style.json',
+        center: [35.4258, 37.0021],
+        zoom: 7
+    });
+
+    const COALITION_COLOR = {
+        1: '#888888',
+        2: '#cc4444',
+        3: '#4488cc'
+    };
+
+    function unitsToGeoJSON(units) {
+        return {
+            type: 'FeatureCollection',
+            features: units.filter(u => u.lat && u.lon).map(u => ({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [u.lon, u.lat] },
+                properties: {
+                    id: u.id,
+                    callsign: u.callsign || u.name,
+                    coalition: u.coalition,
+                    color: COALITION_COLOR[u.coalition] || '#888888',
+                    heading: u.heading || 0,
+                    alt: u.alt ? (Math.round(u.alt / 30.48) / 10) + 'k' : '',
+                    spd: u.speed ? Math.round(u.speed * 1.944) + 'kt' : '',
+                    type: u.type
+                }
+            }))
+        };
+    }
+
+    map.on('load', () => {
+        map.addSource('units', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
+
+        // track dot
+        map.addLayer({
+            id: 'unit-dots',
+            type: 'circle',
+            source: 'units',
+            paint: {
+                'circle-radius': 4,
+                'circle-color': ['get', 'color'],
+                'circle-opacity': 0.9,
+                'circle-stroke-width': 1,
+                'circle-stroke-color': ['get', 'color']
+            }
+        });
+
+        // callsign label
+        map.addLayer({
+            id: 'unit-labels',
+            type: 'symbol',
+            source: 'units',
+            layout: {
+                'text-field': [
+                    'format',
+                    ['get', 'callsign'], { 'font-scale': 1.0 },
+                    '\n', {},
+                    ['concat', ['get', 'alt'], ' ', ['get', 'spd']], { 'font-scale': 0.8 }
+                ],
+                'text-font': ['Roboto Regular', 'Noto Sans Regular'],
+                'text-size': 11,
+                'text-anchor': 'left',
+                'text-offset': [0.8, 0],
+                'text-allow-overlap': true,
+                'text-ignore-placement': true,
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true
+            },
+            paint: {
+                'text-color': ['get', 'color'],
+                'text-halo-color': '#000000',
+                'text-halo-width': 1
+            }
+        });
+
+        connect();
+    });
+
+    function updateMap(units) {
+        const source = map.getSource('units');
+        if (source) source.setData(unitsToGeoJSON(units));
+        document.getElementById('status').textContent =
+            `TRACKS: ${units.length} | ${new Date().toUTCString().slice(17, 25)}Z`;
+    }
+
+    function connect() {
+        const ws = new WebSocket('ws://localhost:3000');
+        ws.onopen = () => document.getElementById('status').textContent = 'CONNECTED';
+        ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'snapshot') updateMap(msg.units);
+        };
+        ws.onclose = () => {
+            document.getElementById('status').textContent = 'RECONNECTING...';
+            setTimeout(connect, 2000);
+        };
+        ws.onerror = () => ws.close();
+    }
+</script>
+</body>
+</html>

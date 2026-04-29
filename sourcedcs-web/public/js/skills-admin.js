@@ -26,18 +26,28 @@ function logout() {
 }
 
 /* ── State ──────────────────────────────────────────────── */
-var _tree             = null;
-var _treeEditor       = null;  /* working copy mutated by the GUI editor */
-var _allGrades        = {};    /* { [sub]: { [moduleId]: gradeRec } } */
-var _pilots           = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
-var _requests         = [];
-var _squadrons        = [];    /* squadron list from /api/squadrons */
-var _pilotSquadrons   = {};    /* { [sub]: squadronId | null } — server-resolved */
-var _activeSub        = null;
-var _editorCollapsed  = {};    /* { [catId]: bool } collapse state for tree editor */
-var _detailCollapsed  = {};    /* { [catId]: bool } collapse state for pilot detail */
+var _tree               = null;
+var _treeEditor         = null;  /* working copy mutated by the GUI editor */
+var _allGrades          = {};    /* { [sub]: { [moduleId]: gradeRec } } */
+var _pilots             = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
+var _requests           = [];
+var _squadrons          = [];    /* squadron list from /api/squadrons */
+var _pilotSquadrons     = {};    /* { [sub]: squadronId | null } — server-resolved (auto+override) */
+var _pilotSqOverrides   = {};    /* { [sub]: squadronId } — admin-set overrides only */
+var _activeSub          = null;
+var _editorCollapsed    = {};    /* { [catId]: bool } collapse state for tree editor */
+var _detailCollapsed    = {};    /* { [catId]: bool } collapse state for pilot detail */
+var _currentUserSub     = null;  /* JWT sub of the logged-in admin */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
+function jwtSub(token) {
+  try {
+    var parts   = token.split('.');
+    var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.sub || null;
+  } catch (e) { return null; }
+}
+
 (function () {
   var tok  = getToken();
   var user = getUser();
@@ -50,6 +60,7 @@ var _detailCollapsed  = {};    /* { [catId]: bool } collapse state for pilot det
       btn.classList.add('login-btn--logout');
       btn.onclick = logout;
     }
+    _currentUserSub = jwtSub(tok);
   } else {
     if (btn) { btn.textContent = 'LOGIN'; btn.onclick = loginWithCasdoor; }
   }
@@ -74,13 +85,15 @@ function loadAll(tok) {
     fetch('/api/grading-requests', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/squadrons').then(function (r) { return r.json(); }).catch(function () { return []; }),
     fetch('/api/skill-pilots-squadrons', { headers: headers }).then(function (r) { return r.json(); }).catch(function () { return {}; }),
+    fetch('/api/skill-pilots-squadron-overrides', { headers: headers }).then(function (r) { return r.json(); }).catch(function () { return {}; }),
   ]).then(function (results) {
-    _tree            = results[0];
-    _allGrades       = results[1] || {};
-    _pilots          = results[2] || {};
-    _requests        = Array.isArray(results[3]) ? results[3] : [];
-    _squadrons       = Array.isArray(results[4]) ? results[4] : [];
-    _pilotSquadrons  = (results[5] && typeof results[5] === 'object') ? results[5] : {};
+    _tree              = results[0];
+    _allGrades         = results[1] || {};
+    _pilots            = results[2] || {};
+    _requests          = Array.isArray(results[3]) ? results[3] : [];
+    _squadrons         = Array.isArray(results[4]) ? results[4] : [];
+    _pilotSquadrons    = (results[5] && typeof results[5] === 'object') ? results[5] : {};
+    _pilotSqOverrides  = (results[6] && typeof results[6] === 'object') ? results[6] : {};
 
     renderGradingQueue();
     renderPilotList();
@@ -173,7 +186,7 @@ function renderGradingQueue() {
       actDiv.appendChild(claimBtn);
     }
 
-    if (req.status === 'claimed') {
+    if (req.status === 'claimed' && req.claimed_by === _currentUserSub) {
       var unclaimBtn = document.createElement('button');
       unclaimBtn.className = 'btn-sm';
       unclaimBtn.textContent = 'UNCLAIM';
@@ -276,9 +289,11 @@ function selectPilot(sub) {
   nameSpan.style.cssText = 'font-size:10px;color:var(--text-3)';
   nameSpan.textContent = pilot.name || '';
 
+  var isOverridden = Object.prototype.hasOwnProperty.call(_pilotSqOverrides, sub);
+
   var sqBadge = document.createElement('span');
   sqBadge.className = sqName ? 'pilot-detail-squadron' : 'pilot-detail-squadron pilot-detail-squadron--none';
-  sqBadge.textContent = sqName || 'NO SQUADRON';
+  sqBadge.textContent = (sqName || 'NO SQUADRON') + (isOverridden ? ' ✎' : '');
 
   var scoreSpan = document.createElement('span');
   scoreSpan.style.cssText = 'font-family:Orbitron,monospace;font-weight:700;font-size:20px;color:var(--green);margin-left:auto';
@@ -299,7 +314,54 @@ function selectPilot(sub) {
   hdr.appendChild(delPilotBtn);
   el.appendChild(hdr);
 
+  /* Squadron override row */
+  var sqOverrideRow = document.createElement('div');
+  sqOverrideRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:8px 10px;background:var(--surface-2,rgba(255,255,255,.04));border:1px solid var(--border);border-radius:3px';
+
+  var sqOverrideLabel = document.createElement('span');
+  sqOverrideLabel.style.cssText = 'font-size:9px;letter-spacing:1px;color:var(--text-3);flex-shrink:0';
+  sqOverrideLabel.textContent = 'SQUADRON';
+
+  var sqSel = document.createElement('select');
+  sqSel.className = 'grade-select';
+  sqSel.style.flex = '1';
+  var autoOpt = document.createElement('option');
+  autoOpt.value = '';
+  autoOpt.textContent = isOverridden ? '(auto — clear override)' : '(auto: ' + (sqName || 'none') + ')';
+  sqSel.appendChild(autoOpt);
+  _squadrons.forEach(function (sq) {
+    var opt = document.createElement('option');
+    opt.value = sq.id;
+    opt.textContent = sq.designator + ' ' + sq.name;
+    if (sqId === sq.id) opt.selected = true;
+    sqSel.appendChild(opt);
+  });
+
+  var sqSaveBtn = document.createElement('button');
+  sqSaveBtn.className   = 'btn-sm btn-sm-blue';
+  sqSaveBtn.textContent = 'SET';
+  sqSaveBtn.title       = 'Override automatic squadron selection for this pilot';
+
+  var sqNote = document.createElement('span');
+  sqNote.style.cssText = 'font-size:8px;color:var(--text-3)';
+  sqNote.textContent = isOverridden ? 'OVERRIDE ACTIVE' : 'auto';
+
+  (function (s, selEl, noteEl) {
+    sqSaveBtn.addEventListener('click', function () {
+      setPilotSquadron(s, selEl.value || null, noteEl);
+    });
+  })(sub, sqSel, sqNote);
+
+  sqOverrideRow.appendChild(sqOverrideLabel);
+  sqOverrideRow.appendChild(sqSel);
+  sqOverrideRow.appendChild(sqSaveBtn);
+  sqOverrideRow.appendChild(sqNote);
+  el.appendChild(sqOverrideRow);
+
   categoriesForPilot(sub).forEach(function (cat) {
+    if (!Object.prototype.hasOwnProperty.call(_detailCollapsed, cat.id)) {
+      _detailCollapsed[cat.id] = true;
+    }
     var catSection  = document.createElement('div');
     catSection.className = 'skill-list-category';
     var mods        = cat.modules || [];
@@ -438,6 +500,45 @@ function buildAdminModuleEl(mod, grades, sub) {
   return card;
 }
 
+/* ── Squadron override ──────────────────────────────────── */
+function setPilotSquadron(sub, squadronId, noteEl) {
+  var tok = getToken();
+  fetch('/api/skill-pilots/' + encodeURIComponent(sub) + '/squadron', {
+    method:  'PUT',
+    headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ squadron_id: squadronId || null }),
+  }).then(function (r) {
+    if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || String(r.status)); });
+    return r.json();
+  }).then(function (result) {
+    var resolved = result.squadron_id || null;
+    if (resolved) {
+      _pilotSqOverrides[sub] = resolved;
+      _pilotSquadrons[sub]   = resolved;
+      if (noteEl) noteEl.textContent = 'OVERRIDE ACTIVE';
+      renderPilotList();
+      selectPilot(sub);
+      showToast('Squadron override set');
+    } else {
+      delete _pilotSqOverrides[sub];
+      /* Reload squadrons to get the freshly-auto-resolved value */
+      var tok2 = getToken();
+      fetch('/api/skill-pilots-squadrons', { headers: { 'Authorization': 'Bearer ' + tok2 } })
+        .then(function (r) { return r.json(); })
+        .then(function (map) {
+          _pilotSquadrons = map || {};
+          renderPilotList();
+          selectPilot(sub);
+          showToast('Squadron override cleared');
+        }).catch(function () {
+          renderPilotList();
+          selectPilot(sub);
+          showToast('Squadron override cleared');
+        });
+    }
+  }).catch(function (err) { showToast('Error: ' + err.message, true); });
+}
+
 /* ── Pilot delete ───────────────────────────────────────── */
 function deletePilot(sub, callsign) {
   var confirm1 = confirm(
@@ -565,6 +666,11 @@ function deleteRequest(id) {
 
 function initTreeEditor() {
   _treeEditor = JSON.parse(JSON.stringify(_tree || { categories: [] }));
+  (_treeEditor.categories || []).forEach(function (cat) {
+    if (!Object.prototype.hasOwnProperty.call(_editorCollapsed, cat.id)) {
+      _editorCollapsed[cat.id] = true;
+    }
+  });
   renderTreeEditor();
 }
 

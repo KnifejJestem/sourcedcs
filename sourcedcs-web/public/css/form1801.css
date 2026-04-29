@@ -1,0 +1,169 @@
+/* ═══════════════════════════════════════════════════════════
+   FORM 1801 — DD Form 1801 ICAO IFR Flight Plan
+   Extends flightplan.css (loaded first)
+═══════════════════════════════════════════════════════════ */
+
+/* ── Hero link to DD 175 ────────────────────────────────── */
+.fpl-link {
+  color: var(--text-3);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  font-size: 9px;
+  letter-spacing: 1px;
+  transition: color .15s, border-color .15s;
+}
+.fpl-link:hover { color: var(--text); border-color: var(--text); }
+:root.movie .fpl-link:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── Panel helper note ──────────────────────────────────── */
+.fp-panel-note {
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+  margin-top: 10px;
+  line-height: 1.6;
+}
+.fp-panel-note code {
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  font-size: 8px;
+}
+
+/* ── FPL Message Preview ────────────────────────────────── */
+.fpl-msg-pre {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+  letter-spacing: 0.3px;
+}
+:root.movie .fpl-msg-pre {
+  color: var(--accent);
+  text-shadow: 0 0 10px rgba(57,255,122,.15);
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.fpl-msg-pre--detail {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  margin-top: 8px;
+}
+:root.movie .fpl-msg-pre--detail { background: var(--bg3); }
+
+/* ════════════════════════════════════════════════════════════
+   PRINT STYLES — DD Form 1801
+   Only #fpl1801PrintView is shown. All else hidden.
+════════════════════════════════════════════════════════════ */
+@media print {
+  header, footer, .fp-hero, .fp-container,
+  .fp-detail-overlay, .scanline { display: none !important; }
+
+  #fpl1801PrintView { display: block !important; }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 9pt;
+  }
+
+  /* Outer wrapper */
+  .fpl1801-print { page-break-inside: avoid; }
+  .fpl1801-print-form {
+    border: 2px solid #000;
+    width: 100%;
+    font-family: 'Courier New', Courier, monospace;
+  }
+
+  /* Title / sub rows */
+  .fpl1801-print-title-row {
+    text-align: center;
+    font-size: 11pt;
+    font-weight: bold;
+    letter-spacing: 2pt;
+    padding: 4pt;
+    border-bottom: 1px solid #000;
+    background: #eee;
+  }
+  .fpl1801-print-sub-row {
+    text-align: center;
+    font-size: 7pt;
+    padding: 2pt;
+    border-bottom: 1px solid #000;
+    color: #444;
+  }
+
+  /* FPL message block */
+  .fpl1801-print-msg-wrap {
+    border-bottom: 1px solid #000;
+    padding: 4pt 6pt;
+    background: #fafafa;
+  }
+  .fpl1801-print-msg-lbl {
+    font-size: 6pt;
+    color: #555;
+    margin-bottom: 2pt;
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+  }
+  .fpl1801-print-msg {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 8.5pt;
+    margin: 0;
+    white-space: pre;
+    line-height: 1.5;
+  }
+
+  /* Field grid */
+  .fpl1801-print-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    width: 100%;
+  }
+
+  .fpl1801-print-cell {
+    border-right: 1px solid #000;
+    border-bottom: 1px solid #000;
+    padding: 3pt 5pt;
+    display: flex;
+    flex-direction: column;
+    gap: 2pt;
+  }
+  .fpl1801-print-cell:nth-child(4n) { border-right: none; }
+  .fpl1801-print-cell:last-child { border-bottom: none; }
+
+  /* Full-width cells (route, other info) */
+  .fpl1801-print-cell--full {
+    grid-column: span 4;
+  }
+  .fpl1801-print-cell--full { border-right: none; }
+
+  /* Half-width (PIC takes 2 cols) */
+  .fpl1801-print-cell--half {
+    grid-column: span 2;
+  }
+  .fpl1801-print-cell--half { border-right: none; }
+
+  .fpl1801-print-lbl {
+    font-size: 5.5pt;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .fpl1801-print-val {
+    font-size: 9pt;
+    font-weight: bold;
+    color: #000;
+    word-break: break-all;
+  }
+}
+
+/* Hide print view on screen */
+#fpl1801PrintView { display: none; }

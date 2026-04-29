@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flight Plan (DD 175) — SOURCE DCS</title>
-  <meta name="description" content="Submit a DD Form 175 military flight plan for SOURCE DCS operations.">
+  <title>DD Form 1801 — ICAO IFR Flight Plan — SOURCE DCS</title>
+  <meta name="description" content="Submit a DD Form 1801 ICAO IFR international flight plan for SOURCE DCS operations.">
   <link rel="icon" href="sourcelogobg.png">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/flightplan.css">
+  <link rel="stylesheet" href="css/form1801.css">
 </head>
 <body>
 
@@ -20,11 +21,7 @@
   </a>
   <nav class="header-nav" id="mainNav" aria-label="Main navigation">
     <a class="nav-link" href="/#about">ABOUT</a>
-    <a class="nav-link" href="gallery.html">GALLERY</a>
     <a class="nav-link" href="/#subsquadrons">WINGS</a>
-    <a class="nav-link" href="schedule.html">SCHEDULE</a>
-    <a class="nav-link" href="skills.html">TRAINING</a>
-    <a class="nav-link active-nav" href="flightplan.html">FLIGHT PLAN</a>
     <a class="nav-link" href="/#join">JOIN</a>
   </nav>
   <div class="header-spacer"></div>
@@ -46,8 +43,8 @@
 <section class="fp-hero">
   <div class="fp-hero-inner">
     <div class="section-label">FLIGHT OPERATIONS</div>
-    <h1 class="fp-title">DD FORM 175 — FLIGHT PLAN</h1>
-    <p class="fp-sub">Military flight plan &middot; All times Zulu (UTC) &middot; Log in to submit</p>
+    <h1 class="fp-title">DD FORM 1801 — ICAO INTERNATIONAL FLIGHT PLAN</h1>
+    <p class="fp-sub">ICAO Doc 4444 format &middot; All times UTC (Zulu) &middot; Log in to submit &middot; <a class="fpl-link" href="form175.html">DD Form 175 &rarr;</a></p>
   </div>
 </section>
 
@@ -60,168 +57,239 @@
 <!-- Main content -->
 <div id="fpMain" style="display:none">
 
-  <!-- ── New Flight Plan Form ────────────────────────────── -->
-  <div class="fp-container" id="fpFormSection">
+  <!-- ── Admin panel ────────────────────────────────────── -->
+  <div class="fp-container" style="padding-bottom:0">
+    <div id="fpl1801AdminPanel" class="fp-admin-panel" style="display:none"></div>
+  </div>
+
+  <!-- ── Form ─────────────────────────────────────────── -->
+  <div class="fp-container" id="fpl1801FormSection">
 
     <div class="fp-form-header">
-      <div class="fp-form-title">NEW FLIGHT PLAN</div>
-      <div class="fp-form-sub">AUTHORITY: <span id="fpAuthorityDisplay">10 USC 8012 AND EO 9397</span></div>
+      <div class="fp-form-title">NEW FLIGHT PLAN — DD FORM 1801</div>
+      <div class="fp-form-sub">ICAO DOC 4444 (PANS-ATM) &nbsp;&middot;&nbsp; ICAO DOC 8643 &nbsp;&middot;&nbsp; DOD FLIP GP</div>
     </div>
 
-    <!-- Section 1: Document Header -->
+    <!-- ── Fields 7 & 8 ── -->
     <div class="fp-panel">
-      <div class="fp-panel-label">PART 1 — DOCUMENT HEADER</div>
+      <div class="fp-panel-label">FIELDS 7 &amp; 8 — IDENTIFICATION / FLIGHT RULES / TYPE</div>
       <div class="fp-panel-body">
         <div class="fp-row">
-          <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpDate">1. DATE <span class="fp-hint">(DD MON YY)</span> <span class="fp-req">*</span></label>
-            <input class="fp-input" id="fpDate" type="text" maxlength="12" placeholder="24 APR 26" autocomplete="off">
+          <div class="fp-field" style="flex:2;min-width:140px">
+            <label class="fp-label" for="fpl7">7 — AIRCRAFT IDENTIFICATION <span class="fp-req">*</span></label>
+            <input class="fp-input fp-upper" id="fpl7" type="text" maxlength="7" placeholder="AAL123" autocomplete="off">
           </div>
-          <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpCallSign">2. AIRCRAFT CALL SIGN <span class="fp-req">*</span></label>
-            <input class="fp-input fp-upper" id="fpCallSign" type="text" maxlength="16" placeholder="HAWK 11" autocomplete="off">
+          <div class="fp-field" style="flex:2;min-width:180px">
+            <label class="fp-label" for="fpl8a">8 — FLIGHT RULES <span class="fp-req">*</span></label>
+            <select class="fp-input" id="fpl8a">
+              <option value="I" selected>I — IFR</option>
+              <option value="V">V — VFR</option>
+              <option value="Y">Y — IFR then VFR</option>
+              <option value="Z">Z — VFR then IFR</option>
+            </select>
           </div>
-          <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpAircraftDesig">3. AIRCRAFT DESG AND TO CODE <span class="fp-req">*</span></label>
-            <input class="fp-input fp-upper" id="fpAircraftDesig" type="text" maxlength="32" placeholder="F-16C/B" autocomplete="off">
-          </div>
-          <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpAuthority">AUTHORITY</label>
-            <input class="fp-input fp-upper" id="fpAuthority" type="text" maxlength="64" placeholder="10 USC 8012 AND EO 9397" value="10 USC 8012 AND EO 9397" autocomplete="off">
+          <div class="fp-field" style="flex:3;min-width:200px">
+            <label class="fp-label" for="fpl8b">TYPE OF FLIGHT <span class="fp-req">*</span></label>
+            <select class="fp-input" id="fpl8b">
+              <option value="S">S — Scheduled Air Transport</option>
+              <option value="N">N — Non-scheduled Air Transport</option>
+              <option value="G">G — General Aviation</option>
+              <option value="M" selected>M — Military</option>
+              <option value="X">X — Other</option>
+            </select>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Section 2: Route Legs -->
+    <!-- ── Field 9 ── -->
     <div class="fp-panel">
-      <div class="fp-panel-label">
-        PART 2 — ROUTE OF FLIGHT
-        <button class="fp-add-btn" onclick="fpAddLeg()">+ ADD LEG</button>
-      </div>
-      <div class="fp-panel-body fp-panel-body--flush">
-        <div class="fp-table-scroll">
-          <table class="fp-legs-table">
-            <thead>
-              <tr>
-                <th style="width:32px">4. TYPE <span class="fp-req">*</span></th>
-                <th style="width:70px">5. TAS (KT)</th>
-                <th style="width:80px">6. DEPARTURE <span class="fp-req">*</span></th>
-                <th style="width:80px">7. DEP TIME (Z) <span class="fp-req">*</span></th>
-                <th style="width:80px">8. ALT (FT&times;100)</th>
-                <th>9. ROUTE OF FLIGHT</th>
-                <th style="width:80px">10. DEST <span class="fp-req">*</span></th>
-                <th style="width:70px">11. ETE <span class="fp-req">*</span></th>
-                <th style="width:32px"></th>
-              </tr>
-            </thead>
-            <tbody id="fpLegsTbody"></tbody>
-          </table>
+      <div class="fp-panel-label">FIELD 9 — NUMBER / TYPE / WAKE TURBULENCE CATEGORY</div>
+      <div class="fp-panel-body">
+        <div class="fp-row">
+          <div class="fp-field" style="min-width:90px">
+            <label class="fp-label" for="fpl9n">9 — NUMBER <span class="fp-req">*</span></label>
+            <input class="fp-input" id="fpl9n" type="number" min="1" max="99" value="1" style="width:80px">
+          </div>
+          <div class="fp-field" style="flex:2;min-width:140px">
+            <label class="fp-label" for="fpl9t">TYPE OF AIRCRAFT <span class="fp-req">*</span></label>
+            <input class="fp-input fp-upper" id="fpl9t" type="text" maxlength="4" placeholder="B738" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:2;min-width:160px">
+            <label class="fp-label" for="fpl9w">WAKE TURBULENCE CAT. <span class="fp-req">*</span></label>
+            <select class="fp-input" id="fpl9w">
+              <option value="L">L — Light</option>
+              <option value="M" selected>M — Medium</option>
+              <option value="H">H — Heavy</option>
+              <option value="J">J — Super</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Section 3: Administrative Fields -->
+    <!-- ── Field 10 ── -->
     <div class="fp-panel">
-      <div class="fp-panel-label">PART 3 — ADMINISTRATIVE DATA</div>
+      <div class="fp-panel-label">FIELD 10 — EQUIPMENT</div>
+      <div class="fp-panel-body">
+        <div class="fp-row">
+          <div class="fp-field" style="flex:3;min-width:180px">
+            <label class="fp-label" for="fpl10a">COM/NAV/APPROACH AID EQUIPMENT <span class="fp-req">*</span></label>
+            <input class="fp-input fp-upper" id="fpl10a" type="text" maxlength="64" value="ITUV" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:2;min-width:140px">
+            <label class="fp-label" for="fpl10b">TRANSPONDER <span class="fp-req">*</span></label>
+            <input class="fp-input fp-upper" id="fpl10b" type="text" maxlength="8" value="C" autocomplete="off">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Field 13 ── -->
+    <div class="fp-panel">
+      <div class="fp-panel-label">FIELD 13 — DEPARTURE AERODROME &amp; TIME</div>
+      <div class="fp-panel-body">
+        <div class="fp-row">
+          <div class="fp-field" style="flex:1;min-width:140px">
+            <label class="fp-label" for="fpl13a">13 — DEPARTURE AERODROME <span class="fp-req">*</span></label>
+            <input class="fp-input fp-upper" id="fpl13a" type="text" maxlength="4" placeholder="EDDF" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1;min-width:120px">
+            <label class="fp-label" for="fpl13b">DEPARTURE TIME (Z) <span class="fp-req">*</span></label>
+            <input class="fp-input" id="fpl13b" type="text" maxlength="4" placeholder="1632" autocomplete="off">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Field 15 ── -->
+    <div class="fp-panel">
+      <div class="fp-panel-label">FIELD 15 — CRUISING SPEED / LEVEL / ROUTE</div>
+      <div class="fp-panel-body">
+        <div class="fp-row">
+          <div class="fp-field" style="min-width:140px">
+            <label class="fp-label" for="fpl15su">15 — SPEED UNIT <span class="fp-req">*</span></label>
+            <select class="fp-input" id="fpl15su" style="width:160px">
+              <option value="K">K — km/h</option>
+              <option value="N" selected>N — Knots</option>
+              <option value="M">M — Mach</option>
+            </select>
+          </div>
+          <div class="fp-field" style="min-width:100px">
+            <label class="fp-label" for="fpl15sv">SPEED VALUE <span class="fp-req">*</span></label>
+            <input class="fp-input" id="fpl15sv" type="text" maxlength="4" placeholder="0450" autocomplete="off" style="width:90px">
+          </div>
+          <div class="fp-field" style="min-width:160px">
+            <label class="fp-label" for="fpl15lu">LEVEL UNIT <span class="fp-req">*</span></label>
+            <select class="fp-input" id="fpl15lu" style="width:180px">
+              <option value="F" selected>F — Flight Level</option>
+              <option value="A">A — Altitude (×100 ft)</option>
+              <option value="S">S — Metric level</option>
+              <option value="M">M — Metric altitude</option>
+            </select>
+          </div>
+          <div class="fp-field" style="min-width:100px">
+            <label class="fp-label" for="fpl15lv">LEVEL VALUE <span class="fp-req">*</span></label>
+            <input class="fp-input" id="fpl15lv" type="text" maxlength="4" placeholder="350" autocomplete="off" style="width:90px">
+          </div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="fpl15r">ROUTE <span class="fp-req">*</span></label>
+          <textarea class="fp-input fp-textarea fp-upper" id="fpl15r" rows="3" maxlength="1000" placeholder="DCT DEVOL UL9 KONAN DCT"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Field 16 ── -->
+    <div class="fp-panel">
+      <div class="fp-panel-label">FIELD 16 — DESTINATION / TOTAL EET / ALTERNATES</div>
+      <div class="fp-panel-body">
+        <div class="fp-row">
+          <div class="fp-field" style="flex:1;min-width:140px">
+            <label class="fp-label" for="fpl16a">16 — DESTINATION AERODROME <span class="fp-req">*</span></label>
+            <input class="fp-input fp-upper" id="fpl16a" type="text" maxlength="4" placeholder="EGLL" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1;min-width:120px">
+            <label class="fp-label" for="fpl16e">TOTAL EET <span class="fp-req">*</span></label>
+            <input class="fp-input" id="fpl16e" type="text" maxlength="4" placeholder="0215" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1;min-width:120px">
+            <label class="fp-label" for="fpl16alt1">ALTN AERODROME</label>
+            <input class="fp-input fp-upper" id="fpl16alt1" type="text" maxlength="4" placeholder="EGKK" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1;min-width:120px">
+            <label class="fp-label" for="fpl16alt2">2ND ALTN AERODROME</label>
+            <input class="fp-input fp-upper" id="fpl16alt2" type="text" maxlength="4" autocomplete="off">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Field 18 ── -->
+    <div class="fp-panel">
+      <div class="fp-panel-label">FIELD 18 — OTHER INFORMATION</div>
       <div class="fp-panel-body">
         <div class="fp-field">
-          <label class="fp-label" for="fpRemarks">12. REMARKS</label>
-          <textarea class="fp-input fp-textarea" id="fpRemarks" rows="3" maxlength="1000" placeholder="e.g. KOZR-S, REQUEST RADAR DEPARTURE, PPR 0723..."></textarea>
-        </div>
-        <div class="fp-row">
-          <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpRankHonor">13. RANK AND HONOR CODE</label>
-            <input class="fp-input fp-upper" id="fpRankHonor" type="text" maxlength="32" placeholder="CPT" value="CPT" autocomplete="off">
-          </div>
-          <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpFuel">14. FUEL ON BD <span class="fp-hint">(H+MM)</span></label>
-            <input class="fp-input" id="fpFuel" type="text" maxlength="5" placeholder="4+30" autocomplete="off">
-          </div>
-          <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpAlternate">15. ALTN AIRFIELD</label>
-            <input class="fp-input fp-upper" id="fpAlternate" type="text" maxlength="4" placeholder="KLSF" autocomplete="off">
-          </div>
-          <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpEteAltn">16. ETE TO ALTN <span class="fp-hint">(H+MM)</span></label>
-            <input class="fp-input" id="fpEteAltn" type="text" maxlength="5" placeholder="0+50" autocomplete="off">
-          </div>
-        </div>
-        <div class="fp-row">
-          <div class="fp-field fp-field--check" style="flex:1">
-            <label class="fp-label">17. NOTAMS</label>
-            <label class="fp-check-label">
-              <input type="checkbox" id="fpNotams"> REVIEWED
-            </label>
-          </div>
-          <div class="fp-field" style="flex:1">
-            <label class="fp-label" for="fpWeather">18. WEATHER</label>
-            <input class="fp-input fp-upper" id="fpWeather" type="text" maxlength="64" placeholder="LS 18" autocomplete="off">
-          </div>
-          <div class="fp-field" style="flex:2">
-            <label class="fp-label" for="fpWtBal">19. WT AND BALANCE</label>
-            <input class="fp-input fp-upper" id="fpWtBal" type="text" maxlength="64" placeholder="KOZR, 24 APR 26" autocomplete="off">
-          </div>
-        </div>
-        <div class="fp-field">
-          <label class="fp-label" for="fpAcSerial">20. AIRCRAFT SERIAL NUMBER, UNIT, AND HOME STATION</label>
-          <input class="fp-input fp-upper" id="fpAcSerial" type="text" maxlength="128" placeholder="96-0001 / VIPER SQDN / UGKO" autocomplete="off">
+          <label class="fp-label" for="fpl18">OTHER INFORMATION <span class="fp-req">*</span></label>
+          <textarea class="fp-input fp-textarea fp-upper" id="fpl18" rows="3" maxlength="500">DOF/YY-MM-DD OPR/DOD REG/##### STS/STATE RMK/OAT MDCN PERM 265501</textarea>
         </div>
       </div>
     </div>
 
-    <!-- Section 4: Crew / Passenger Manifest -->
+    <!-- ── Supplementary Field 19 ── -->
     <div class="fp-panel">
-      <div class="fp-panel-label">
-        PART 4 — CREW / PASSENGER MANIFEST
-        <button class="fp-add-btn" onclick="fpAddCrew()">+ ADD ROW</button>
-      </div>
-      <div class="fp-panel-body fp-panel-body--flush">
-        <div class="fp-table-scroll">
-          <table class="fp-crew-table">
-            <thead>
-              <tr>
-                <th style="width:160px">24. DUTY POSITION</th>
-                <th>25. NAME AND INITIALS</th>
-                <th style="width:70px">26. RANK</th>
-                <th style="width:110px">27. SSN / MEMBER ID</th>
-                <th>28. ORGANIZATION AND LOCATION</th>
-                <th style="width:32px"></th>
-              </tr>
-            </thead>
-            <tbody id="fpCrewTbody"></tbody>
-          </table>
+      <div class="fp-panel-label">SUPPLEMENTARY INFORMATION — FIELD 19</div>
+      <div class="fp-panel-body">
+        <div class="fp-row">
+          <div class="fp-field" style="flex:1;min-width:120px">
+            <label class="fp-label" for="fpl19e">E/ — ENDURANCE <span class="fp-req">*</span></label>
+            <input class="fp-input" id="fpl19e" type="text" maxlength="4" placeholder="0430" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:1;min-width:120px">
+            <label class="fp-label" for="fpl19p">P/ — PEOPLE ON BOARD <span class="fp-req">*</span></label>
+            <input class="fp-input" id="fpl19p" type="text" maxlength="8" placeholder="180" value="0" autocomplete="off">
+          </div>
+          <div class="fp-field" style="flex:3;min-width:200px">
+            <label class="fp-label" for="fpl19c">C/ — PILOT IN COMMAND <span class="fp-req">*</span></label>
+            <input class="fp-input fp-upper" id="fpl19c" type="text" maxlength="56" placeholder="SMITH JOHN" autocomplete="off">
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Actions -->
     <div class="fp-actions">
-      <div class="fp-msg fp-error" id="fpError" style="display:none"></div>
-      <div class="fp-msg fp-success" id="fpSuccess" style="display:none"></div>
+      <div class="fp-msg fp-error"   id="fpl1801Error"   style="display:none"></div>
+      <div class="fp-msg fp-success" id="fpl1801Success" style="display:none"></div>
       <div class="fp-actions-row">
-        <button class="btn btn-ghost" onclick="fpPrint()">PRINT PREVIEW</button>
-        <button class="btn btn-primary" id="fpSubmitBtn" onclick="fpSubmit()">SUBMIT FLIGHT PLAN</button>
+        <button class="btn btn-ghost" onclick="fpl1801Print()">PRINT PREVIEW</button>
+        <button class="btn btn-primary" id="fpl1801SubmitBtn" onclick="fpl1801Submit()">SUBMIT FLIGHT PLAN</button>
       </div>
     </div>
 
-  </div><!-- /fpFormSection -->
+  </div><!-- /fpl1801FormSection -->
 
-  <!-- ── Admin: controller squadron config ─────────────── -->
+  <!-- ── FPL Message Preview ───────────────────────────── -->
   <div class="fp-container fp-plans-section" style="padding-bottom:0">
-    <div id="fpAdminPanel" class="fp-admin-panel" style="display:none"></div>
+    <div class="fp-panel">
+      <div class="fp-panel-label">FPL MESSAGE PREVIEW</div>
+      <div class="fp-panel-body">
+        <pre id="fplPreview" class="fpl-msg-pre">(FPL
+-...)</pre>
+      </div>
+    </div>
   </div>
 
   <!-- ── Submitted Plans ─────────────────────────────────── -->
   <div class="fp-container fp-plans-section">
-    <div class="fp-section-divider" id="fpPlansLabel">SUBMITTED FLIGHT PLANS</div>
-    <div id="fpPlansList"></div>
+    <div class="fp-section-divider" id="fpl1801PlansLabel">SUBMITTED FLIGHT PLANS</div>
+    <div id="fpl1801PlansList"></div>
   </div>
 
 </div><!-- /fpMain -->
 
-<!-- ── Print view (rendered by JS, shown only during print) ── -->
-<div id="fpPrintView"></div>
+<!-- ── Print view ── -->
+<div id="fpl1801PrintView"></div>
 
 <footer>
   <div class="footer-inner">
@@ -238,7 +306,7 @@
 
 <script src="/js/config.js"></script>
 <script src="/js/auth.js"></script>
-<script src="/js/flightplan.js"></script>
+<script src="/js/form1801.js"></script>
 
 </body>
 </html>

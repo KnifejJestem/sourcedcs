@@ -9,7 +9,7 @@ function setTheme(t) {
 /* ── Apply external links from config ── */
 (function() {
   function setLink(id, url) { var el = document.getElementById(id); if (el && url) el.href = url; }
-  setLink('toolDiscordLink',  typeof DISCORD_URL  !== 'undefined' ? DISCORD_URL  : null);
+  setLink('socialDiscordLink', typeof DISCORD_URL  !== 'undefined' ? DISCORD_URL  : null);
   setLink('toolWikiLink',     typeof WIKI_URL     !== 'undefined' ? WIKI_URL     : null);
   setLink('toolAtoLink',      typeof ATO_URL      !== 'undefined' ? ATO_URL      : null);
   setLink('toolOlympusLink',  typeof OLYMPUS_URL  !== 'undefined' ? OLYMPUS_URL  : null);
@@ -46,6 +46,10 @@ function logoutCasdoor() {
     portal.style.display = '';
     var wel = document.getElementById('memberWelcome');
     if (wel) wel.textContent = 'WELCOME BACK, ' + name;
+  }
+  if (isAdminRole(token)) {
+    var adminCard = document.getElementById('toolSkillsAdminLink');
+    if (adminCard) adminCard.style.display = '';
   }
 })();
 

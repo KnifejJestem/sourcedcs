@@ -298,6 +298,16 @@ io.on('connection', (socket) => {
     socket.to(currentSessionId).emit('display-changed', display);
   });
 
+  // ── Presenter: close room ─────────────────────────────────
+  socket.on('close-room', () => {
+    if (!currentSessionId || currentRole !== 'presenter') return;
+    const session = sessions.get(currentSessionId);
+    if (!session || session.presenterId !== socket.id) return;
+
+    io.to(currentSessionId).emit('room-closed');
+    sessions.delete(currentSessionId);
+  });
+
   // ── Disconnect ────────────────────────────────────────────
   socket.on('disconnect', () => {
     if (currentSessionId) {
@@ -316,6 +326,22 @@ io.on('connection', (socket) => {
       }
     }
   });
+});
+
+// ── Active rooms list ────────────────────────────────────────
+app.get('/api/rooms', (_req, res) => {
+  const rooms = [];
+  sessions.forEach((session, id) => {
+    if (session.members.size === 0 && session.packageYaml === null) return;
+    rooms.push({
+      id,
+      hasPackage:      session.packageYaml !== null,
+      presenterActive: session.presenterId !== null &&
+                       !!(io.sockets.sockets.get(session.presenterId)?.connected),
+      members:         buildPresence(session),
+    });
+  });
+  res.json({ rooms });
 });
 
 // ── Start ────────────────────────────────────────────────────
