@@ -1,79 +1,91 @@
-const grpc = require('@grpc/grpc-js');
-const protoLoader = require('@grpc/proto-loader');
-const WebSocket = require('ws');
+'use strict';
+require('dotenv').config();
+const http = require('http');
+const fs   = require('fs');
 const path = require('path');
 
-const PROTO_PATH = '/home/nklx/Downloads/DCS-gRPC-0.8.1/Docs/DCS-gRPC/protos';
-const DCS_HOST = 'server.sourcedcs.page:50051';
+const GrpcClient = require('./src/grpc-client');
+const SrsClient  = require('./src/srs-client');
+const TrackStore = require('./src/tracks');
+const WsServer   = require('./src/ws-server');
 
-const packageDef = protoLoader.loadSync(
-    path.join(PROTO_PATH, 'dcs/mission/v0/mission.proto'),
-    { keepCase: true, includeDirs: [PROTO_PATH] }
-);
-const proto = grpc.loadPackageDefinition(packageDef);
-const MissionService = proto.dcs.mission.v0.MissionService;
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
-const client = new MissionService(DCS_HOST, grpc.credentials.createInsecure());
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js':   'application/javascript',
+  '.json': 'application/json',
+  '.css':  'text/css',
+  '.png':  'image/png',
+  '.svg':  'image/svg+xml',
+};
 
-const units = new Map();
+// ── HTTP server (static files + WebSocket upgrade) ────────────────────────
 
-function startStream() {
-    const stream = client.StreamUnits({
-        poll_rate: 1,
-        category: 'GROUP_CATEGORY_UNSPECIFIED'
-    });
+const httpServer = http.createServer((req, res) => {
+  const urlPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+  const filePath = path.normalize(path.join(PUBLIC_DIR, urlPath));
 
-    stream.on('data', (response) => {
-        if (response.unit) {
-            const u = response.unit;
-            units.set(u.id, {
-                id: u.id,
-                name: u.name,
-                callsign: u.callsign,
-                coalition: u.coalition,
-                type: u.type,
-                lat: u.position.lat,
-                lon: u.position.lon,
-                alt: Math.round(u.position.alt),
-                heading: u.orientation.heading,
-                speed: Math.round(u.velocity.speed),
-                player: u.player_name || null,
-                group: u.group.name
-            });
-        }
-        if (response.gone) {
-            units.delete(response.gone.id);
-        }
-    });
+  // Prevent path traversal
+  if (!filePath.startsWith(PUBLIC_DIR + path.sep) && filePath !== PUBLIC_DIR) {
+    res.writeHead(403);
+    return res.end('Forbidden');
+  }
 
-    stream.on('error', (err) => {
-        console.error('gRPC stream error:', err.message);
-        setTimeout(startStream, 3000);
-    });
-
-    stream.on('end', () => {
-        console.log('gRPC stream ended, reconnecting...');
-        setTimeout(startStream, 3000);
-    });
-
-    console.log('gRPC stream started');
-}
-
-const wss = new WebSocket.Server({ port: 3000 });
-
-wss.on('connection', (ws) => {
-    console.log('client connected');
-    ws.send(JSON.stringify({ type: 'snapshot', units: Array.from(units.values()) }));
-    ws.on('close', () => console.log('client disconnected'));
+  fs.readFile(filePath, (err, data) => {
+    if (err) { res.writeHead(404); return res.end('Not found'); }
+    const ct = MIME[path.extname(filePath)] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': ct });
+    res.end(data);
+  });
 });
 
-setInterval(() => {
-    if (wss.clients.size === 0) return;
-    const msg = JSON.stringify({ type: 'snapshot', units: Array.from(units.values()) });
-    wss.clients.forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(msg);
-    });
-}, 500);
+// ── Core components ───────────────────────────────────────────────────────
 
-startStream();
-console.log('WebSocket server listening on ws://localhost:3000');
+const store      = new TrackStore();
+const grpcClient = new GrpcClient();
+const srsClient  = new SrsClient();
+const wsServer   = new WsServer();
+
+wsServer.attach(httpServer, store, () => grpcClient.triggerMissionFetch());
+
+// ── gRPC → store + ws ─────────────────────────────────────────────────────
+
+grpcClient.on('unit', (unitData) => {
+  store.update(unitData, srsClient.getTransponder(unitData.player));
+});
+
+grpcClient.on('gone', (id) => {
+  store.remove(id);
+});
+
+grpcClient.on('mission-load', (missionData) => {
+  store.clear();
+  wsServer.setMissionData(missionData);
+  wsServer.broadcastInit();
+  console.log(`[crc] mission init — ${missionData.airports.length} airports`);
+});
+
+grpcClient.on('status', (state) => {
+  wsServer.setGrpcStatus(state);
+  wsServer.broadcastStatus();
+});
+
+// ── SRS → ws ─────────────────────────────────────────────────────────────
+
+srsClient.on('status', (state) => {
+  wsServer.setSrsStatus(state);
+  wsServer.broadcastStatus();
+});
+
+// ── Start ─────────────────────────────────────────────────────────────────
+// Delta broadcasts are now driven by per-client timers inside WsServer,
+// using the active view's sweepRate. No global interval needed.
+
+const port = parseInt(process.env.WS_PORT) || 3100;
+httpServer.listen(port, () => {
+  console.log(`[crc] http://localhost:${port}`);
+});
+
+grpcClient.connect();
+srsClient.connect();

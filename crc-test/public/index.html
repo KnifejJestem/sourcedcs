@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CRC</title>
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --ui-bg:          rgba(13,13,13,0.85);
+      --ui-bg-solid:    rgba(13,13,13,0.95);
+      --ui-bg-input:    #111;
+      --ui-border:      #1e2e1e;
+      --ui-border-2:    #2a3a2a;
+      --ui-border-3:    #2a4a2a;
+      --ui-border-4:    #1a2a1a;
+      --ui-text:        #4a6a4a;
+      --ui-text-dim:    #3a5a3a;
+      --ui-text-bright: #6a9a6a;
+      --ui-text-hi:     #8aca8a;
+      --ui-text-input:  #8aaa8a;
+      --ui-title:       #6a9a6a;
+      --ui-active:      #8aaa6a;
+      --ui-hover-bg:    #0d1f0d;
+      --ui-option-text: #4a7a4a;
+      --ui-sep:         #2a3a2a;
+    }
+    body.light {
+      --ui-bg:          rgba(237,236,234,0.92);
+      --ui-bg-solid:    rgba(237,236,234,0.98);
+      --ui-bg-input:    #f4f3f0;
+      --ui-border:      #c8c5bf;
+      --ui-border-2:    #9a9690;
+      --ui-border-3:    #9a9690;
+      --ui-border-4:    #c8c5bf;
+      --ui-text:        #4a4845;
+      --ui-text-dim:    #7a7875;
+      --ui-text-bright: #1a1917;
+      --ui-text-hi:     #1a1917;
+      --ui-text-input:  #1a1917;
+      --ui-title:       #1a1917;
+      --ui-active:      #1a5c2e;
+      --ui-hover-bg:    #e5e4e0;
+      --ui-option-text: #4a4845;
+      --ui-sep:         #9a9690;
+    }
+
+    body {
+      background: #0d0d0d;
+      font-family: 'Courier New', monospace;
+      color: var(--ui-text);
+      overflow: hidden;
+    }
+
+    #map { width: 100vw; height: 100vh; }
+
+    /* ── Top bar ── */
+    #topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 32px;
+      background: var(--ui-bg);
+      border-bottom: 1px solid var(--ui-border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 16px;
+      z-index: 20;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+
+    #topbar-title {
+      font-size: 13px;
+      font-weight: bold;
+      color: var(--ui-title);
+      letter-spacing: 0.15em;
+    }
+
+    .sep { color: var(--ui-sep); }
+
+    #status-grpc, #status-srs {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #333;
+    }
+    .dot.connected    { background: #4a9a4a; box-shadow: 0 0 4px #4a9a4a88; }
+    .dot.reconnecting { background: #9a7a4a; box-shadow: 0 0 4px #9a7a4a88; }
+    .dot.disconnected { background: #6a3a3a; }
+
+    /* View selector */
+    #view-selector {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+    #view-selector:hover #view-label { color: var(--ui-text-hi); }
+    #view-label {
+      color: var(--ui-text-bright);
+      font-weight: bold;
+      letter-spacing: 0.12em;
+    }
+    #view-caret { font-size: 8px; color: var(--ui-text-dim); }
+
+    /* View dropdown */
+    #view-dropdown {
+      display: none;
+      position: fixed;
+      top: 32px;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      z-index: 40;
+      min-width: 140px;
+    }
+    #view-dropdown.open { display: block; }
+    .view-option {
+      padding: 8px 14px;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--ui-option-text);
+      cursor: pointer;
+    }
+    .view-option:hover { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
+    .view-option.active { color: var(--ui-active); }
+    .view-option-badge {
+      font-size: 9px;
+      color: var(--ui-text-dim);
+      margin-left: 6px;
+      letter-spacing: 0.05em;
+    }
+
+    /* Reference aircraft display */
+    #ref-display {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+    #ref-display.active { color: var(--ui-active); }
+    #ref-display:hover { color: var(--ui-text-bright); }
+
+    /* Floating bullseye BRA (follows cursor) */
+    #cursor-bra {
+      position: fixed;
+      pointer-events: none;
+      z-index: 50;
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      color: #4488cc;
+      background: rgba(0,0,0,0.55);
+      padding: 2px 6px;
+      display: none;
+    }
+    body.light #cursor-bra { background: none; }
+    #cursor-bra.visible { display: block; }
+
+    /* Reference selection dropdown */
+    #ref-dropdown {
+      display: none;
+      position: fixed;
+      top: 32px;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      z-index: 40;
+      min-width: 180px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    #ref-dropdown.open { display: block; }
+    .ref-option {
+      padding: 7px 14px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--ui-option-text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .ref-option:hover { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
+    .ref-option.active { color: var(--ui-active); }
+    .ref-option.none-opt { color: var(--ui-text-dim); border-bottom: 1px solid var(--ui-border-4); }
+    .ref-option.none-opt:hover { color: var(--ui-text-bright); }
+    .ref-option.disabled { color: var(--ui-border-2); cursor: default; font-size: 10px; }
+    .ref-opt-type  { font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.04em; }
+    .ref-opt-badge { font-size: 9px; color: var(--ui-option-text); letter-spacing: 0.04em; margin-left: 4px; }
+
+    /* Airport selector */
+    #apt-dropdown {
+      display: none;
+      position: fixed;
+      top: 32px;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      z-index: 40;
+      min-width: 180px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    #apt-dropdown.open { display: block; }
+    .apt-option {
+      padding: 7px 14px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--ui-option-text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .apt-option:hover  { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
+    .apt-option.active { color: var(--ui-active); }
+    .apt-opt-name      { font-size: 9px; color: var(--ui-text-dim); }
+
+    /* Airport search input */
+    #apt-search-row {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    #apt-search {
+      width: 100%;
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 3px 6px;
+      outline: none;
+    }
+    #apt-search::placeholder { color: var(--ui-text-dim); }
+    #apt-search:focus { border-color: var(--ui-text-bright); }
+
+    /* Airport display button (only shown in airport view) */
+    #apt-sep, #apt-display { display: none; }
+    #apt-display {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+    #apt-display.active { color: var(--ui-active); }
+    #apt-display:hover  { color: var(--ui-text-bright); }
+
+    #track-count {
+      margin-left: auto;
+      color: var(--ui-text-dim);
+    }
+
+    #btn-settings, #btn-calls {
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    #btn-settings:hover, #btn-calls:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+
+    /* ── Settings panel ── */
+    #settings-panel {
+      position: fixed;
+      top: 32px; right: 0;
+      width: 260px;
+      height: calc(100vh - 32px);
+      background: var(--ui-bg-solid);
+      border-left: 1px solid var(--ui-border);
+      z-index: 30;
+      padding: 20px 16px;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+      overflow-y: auto;
+    }
+    #settings-panel.open { transform: translateX(0); }
+
+    .setting-group { margin-bottom: 20px; }
+
+    .setting-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 11px;
+    }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 36px; height: 20px;
+      cursor: pointer;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--ui-border);
+      border: 1px solid var(--ui-border-2);
+      border-radius: 10px;
+      transition: 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      top: 2px; left: 2px;
+      background: var(--ui-text-dim);
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--ui-border-3); border-color: var(--ui-active); }
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(16px);
+      background: var(--ui-active);
+    }
+
+    input[type="number"], input[type="range"] {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 3px 6px;
+      width: 70px;
+    }
+    input[type="range"] {
+      width: 120px;
+      padding: 0;
+      accent-color: var(--ui-active);
+    }
+    input[type="color"] {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      padding: 1px;
+      width: 34px;
+      height: 22px;
+      cursor: pointer;
+    }
+
+    .hr { border: none; border-top: 1px solid var(--ui-border-4); margin: 16px 0; }
+
+    /* ── Stale overlay ── */
+    #stale-banner {
+      position: fixed;
+      top: 32px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(60,30,10,0.9);
+      border: 1px solid #6a3a1a;
+      color: #9a5a3a;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      padding: 4px 14px;
+      z-index: 25;
+      display: none;
+    }
+    #stale-banner.visible { display: block; }
+
+    /* ── Disconnect overlay ── */
+    #disc-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #disc-overlay.visible { opacity: 1; }
+    #disc-msg {
+      color: #6a3a3a;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      border: 1px solid #3a1a1a;
+      padding: 10px 24px;
+      background: rgba(13,13,13,0.9);
+    }
+
+    /* ── Squawk callsign panel ── */
+    #calls-panel {
+      position: fixed;
+      top: 32px; right: 0;
+      width: 260px;
+      max-height: calc(100vh - 32px);
+      background: var(--ui-bg-solid);
+      border-left: 1px solid var(--ui-border);
+      z-index: 30;
+      padding: 16px;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+      overflow-y: auto;
+    }
+    #calls-panel.open { transform: translateX(0); }
+    .calls-title {
+      font-size: 10px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; margin-bottom: 12px;
+    }
+    .sqmap-add-row {
+      display: flex; gap: 4px; margin-bottom: 12px;
+    }
+    .sqmap-add-row input {
+      background: var(--ui-bg-input); border: 1px solid var(--ui-border-2); color: var(--ui-text-input);
+      font-family: inherit; font-size: 10px; padding: 4px 6px;
+    }
+    #sqmap-code-input  { width: 54px; }
+    #sqmap-name-input  { flex: 1; }
+    #sqmap-add {
+      background: none; border: 1px solid var(--ui-border-3); color: var(--ui-text-bright);
+      font-family: inherit; font-size: 10px; padding: 4px 8px; cursor: pointer;
+    }
+    #sqmap-add:hover { border-color: var(--ui-text-bright); color: var(--ui-active); }
+    #sqmap-list { display: flex; flex-direction: column; gap: 4px; }
+    .sqmap-row {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; padding: 3px 0; border-bottom: 1px solid var(--ui-border-4);
+    }
+    .sqmap-code  { color: var(--ui-active); min-width: 36px; }
+    .sqmap-arrow { color: var(--ui-text-dim); }
+    .sqmap-name  { flex: 1; color: var(--ui-text-input); letter-spacing: 0.05em; }
+    .sqmap-del   {
+      background: none; border: none; color: #6a3a3a; cursor: pointer;
+      font-size: 12px; padding: 0 4px; line-height: 1;
+    }
+    .sqmap-del:hover { color: #cc4444; }
+    .sqmap-empty { font-size: 10px; color: var(--ui-text-dim); font-style: italic; }
+
+    /* ── Approach panel ── */
+    #approach-panel {
+      display: none;
+      position: fixed;
+      top: 32px; left: 0;
+      max-height: calc(100vh - 32px);
+      background: var(--ui-bg-solid);
+      border-right: 1px solid var(--ui-border);
+      z-index: 30;
+      padding: 10px 10px 14px;
+      overflow-y: auto;
+    }
+    #approach-panel.open { display: block; }
+    .app-panel-title {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--ui-border-4);
+      padding-bottom: 5px;
+    }
+    #approach-table {
+      border-collapse: collapse;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+    #approach-table th {
+      color: var(--ui-text-dim);
+      font-weight: normal;
+      text-align: left;
+      padding: 0 6px 4px;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    #approach-table td {
+      padding: 3px 4px;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    #approach-table tr:last-child td { border-bottom: none; }
+    .app-col-cs   { color: var(--ui-text-bright); font-size: 11px; min-width: 60px; font-family: 'Courier New', monospace; }
+    .app-col-sqwk { color: var(--ui-text-dim); min-width: 36px; }
+    .app-col-alt  { color: var(--ui-active); min-width: 44px; text-align: right; }
+    .app-inp {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      padding: 2px 4px;
+      outline: none;
+      width: 52px;
+      text-transform: uppercase;
+    }
+    #approach-table th:nth-child(7),
+    #approach-table td:nth-child(7) .app-inp { width: 44px; }
+    .app-inp:focus { border-color: var(--ui-text-bright); }
+    .app-inp::placeholder { color: var(--ui-text-dim); text-transform: none; }
+    .app-atis-btn {
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-dim);
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      padding: 2px 6px;
+      cursor: pointer;
+      letter-spacing: 0.06em;
+      width: 28px;
+    }
+    .app-atis-btn.on  { color: var(--ui-active); border-color: var(--ui-active); }
+    .app-atis-btn:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- Floating bullseye BRA label (follows mouse cursor) -->
+<div id="cursor-bra"></div>
+
+<!-- View dropdown -->
+<div id="view-dropdown">
+  <div class="view-option active" data-view="crc">
+    CRC <span class="view-option-badge">THEATER</span>
+  </div>
+  <div class="view-option" data-view="airport">
+    AIRPORT <span class="view-option-badge">20NM</span>
+  </div>
+  <div class="view-option" data-view="approach">
+    APPROACH <span class="view-option-badge">80NM</span>
+  </div>
+</div>
+
+<!-- Reference selection dropdown (populated by JS) -->
+<div id="ref-dropdown"></div>
+
+<!-- Airport selection dropdown -->
+<div id="apt-dropdown">
+  <div id="apt-search-row">
+    <input type="text" id="apt-search" placeholder="Search…" autocomplete="off" spellcheck="false"/>
+  </div>
+  <div id="apt-list"></div>
+</div>
+
+<!-- Top bar -->
+<div id="topbar">
+  <span id="topbar-title">CRC</span>
+  <span class="sep">|</span>
+  <div id="status-grpc">
+    <div class="dot disconnected" id="dot-grpc"></div>
+    <span id="lbl-grpc">GRPC</span>
+  </div>
+  <span class="sep">|</span>
+  <div id="status-srs">
+    <div class="dot disconnected" id="dot-srs"></div>
+    <span id="lbl-srs">SRS</span>
+  </div>
+  <span class="sep">|</span>
+  <div id="view-selector">
+    <span>VIEW</span>
+    <span id="view-label">CRC</span>
+    <span id="view-caret">▾</span>
+  </div>
+  <span class="sep" id="ref-sep">|</span>
+  <span id="ref-display">REF: NONE</span>
+  <span class="sep" id="apt-sep">|</span>
+  <span id="apt-display">APT: NONE</span>
+  <span class="sep" id="rwy-sep" style="display:none">|</span>
+  <div id="rwy-row" style="display:none; align-items:center; gap:5px; font-size:10px; letter-spacing:0.08em;">
+    <span style="color:var(--ui-text-dim)">RWY</span>
+    <input type="text" id="rwy-input" maxlength="3" placeholder="360"
+      style="width:46px; background:var(--ui-bg-input); border:1px solid var(--ui-border-2);
+             color:var(--ui-text-input); font-family:inherit; font-size:10px;
+             letter-spacing:0.06em; padding:2px 5px; outline:none; text-align:center;" />
+  </div>
+  <span id="track-count">0 TRACKS</span>
+  <button id="btn-calls">SQWK C/S</button>
+  <button id="btn-settings">SETTINGS</button>
+</div>
+
+<!-- Stale data warning -->
+<div id="stale-banner">DATA STALE — NO UPDATE IN 10s</div>
+
+<!-- Disconnect overlay -->
+<div id="disc-overlay">
+  <div id="disc-msg">GRD DISCONNECTED</div>
+</div>
+
+<!-- Squawk → callsign mapping panel -->
+<div id="calls-panel">
+  <div class="calls-title">Squawk Callsign Map</div>
+  <div class="sqmap-add-row">
+    <input type="text" id="sqmap-code-input" maxlength="4" placeholder="1101" />
+    <input type="text" id="sqmap-name-input" placeholder="SHADOW11" />
+    <button id="sqmap-add">ADD</button>
+  </div>
+  <div id="sqmap-list"></div>
+</div>
+
+<!-- Approach panel -->
+<div id="approach-panel">
+  <div class="app-panel-title">Approach</div>
+  <table id="approach-table">
+    <thead>
+      <tr>
+        <th>C/S</th>
+        <th>SQWK</th>
+        <th>ALT</th>
+        <th>ATIS</th>
+        <th>APP</th>
+        <th>LDG</th>
+        <th>WPT</th>
+      </tr>
+    </thead>
+    <tbody id="approach-ac-table"></tbody>
+  </table>
+</div>
+
+<!-- Settings panel -->
+<div id="settings-panel">
+  <div class="setting-label">Display</div>
+
+  <div class="setting-group">
+    <div class="setting-row">
+      <span>Light Mode</span>
+      <label class="toggle">
+        <input type="checkbox" id="set-light-mode" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="hr"></div>
+  <div class="setting-label">Tracks</div>
+
+  <div class="setting-group">
+    <div class="setting-row">
+      <span>Projected Position Line</span>
+      <label class="toggle">
+        <input type="checkbox" id="set-ppl-enabled" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <span>PPL Duration</span>
+      <span id="set-ppl-val">60s</span>
+    </div>
+    <div class="setting-row">
+      <input type="range" id="set-ppl-duration" min="10" max="300" step="10" value="60" />
+    </div>
+  </div>
+
+  <div class="hr"></div>
+  <div class="setting-label">Track History</div>
+  <div class="setting-group">
+    <div class="setting-row">
+      <span>Show trail</span>
+      <label class="toggle">
+        <input type="checkbox" id="set-trail-enabled" checked />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <span>Trail length</span>
+      <span id="set-trail-length-val">10</span>
+    </div>
+    <div class="setting-row">
+      <input type="range" id="set-trail-length" min="0" max="25" step="1" value="10" />
+    </div>
+  </div>
+
+  <div class="hr"></div>
+  <div class="setting-label">Bullseye</div>
+  <div class="setting-group">
+    <div class="setting-row">
+      <span>BRA text color</span>
+      <input type="color" id="set-bra-color" value="#4488cc" />
+    </div>
+  </div>
+
+  <div class="hr"></div>
+  <div class="setting-label">Scale</div>
+  <div class="setting-group">
+    <div class="setting-row">
+      <span>Track &amp; Label Size</span>
+      <span id="set-scale-val">1.0×</span>
+    </div>
+    <div class="setting-row">
+      <input type="range" id="set-scale" min="0.6" max="2.0" step="0.1" value="1.0" />
+    </div>
+  </div>
+
+  <div class="hr"></div>
+  <div class="setting-label">Labels</div>
+  <div class="setting-group">
+    <div class="setting-row">
+      <span>Show AI units</span>
+      <label class="toggle">
+        <input type="checkbox" id="set-ai-enabled" checked />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <span>Show ships</span>
+      <label class="toggle">
+        <input type="checkbox" id="set-ships-enabled" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<script src="./js/geo.js"></script>
+<script src="./js/geojson.js"></script>
+<script src="./js/icons.js"></script>
+<script src="./js/ui.js"></script>
+<script src="./js/map-setup.js"></script>
+<script src="./js/views/crc.js"></script>
+<script src="./js/views/airport.js"></script>
+<script src="./js/views/approach.js"></script>
+<script src="./js/app.js"></script>
+</body>
+</html>
