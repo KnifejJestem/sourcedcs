@@ -121,9 +121,10 @@ class GrpcClient extends EventEmitter {
           callsign:  u.callsign || u.name,
           coalition: this._coalNum(u.coalition),
           type:      u.type || '',
-          lat:       u.position ? u.position.lat : 0,
-          lon:       u.position ? u.position.lon : 0,
-          alt:       u.position ? Math.round(u.position.alt) : 0,
+          lat:       u.position    ? u.position.lat             : 0,
+          lon:       u.position    ? u.position.lon             : 0,
+          alt:       u.position    ? Math.round(u.position.alt) : 0,
+          heading:   u.orientation ? u.orientation.heading      : 0,
           player:    u.player_name || null,
           category:  catNum, // 1=airplane 2=helicopter 4=ship
         });
@@ -232,10 +233,11 @@ class GrpcClient extends EventEmitter {
             const name = a.display_name || a.name;
             return {
               name,
-              icao: this._icao[name] || this._icao[a.name] || null,
-              lat:  a.position ? a.position.lat  : 0,
-              lon:  a.position ? a.position.lon  : 0,
-              elev: a.position ? Math.round(a.position.alt) : 0,
+              icao:      this._icao[name] || this._icao[a.name] || null,
+              coalition: this._coalNum(a.coalition),
+              lat:       a.position ? a.position.lat  : 0,
+              lon:       a.position ? a.position.lon  : 0,
+              elev:      a.position ? Math.round(a.position.alt) : 0,
             };
           });
         resolve(airports);

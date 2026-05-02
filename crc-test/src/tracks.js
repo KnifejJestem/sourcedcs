@@ -16,6 +16,7 @@ class TrackStore {
       lat:       unitData.lat,
       lon:       unitData.lon,
       alt:       unitData.alt,
+      heading:   unitData.heading || 0,
       player:    unitData.player,
       category:  unitData.category,
     };

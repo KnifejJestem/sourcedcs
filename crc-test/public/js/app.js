@@ -2,8 +2,9 @@
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
-const COALITION_COLOR  = { 1: '#888888', 2: '#cc4444', 3: '#4488cc' };
-const GROUND_COLOR     = { 1: '#7a7a68', 2: '#aa6644', 3: '#557799' };
+const COALITION_COLOR       = { 1: '#888888', 2: '#cc4444', 3: '#4488cc' };
+const LIGHT_COALITION_COLOR = { 1: '#505050', 2: '#cc0000', 3: '#004499' }; // higher contrast on light map
+const GROUND_COLOR          = { 1: '#7a7a68', 2: '#aa6644', 3: '#557799' };
 const HISTORY_MAX      = 10;
 const FADE_DURATION_MS = 10000;
 const STALE_MS         = 10000;
@@ -16,29 +17,45 @@ const CRC_RANGE_NM     = 200;
 const CRC_RANGE_M      = CRC_RANGE_NM * 1852;
 
 // Default label position and geometry constants (used by geojson.js + map-setup.js)
-const TEXT_SIZE_PX     = 11;
-const TEXT_OFFSET_EM   = [4.0, -0.5]; // em units [right, up] from icon
-const LEADER_ICON_GAP  = 7;
-const LABEL_HALF_W     = 30;
-const LABEL_HALF_H     = 13;
+const TEXT_SIZE_PX      = 11;
+const TEXT_OFFSET_EM    = [4.0, -0.5]; // em units [right, up] from icon
+const LEADER_ICON_GAP   = 7;
+const LABEL_HALF_W      = 30;
+const LABEL_HALF_H      = 13;
 const LABEL_EDGE_MARGIN = 2;
 
 const SQUAWK_EMERGENCY = { 7700: 'gen', 7600: 'radio', 7500: 'hijack' };
 const EMERGENCY_COLOR  = { gen: '#cc2222', radio: '#b8a000', hijack: '#cc6600' };
 
+// Radar sweep
+const SWEEP_BEAM_DEG  = 4;   // rotating beam width in degrees
+const SWEEP_INTERVAL  = 50;  // ms between sweep ticks
+
 // ── State ─────────────────────────────────────────────────────────────────
 
-// Track IDs are normalised to strings on receipt so Map lookups are consistent
-// regardless of whether the server sends them as numbers or strings.
-const tracks       = new Map(); // id(string) → track
-const history      = new Map(); // id → [{lat, lon, alt, timestamp}, ...]
-const fading       = new Map(); // id → {track, lastHist, goneAt}
-// labelOffsets stores dragged label positions as [lat, lon] geographic coordinates.
-// Tracks with no entry use the default TEXT_OFFSET_EM via text-offset in the layer.
-const labelOffsets = new Map(); // id → [lat, lon]
+// latestFromServer: all track data as received from server (no filtering).
+// tracks: tracks currently visible on scope (illuminated by at least one radar).
+// lastSweepMs: when each track was last hit by a radar beam.
+const latestFromServer = new Map(); // id → track (raw server data)
+const tracks           = new Map(); // id → track (displayed)
+const history          = new Map(); // id → [{lat, lon, alt, timestamp}, ...]
+const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
+
+// Per-radar sweep state
+const radarSweepStart = new Map(); // radarId → sweepStartMs
+const noseScanLastMs  = new Map(); // radarId → lastScanMs (nose radars)
+const lastSweepMs     = new Map(); // trackId → timestamp of last illumination
+
+// User-assigned labels for ground vehicles (persists across view switches)
+const groundLabels = new Map(); // trackId → string
+
+// Static reference data loaded at startup
+let aircraftTypes = {};
+let airportsDb    = {};
 
 let missionData      = null;
 let grpcStatus       = 'disconnected';
+let noRadarsActive   = false; // true when all radars are disabled / none available
 let srsStatus        = 'disconnected';
 let lastUpdateMs     = null;
 let mapReady         = false;
@@ -46,61 +63,33 @@ let map;
 let _drag            = null;
 let _measure         = null;
 let _pulseBright     = true;
-let selectedRef      = null; // string track id
+let selectedRef      = null; // string track id (reference)
 let selectedApt      = null;
 let _ws              = null;
-let activeView       = 'crc';
-let approachRwyCourse = null; // runway QFU in degrees (e.g. 230 for RWY 23)
-// approachData stores per-track user-entered fields for the approach table.
-// id → { atis: bool, app: string, ldg: string, wpt: string }
-const approachData = new Map();
+let approachRwyCourse = null; // used for approach-vector line
 
-// ── Sweep clock ───────────────────────────────────────────────────────────
-// Each track's visual update is deferred until the virtual rotating beam
-// reaches that track's bearing — producing the classic radar sweep appearance.
+// Radar selector — opt-in: only radars in this set are used for tracking.
+// Default: all off.  User enables radars from the RADARS panel.
+const enabledRadarIds = new Set();
 
-let _sweepPeriodMs = 5000;
-let _sweepStartMs  = Date.now();
-const _pendingTimers = new Map();
+// ── Static data ───────────────────────────────────────────────────────────
 
-function _currentSweepAngle() {
-  return ((Date.now() - _sweepStartMs) % _sweepPeriodMs) / _sweepPeriodMs * 360;
-}
-
-function _radarCenter() {
-  if (activeView === 'airport' && selectedApt) return selectedApt;
-  if (activeView === 'crc' && selectedRef) {
-    const ref = tracks.get(selectedRef);
-    if (ref) return ref;
+async function loadStaticData() {
+  try {
+    const [at, ap] = await Promise.all([
+      fetch('/data/aircraft-types.json').then(r => r.json()),
+      fetch('/data/airports.json').then(r => r.json()),
+    ]);
+    // Strip the _comment key
+    // Remove comment keys so they don't appear in type lookups
+    Object.keys(at).filter(k => k.startsWith('_comment')).forEach(k => delete at[k]);
+    delete ap._comment;
+    aircraftTypes = at;
+    airportsDb    = ap;
+    console.log(`[crc] loaded ${Object.keys(aircraftTypes).length} aircraft types, ${Object.keys(airportsDb).length} airports`);
+  } catch (e) {
+    console.warn('[crc] failed to load static data:', e);
   }
-  if (missionData && missionData.bullseye) {
-    if (missionData.bullseye.blue) return missionData.bullseye.blue;
-    if (missionData.bullseye.red)  return missionData.bullseye.red;
-  }
-  if (map) { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }
-  return { lat: 37, lon: 35 };
-}
-
-function _scheduleSweepUpdate(t) {
-  if (_pendingTimers.has(t.id)) {
-    clearTimeout(_pendingTimers.get(t.id));
-    _pendingTimers.delete(t.id);
-  }
-  const center  = _radarCenter();
-  const bearing = bearingDeg(center.lat, center.lon, t.lat, t.lon);
-  const delta   = (bearing - _currentSweepAngle() + 360) % 360;
-  const delay   = delta / 360 * _sweepPeriodMs;
-
-  const handle = setTimeout(() => {
-    _pendingTimers.delete(t.id);
-    tracks.set(t.id, t);
-    fading.delete(t.id);
-    pushHistory(t.id, t);
-    lastUpdateMs = Date.now();
-    updateMap();
-  }, delay);
-
-  _pendingTimers.set(t.id, handle);
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────
@@ -113,9 +102,15 @@ const DEFAULTS = {
   aiEnabled:     true,
   shipsEnabled:  false,
   braColor:      '#4488cc',
-  squawkMap:     {}, // squawk code (string) → display callsign
+  magVar:        0,
+  radarDebug:    false,
+  squawkMap:     {},
+  squawkSeq:     {}, // sequential ranges: { "1101": "HAT1" } → 1101→HAT11, 1102→HAT12…
   scale:         1.0,
   lightMode:     false,
+  fadeGraceMs:    10000, // ms at full brightness after last sweep before fading starts
+  navDeclutter:    true,  // hide navpoints whose names contain digits
+  trailIntervalMs: 5000, // minimum ms between trail dot recordings
 };
 
 let settings = { ...DEFAULTS };
@@ -131,28 +126,35 @@ function saveSettings() {
   localStorage.setItem('crc-settings', JSON.stringify(settings));
 }
 
+function loadEnabledRadars() {
+  try {
+    const raw = localStorage.getItem('crc-enabled-radars');
+    if (raw) JSON.parse(raw).forEach(id => enabledRadarIds.add(id));
+  } catch (_) {}
+}
+
+function saveEnabledRadars() {
+  localStorage.setItem('crc-enabled-radars', JSON.stringify([...enabledRadarIds]));
+}
+
 // ── Scale helpers ─────────────────────────────────────────────────────────
-// All size constants are multiplied by the user-selected scale factor.
 
-function getScale()              { return settings.scale || 1.0; }
-function getTextSizePx()         { return TEXT_SIZE_PX         * getScale(); }
-function getLeaderIconGap()      { return LEADER_ICON_GAP       * getScale(); }
-function getLabelHalfW()         { return LABEL_HALF_W          * getScale(); }
-function getLabelHalfH()         { return LABEL_HALF_H          * getScale(); }
+function getScale()         { return settings.scale || 1.0; }
+function getTextSizePx()    { return TEXT_SIZE_PX    * getScale(); }
+function getLeaderIconGap() { return LEADER_ICON_GAP * getScale(); }
+function getLabelHalfW()    { return LABEL_HALF_W    * getScale(); }
+function getLabelHalfH()    { return LABEL_HALF_H    * getScale(); }
 
-// Apply scale to all MapLibre layer properties.
-// Called on map load and whenever the scale setting changes.
 function applyScale() {
   if (!mapReady) return;
   const s = getScale();
-  map.setLayoutProperty('unit-squares',      'icon-size',    s);
-  map.setLayoutProperty('unit-emerg-square', 'icon-size',    s);
-  map.setLayoutProperty('unit-labels',       'text-size',    getTextSizePx());
-  map.setLayoutProperty('navpt-labels',      'text-size',    9 * s);
+  map.setLayoutProperty('unit-squares',      'icon-size',     s);
+  map.setLayoutProperty('unit-emerg-square', 'icon-size',     s);
+  map.setLayoutProperty('unit-labels',       'text-size',     getTextSizePx());
+  map.setLayoutProperty('navpt-labels',      'text-size',     9 * s);
   map.setPaintProperty('trail-dots',         'circle-radius', 1.5 * s);
   map.setPaintProperty('leader-lines',       'line-width',    0.75 * s);
   map.setPaintProperty('ppl-lines',          'line-width',    s);
-  // Rebuild geometry that depends on pixel sizes (leader lines, labels)
   updateMap();
 }
 
@@ -160,73 +162,252 @@ function applyScale() {
 
 function pushHistory(id, track) {
   if (!history.has(id)) history.set(id, []);
-  const h = history.get(id);
-  h.push({ lat: track.lat, lon: track.lon, alt: track.alt, timestamp: Date.now() });
+  const h        = history.get(id);
+  const minGapMs = settings.trailIntervalMs ?? 5000;
+  const now      = Date.now();
+  // Drop the new point if the last stored dot is too recent
+  if (h.length > 0 && now - h[h.length - 1].timestamp < minGapMs) return;
+  h.push({ lat: track.lat, lon: track.lon, alt: track.alt, timestamp: now });
   const max = settings.trailLength ?? HISTORY_MAX;
   if (h.length > max) h.splice(0, h.length - max);
 }
 
-function cleanFading() {
-  const now = Date.now();
-  for (const [id, f] of fading) {
-    if (now - f.goneAt >= FADE_DURATION_MS) {
-      fading.delete(id);
-      history.delete(id);
+// ── Radar simulation ──────────────────────────────────────────────────────
+
+const _HELIPAD_RE = /helipad|farp|fob/i;
+
+// Returns every radar that could potentially be active (regardless of user toggle).
+// type: 'airport' | 'approach' | 'awacs' | 'carrier'
+function getAllRadars() {
+  const radars   = [];
+  const airports = (missionData && missionData.airports) || [];
+
+  for (const apt of airports) {
+    if (!apt.lat || !apt.lon) continue;
+    if (apt.name === 'H' || _HELIPAD_RE.test(apt.name)) continue;
+    const aptLabel = apt.icao || apt.name;
+
+    radars.push({
+      id: `apt:${apt.name}`, type: 'airport', label: aptLabel,
+      lat: apt.lat, lon: apt.lon, rangeM: 40 * 1852, sweepMs: 2000,
+      seesGround: true, seesShips: false, noGroundAircraft: false,
+      angleFromNose: 360, heading: 0,
+    });
+
+    radars.push({
+      id: `app:${apt.name}`, type: 'approach', label: aptLabel + ' APP',
+      lat: apt.lat, lon: apt.lon, rangeM: 80 * 1852, sweepMs: 3000,
+      seesGround: false, seesShips: false, noGroundAircraft: true,
+      angleFromNose: 360, heading: 0,
+    });
+  }
+
+  for (const t of latestFromServer.values()) {
+    if (t.category !== 1 && t.category !== 2) continue;
+    const spec = aircraftTypes[t.type];
+    if (!spec || !spec.radar) continue;
+    const onGnd = checkOnGround(t);
+    radars.push({
+      id: `crc:${t.id}`, type: 'awacs', label: resolveCallsign(t),
+      sublabel: spec.label || t.type,
+      lat: t.lat, lon: t.lon,
+      rangeM: spec.radar.rangeNm * 1852, sweepMs: spec.radar.sweepMs,
+      seesGround: false, seesShips: true, noGroundAircraft: true,
+      angleFromNose: spec.radar.angleFromNose, heading: t.heading || 0,
+      onGround: onGnd, // radar is off when the aircraft is on the ground
+    });
+  }
+
+  for (const t of latestFromServer.values()) {
+    if (t.category !== 4) continue;
+    const spec = aircraftTypes[t.type];
+    if (!spec || !spec.carrierRadar) continue;
+    radars.push({
+      id: `carrier:${t.id}`, type: 'carrier', label: resolveCallsign(t) || spec.label || t.type,
+      sublabel: spec.label || t.type,
+      lat: t.lat, lon: t.lon,
+      rangeM: spec.carrierRadar.rangeNm * 1852, sweepMs: spec.carrierRadar.sweepMs,
+      seesGround: false, seesShips: true, noGroundAircraft: true,
+      angleFromNose: 360, heading: 0,
+      onGround: false,
+    });
+  }
+
+  return radars;
+}
+
+// Returns only the radars the user has explicitly enabled AND that are operational.
+// Radars are opt-in (default all off).
+// AWACS/carrier radars whose unit is on the ground are skipped even if enabled.
+function getActiveRadars() {
+  return getAllRadars().filter(r => enabledRadarIds.has(r.id) && !r.onGround);
+}
+
+// Sweep simulation — runs every SWEEP_INTERVAL ms.
+// For 360° radars: rotating beam illuminates each track as the beam passes over it.
+// For nose radars: beam oscillates left→right→left within the cone (one pass = sweepMs).
+setInterval(() => {
+  const now    = Date.now();
+  const radars = getActiveRadars();
+  let   changed = false;
+
+  for (const radar of radars) {
+    if (radar.angleFromNose === 360) {
+      if (!radarSweepStart.has(radar.id)) radarSweepStart.set(radar.id, now);
+      const sweepAngle = ((now - radarSweepStart.get(radar.id)) % radar.sweepMs) / radar.sweepMs * 360;
+
+      for (const [id, t] of latestFromServer) {
+        if (t.category === 3 && !radar.seesGround) continue;
+        if (t.category === 4 && !radar.seesShips) continue;
+        if (radar.noGroundAircraft && (t.category === 1 || t.category === 2) && checkOnGround(t)) continue;
+        const distM = haversineM(radar.lat, radar.lon, t.lat, t.lon);
+        if (distM > radar.rangeM) continue;
+        const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
+        const diff = Math.abs(((bearing - sweepAngle + 540) % 360) - 180);
+        if (diff > SWEEP_BEAM_DEG) continue;
+
+        const prevSweep = lastSweepMs.get(id) || 0;
+        tracks.set(id, t);
+        lastSweepMs.set(id, now);
+        if (now - prevSweep > 1000) pushHistory(id, t);
+        changed = true;
+      }
+
+    } else {
+      // Nose radar: oscillating beam sweeps left→right→left
+      if (!radarSweepStart.has(radar.id)) radarSweepStart.set(radar.id, now);
+      const halfAngle = radar.angleFromNose / 2;
+      const cycleMs   = radar.sweepMs * 2;
+      const phase     = ((now - radarSweepStart.get(radar.id)) % cycleMs) / cycleMs;
+      const tNorm     = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
+      const beamAngle = (radar.heading - halfAngle + tNorm * radar.angleFromNose + 360) % 360;
+
+      for (const [id, t] of latestFromServer) {
+        if (t.category === 3 && !radar.seesGround) continue;
+        if (t.category === 4 && !radar.seesShips) continue;
+        if (radar.noGroundAircraft && (t.category === 1 || t.category === 2) && checkOnGround(t)) continue;
+        const distM = haversineM(radar.lat, radar.lon, t.lat, t.lon);
+        if (distM > radar.rangeM) continue;
+        const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
+        const diff = Math.abs(((bearing - beamAngle + 540) % 360) - 180);
+        if (diff > SWEEP_BEAM_DEG) continue;
+
+        const prevSweep = lastSweepMs.get(id) || 0;
+        tracks.set(id, t);
+        lastSweepMs.set(id, now);
+        if (now - prevSweep > 1000) pushHistory(id, t);
+        changed = true;
+      }
     }
   }
-}
+
+  // "No radars active" overlay
+  const newNoRadars = radars.length === 0;
+  if (newNoRadars !== noRadarsActive) { noRadarsActive = newNoRadars; updateNoAwacsUI(); }
+
+  // Remove expired (fully faded) tracks
+  const totalTrackLifeMs = FADE_DURATION_MS + (settings.fadeGraceMs ?? 10000);
+  for (const [id] of tracks) {
+    if (now - (lastSweepMs.get(id) || 0) > totalTrackLifeMs) {
+      tracks.delete(id);
+      lastSweepMs.delete(id);
+      history.delete(id);
+      labelOffsets.delete(id);
+      if (id === selectedRef) { selectedRef = null; updateRefDisplay(); }
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    lastUpdateMs = now;
+    updateMap();
+  }
+
+  // Radar debug overlay update (runs even when no track changed)
+  if (settings.radarDebug && mapReady) {
+    map.getSource('radar-debug').setData(buildRadarDebug(radars));
+  }
+}, SWEEP_INTERVAL);
 
 // ── Track state ───────────────────────────────────────────────────────────
 
-function applySnapshot(trackList) {
-  for (const handle of _pendingTimers.values()) clearTimeout(handle);
-  _pendingTimers.clear();
+// Clear all sweep/display state — called on snapshot reload or view switch.
+// latestFromServer is NOT cleared here; it holds raw server data.
+function resetSweepState() {
   tracks.clear();
-  fading.clear();
-  for (const t of trackList) {
-    tracks.set(t.id, t);
-    pushHistory(t.id, t);
-  }
-  _sweepStartMs = Date.now();
-  lastUpdateMs  = Date.now();
+  lastSweepMs.clear();
+  history.clear();
+  labelOffsets.clear();
+  radarSweepStart.clear();
+  selectedRef = null;
+  updateRefDisplay();
   updateMap();
+}
+
+function applySnapshot(trackList) {
+  latestFromServer.clear();
+  resetSweepState();
+  for (const t of trackList) latestFromServer.set(t.id, t);
+  lastUpdateMs = Date.now();
+  updateMap();
+  // Rebuild panel in case AWACS/carrier tracks changed the available radar list
+  buildRadarPanelContent();
 }
 
 function applyDelta(updated, gone) {
   for (const id of gone) {
-    if (_pendingTimers.has(id)) {
-      clearTimeout(_pendingTimers.get(id));
-      _pendingTimers.delete(id);
-    }
-    const t = tracks.get(id);
-    if (t) {
-      const h = history.get(id);
-      fading.set(id, { track: t, lastHist: h ? [...h] : [], goneAt: Date.now() });
-      tracks.delete(id);
-    }
-    if (id === selectedRef) {
-      selectedRef = null;
-      updateRefDisplay();
-    }
+    latestFromServer.delete(id);
+    // Displayed track stays in `tracks` and fades out naturally via lastSweepMs
   }
   for (const t of updated) {
-    _scheduleSweepUpdate(t);
+    latestFromServer.set(t.id, t);
+    // Do NOT update tracks here — position only updates when the radar beam hits the track.
   }
-  if (gone.length > 0) {
-    lastUpdateMs = Date.now();
-    updateMap();
+}
+
+// ── Zoom + pan limits ─────────────────────────────────────────────────────
+// Computes the bounding rectangle of all active radar coverage areas (each
+// radar treated as a square), then enforces that rectangle as the map bounds
+// and sets minZoom so the full coverage area is always visible.
+function updateZoomLimits() {
+  if (!mapReady) return;
+  const radars = getActiveRadars();
+
+  if (radars.length === 0) {
+    map.setMaxBounds(null);
+    map.setMinZoom(2);
+    return;
   }
+
+  let minLat = Infinity, maxLat = -Infinity;
+  let minLon = Infinity, maxLon = -Infinity;
+
+  for (const r of radars) {
+    const latDeg = r.rangeM / 111320;
+    const lonDeg = r.rangeM / (111320 * Math.cos(r.lat * Math.PI / 180)) * 1.5;
+    minLat = Math.min(minLat, r.lat - latDeg);
+    maxLat = Math.max(maxLat, r.lat + latDeg);
+    minLon = Math.min(minLon, r.lon - lonDeg);
+    maxLon = Math.max(maxLon, r.lon + lonDeg);
+  }
+
+  // Aggressive: pad only 3% so the view is tightly constrained
+  const padLat = (maxLat - minLat) * 0.03;
+  const padLon = (maxLon - minLon) * 0.03;
+
+  map.setMaxBounds([
+    [minLon - padLon, minLat - padLat],
+    [maxLon + padLon, maxLat + padLat],
+  ]);
+
+  // minZoom: just enough to see the full coverage rect at screen size
+  const spanDeg = Math.max(maxLat - minLat, (maxLon - minLon) * 0.65);
+  const minZoom = spanDeg > 12 ? 4 : spanDeg > 5 ? 5 : spanDeg > 2 ? 6 : 7;
+  map.setMinZoom(minZoom);
 }
 
 // ── WebSocket ─────────────────────────────────────────────────────────────
 
-function sendSelectView(viewId, params) {
-  if (_ws && _ws.readyState === WebSocket.OPEN) {
-    _ws.send(JSON.stringify({ version: 2, type: 'select_view', view: viewId, params: params || {} }));
-  }
-}
-
-// Normalise a track so its .id is always a string (server may send numbers).
 function normaliseTrack(t) {
   return t.id === String(t.id) ? t : { ...t, id: String(t.id) };
 }
@@ -256,6 +437,9 @@ function connect() {
           map.getSource('navpoints').setData(buildNavpoints());
           map.getSource('drawings').setData(buildDrawings());
         }
+        // Rebuild radar panel so airport radars reflect the new mission
+        buildRadarPanelContent();
+        updateRadarBadge();
         break;
       case 'snapshot':
         applySnapshot((msg.tracks || []).map(normaliseTrack));
@@ -285,20 +469,18 @@ function connect() {
 
 setInterval(() => {
   checkStale();
-  if (fading.size > 0 || grpcStatus !== 'connected') updateMap();
+  if (grpcStatus !== 'connected') updateMap();
 }, 500);
 
 setInterval(() => {
   _pulseBright = !_pulseBright;
   let hasIdent = false, hasEmerg = false;
   for (const t of tracks.values()) {
-    if (t.squawkStatus === 2)   hasIdent = true;
-    if (squawkEmergency(t.squawk)) hasEmerg = true;
+    if (t.squawkStatus === 2)       hasIdent = true;
+    if (squawkEmergency(t.squawk))  hasEmerg = true;
     if (hasIdent && hasEmerg) break;
   }
-  // Ident: rebuild dots so the track icon opacity pulses
-  if (hasIdent) updateMap();
-  // Emergency: toggle the blinking square layer opacity without a full rebuild
+  if (hasIdent || hasEmerg) updateMap();
   if (mapReady) {
     map.setPaintProperty('unit-emerg-square', 'icon-opacity', _pulseBright ? 0.95 : 0.12);
   }
@@ -307,12 +489,14 @@ setInterval(() => {
 // ── Boot ──────────────────────────────────────────────────────────────────
 
 loadSettings();
+loadEnabledRadars();
+loadStaticData();
 initMap();
 initSettings();
 initCallsPanel();
-initViewSelector();
+initRadarPanel();
 initRefSelector();
 initAptSelector();
-initApproachPanel();
-updateViewUI();
+initRwyInput();
+updateTopbarUI();
 connect();

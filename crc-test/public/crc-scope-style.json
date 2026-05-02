@@ -16,7 +16,10 @@
   "sprite": "https://api.maptiler.com/maps/streets-v2-dark/sprite",
   "bearing": 0,
   "pitch": 0,
-  "center": [0, 0],
+  "center": [
+    0,
+    0
+  ],
   "zoom": 1,
   "layers": [
     {
@@ -49,7 +52,16 @@
       "paint": {
         "line-color": "#0f0f0f",
         "line-width": {
-          "stops": [[10, 0.5], [16, 2]]
+          "stops": [
+            [
+              10,
+              0.5
+            ],
+            [
+              16,
+              2
+            ]
+          ]
         }
       }
     },
@@ -60,15 +72,35 @@
       "source-layer": "boundary",
       "filter": [
         "all",
-        ["==", "admin_level", 2],
-        ["==", "maritime", 0]
+        [
+          "==",
+          "admin_level",
+          2
+        ],
+        [
+          "==",
+          "maritime",
+          0
+        ]
       ],
       "paint": {
         "line-color": "#2a2a2a",
         "line-width": {
-          "stops": [[3, 0.5], [10, 1.5]]
+          "stops": [
+            [
+              3,
+              0.5
+            ],
+            [
+              10,
+              1.5
+            ]
+          ]
         },
-        "line-dasharray": [3, 2]
+        "line-dasharray": [
+          3,
+          2
+        ]
       }
     },
     {
@@ -96,7 +128,10 @@
       "paint": {
         "line-color": [
           "match",
-          ["get", "class"],
+          [
+            "get",
+            "class"
+          ],
           "runway",
           "#4a5a4a",
           "taxiway",
@@ -105,29 +140,48 @@
         ],
         "line-width": [
           "interpolate",
-          ["linear"],
-          ["zoom"],
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
           11,
           [
             "match",
-            ["get", "class"],
-            ["runway"],
+            [
+              "get",
+              "class"
+            ],
+            [
+              "runway"
+            ],
             3,
             1
           ],
           16,
           [
             "match",
-            ["get", "class"],
-            ["runway"],
+            [
+              "get",
+              "class"
+            ],
+            [
+              "runway"
+            ],
             14,
             6
           ],
           20,
           [
             "match",
-            ["get", "class"],
-            ["runway"],
+            [
+              "get",
+              "class"
+            ],
+            [
+              "runway"
+            ],
             22,
             10
           ]
@@ -153,7 +207,16 @@
           "Noto Sans Regular"
         ],
         "text-size": {
-          "stops": [[13, 12], [18, 18]]
+          "stops": [
+            [
+              13,
+              12
+            ],
+            [
+              18,
+              18
+            ]
+          ]
         },
         "text-keep-upright": true
       },
@@ -169,7 +232,11 @@
       "source": "maptiler_planet",
       "source-layer": "aeroway",
       "minzoom": 15,
-      "filter": ["==", "class", "gate"],
+      "filter": [
+        "==",
+        "class",
+        "gate"
+      ],
       "layout": {
         "text-field": "{ref}",
         "text-font": [
@@ -177,7 +244,16 @@
           "Noto Sans Regular"
         ],
         "text-size": {
-          "stops": [[15, 9], [22, 14]]
+          "stops": [
+            [
+              15,
+              9
+            ],
+            [
+              22,
+              14
+            ]
+          ]
         },
         "visibility": "visible"
       },
@@ -206,42 +282,22 @@
           "Noto Sans Regular"
         ],
         "text-size": {
-          "stops": [[2, 10], [6, 13]]
+          "stops": [
+            [
+              2,
+              10
+            ],
+            [
+              6,
+              13
+            ]
+          ]
         },
         "text-transform": "uppercase",
         "text-letter-spacing": 0.1
       },
       "paint": {
         "text-color": "#404040",
-        "text-halo-color": "#000",
-        "text-halo-width": 1
-      }
-    },
-    {
-      "id": "City labels",
-      "type": "symbol",
-      "source": "maptiler_planet",
-      "source-layer": "place",
-      "minzoom": 5,
-      "maxzoom": 14,
-      "filter": [
-        "in",
-        "class",
-        "city",
-        "town"
-      ],
-      "layout": {
-        "text-field": "{name:en}",
-        "text-font": [
-          "Roboto Regular",
-          "Noto Sans Regular"
-        ],
-        "text-size": {
-          "stops": [[6, 9], [12, 12]]
-        }
-      },
-      "paint": {
-        "text-color": "#505050",
         "text-halo-color": "#000",
         "text-halo-width": 1
       }

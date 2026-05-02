@@ -17,6 +17,19 @@ function initMap() {
   map.on('load', () => {
     initIcons();
 
+    // ── Radar debug overlay ──────────────────────────────────────────────
+    // Sweep lines / cone edges for active radars (debug mode only).
+    map.addSource('radar-debug', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'radar-debug-lines', type: 'line', source: 'radar-debug',
+      paint: {
+        'line-color':   ['get', 'color'],
+        'line-opacity': ['coalesce', ['get', 'opacity'], 0.7],
+        'line-width':   1,
+        'line-dasharray': [4, 3],
+      },
+    });
+
     // ── Range rings ──────────────────────────────────────────────────────
     map.addSource('range-ring', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
@@ -171,6 +184,8 @@ function initMap() {
           'case',
           ['==', ['get', 'category'], 3],
           ['match', ['get', 'coalition'], 1,'gnd-neutral', 2,'gnd-red', 3,'gnd-blue', 'gnd-neutral'],
+          ['==', ['get', 'category'], 4],
+          ['match', ['get', 'coalition'], 1,'ship-neutral', 2,'ship-red', 3,'ship-blue', 'ship-neutral'],
           ['get', 'onGround'],
           ['match', ['get', 'coalition'], 1,'ac-neutral', 2,'ac-red', 3,'ac-blue', 'ac-neutral'],
           ['match', ['get', 'coalition'], 1,'sq-neutral', 2,'sq-red', 3,'sq-blue', 'sq-neutral'],
@@ -215,7 +230,15 @@ function initMap() {
     map.addLayer({
       id: 'unit-labels', type: 'symbol', source: 'labels',
       layout: {
-        'text-field': ['format', ['get', 'callsign'], {}, '\n', {}, ['get', 'info'], {}],
+        'text-field': ['format',
+          ['get', 'callsign'], {},
+          // Add '\n' after callsign only when there's something on subsequent lines
+          ['case', ['any', ['!=', ['get', 'infoLine'], ''], ['!=', ['get', 'sqTag'], '']], '\n', ''], {},
+          ['get', 'infoLine'], {},
+          // Add '\n' between info and sqTag only when both are present
+          ['case', ['all', ['!=', ['get', 'infoLine'], ''], ['!=', ['get', 'sqTag'], '']], '\n', ''], {},
+          ['get', 'sqTag'], {'text-color': ['get', 'sqColor']},
+        ],
         'text-font': ['Roboto Regular', 'Noto Sans Regular'],
         'text-size': TEXT_SIZE_PX, 'text-anchor': 'center', 'text-justify': 'left',
         'text-offset': ['get', 'textOffset'],
@@ -225,13 +248,6 @@ function initMap() {
         'text-color':   ['get', 'color'],
         'text-opacity': ['get', 'opacity'],
       },
-    });
-
-    // ── Viewport change: rebuild leader lines (pixel-space geometry) ──────
-    // Labels are zoom-stable (geo-anchored or em-offset) and don't need rebuild.
-    map.on('move', () => {
-      if (!mapReady) return;
-      map.getSource('leaders').setData(buildLeaders());
     });
 
     // ── Cursor ───────────────────────────────────────────────────────────
@@ -251,7 +267,7 @@ function initMap() {
       e.preventDefault();
 
       const id    = String(e.features[0].properties.id);
-      const track = tracks.get(id) || (fading.has(id) ? fading.get(id).track : null);
+      const track = tracks.get(id);
       if (!track) return;
 
       // Compute the label's current relative offset from the track [dLat, dLon]
@@ -275,6 +291,16 @@ function initMap() {
       _drag = { id, startMouseLat: startMouse.lat, startMouseLon: startMouse.lng, startRelLat, startRelLon };
       map.dragPan.disable();
       map.getCanvas().style.cursor = 'grabbing';
+    });
+
+    // ── Left-click on ground vehicle or ship → label popup ───────────────
+    map.on('click', 'unit-squares', (e) => {
+      const feat = e.features && e.features[0];
+      if (!feat) return;
+      const cat = feat.properties.category;
+      if (cat !== 3 && cat !== 4) return;
+      e.preventDefault();
+      showGroundLabelPopup(String(feat.properties.id), e.originalEvent.clientX, e.originalEvent.clientY);
     });
 
     // ── Combined mousemove: BRA + label drag + measure line ───────────────
@@ -344,11 +370,11 @@ function applyMapTheme() {
   if (!mapReady) return;
   const light = settings.lightMode;
 
-  // Background
-  map.setPaintProperty('Background', 'background-color', light ? '#f4f3f0' : '#0d0d0d');
+  // Background (land)
+  map.setPaintProperty('Background', 'background-color', light ? '#f4f3f0' : '#141414');
 
-  // Water
-  map.setPaintProperty('Water', 'fill-color', light ? '#c0d8e8' : '#080808');
+  // Water — in dark mode use a distinct dark blue-grey so land/water are easy to tell apart
+  map.setPaintProperty('Water', 'fill-color', light ? '#c0d8e8' : '#07111a');
 
   // Rivers
   map.setPaintProperty('River', 'line-color', light ? '#a0c0d8' : '#0f0f0f');
@@ -380,8 +406,6 @@ function applyMapTheme() {
 
   map.setPaintProperty('Country labels',  'text-color',      placePaint.color);
   map.setPaintProperty('Country labels',  'text-halo-color', placePaint.halo);
-  map.setPaintProperty('City labels',     'text-color',      placePaint.color);
-  map.setPaintProperty('City labels',     'text-halo-color', placePaint.halo);
 
   // Airport labels — halo only needed in dark mode for contrast
   map.setPaintProperty('airport-labels', 'text-halo-width', light ? 0 : 1);
@@ -395,4 +419,6 @@ function applyMapTheme() {
   map.setPaintProperty('measure-label', 'text-halo-width', light ? 0 : 1.5);
   // Rebuild drawings so line color (white vs dark) updates
   if (missionData) map.getSource('drawings').setData(buildDrawings());
+  // Re-register coalition icons with theme-correct colors
+  updateIcons(light);
 }

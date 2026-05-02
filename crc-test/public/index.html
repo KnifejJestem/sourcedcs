@@ -97,52 +97,69 @@
     .dot.reconnecting { background: #9a7a4a; box-shadow: 0 0 4px #9a7a4a88; }
     .dot.disconnected { background: #6a3a3a; }
 
-    /* View selector */
-    #view-selector {
-      position: relative;
+    /* Radar panel */
+    #radars-panel {
+      position: fixed;
+      top: 32px; left: 0;
+      width: 240px;
+      max-height: calc(100vh - 32px);
+      background: var(--ui-bg-solid);
+      border-right: 1px solid var(--ui-border);
+      z-index: 30;
+      padding: 14px 14px 20px;
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+      overflow-y: auto;
+    }
+    #radars-panel.open { transform: translateX(0); }
+    .radar-panel-title {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .radar-group-heading {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      padding: 8px 0 4px;
+      border-bottom: 1px solid var(--ui-border-4);
+      margin-bottom: 4px;
+    }
+    .radar-row {
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      color: var(--ui-text-dim);
-      cursor: pointer;
-      user-select: none;
-    }
-    #view-selector:hover #view-label { color: var(--ui-text-hi); }
-    #view-label {
-      color: var(--ui-text-bright);
-      font-weight: bold;
-      letter-spacing: 0.12em;
-    }
-    #view-caret { font-size: 8px; color: var(--ui-text-dim); }
-
-    /* View dropdown */
-    #view-dropdown {
-      display: none;
-      position: fixed;
-      top: 32px;
-      background: var(--ui-bg-solid);
-      border: 1px solid var(--ui-border-3);
-      z-index: 40;
-      min-width: 140px;
-    }
-    #view-dropdown.open { display: block; }
-    .view-option {
-      padding: 8px 14px;
+      gap: 7px;
+      padding: 4px 0;
       font-size: 11px;
-      letter-spacing: 0.1em;
-      color: var(--ui-option-text);
-      cursor: pointer;
+      letter-spacing: 0.05em;
+      color: var(--ui-text-bright);
     }
-    .view-option:hover { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
-    .view-option.active { color: var(--ui-active); }
-    .view-option-badge {
+    .radar-row.disabled { color: var(--ui-text-dim); }
+    .radar-check { accent-color: var(--ui-active); cursor: pointer; flex-shrink: 0; }
+    .radar-row-label { flex: 1; }
+    .radar-row-range {
       font-size: 9px;
       color: var(--ui-text-dim);
-      margin-left: 6px;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
     }
+    .radar-empty { font-size: 10px; color: var(--ui-text-dim); font-style: italic; padding: 8px 0; }
+    #radar-count-badge {
+      display: inline-block;
+      font-size: 9px;
+      color: var(--ui-active);
+      margin-left: 3px;
+    }
+    #radar-search {
+      width: 100%; box-sizing: border-box;
+      background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: inherit; font-size: 10px;
+      padding: 4px 6px; margin-bottom: 10px; outline: none;
+    }
+    #radar-search::placeholder { color: var(--ui-text-dim); }
 
     /* Reference aircraft display */
     #ref-display {
@@ -266,7 +283,7 @@
       color: var(--ui-text-dim);
     }
 
-    #btn-settings, #btn-calls {
+    #btn-settings, #btn-calls, #btn-radars {
       background: none;
       border: 1px solid var(--ui-border-2);
       color: var(--ui-text);
@@ -276,7 +293,7 @@
       padding: 3px 8px;
       cursor: pointer;
     }
-    #btn-settings:hover, #btn-calls:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    #btn-settings:hover, #btn-calls:hover, #btn-radars:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
 
     /* ── Settings panel ── */
     #settings-panel {
@@ -406,6 +423,29 @@
       background: rgba(13,13,13,0.9);
     }
 
+    /* ── No AWACS overlay ── */
+    #no-awacs-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 14;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #no-awacs-overlay.visible { opacity: 1; }
+    #no-awacs-msg {
+      color: #4a6a9a;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      border: 1px solid #1a2a4a;
+      padding: 10px 24px;
+      background: rgba(13,13,13,0.9);
+    }
+
     /* ── Squawk callsign panel ── */
     #calls-panel {
       position: fixed;
@@ -452,82 +492,49 @@
       font-size: 12px; padding: 0 4px; line-height: 1;
     }
     .sqmap-del:hover { color: #cc4444; }
+    .sqmap-edit  {
+      background: none; border: none; color: var(--ui-text-dim); cursor: pointer;
+      font-size: 11px; padding: 0 2px; line-height: 1;
+    }
+    .sqmap-edit:hover { color: var(--ui-text-bright); }
     .sqmap-empty { font-size: 10px; color: var(--ui-text-dim); font-style: italic; }
+    .sqmap-seq-badge {
+      font-size: 8px; letter-spacing: 0.08em;
+      color: var(--ui-active); opacity: 0.75;
+      margin-left: 2px; vertical-align: middle;
+    }
+    .sqmap-seq-row {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: var(--ui-text-dim);
+      margin-top: 4px; margin-bottom: 10px;
+    }
+    #sqmap-seq-toggle { accent-color: var(--ui-active); cursor: pointer; }
+    .sqmap-seq-label { cursor: pointer; user-select: none; }
 
-    /* ── Approach panel ── */
-    #approach-panel {
+    /* ── Ground vehicle label popup ── */
+    #gnd-label-popup {
       display: none;
       position: fixed;
-      top: 32px; left: 0;
-      max-height: calc(100vh - 32px);
+      z-index: 100;
       background: var(--ui-bg-solid);
-      border-right: 1px solid var(--ui-border);
-      z-index: 30;
-      padding: 10px 10px 14px;
-      overflow-y: auto;
+      border: 1px solid var(--ui-border-3);
+      padding: 4px 6px;
+      border-radius: 2px;
     }
-    #approach-panel.open { display: block; }
-    .app-panel-title {
-      font-size: 10px;
-      letter-spacing: 0.12em;
-      color: var(--ui-text-dim);
-      text-transform: uppercase;
-      margin-bottom: 8px;
-      border-bottom: 1px solid var(--ui-border-4);
-      padding-bottom: 5px;
-    }
-    #approach-table {
-      border-collapse: collapse;
-      font-size: 10px;
-      letter-spacing: 0.05em;
-      white-space: nowrap;
-    }
-    #approach-table th {
-      color: var(--ui-text-dim);
-      font-weight: normal;
-      text-align: left;
-      padding: 0 6px 4px;
-      letter-spacing: 0.08em;
-      border-bottom: 1px solid var(--ui-border-4);
-    }
-    #approach-table td {
-      padding: 3px 4px;
-      vertical-align: middle;
-      border-bottom: 1px solid var(--ui-border-4);
-    }
-    #approach-table tr:last-child td { border-bottom: none; }
-    .app-col-cs   { color: var(--ui-text-bright); font-size: 11px; min-width: 60px; font-family: 'Courier New', monospace; }
-    .app-col-sqwk { color: var(--ui-text-dim); min-width: 36px; }
-    .app-col-alt  { color: var(--ui-active); min-width: 44px; text-align: right; }
-    .app-inp {
+    #gnd-label-input {
       background: var(--ui-bg-input);
       border: 1px solid var(--ui-border-2);
       color: var(--ui-text-input);
       font-family: 'Courier New', monospace;
-      font-size: 10px;
-      letter-spacing: 0.04em;
-      padding: 2px 4px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      padding: 3px 6px;
       outline: none;
-      width: 52px;
+      width: 140px;
       text-transform: uppercase;
     }
-    #approach-table th:nth-child(7),
-    #approach-table td:nth-child(7) .app-inp { width: 44px; }
-    .app-inp:focus { border-color: var(--ui-text-bright); }
-    .app-inp::placeholder { color: var(--ui-text-dim); text-transform: none; }
-    .app-atis-btn {
-      background: none;
-      border: 1px solid var(--ui-border-2);
-      color: var(--ui-text-dim);
-      font-family: 'Courier New', monospace;
-      font-size: 10px;
-      padding: 2px 6px;
-      cursor: pointer;
-      letter-spacing: 0.06em;
-      width: 28px;
-    }
-    .app-atis-btn.on  { color: var(--ui-active); border-color: var(--ui-active); }
-    .app-atis-btn:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    #gnd-label-input:focus { border-color: var(--ui-text-bright); }
+    #gnd-label-input::placeholder { color: var(--ui-text-dim); text-transform: none; }
   </style>
 </head>
 <body>
@@ -537,17 +544,11 @@
 <!-- Floating bullseye BRA label (follows mouse cursor) -->
 <div id="cursor-bra"></div>
 
-<!-- View dropdown -->
-<div id="view-dropdown">
-  <div class="view-option active" data-view="crc">
-    CRC <span class="view-option-badge">THEATER</span>
-  </div>
-  <div class="view-option" data-view="airport">
-    AIRPORT <span class="view-option-badge">20NM</span>
-  </div>
-  <div class="view-option" data-view="approach">
-    APPROACH <span class="view-option-badge">80NM</span>
-  </div>
+<!-- Radar selection panel -->
+<div id="radars-panel">
+  <div class="radar-panel-title">Active Radars</div>
+  <input type="text" id="radar-search" placeholder="Search airports…" autocomplete="off" />
+  <div id="radar-groups"></div>
 </div>
 
 <!-- Reference selection dropdown (populated by JS) -->
@@ -575,11 +576,7 @@
     <span id="lbl-srs">SRS</span>
   </div>
   <span class="sep">|</span>
-  <div id="view-selector">
-    <span>VIEW</span>
-    <span id="view-label">CRC</span>
-    <span id="view-caret">▾</span>
-  </div>
+  <button id="btn-radars">RADARS <span id="radar-count-badge">0</span></button>
   <span class="sep" id="ref-sep">|</span>
   <span id="ref-display">REF: NONE</span>
   <span class="sep" id="apt-sep">|</span>
@@ -605,6 +602,11 @@
   <div id="disc-msg">GRD DISCONNECTED</div>
 </div>
 
+<!-- No radars active overlay -->
+<div id="no-awacs-overlay">
+  <div id="no-awacs-msg">NO RADARS ACTIVE</div>
+</div>
+
 <!-- Squawk → callsign mapping panel -->
 <div id="calls-panel">
   <div class="calls-title">Squawk Callsign Map</div>
@@ -613,26 +615,16 @@
     <input type="text" id="sqmap-name-input" placeholder="SHADOW11" />
     <button id="sqmap-add">ADD</button>
   </div>
+  <div class="sqmap-seq-row">
+    <input type="checkbox" id="sqmap-seq-toggle" />
+    <label class="sqmap-seq-label" for="sqmap-seq-toggle">Sequential (SEQ) — <span style="color:var(--ui-active)">1101→HAT11</span></label>
+  </div>
   <div id="sqmap-list"></div>
 </div>
 
-<!-- Approach panel -->
-<div id="approach-panel">
-  <div class="app-panel-title">Approach</div>
-  <table id="approach-table">
-    <thead>
-      <tr>
-        <th>C/S</th>
-        <th>SQWK</th>
-        <th>ALT</th>
-        <th>ATIS</th>
-        <th>APP</th>
-        <th>LDG</th>
-        <th>WPT</th>
-      </tr>
-    </thead>
-    <tbody id="approach-ac-table"></tbody>
-  </table>
+<!-- Ground vehicle label popup -->
+<div id="gnd-label-popup">
+  <input type="text" id="gnd-label-input" placeholder="Label…" maxlength="20" autocomplete="off" spellcheck="false" />
 </div>
 
 <!-- Settings panel -->
@@ -686,6 +678,20 @@
     <div class="setting-row">
       <input type="range" id="set-trail-length" min="0" max="25" step="1" value="10" />
     </div>
+    <div class="setting-row">
+      <span>Trail interval</span>
+      <span id="set-trail-interval-val">5s</span>
+    </div>
+    <div class="setting-row">
+      <input type="range" id="set-trail-interval" min="1000" max="30000" step="1000" value="5000" />
+    </div>
+    <div class="setting-row">
+      <span>Fade grace</span>
+      <span id="set-fade-grace-val">10s</span>
+    </div>
+    <div class="setting-row">
+      <input type="range" id="set-fade-grace" min="0" max="30000" step="500" value="10000" />
+    </div>
   </div>
 
   <div class="hr"></div>
@@ -694,6 +700,10 @@
     <div class="setting-row">
       <span>BRA text color</span>
       <input type="color" id="set-bra-color" value="#4488cc" />
+    </div>
+    <div class="setting-row">
+      <span>Mag variation (°)</span>
+      <input type="number" id="set-mag-var" value="0" min="-30" max="30" step="1" style="width:54px" />
     </div>
   </div>
 
@@ -723,6 +733,20 @@
       <span>Show ships</span>
       <label class="toggle">
         <input type="checkbox" id="set-ships-enabled" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <span>Radar debug</span>
+      <label class="toggle">
+        <input type="checkbox" id="set-radar-debug" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <span>Navpoint declutter</span>
+      <label class="toggle">
+        <input type="checkbox" id="set-nav-declutter" checked />
         <span class="toggle-slider"></span>
       </label>
     </div>

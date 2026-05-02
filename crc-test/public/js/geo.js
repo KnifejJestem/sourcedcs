@@ -59,9 +59,10 @@ function verticalFpm(hist) {
 }
 
 // Returns the emergency type string for a squawk code, or null.
+// Coerces squawk to number so both "7700" (string) and 7700 (number) match.
 function squawkEmergency(squawk) {
   if (squawk == null) return null;
-  return SQUAWK_EMERGENCY[squawk] || null;
+  return SQUAWK_EMERGENCY[Number(squawk)] || null;
 }
 
 // Returns true if the track is on the ground:
@@ -81,23 +82,28 @@ function checkOnGround(track) {
 }
 
 // Resolves the display callsign for a track.
-// If the track's squawk code has a user-defined mapping in squawkMap, that name is returned;
-// otherwise the gRPC callsign is used.
+// Checks exact squawkMap first, then sequential squawkSeq ranges.
+// squawkSeq: { "1101": "HAT1" } means 1101→HAT11, 1102→HAT12, ... (offset+1 appended)
 function resolveCallsign(track) {
-  if (track.squawk != null && settings.squawkMap) {
-    const mapped = settings.squawkMap[String(track.squawk)];
-    if (mapped) return mapped;
+  if (track.squawk != null) {
+    const sq = Number(track.squawk);
+
+    // Exact mapping
+    if (settings.squawkMap) {
+      const mapped = settings.squawkMap[String(sq)];
+      if (mapped) return mapped;
+    }
+
+    // Sequential range mapping
+    if (settings.squawkSeq) {
+      for (const [baseCode, baseName] of Object.entries(settings.squawkSeq)) {
+        const base   = parseInt(baseCode, 10);
+        const offset = sq - base;
+        if (offset >= 0 && offset <= 98) {
+          return baseName + (offset + 1);
+        }
+      }
+    }
   }
   return track.callsign;
-}
-
-// Returns true when this track should be visible given the current view + reference.
-// Airport view: server already filtered to 20 nm; always true here.
-// CRC view: filtered to 200 nm from selectedRef if one is set.
-function checkInRange(track) {
-  if (activeView !== 'crc') return true;
-  if (!selectedRef) return true;
-  const ref = tracks.get(selectedRef);
-  if (!ref) return true;
-  return haversineM(ref.lat, ref.lon, track.lat, track.lon) <= CRC_RANGE_M;
 }

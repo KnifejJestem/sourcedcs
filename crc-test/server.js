@@ -10,6 +10,7 @@ const TrackStore = require('./src/tracks');
 const WsServer   = require('./src/ws-server');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const DATA_DIR   = path.join(__dirname, 'data');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -23,6 +24,17 @@ const MIME = {
 // ── HTTP server (static files + WebSocket upgrade) ────────────────────────
 
 const httpServer = http.createServer((req, res) => {
+  // Serve static data files (aircraft-types.json, airports.json, icao.json …)
+  if (req.url.startsWith('/data/')) {
+    const dataPath = path.normalize(path.join(DATA_DIR, req.url.slice(6).split('?')[0]));
+    if (!dataPath.startsWith(DATA_DIR + path.sep)) { res.writeHead(403); return res.end('Forbidden'); }
+    return fs.readFile(dataPath, (err, data) => {
+      if (err) { res.writeHead(404); return res.end('Not found'); }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(data);
+    });
+  }
+
   const urlPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
   const filePath = path.normalize(path.join(PUBLIC_DIR, urlPath));
 

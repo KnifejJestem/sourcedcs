@@ -11,7 +11,8 @@ function trackOpacity() {
 
 function trackColor(coalition, category) {
   if (category === 3) return GROUND_COLOR[coalition] || '#7a7a68';
-  return COALITION_COLOR[coalition] || '#888888';
+  const palette = settings.lightMode ? LIGHT_COALITION_COLOR : COALITION_COLOR;
+  return palette[coalition] || '#888888';
 }
 
 function buildInfo(track, hist) {
@@ -30,23 +31,30 @@ function buildInfo(track, hist) {
   return line;
 }
 
-// Track dots + fading dots
+// Fade opacity for a track based on time since last radar sweep hit.
+// Stays at full brightness for fadeGraceMs, then fades to 0 over FADE_DURATION_MS.
+function sweepOpacity(id, baseOp) {
+  const elapsed = Math.max(0, Date.now() - (lastSweepMs.get(id) || 0));
+  const grace   = settings.fadeGraceMs ?? 10000;
+  if (elapsed <= grace) return baseOp;
+  return baseOp * Math.max(0, 1 - (elapsed - grace) / FADE_DURATION_MS);
+}
+
+// Track dots
 function buildDots() {
   const features = [];
   const baseOp   = trackOpacity();
-  const now      = Date.now();
 
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
-    if (!checkInRange(t)) continue;
-    const hist     = history.get(id) || [];
+    const hist       = history.get(id) || [];
     const { heading } = kinematics(hist);
-    const onGround = checkOnGround(t);
-    const emType   = squawkEmergency(t.squawk);
-    const isIdent  = t.squawkStatus === 2;
-    let opacity    = baseOp;
-    if (isIdent) opacity = baseOp * (_pulseBright ? 1.0 : 0.3);
+    const onGround   = checkOnGround(t);
+    const emType     = squawkEmergency(t.squawk);
+    const isIdent    = t.squawkStatus === 2;
+    let   opacity    = sweepOpacity(id, baseOp);
+    if (isIdent) opacity = sweepOpacity(id, baseOp) * (_pulseBright ? 1.0 : 0.3);
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
@@ -61,26 +69,6 @@ function buildDots() {
         heading:        Math.round(heading),
         emergency:      emType || '',
         emergencyColor: emType ? EMERGENCY_COLOR[emType] : '',
-      },
-    });
-  }
-
-  for (const [, f] of fading) {
-    const t  = f.track;
-    const op = Math.max(0, 1 - (now - f.goneAt) / FADE_DURATION_MS) * 0.45;
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
-      properties: {
-        callsign:       t.callsign,
-        color:          trackColor(t.coalition, t.category),
-        coalition:      t.coalition,
-        category:       t.category,
-        opacity:        op,
-        onGround:       false,
-        heading:        0,
-        emergency:      '',
-        emergencyColor: '',
       },
     });
   }
@@ -111,12 +99,10 @@ function buildTrails() {
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
-    if (!checkInRange(t)) continue;
+    if (t.category === 3) continue; // ground units have no trail
+    if (checkOnGround(t)) continue; // aircraft on ground have no trail
     const hist = history.get(id);
-    if (hist && hist.length > 1) addDots(hist, t.coalition, t.category, 1);
-  }
-  for (const [, f] of fading) {
-    if (f.lastHist && f.lastHist.length > 1) addDots(f.lastHist, f.track.coalition, f.track.category, 0.4);
+    if (hist && hist.length > 1) addDots(hist, t.coalition, t.category, sweepOpacity(id, 1));
   }
 
   return { type: 'FeatureCollection', features };
@@ -131,7 +117,8 @@ function buildPPL() {
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
-    if (!checkInRange(t)) continue;
+    if (t.category === 3) continue; // ground units have no PPL
+    if (checkOnGround(t)) continue; // aircraft on ground have no PPL
     const hist = history.get(id) || [];
     const { heading, speedMs, speedKt } = kinematics(hist);
     if (speedKt < MIN_SPD_KT_PPL) continue;
@@ -146,65 +133,35 @@ function buildPPL() {
   return { type: 'FeatureCollection', features };
 }
 
-// Leader lines connecting each icon to its label.
-// labelOffsets stores a relative [dLat, dLon] from the track's current position.
-// Default (no drag) labels use the em-based TEXT_OFFSET_EM pixel offset.
+// Leader lines — purely geo, no map.project() calls, zoom-stable length.
+// labelOffsets stores [dLat, dLon] from track to label (set by buildLabels).
+// The line runs 15%→70% of that vector, keeping clear of the icon and label text.
 function buildLeaders() {
   if (!mapReady) return { type: 'FeatureCollection', features: [] };
-  const features   = [];
-  const baseOp     = trackOpacity();
-  const textSizePx = getTextSizePx();
-  const iconGap    = getLeaderIconGap();
-  const halfW      = getLabelHalfW();
-  const halfH      = getLabelHalfH();
+  const features = [];
+  const baseOp   = trackOpacity();
 
-  const allTracks = [
-    ...tracks.entries(),
-    ...[...fading.entries()].map(([, f]) => [f.track.id, f.track]),
-  ];
-
-  for (const [id, t] of allTracks) {
+  for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.category === 4) continue;
+    if ((t.category === 3 || t.category === 4) && !groundLabels.has(id)) continue;
 
-    const iconPx = map.project([t.lon, t.lat]);
-
-    // Pixel offset from icon to label centre
-    let offX, offY;
     const relOff = labelOffsets.get(id);
-    if (relOff) {
-      // Dragged: label is at track position + stored relative geo offset
-      const labelPx = map.project([t.lon + relOff[1], t.lat + relOff[0]]);
-      offX = labelPx.x - iconPx.x;
-      offY = labelPx.y - iconPx.y;
-    } else {
-      // Default: fixed em offset (scales with text size)
-      offX = TEXT_OFFSET_EM[0] * textSizePx;
-      offY = TEXT_OFFSET_EM[1] * textSizePx;
-    }
+    if (!relOff) continue;
 
-    const offLen = Math.sqrt(offX * offX + offY * offY);
-    if (offLen < 1) continue;
+    const [dLat, dLon] = relOff;
+    if (Math.abs(dLat) < 1e-7 && Math.abs(dLon) < 1e-7) continue;
 
-    const nx = offX / offLen, ny = offY / offLen;
-    const startRelX = nx * iconGap;
-    const startRelY = ny * iconGap;
-
-    const tX       = Math.abs(nx) > 0.0001 ? halfW / Math.abs(nx) : Infinity;
-    const tY       = Math.abs(ny) > 0.0001 ? halfH / Math.abs(ny) : Infinity;
-    const labelGap = Math.min(tX, tY) + LABEL_EDGE_MARGIN;
-    const endRelX  = offX - nx * labelGap;
-    const endRelY  = offY - ny * labelGap;
-
-    const lineLen = Math.sqrt((endRelX - startRelX)**2 + (endRelY - startRelY)**2);
-    if (lineLen < 2) continue;
-
-    const startGeo = map.unproject([iconPx.x + startRelX, iconPx.y + startRelY]);
-    const endGeo   = map.unproject([iconPx.x + endRelX,   iconPx.y + endRelY]);
-
+    // Geo-stable endpoints: 15% from icon, stopping at 70% (30% gap before label)
     features.push({
       type: 'Feature',
-      geometry: { type: 'LineString', coordinates: [[startGeo.lng, startGeo.lat], [endGeo.lng, endGeo.lat]] },
-      properties: { color: trackColor(t.coalition, t.category), opacity: baseOp },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [t.lon + dLon * 0.15, t.lat + dLat * 0.15],
+          [t.lon + dLon * 0.70, t.lat + dLat * 0.70],
+        ],
+      },
+      properties: { color: trackColor(t.coalition, t.category), opacity: sweepOpacity(id, baseOp) },
     });
   }
 
@@ -212,56 +169,67 @@ function buildLeaders() {
 }
 
 // Labels.
-// - Default (not dragged): placed at track's geo position; TEXT_OFFSET_EM (em)
-//   moves the rendered text a fixed pixel distance from the icon at any zoom.
-// - Dragged: labelOffsets stores a relative [dLat, dLon] from the track.
-//   The label is placed at track + relOff so it follows the track as it moves.
+// All labels use geo-anchored positions so leader lines are zoom-stable.
+// Non-dragged tracks: geo offset computed from em-offset at first render, stored in labelOffsets.
+// Dragged tracks: labelOffsets already holds the geo offset set by the drag interaction.
+// The rendered text uses textOffset [0,0] so MapLibre places it at the geo coordinate directly.
 function buildLabels() {
   if (!mapReady) return { type: 'FeatureCollection', features: [] };
-  const features = [];
-  const baseOp   = trackOpacity();
-  const now      = Date.now();
+  const features   = [];
+  const baseOp     = trackOpacity();
+  const textSizePx = getTextSizePx();
 
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
-    if (!checkInRange(t)) continue;
-    const hist   = history.get(id) || [];
-    const relOff = labelOffsets.get(id);
-    // Relative offset: label placed at track position + [dLon, dLat]
-    const coords     = relOff ? [t.lon + relOff[1], t.lat + relOff[0]] : [t.lon, t.lat];
-    const textOffset = relOff ? [0, 0] : TEXT_OFFSET_EM;
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: coords },
-      properties: {
-        id,
-        callsign:   resolveCallsign(t),
-        info:       t._csOnly ? '' : buildInfo(t, hist),
-        color:      trackColor(t.coalition, t.category),
-        opacity:    baseOp,
-        textOffset,
-      },
-    });
-  }
 
-  for (const [id, f] of fading) {
-    const t  = f.track;
-    const op = Math.max(0, 1 - (now - f.goneAt) / FADE_DURATION_MS) * 0.45;
+    // Ensure every track has a stored geo offset (compute from em-offset if not yet set)
+    if (!labelOffsets.has(id)) {
+      const iconPx  = map.project([t.lon, t.lat]);
+      const labelPx = [
+        iconPx.x + TEXT_OFFSET_EM[0] * textSizePx,
+        iconPx.y + TEXT_OFFSET_EM[1] * textSizePx,
+      ];
+      const labelGeo = map.unproject(labelPx);
+      labelOffsets.set(id, [labelGeo.lat - t.lat, labelGeo.lng - t.lon]);
+    }
+
     const relOff     = labelOffsets.get(id);
-    const coords     = relOff ? [t.lon + relOff[1], t.lat + relOff[0]] : [t.lon, t.lat];
-    const textOffset = relOff ? [0, 0] : TEXT_OFFSET_EM;
+    const coords     = [t.lon + relOff[1], t.lat + relOff[0]];
+    const textOffset = [0, 0]; // label is placed at its geo coordinate
+    const color      = trackColor(t.coalition, t.category);
+    const opacity    = sweepOpacity(id, baseOp);
+
+    // Ground vehicles and ships: only render if the user has assigned a label
+    if (t.category === 3 || t.category === 4) {
+      const customLabel = groundLabels.get(id);
+      if (!customLabel) continue;
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: coords },
+        properties: { id, callsign: customLabel, infoLine: '', sqTag: '', sqColor: color, color, opacity, textOffset },
+      });
+      continue;
+    }
+
+    const hist     = history.get(id) || [];
+    const csOnly   = checkOnGround(t);
+    const infoLine = csOnly ? '' : buildInfo(t, hist);
+
+    // Squawk tag — shown on its own line below the info line.
+    const emType = squawkEmergency(t.squawk);
+    let sqTag = '', sqColor = color;
+    if (emType === 'hijack')     { sqTag = 'HIJ'; sqColor = '#cc2222'; }
+    else if (emType === 'radio') { sqTag = 'RDF'; sqColor = '#b8a000'; }
+    else if (emType === 'gen')   { sqTag = 'EMR'; sqColor = '#cc2222'; }
+    else if (t.squawk != null && Number(t.squawk) !== 0) {
+      sqTag = String(t.squawk).padStart(4, '0');
+    }
+
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: coords },
-      properties: {
-        id,
-        callsign:   resolveCallsign(t),
-        info:       'LOST',
-        color:      trackColor(t.coalition, t.category),
-        opacity:    op,
-        textOffset,
-      },
+      properties: { id, callsign: resolveCallsign(t), infoLine, sqTag, sqColor, color, opacity, textOffset },
     });
   }
 
@@ -276,7 +244,11 @@ function buildNavpoints() {
   return {
     type: 'FeatureCollection',
     features: missionData.waypoints
-      .filter(w => w.lat && w.lon)
+      .filter(w => {
+        if (!w.lat || !w.lon) return false;
+        if (settings.navDeclutter && /\d/.test(w.name || '')) return false;
+        return true;
+      })
       .map(w => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [w.lon, w.lat] },
@@ -341,9 +313,10 @@ function buildDrawings() {
   return { type: 'FeatureCollection', features };
 }
 
-// Approach vector: 15 nm extended centreline from FAF to threshold
+// Approach vector: 15 nm extended centreline from FAF to threshold.
+// Shown whenever an airport is selected and a runway course has been entered.
 function buildApproachVector() {
-  if (activeView !== 'approach' || !selectedApt || approachRwyCourse == null)
+  if (!selectedApt || approachRwyCourse == null)
     return { type: 'FeatureCollection', features: [] };
 
   const course     = approachRwyCourse;                    // aircraft heading TO runway
@@ -379,20 +352,33 @@ function _makeRing(lat, lon, radiusM, ringType) {
   };
 }
 
-// Range ring(s): CRC = 200 nm ring around reference; Airport = 20 nm + 2 nm rings; Approach = 80 nm.
+// Range ring — shown for the selected reference track or airport.
+// Ring size for an airport is determined by the largest active radar for that airport.
 function buildRangeRing() {
   const features = [];
-  if (activeView === 'crc' && selectedRef) {
-    const ref = tracks.get(selectedRef);
+
+  // Reference range ring (CRC/AWACS style)
+  if (selectedRef) {
+    const ref = tracks.get(selectedRef) || latestFromServer.get(selectedRef);
     if (ref) features.push(_makeRing(ref.lat, ref.lon, CRC_RANGE_M, 'range'));
   }
-  if (activeView === 'airport' && selectedApt) {
-    features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * 1852, 'range'));
-    features.push(_makeRing(selectedApt.lat, selectedApt.lon,  2 * 1852, 'ground'));
+
+  // Airport range ring — pick size from largest active radar for this airport
+  if (selectedApt) {
+    const active = getActiveRadars();
+    const hasApp = active.some(r => r.id === `app:${selectedApt.name}`);
+    const hasApt = active.some(r => r.id === `apt:${selectedApt.name}`);
+    if (hasApp) {
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 80 * 1852, 'range'));
+    } else if (hasApt) {
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * 1852, 'range'));
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon,  2 * 1852, 'ground'));
+    } else {
+      // Airport selected but no radar active: show small reference ring
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * 1852, 'range'));
+    }
   }
-  if (activeView === 'approach' && selectedApt) {
-    features.push(_makeRing(selectedApt.lat, selectedApt.lon, 80 * 1852, 'range'));
-  }
+
   return { type: 'FeatureCollection', features };
 }
 
@@ -438,21 +424,83 @@ function buildBullseye() {
   return { type: 'FeatureCollection', features };
 }
 
+// ── Radar debug overlay ────────────────────────────────────────────────────
+// Draws a sweep beam for each active radar when debug mode is on.
+// 360° radars: single rotating line.
+// Nose radars: animated beam + faint cone edges as reference.
+function buildRadarDebug(radars) {
+  if (!settings.radarDebug || !radars) return { type: 'FeatureCollection', features: [] };
+  const features = [];
+  const now = Date.now();
+
+  for (const radar of radars) {
+    const isApt = radar.id.startsWith('apt:');
+    const isApp = radar.id.startsWith('app:');
+    const color = isApt ? '#aa8833' : isApp ? '#3388aa' : '#33aa55';
+
+    if (radar.angleFromNose === 360) {
+      // Rotating beam: single line in current sweep direction
+      if (!radarSweepStart.has(radar.id)) continue;
+      const angle = ((now - radarSweepStart.get(radar.id)) % radar.sweepMs) / radar.sweepMs * 360;
+      const [endLat, endLon] = projectPos(radar.lat, radar.lon, angle, radar.rangeM);
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[radar.lon, radar.lat], [endLon, endLat]] },
+        properties: { color, opacity: 0.75 },
+      });
+    } else {
+      // Nose radar: animated sweep beam + faint static cone edges
+      if (!radarSweepStart.has(radar.id)) continue;
+      const halfAngle = radar.angleFromNose / 2;
+      const cycleMs   = radar.sweepMs * 2;
+      const phase     = ((now - radarSweepStart.get(radar.id)) % cycleMs) / cycleMs;
+      const tNorm     = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
+      const beamAngle = (radar.heading - halfAngle + tNorm * radar.angleFromNose + 360) % 360;
+
+      // Current beam line (bright)
+      const [bLat, bLon] = projectPos(radar.lat, radar.lon, beamAngle, radar.rangeM);
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[radar.lon, radar.lat], [bLon, bLat]] },
+        properties: { color, opacity: 0.75 },
+      });
+
+      // Left and right cone edge lines (faint reference)
+      const [l1, o1] = projectPos(radar.lat, radar.lon, (radar.heading - halfAngle + 360) % 360, radar.rangeM);
+      const [l2, o2] = projectPos(radar.lat, radar.lon, (radar.heading + halfAngle) % 360, radar.rangeM);
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[radar.lon, radar.lat], [o1, l1]] },
+        properties: { color, opacity: 0.25 },
+      });
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[radar.lon, radar.lat], [o2, l2]] },
+        properties: { color, opacity: 0.25 },
+      });
+    }
+  }
+  return { type: 'FeatureCollection', features };
+}
+
 function updateMap() {
   if (!mapReady) return;
-  cleanFading();
   map.getSource('range-ring').setData(buildRangeRing());
   map.getSource('ref-dot').setData(buildRefDot());
   map.getSource('trails').setData(buildTrails());
   map.getSource('ppl').setData(buildPPL());
+  // buildLabels first — it populates labelOffsets which buildLeaders depends on
+  map.getSource('labels').setData(buildLabels());
   map.getSource('leaders').setData(buildLeaders());
   map.getSource('units').setData(buildDots());
-  map.getSource('labels').setData(buildLabels());
   map.getSource('bullseye').setData(buildBullseye());
   map.getSource('approach-vec').setData(buildApproachVector());
-  let visible = 0;
-  for (const t of tracks.values()) if (checkInRange(t)) visible++;
-  document.getElementById('track-count').textContent =
-    `${visible} TRACK${visible !== 1 ? 'S' : ''}`;
-  if (activeView === 'approach') updateApproachPanel();
+  if (!settings.radarDebug) {
+    map.getSource('radar-debug').setData({ type: 'FeatureCollection', features: [] });
+  }
+  updateZoomLimits();
+  updateTopbarUI();
+  updateRadarBadge();
+  const n = tracks.size;
+  document.getElementById('track-count').textContent = `${n} TRACK${n !== 1 ? 'S' : ''}`;
 }
