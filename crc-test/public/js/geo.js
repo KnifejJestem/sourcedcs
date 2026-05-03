@@ -81,14 +81,80 @@ function checkOnGround(track) {
   return false;
 }
 
+// ── Track numbers ─────────────────────────────────────────────────────────
+// Auto-assigned TN##### identifiers for enemy-coalition tracks.
+// Generated once per track ID and persisted so they stay stable across sessions.
+
+const trackNumbers = new Map(); // trackId (string) → "TN#####"
+
+function loadTrackNumbers() {
+  try {
+    const raw = localStorage.getItem('crc-track-numbers');
+    if (!raw) return;
+    for (const [id, tn] of Object.entries(JSON.parse(raw))) {
+      if (tn && typeof tn === 'string') trackNumbers.set(id, tn);
+    }
+  } catch (_) {}
+}
+
+function saveTrackNumbers() {
+  const obj = {};
+  for (const [id, tn] of trackNumbers) obj[id] = tn;
+  localStorage.setItem('crc-track-numbers', JSON.stringify(obj));
+}
+
+function getOrAssignTrackNumber(id) {
+  const key = String(id);
+  if (trackNumbers.has(key)) return trackNumbers.get(key);
+  const used = new Set(trackNumbers.values());
+  let tn;
+  do { tn = 'TN' + String(Math.floor(10000 + Math.random() * 90000)); } while (used.has(tn));
+  trackNumbers.set(key, tn);
+  saveTrackNumbers();
+  return tn;
+}
+
+// ── Track renames ─────────────────────────────────────────────────────────
+// User-assigned custom callsigns, persisted across sessions.
+// Lower priority than squawk→callsign mappings.
+
+const trackRenames = new Map(); // trackId (string) → callsign string
+
+function loadTrackRenames() {
+  try {
+    const raw = localStorage.getItem('crc-track-renames');
+    if (!raw) return;
+    for (const [id, name] of Object.entries(JSON.parse(raw))) {
+      if (name && typeof name === 'string') trackRenames.set(id, name);
+    }
+  } catch (_) {}
+}
+
+function saveTrackRenames() {
+  const obj = {};
+  for (const [id, name] of trackRenames) obj[id] = name;
+  localStorage.setItem('crc-track-renames', JSON.stringify(obj));
+}
+
+function setTrackRename(id, name) {
+  const clean = (name || '').trim().toUpperCase();
+  if (clean) trackRenames.set(String(id), clean);
+  else       trackRenames.delete(String(id));
+  saveTrackRenames();
+}
+
+function clearTrackRename(id) {
+  trackRenames.delete(String(id));
+  saveTrackRenames();
+}
+
 // Resolves the display callsign for a track.
-// Checks exact squawkMap first, then sequential squawkSeq ranges.
-// squawkSeq: { "1101": "HAT1" } means 1101→HAT11, 1102→HAT12, ... (offset+1 appended)
+// Priority: squawkMap (exact) → squawkSeq (range) → custom rename → TN##### (enemy) → raw callsign
 function resolveCallsign(track) {
   if (track.squawk != null) {
     const sq = Number(track.squawk);
 
-    // Exact mapping
+    // Exact squawk→callsign mapping (highest priority)
     if (settings.squawkMap) {
       const mapped = settings.squawkMap[String(sq)];
       if (mapped) return mapped;
@@ -105,5 +171,18 @@ function resolveCallsign(track) {
       }
     }
   }
+
+  // User-assigned custom rename (lower priority than squawk mapping)
+  const rename = trackRenames.get(String(track.id));
+  if (rename) return rename;
+
+  // Enemy-coalition tracks get a persistent random track number (TN#####)
+  if (typeof userCoalition !== 'undefined'
+      && track.coalition != null
+      && track.coalition !== 1          // not neutral
+      && track.coalition !== userCoalition) {
+    return getOrAssignTrackNumber(track.id);
+  }
+
   return track.callsign;
 }

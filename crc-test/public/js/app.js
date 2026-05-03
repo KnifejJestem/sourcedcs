@@ -42,9 +42,10 @@ const history          = new Map(); // id → [{lat, lon, alt, timestamp}, ...]
 const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
 
 // Per-radar sweep state
-const radarSweepStart = new Map(); // radarId → sweepStartMs
-const noseScanLastMs  = new Map(); // radarId → lastScanMs (nose radars)
-const lastSweepMs     = new Map(); // trackId → timestamp of last illumination
+const radarSweepStart  = new Map(); // radarId → sweepStartMs
+const noseScanLastMs   = new Map(); // radarId → lastScanMs (nose radars)
+const lastSweepMs      = new Map(); // trackId → timestamp of last illumination
+const zeroSpeedSinceMs = new Map(); // trackId → timestamp when 0-speed-airborne first detected
 
 // User-assigned labels for ground vehicles (persists across view switches)
 const groundLabels = new Map(); // trackId → string
@@ -110,7 +111,21 @@ const DEFAULTS = {
   lightMode:     false,
   fadeGraceMs:    10000, // ms at full brightness after last sweep before fading starts
   navDeclutter:    true,  // hide navpoints whose names contain digits
+  navDeclutter5:   true,  // hide navpoints whose names are not exactly 5 letters
   trailIntervalMs: 5000, // minimum ms between trail dot recordings
+  declutter:       true,  // auto-hide labels for sequential-squawk formation flights
+  datalink:        false, // auto-include all friendly aircraft radars
+  // ── Colours ───────────────────────────────────────────────────────────────
+  colFriendly:    '#4488cc',
+  colBogey:       '#ccaa00',
+  colNeutral:     '#888888',
+  colBandit:      '#cc6600',
+  colHostile:     '#cc2222',
+  colEmergGen:    '#cc2222',   // 7700 general emergency
+  colEmergRadio:  '#b8a000',   // 7600 radio failure
+  colEmergHijack: '#cc6600',   // 7500 hijack
+  colRangeRing:   '#8aaa6a',
+  colNavpoint:    '#3a5a3a',
 };
 
 let settings = { ...DEFAULTS };
@@ -177,7 +192,7 @@ function pushHistory(id, track) {
 const _HELIPAD_RE = /helipad|farp|fob/i;
 
 // Returns every radar that could potentially be active (regardless of user toggle).
-// type: 'airport' | 'approach' | 'awacs' | 'carrier'
+// type: 'airport' | 'approach' | 'awacs' | 'fighter' | 'carrier'
 function getAllRadars() {
   const radars   = [];
   const airports = (missionData && missionData.airports) || [];
@@ -207,26 +222,34 @@ function getAllRadars() {
     const spec = aircraftTypes[t.type];
     if (!spec || !spec.radar) continue;
     const onGnd = checkOnGround(t);
+    // 360° rotating dish → AWACS; forward-looking nose radar → fighter
+    const radarType = spec.radar.angleFromNose === 360 ? 'awacs' : 'fighter';
     radars.push({
-      id: `crc:${t.id}`, type: 'awacs', label: resolveCallsign(t),
+      id: `crc:${t.id}`, type: radarType, label: resolveCallsign(t),
       sublabel: spec.label || t.type,
       lat: t.lat, lon: t.lon,
       rangeM: spec.radar.rangeNm * 1852, sweepMs: spec.radar.sweepMs,
       seesGround: false, seesShips: true, noGroundAircraft: true,
       angleFromNose: spec.radar.angleFromNose, heading: t.heading || 0,
-      onGround: onGnd, // radar is off when the aircraft is on the ground
+      onGround: onGnd,
+      coalition: t.coalition,
     });
   }
 
+  // Ship radars — all category-4 tracks get a radar entry.
+  // Known types (in aircraft-types.json with carrierRadar) use their spec;
+  // unknown ship types fall back to a generic 40 nm surface-search radar.
+  const SHIP_RADAR_DEFAULT = { rangeNm: 40, sweepMs: 5000 };
   for (const t of latestFromServer.values()) {
     if (t.category !== 4) continue;
-    const spec = aircraftTypes[t.type];
-    if (!spec || !spec.carrierRadar) continue;
+    const spec      = aircraftTypes[t.type];
+    const radarSpec = (spec && spec.carrierRadar) || SHIP_RADAR_DEFAULT;
     radars.push({
-      id: `carrier:${t.id}`, type: 'carrier', label: resolveCallsign(t) || spec.label || t.type,
-      sublabel: spec.label || t.type,
+      id: `carrier:${t.id}`, type: 'carrier',
+      label:    resolveCallsign(t) || (spec && spec.label) || t.type,
+      sublabel: (spec && spec.label) || t.type,
       lat: t.lat, lon: t.lon,
-      rangeM: spec.carrierRadar.rangeNm * 1852, sweepMs: spec.carrierRadar.sweepMs,
+      rangeM: radarSpec.rangeNm * 1852, sweepMs: radarSpec.sweepMs,
       seesGround: false, seesShips: true, noGroundAircraft: true,
       angleFromNose: 360, heading: 0,
       onGround: false,
@@ -237,10 +260,24 @@ function getAllRadars() {
 }
 
 // Returns only the radars the user has explicitly enabled AND that are operational.
-// Radars are opt-in (default all off).
-// AWACS/carrier radars whose unit is on the ground are skipped even if enabled.
+// When datalink is active, all friendly airborne aircraft radars are included automatically.
 function getActiveRadars() {
-  return getAllRadars().filter(r => enabledRadarIds.has(r.id) && !r.onGround);
+  const all    = getAllRadars();
+  const active = all.filter(r => enabledRadarIds.has(r.id) && !r.onGround);
+
+  if (!settings.datalink) return active;
+
+  // Datalink: auto-include every friendly coalition aircraft radar not already in the list
+  const activeIds = new Set(active.map(r => r.id));
+  for (const r of all) {
+    if (activeIds.has(r.id)) continue;
+    if (r.onGround) continue;
+    if (r.type !== 'awacs' && r.type !== 'fighter') continue;
+    if (r.coalition !== userCoalition) continue;
+    active.push(r);
+  }
+
+  return active;
 }
 
 // Sweep simulation — runs every SWEEP_INTERVAL ms.
@@ -305,15 +342,33 @@ setInterval(() => {
   const newNoRadars = radars.length === 0;
   if (newNoRadars !== noRadarsActive) { noRadarsActive = newNoRadars; updateNoAwacsUI(); }
 
+  // Zero-speed-airborne detection: track when each visible airborne track first hits 0 kt.
+  // These tracks are faded out after the normal grace period even if the radar keeps sweeping them.
+  for (const [id, t] of tracks) {
+    if (t.category === 3 || t.category === 4) { zeroSpeedSinceMs.delete(id); continue; }
+    if (checkOnGround(t)) { zeroSpeedSinceMs.delete(id); continue; }
+    const hist = history.get(id) || [];
+    const { speedKt } = kinematics(hist);
+    if (speedKt < 1) {
+      if (!zeroSpeedSinceMs.has(id)) zeroSpeedSinceMs.set(id, now);
+    } else {
+      zeroSpeedSinceMs.delete(id);
+    }
+  }
+
   // Remove expired (fully faded) tracks
   const totalTrackLifeMs = FADE_DURATION_MS + (settings.fadeGraceMs ?? 10000);
   for (const [id] of tracks) {
-    if (now - (lastSweepMs.get(id) || 0) > totalTrackLifeMs) {
+    const sinceLastSweep = now - (lastSweepMs.get(id) || 0);
+    const zeroSince      = zeroSpeedSinceMs.get(id);
+    const sinceZeroSpeed = zeroSince ? now - zeroSince : 0;
+    if (sinceLastSweep > totalTrackLifeMs || sinceZeroSpeed > totalTrackLifeMs) {
       tracks.delete(id);
       lastSweepMs.delete(id);
+      zeroSpeedSinceMs.delete(id);
       history.delete(id);
       labelOffsets.delete(id);
-      if (id === selectedRef) { selectedRef = null; updateRefDisplay(); }
+      if (id === selectedRef) { selectedRef = null; }
       changed = true;
     }
   }
@@ -336,11 +391,11 @@ setInterval(() => {
 function resetSweepState() {
   tracks.clear();
   lastSweepMs.clear();
+  zeroSpeedSinceMs.clear();
   history.clear();
   labelOffsets.clear();
   radarSweepStart.clear();
   selectedRef = null;
-  updateRefDisplay();
   updateMap();
 }
 
@@ -490,13 +545,35 @@ setInterval(() => {
 
 loadSettings();
 loadEnabledRadars();
+loadUserCoalition();
+loadIffOverrides();
+loadTrackRenames();
+loadTrackNumbers();
 loadStaticData();
 initMap();
 initSettings();
+initTrackPanel();
 initCallsPanel();
 initRadarPanel();
-initRefSelector();
 initAptSelector();
 initRwyInput();
+initCoalitionBtn();
 updateTopbarUI();
 connect();
+
+function initCoalitionBtn() {
+  const $btn = document.getElementById('btn-coalition');
+  if (!$btn) return;
+  _updateCoalitionBtn($btn);
+  $btn.addEventListener('click', () => {
+    toggleUserCoalition();
+    _updateCoalitionBtn($btn);
+    updateMap();
+  });
+}
+
+function _updateCoalitionBtn($btn) {
+  const blue = getUserCoalition() === 3;
+  $btn.textContent = blue ? 'BLUE' : 'RED';
+  $btn.classList.toggle('coalition-red', !blue);
+}

@@ -117,6 +117,23 @@ function createBullseyeIcon(color, size = 26) {
   return ctx.getImageData(0, 0, size, size);
 }
 
+// Filled upward-pointing triangle — BANDIT / HOSTILE tracks
+function createTriangleIcon(color, size = 14) {
+  const canvas = document.createElement('canvas');
+  canvas.width  = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const m   = 2;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(size / 2, m);
+  ctx.lineTo(size - m, size - m);
+  ctx.lineTo(m,        size - m);
+  ctx.closePath();
+  ctx.fill();
+  return ctx.getImageData(0, 0, size, size);
+}
+
 // Small hollow upward-pointing triangle — nav/waypoints
 function createNavpointIcon(color, size = 11) {
   const canvas = document.createElement('canvas');
@@ -151,10 +168,57 @@ function initIcons() {
   map.addImage('ship-blue',    createShipIcon('#4488cc'));
   map.addImage('be-blue',      createBullseyeIcon('#4488cc'));
   map.addImage('be-red',       createBullseyeIcon('#cc4444'));
-  map.addImage('emerg-gen',    createEmergencySquare('#cc2222')); // 7700
-  map.addImage('emerg-radio',  createEmergencySquare('#b8a000')); // 7600
-  map.addImage('emerg-hijack', createEmergencySquare('#cc6600')); // 7500
-  map.addImage('navpt',        createNavpointIcon('#3a5a3a'));
+  map.addImage('navpt', createNavpointIcon((settings && settings.colNavpoint) || '#3a5a3a'));
+
+  // ── IFF state icons — colours read from settings at init time ────────────
+  _registerIffIcons('add');
+}
+
+// Registers or updates all IFF + emergency icons using current settings.
+// mode: 'add' (first load) | 'update' (after colour change)
+function _registerIffIcons(mode) {
+  const fn = mode === 'add'
+    ? (name, data) => map.addImage(name, data)
+    : (name, data) => map.updateImage(name, data);
+
+  const fr = (settings && settings.colFriendly)    || '#4488cc';
+  const bo = (settings && settings.colBogey)       || '#ccaa00';
+  const ne = (settings && settings.colNeutral)     || '#888888';
+  const ba = (settings && settings.colBandit)      || '#cc6600';
+  const ho = (settings && settings.colHostile)     || '#cc2222';
+  const eg = (settings && settings.colEmergGen)    || '#cc2222';
+  const er = (settings && settings.colEmergRadio)  || '#b8a000';
+  const eh = (settings && settings.colEmergHijack) || '#cc6600';
+
+  // Triangles — bandit / hostile (all categories)
+  fn('tri-iff-bandit',    createTriangleIcon(ba));
+  fn('tri-iff-hostile',   createTriangleIcon(ho));
+  // Airborne (hollow diamond)
+  fn('sq-iff-friendly',   createSquareIcon(fr));
+  fn('sq-iff-bogey',      createSquareIcon(bo));
+  fn('sq-iff-neutral',    createSquareIcon(ne));
+  // On-ground aircraft silhouette
+  fn('ac-iff-friendly',   createAircraftIcon(fr));
+  fn('ac-iff-bogey',      createAircraftIcon(bo));
+  fn('ac-iff-neutral',    createAircraftIcon(ne));
+  // Ground vehicles (filled square)
+  fn('gnd-iff-friendly',  createGroundIcon(fr));
+  fn('gnd-iff-bogey',     createGroundIcon(bo));
+  fn('gnd-iff-neutral',   createGroundIcon(ne));
+  // Ships (circle)
+  fn('ship-iff-friendly', createShipIcon(fr));
+  fn('ship-iff-bogey',    createShipIcon(bo));
+  fn('ship-iff-neutral',  createShipIcon(ne));
+  // Emergency blinking squares
+  fn('emerg-gen',    createEmergencySquare(eg));
+  fn('emerg-radio',  createEmergencySquare(er));
+  fn('emerg-hijack', createEmergencySquare(eh));
+}
+
+// Called whenever IFF / emergency colours change.
+function updateIffIcons() {
+  if (!mapReady) return;
+  _registerIffIcons('update');
 }
 
 // Re-colour theme-sensitive icons when switching light / dark mode.

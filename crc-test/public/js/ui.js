@@ -2,24 +2,7 @@
 
 // ── Topbar display elements ────────────────────────────────────────────────
 
-const $refDisplay = document.getElementById('ref-display');
 const $aptDisplay = document.getElementById('apt-display');
-
-function updateRefDisplay() {
-  if (!selectedRef) {
-    $refDisplay.textContent = 'REF: NONE';
-    $refDisplay.classList.remove('active');
-  } else {
-    const t = tracks.get(selectedRef);
-    $refDisplay.textContent = t ? `REF: ${resolveCallsign(t)}` : 'REF: NONE';
-    $refDisplay.classList.toggle('active', !!t);
-    if (!t) selectedRef = null;
-  }
-  if (mapReady) {
-    map.getSource('range-ring').setData(buildRangeRing());
-    map.getSource('ref-dot').setData(buildRefDot());
-  }
-}
 
 function updateAptDisplay() {
   if (!selectedApt) {
@@ -36,15 +19,9 @@ function updateAptDisplay() {
 
 // Update topbar visibility based on active radar types.
 function updateTopbarUI() {
-  const active  = getActiveRadars();
-  const hasCrc  = active.some(r => r.type === 'awacs' || r.type === 'carrier');
-  const $refSep = document.getElementById('ref-sep');
   const $aptSep = document.getElementById('apt-sep');
   const $rwySep = document.getElementById('rwy-sep');
   const $rwyRow = document.getElementById('rwy-row');
-
-  $refDisplay.style.display = hasCrc ? '' : 'none';
-  $refSep.style.display     = hasCrc ? '' : 'none';
 
   $aptDisplay.style.display = '';
   $aptSep.style.display     = '';
@@ -137,6 +114,16 @@ function initSettings() {
     if (!panel.contains(e.target) && e.target !== btnOpen) panel.classList.remove('open');
   });
 
+  // ── Tab switching ─────────────────────────────────────────────────────
+  panel.querySelectorAll('.stab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      panel.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+      panel.querySelectorAll('.stab-pane').forEach(p => { p.style.display = 'none'; });
+      btn.classList.add('active');
+      document.getElementById('stab-' + btn.dataset.pane).style.display = '';
+    });
+  });
+
   const els = {
     pplEnabled:     document.getElementById('set-ppl-enabled'),
     pplDuration:    document.getElementById('set-ppl-duration'),
@@ -148,12 +135,8 @@ function initSettings() {
     trailIntervalVal: document.getElementById('set-trail-interval-val'),
     fadeGrace:      document.getElementById('set-fade-grace'),
     fadeGraceVal:   document.getElementById('set-fade-grace-val'),
-    aiEn:           document.getElementById('set-ai-enabled'),
-    shipsEn:        document.getElementById('set-ships-enabled'),
-    braColor:       document.getElementById('set-bra-color'),
     magVar:         document.getElementById('set-mag-var'),
     radarDebug:     document.getElementById('set-radar-debug'),
-    navDeclutter:   document.getElementById('set-nav-declutter'),
     scale:          document.getElementById('set-scale'),
     scaleVal:       document.getElementById('set-scale-val'),
     lightMode:      document.getElementById('set-light-mode'),
@@ -169,15 +152,11 @@ function initSettings() {
   els.trailIntervalVal.textContent = ((settings.trailIntervalMs ?? 5000) / 1000).toFixed(0) + 's';
   els.fadeGrace.value           = settings.fadeGraceMs ?? 10000;
   els.fadeGraceVal.textContent  = ((settings.fadeGraceMs ?? 10000) / 1000).toFixed(1) + 's';
-  els.aiEn.checked       = settings.aiEnabled;
-  els.shipsEn.checked    = settings.shipsEnabled;
-  els.braColor.value     = settings.braColor;
   els.magVar.value       = settings.magVar;
   els.scale.value        = settings.scale;
   els.scaleVal.textContent = parseFloat(settings.scale).toFixed(1) + '×';
   els.lightMode.checked  = settings.lightMode;
   els.radarDebug.checked   = settings.radarDebug;
-  els.navDeclutter.checked = settings.navDeclutter ?? true;
   applyLightMode();
 
   const persist = (key, val) => { settings[key] = val; saveSettings(); updateMap(); };
@@ -205,9 +184,6 @@ function initSettings() {
     els.fadeGraceVal.textContent = (settings.fadeGraceMs / 1000).toFixed(1) + 's';
     saveSettings(); updateMap();
   });
-  els.aiEn.addEventListener('change',    () => persist('aiEnabled',    els.aiEn.checked));
-  els.shipsEn.addEventListener('change', () => persist('shipsEnabled', els.shipsEn.checked));
-  els.braColor.addEventListener('input', () => persist('braColor', els.braColor.value));
   els.magVar.addEventListener('input', () => persist('magVar', parseInt(els.magVar.value) || 0));
   els.scale.addEventListener('input', () => {
     settings.scale = parseFloat(els.scale.value);
@@ -221,10 +197,121 @@ function initSettings() {
     applyLightMode();
   });
   els.radarDebug.addEventListener('change',   () => persist('radarDebug',   els.radarDebug.checked));
-  els.navDeclutter.addEventListener('change', () => {
-    persist('navDeclutter', els.navDeclutter.checked);
-    if (mapReady && missionData) map.getSource('navpoints').setData(buildNavpoints());
+
+  // ── Colours tab ───────────────────────────────────────────────────────
+  initColorSettings();
+}
+
+function initColorSettings() {
+  // Each entry: [inputId, swatchId, settingsKey, defaultColor]
+  const COLOR_DEFS = [
+    ['col-friendly',    'sw-friendly',    'colFriendly',    '#4488cc'],
+    ['col-bogey',       'sw-bogey',       'colBogey',       '#ccaa00'],
+    ['col-neutral',     'sw-neutral',     'colNeutral',     '#888888'],
+    ['col-bandit',      'sw-bandit',      'colBandit',      '#cc6600'],
+    ['col-hostile',     'sw-hostile',     'colHostile',     '#cc2222'],
+    ['col-emerg-gen',   'sw-emerg-gen',   'colEmergGen',    '#cc2222'],
+    ['col-emerg-radio', 'sw-emerg-radio', 'colEmergRadio',  '#b8a000'],
+    ['col-emerg-hijack','sw-emerg-hijack','colEmergHijack', '#cc6600'],
+    ['col-bra',         'sw-bra',         'braColor',       '#4488cc'],
+    ['col-range-ring',  'sw-range-ring',  'colRangeRing',   '#8aaa6a'],
+    ['col-navpoint',    'sw-navpoint',    'colNavpoint',    '#3a5a3a'],
+  ];
+
+  for (const [inputId, swatchId, key, def] of COLOR_DEFS) {
+    const inp    = document.getElementById(inputId);
+    const swatch = document.getElementById(swatchId);
+    if (!inp) continue;
+
+    // Initialise input and swatch from current settings
+    const cur = settings[key] || def;
+    inp.value = cur;
+    if (swatch) swatch.style.background = cur;
+
+    inp.addEventListener('input', () => {
+      settings[key] = inp.value;
+      if (swatch) swatch.style.background = inp.value;
+      saveSettings();
+      // BRA cursor: update CSS color directly
+      if (key === 'braColor') {
+        const $bra = document.getElementById('cursor-bra');
+        if ($bra) $bra.style.color = inp.value;
+        updateMap();
+        return;
+      }
+      applyColors();
+    });
+  }
+
+  // Reset buttons — restore default, persist, refresh
+  document.querySelectorAll('.col-reset').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.key;
+      const def = btn.dataset.default;
+      settings[key] = def;
+      saveSettings();
+      // Sync the matching input and swatch
+      const def2 = COLOR_DEFS.find(d => d[2] === key);
+      if (def2) {
+        const inp    = document.getElementById(def2[0]);
+        const swatch = document.getElementById(def2[1]);
+        if (inp)    inp.value = def;
+        if (swatch) swatch.style.background = def;
+      }
+      if (key === 'braColor') {
+        const $bra = document.getElementById('cursor-bra');
+        if ($bra) $bra.style.color = def;
+        updateMap();
+      } else {
+        applyColors();
+      }
+    });
   });
+
+  // ── Declutter tab ─────────────────────────────────────────────────────
+  const $declutter  = document.getElementById('set-declutter');
+  const $navDecl    = document.getElementById('set-nav-declutter');
+  const $navDecl5   = document.getElementById('set-nav-declutter-5');
+  const $aiEn       = document.getElementById('set-ai-enabled');
+  const $shipsEn    = document.getElementById('set-ships-enabled');
+
+  if ($declutter) {
+    $declutter.checked = settings.declutter ?? true;
+    $declutter.addEventListener('change', () => {
+      settings.declutter = $declutter.checked;
+      saveSettings();
+      updateMap();
+    });
+  }
+
+  if ($navDecl) {
+    $navDecl.checked = settings.navDeclutter ?? true;
+    $navDecl.addEventListener('change', () => {
+      settings.navDeclutter = $navDecl.checked;
+      saveSettings();
+      if (mapReady && missionData) map.getSource('navpoints').setData(buildNavpoints());
+    });
+  }
+
+  if ($navDecl5) {
+    $navDecl5.checked = settings.navDeclutter5 ?? true;
+    $navDecl5.addEventListener('change', () => {
+      settings.navDeclutter5 = $navDecl5.checked;
+      saveSettings();
+      if (mapReady && missionData) map.getSource('navpoints').setData(buildNavpoints());
+    });
+  }
+
+  if ($aiEn) {
+    $aiEn.checked = settings.aiEnabled;
+    $aiEn.addEventListener('change', () => { settings.aiEnabled = $aiEn.checked; saveSettings(); updateMap(); });
+  }
+
+  if ($shipsEn) {
+    $shipsEn.checked = settings.shipsEnabled;
+    $shipsEn.addEventListener('change', () => { settings.shipsEnabled = $shipsEn.checked; saveSettings(); updateMap(); });
+  }
 }
 
 function applyLightMode() {
@@ -236,8 +323,8 @@ function applyLightMode() {
 // Groups all available radars by type; user can toggle each on/off.
 // New radars auto-enabled (opt-out model); disabled IDs saved to localStorage.
 
-const TYPE_ORDER  = ['airport', 'approach', 'awacs', 'carrier'];
-const TYPE_LABELS = { airport: 'AIRPORT', approach: 'APPROACH', awacs: 'AWACS', carrier: 'CARRIER' };
+const TYPE_ORDER  = ['airport', 'approach', 'awacs', 'fighter', 'carrier'];
+const TYPE_LABELS = { airport: 'AIRPORT', approach: 'APPROACH', awacs: 'AWACS', fighter: 'FIGHTER', carrier: 'CARRIER' };
 const TYPE_RANGE_LABEL = (r) => {
   const nm = Math.round(r.rangeM / 1852);
   return `${nm}nm`;
@@ -327,10 +414,27 @@ function updateRadarBadge() {
 }
 
 function initRadarPanel() {
-  const $btn    = document.getElementById('btn-radars');
-  const $panel  = document.getElementById('radars-panel');
-  const $search = document.getElementById('radar-search');
+  const $btn      = document.getElementById('btn-radars');
+  const $panel    = document.getElementById('radars-panel');
+  const $search   = document.getElementById('radar-search');
+  const $dlToggle = document.getElementById('datalink-toggle');
+  const $dlRow    = document.getElementById('datalink-row');
   if (!$btn || !$panel) return;
+
+  // Initialise datalink toggle
+  if ($dlToggle) {
+    $dlToggle.checked = settings.datalink ?? false;
+    if ($dlRow) $dlRow.classList.toggle('active', !!settings.datalink);
+    $dlToggle.addEventListener('change', () => {
+      settings.datalink = $dlToggle.checked;
+      if ($dlRow) $dlRow.classList.toggle('active', $dlToggle.checked);
+      saveSettings();
+      updateTopbarUI();
+      resetSweepState();
+      updateMap();
+      updateZoomLimits();
+    });
+  }
 
   $btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -349,69 +453,6 @@ function initRadarPanel() {
     $search.addEventListener('input', () => buildRadarPanelContent($search.value));
     $search.addEventListener('click', e => e.stopPropagation());
   }
-}
-
-// ── Reference selector ────────────────────────────────────────────────────
-
-function populateRefDropdown($dd) {
-  $dd.innerHTML = '';
-
-  const noneEl = document.createElement('div');
-  noneEl.className   = 'ref-option none-opt' + (!selectedRef ? ' active' : '');
-  noneEl.dataset.ref = '';
-  noneEl.textContent = 'NONE';
-  $dd.appendChild(noneEl);
-
-  // All airborne tracks; players first, then AI, sorted by callsign within each group
-  const all     = [...tracks.values()].filter(t => t.category === 1 || t.category === 2);
-  const players = all.filter(t =>  t.player).sort((a, b) => a.callsign.localeCompare(b.callsign));
-  const ai      = all.filter(t => !t.player).sort((a, b) => a.callsign.localeCompare(b.callsign));
-
-  if (all.length === 0) {
-    const empty = document.createElement('div');
-    empty.className   = 'ref-option disabled';
-    empty.textContent = 'NO TRACKS';
-    $dd.appendChild(empty);
-    return;
-  }
-
-  const addTrack = (t) => {
-    const el = document.createElement('div');
-    el.className   = 'ref-option' + (selectedRef === t.id ? ' active' : '');
-    el.dataset.ref = t.id;
-    el.innerHTML   =
-      `<span>${resolveCallsign(t)}${t.player ? ` <span class="ref-opt-badge">PLR</span>` : ''}</span>` +
-      `<span class="ref-opt-type">${t.type || ''}</span>`;
-    $dd.appendChild(el);
-  };
-
-  players.forEach(addTrack);
-  ai.forEach(addTrack);
-}
-
-function initRefSelector() {
-  const $dd = document.getElementById('ref-dropdown');
-
-  $refDisplay.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if ($dd.classList.contains('open')) { $dd.classList.remove('open'); return; }
-    populateRefDropdown($dd);
-    const rect = $refDisplay.getBoundingClientRect();
-    $dd.style.left = rect.left + 'px';
-    $dd.classList.add('open');
-  });
-
-  document.addEventListener('click', () => $dd.classList.remove('open'));
-
-  $dd.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const opt = e.target.closest('.ref-option');
-    if (!opt || opt.classList.contains('disabled')) return;
-    selectedRef = opt.dataset.ref || null; // empty string → null
-    $dd.classList.remove('open');
-    updateRefDisplay();
-    updateMap();
-  });
 }
 
 // ── Airport selector ──────────────────────────────────────────────────────
@@ -575,9 +616,13 @@ function initCallsPanel() {
     e.stopPropagation();
     const open = panel.classList.toggle('open');
     if (open) renderSquawkMapList(list, inp, inpN, seqToggle);
+    _repositionTrackPanel();
   });
   document.addEventListener('click', (e) => {
-    if (!panel.contains(e.target) && e.target !== btn) panel.classList.remove('open');
+    if (!panel.contains(e.target) && e.target !== btn) {
+      panel.classList.remove('open');
+      _repositionTrackPanel();
+    }
   });
 
   addBtn.addEventListener('click', () => {
@@ -604,6 +649,188 @@ function initCallsPanel() {
   [inp, inpN].forEach(el => el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addBtn.click();
   }));
+}
+
+// ── Track info panel ─────────────────────────────────────────────────────
+// Left-clicking an aircraft track opens this persistent side panel.
+// It shows live properties and integrates IFF + callsign override controls.
+
+let _trackPanelId = null; // currently displayed track id (string), or null
+
+function initTrackPanel() {
+  const $panel   = document.getElementById('track-panel');
+  const $calls   = document.getElementById('calls-panel');
+  if (!$panel) return;
+
+  // Close button
+  document.getElementById('tp-close').addEventListener('click', () => closeTrackPanel());
+
+  // IFF buttons
+  const iffColors = () => ({
+    friendly: settings.colFriendly || '#4488cc',
+    bogey:    settings.colBogey    || '#ccaa00',
+    neutral:  settings.colNeutral  || '#888888',
+    bandit:   settings.colBandit   || '#cc6600',
+    hostile:  settings.colHostile  || '#cc2222',
+  });
+
+  $panel.querySelectorAll('.tp-iff-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (_trackPanelId == null) return;
+      setIffOverride(_trackPanelId, btn.dataset.state);
+      _refreshIffButtons();
+      updateMap();
+    });
+  });
+
+  document.getElementById('tp-iff-clr').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (_trackPanelId == null) return;
+    clearIffOverride(_trackPanelId);
+    _refreshIffButtons();
+    updateMap();
+  });
+
+  // Rename controls
+  const $renameInput = document.getElementById('tp-rename-input');
+  const commitRename = () => {
+    if (_trackPanelId == null) return;
+    setTrackRename(_trackPanelId, $renameInput.value);
+    updateMap();
+    _refreshCallsign();
+  };
+  document.getElementById('tp-rename-set').addEventListener('click', (e) => {
+    e.stopPropagation(); commitRename();
+  });
+  document.getElementById('tp-rename-clr').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (_trackPanelId == null) return;
+    clearTrackRename(_trackPanelId);
+    $renameInput.value = '';
+    updateMap();
+    _refreshCallsign();
+  });
+  $renameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+    if (e.key === 'Escape') { closeTrackPanel(); }
+  });
+  $renameInput.addEventListener('click', e => e.stopPropagation());
+
+  // Reposition when calls-panel transitions open/closed
+  if ($calls) {
+    const reposition = () => _repositionTrackPanel();
+    $calls.addEventListener('transitionend', reposition);
+    // Also watch toggle via MutationObserver for class changes
+    new MutationObserver(reposition).observe($calls, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  function _refreshIffButtons() {
+    const cols     = iffColors();
+    const override = iffOverrides.get(String(_trackPanelId));
+    $panel.querySelectorAll('.tp-iff-btn').forEach(btn => {
+      const col = cols[btn.dataset.state] || '#888888';
+      btn.style.color       = col;
+      btn.style.borderColor = col + '55';
+      btn.classList.toggle('iff-active', btn.dataset.state === override);
+    });
+    // also update the iff state badge
+    if (_trackPanelId != null) {
+      const t = tracks.get(String(_trackPanelId));
+      if (t) _refreshIffState(t);
+    }
+  }
+
+  function _refreshCallsign() {
+    if (_trackPanelId == null) return;
+    const t = tracks.get(String(_trackPanelId));
+    if (t) document.getElementById('tp-callsign').textContent = resolveCallsign(t);
+  }
+
+  // Expose so updateTrackPanel can call them
+  initTrackPanel._refreshIffButtons = _refreshIffButtons;
+}
+
+function _refreshIffState(t) {
+  const state  = getIff(t);
+  const col    = iffColor(state);
+  const $badge = document.getElementById('tp-iff-state');
+  if (!$badge) return;
+  $badge.innerHTML = '';
+  const span = document.createElement('span');
+  span.className   = 'tp-iff-state';
+  span.textContent = state.toUpperCase();
+  span.style.color       = col;
+  span.style.borderColor = col + '55';
+  $badge.appendChild(span);
+}
+
+function _repositionTrackPanel() {
+  const $panel = document.getElementById('track-panel');
+  const $calls = document.getElementById('calls-panel');
+  if (!$panel) return;
+  if ($calls && $calls.classList.contains('open')) {
+    $panel.style.top = (32 + $calls.offsetHeight) + 'px';
+  } else {
+    $panel.style.top = '32px';
+  }
+}
+
+function showTrackPanel(id) {
+  const $panel = document.getElementById('track-panel');
+  if (!$panel) return;
+  _trackPanelId = String(id);
+  _repositionTrackPanel();
+  $panel.classList.add('open');
+  updateTrackPanel();
+}
+
+function closeTrackPanel() {
+  const $panel = document.getElementById('track-panel');
+  if ($panel) $panel.classList.remove('open');
+  _trackPanelId = null;
+}
+
+function updateTrackPanel() {
+  if (_trackPanelId == null) return;
+  const t = tracks.get(_trackPanelId);
+  if (!t) return; // track faded out — leave panel open with last values
+
+  const hist     = history.get(_trackPanelId) || [];
+  const { heading, speedKt } = kinematics(hist);
+  const fpm      = verticalFpm(hist);
+  const altFt    = Math.round((t.alt || 0) * 3.281);
+  const fl       = Math.round(altFt / 100);
+  const spec     = aircraftTypes && aircraftTypes[t.type];
+
+  // Header
+  document.getElementById('tp-callsign').textContent = resolveCallsign(t);
+  document.getElementById('tp-type').textContent     = (spec && spec.label) || t.type || '';
+
+  // Properties
+  document.getElementById('tp-alt').textContent  =
+    `FL${String(fl).padStart(3,'0')}  (${altFt.toLocaleString()} ft)`;
+  const vsSign = fpm >  50 ? '+' : fpm < -50 ? '' : '±';
+  document.getElementById('tp-vs').textContent   =
+    Math.abs(fpm) < 50 ? 'level' : `${vsSign}${Math.round(fpm)} fpm`;
+  document.getElementById('tp-hdg').textContent  =
+    `${String(Math.round(heading)).padStart(3,'0')}°`;
+  document.getElementById('tp-spd').textContent  =
+    `${Math.round(speedKt)} kt`;
+  document.getElementById('tp-sqwk').textContent =
+    t.squawk != null ? String(t.squawk).padStart(4,'0') : '—';
+
+  // IFF state badge
+  _refreshIffState(t);
+
+  // IFF buttons
+  if (initTrackPanel._refreshIffButtons) initTrackPanel._refreshIffButtons();
+
+  // Rename input (only pre-fill if it's not focused)
+  const $ri = document.getElementById('tp-rename-input');
+  if ($ri && document.activeElement !== $ri) {
+    $ri.value = trackRenames.get(_trackPanelId) || '';
+  }
 }
 
 // ── Ground vehicle label popup ────────────────────────────────────────────

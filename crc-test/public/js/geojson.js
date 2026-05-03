@@ -9,10 +9,8 @@ function trackOpacity() {
   return 1.0;
 }
 
-function trackColor(coalition, category) {
-  if (category === 3) return GROUND_COLOR[coalition] || '#7a7a68';
-  const palette = settings.lightMode ? LIGHT_COALITION_COLOR : COALITION_COLOR;
-  return palette[coalition] || '#888888';
+function trackColor(track) {
+  return iffColor(getIff(track));
 }
 
 function buildInfo(track, hist) {
@@ -31,13 +29,19 @@ function buildInfo(track, hist) {
   return line;
 }
 
-// Fade opacity for a track based on time since last radar sweep hit.
-// Stays at full brightness for fadeGraceMs, then fades to 0 over FADE_DURATION_MS.
+// Fade opacity for a track based on time since last radar sweep hit,
+// or since the track first registered 0 kt airborne (stale DCS ghost tracks).
 function sweepOpacity(id, baseOp) {
-  const elapsed = Math.max(0, Date.now() - (lastSweepMs.get(id) || 0));
+  const now     = Date.now();
   const grace   = settings.fadeGraceMs ?? 10000;
-  if (elapsed <= grace) return baseOp;
-  return baseOp * Math.max(0, 1 - (elapsed - grace) / FADE_DURATION_MS);
+  const elapsed = Math.max(0, now - (lastSweepMs.get(id) || 0));
+
+  const zeroSince   = zeroSpeedSinceMs.get(id);
+  const zeroElapsed = zeroSince ? Math.max(0, now - zeroSince) : 0;
+
+  const effective = Math.max(elapsed, zeroElapsed);
+  if (effective <= grace) return baseOp;
+  return baseOp * Math.max(0, 1 - (effective - grace) / FADE_DURATION_MS);
 }
 
 // Track dots
@@ -48,6 +52,8 @@ function buildDots() {
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
+    const iffState = getIff(t);
+    if (iffState === 'invisible') continue;
     const hist       = history.get(id) || [];
     const { heading } = kinematics(hist);
     const onGround   = checkOnGround(t);
@@ -61,9 +67,10 @@ function buildDots() {
       properties: {
         id,
         callsign:       resolveCallsign(t),
-        color:          trackColor(t.coalition, t.category),
+        color:          trackColor(t),
         coalition:      t.coalition,
         category:       t.category,
+        iff:            iffState,
         opacity,
         onGround,
         heading:        Math.round(heading),
@@ -82,8 +89,8 @@ function buildTrails() {
   const features = [];
   const baseOp   = trackOpacity();
 
-  const addDots = (hist, coalition, category, extraScale) => {
-    const color = trackColor(coalition, category);
+  const addDots = (hist, t, extraScale) => {
+    const color = trackColor(t);
     for (let i = 0; i < hist.length - 1; i++) {
       const age     = hist.length - 1 - i;
       const trailMax = (settings.trailLength ?? HISTORY_MAX) || 1;
@@ -99,10 +106,11 @@ function buildTrails() {
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
+    if (getIff(t) === 'invisible') continue;
     if (t.category === 3) continue; // ground units have no trail
     if (checkOnGround(t)) continue; // aircraft on ground have no trail
     const hist = history.get(id);
-    if (hist && hist.length > 1) addDots(hist, t.coalition, t.category, sweepOpacity(id, 1));
+    if (hist && hist.length > 1) addDots(hist, t, sweepOpacity(id, 1));
   }
 
   return { type: 'FeatureCollection', features };
@@ -117,6 +125,7 @@ function buildPPL() {
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
+    if (getIff(t) === 'invisible') continue;
     if (t.category === 3) continue; // ground units have no PPL
     if (checkOnGround(t)) continue; // aircraft on ground have no PPL
     const hist = history.get(id) || [];
@@ -126,7 +135,7 @@ function buildPPL() {
     features.push({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [[t.lon, t.lat], [lon2, lat2]] },
-      properties: { color: trackColor(t.coalition, t.category) },
+      properties: { color: trackColor(t) },
     });
   }
 
@@ -143,6 +152,7 @@ function buildLeaders() {
 
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.category === 4) continue;
+    if (getIff(t) === 'invisible') continue;
     if ((t.category === 3 || t.category === 4) && !groundLabels.has(id)) continue;
 
     const relOff = labelOffsets.get(id);
@@ -161,11 +171,43 @@ function buildLeaders() {
           [t.lon + dLon * 0.70, t.lat + dLat * 0.70],
         ],
       },
-      properties: { color: trackColor(t.coalition, t.category), opacity: sweepOpacity(id, baseOp) },
+      properties: { color: trackColor(t), opacity: sweepOpacity(id, baseOp) },
     });
   }
 
   return { type: 'FeatureCollection', features };
+}
+
+// ── Sequential squawk declutter ───────────────────────────────────────────
+// Returns the Set of track IDs whose labels should be suppressed because they
+// are part of a sequential-squawk formation (e.g. 1101→1102→1103) where each
+// follower is within 0.5 nm horizontally and 1 000 ft vertically of the
+// previous squawk in the sequence.  Only labels are hidden; icons still show.
+
+function getDeclutteredIds() {
+  if (!settings.declutter) return new Set();
+
+  // Build a map of squawk → track for all currently visible tracks
+  const bySquawk = new Map();
+  for (const [, t] of tracks) {
+    if (t.squawk == null) continue;
+    const sq = Number(t.squawk);
+    if (Number.isFinite(sq) && sq >= 0 && sq <= 7777) bySquawk.set(sq, t);
+  }
+
+  const hidden = new Set();
+  const HORIZ_M = 0.5 * 1852;   // 0.5 nm in metres
+  const VERT_M  = 304.8;        // 1 000 ft in metres
+
+  for (const [sq, t] of bySquawk) {
+    const prev = bySquawk.get(sq - 1);
+    if (!prev) continue;
+    if (haversineM(t.lat, t.lon, prev.lat, prev.lon) > HORIZ_M) continue;
+    if (Math.abs((t.alt || 0) - (prev.alt || 0))    > VERT_M)  continue;
+    hidden.add(String(t.id));
+  }
+
+  return hidden;
 }
 
 // Labels.
@@ -175,13 +217,16 @@ function buildLeaders() {
 // The rendered text uses textOffset [0,0] so MapLibre places it at the geo coordinate directly.
 function buildLabels() {
   if (!mapReady) return { type: 'FeatureCollection', features: [] };
-  const features   = [];
-  const baseOp     = trackOpacity();
-  const textSizePx = getTextSizePx();
+  const features    = [];
+  const baseOp      = trackOpacity();
+  const textSizePx  = getTextSizePx();
+  const decluttered = getDeclutteredIds();
 
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
+    if (getIff(t) === 'invisible') continue;
+    if (decluttered.has(id)) continue; // formation follower — suppress label
 
     // Ensure every track has a stored geo offset (compute from em-offset if not yet set)
     if (!labelOffsets.has(id)) {
@@ -197,7 +242,7 @@ function buildLabels() {
     const relOff     = labelOffsets.get(id);
     const coords     = [t.lon + relOff[1], t.lat + relOff[0]];
     const textOffset = [0, 0]; // label is placed at its geo coordinate
-    const color      = trackColor(t.coalition, t.category);
+    const color      = trackColor(t);
     const opacity    = sweepOpacity(id, baseOp);
 
     // Ground vehicles and ships: only render if the user has assigned a label
@@ -217,13 +262,22 @@ function buildLabels() {
     const infoLine = csOnly ? '' : buildInfo(t, hist);
 
     // Squawk tag — shown on its own line below the info line.
+    // Suppressed when the squawk already resolves to a known callsign via squawkMap/squawkSeq.
     const emType = squawkEmergency(t.squawk);
     let sqTag = '', sqColor = color;
-    if (emType === 'hijack')     { sqTag = 'HIJ'; sqColor = '#cc2222'; }
-    else if (emType === 'radio') { sqTag = 'RDF'; sqColor = '#b8a000'; }
-    else if (emType === 'gen')   { sqTag = 'EMR'; sqColor = '#cc2222'; }
+    if (emType === 'hijack')     { sqTag = 'HIJ'; sqColor = settings.colEmergHijack || '#cc6600'; }
+    else if (emType === 'radio') { sqTag = 'RDF'; sqColor = settings.colEmergRadio  || '#b8a000'; }
+    else if (emType === 'gen')   { sqTag = 'EMR'; sqColor = settings.colEmergGen    || '#cc2222'; }
     else if (t.squawk != null && Number(t.squawk) !== 0) {
-      sqTag = String(t.squawk).padStart(4, '0');
+      // Only show raw squawk if it isn't already mapped to a callsign
+      const sq = Number(t.squawk);
+      const mappedByExact = settings.squawkMap && settings.squawkMap[String(sq)];
+      const mappedBySeq   = !mappedByExact && settings.squawkSeq &&
+        Object.entries(settings.squawkSeq).some(([base]) => {
+          const off = sq - parseInt(base, 10);
+          return off >= 0 && off <= 98;
+        });
+      if (!mappedByExact && !mappedBySeq) sqTag = String(t.squawk).padStart(4, '0');
     }
 
     features.push({
@@ -246,7 +300,8 @@ function buildNavpoints() {
     features: missionData.waypoints
       .filter(w => {
         if (!w.lat || !w.lon) return false;
-        if (settings.navDeclutter && /\d/.test(w.name || '')) return false;
+        if (settings.navDeclutter  && /\d/.test(w.name || '')) return false;
+        if (settings.navDeclutter5 && (w.name || '').length !== 5) return false;
         return true;
       })
       .map(w => ({
@@ -503,4 +558,5 @@ function updateMap() {
   updateRadarBadge();
   const n = tracks.size;
   document.getElementById('track-count').textContent = `${n} TRACK${n !== 1 ? 'S' : ''}`;
+  if (typeof updateTrackPanel === 'function') updateTrackPanel();
 }

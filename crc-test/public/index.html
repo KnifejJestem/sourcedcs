@@ -147,6 +147,15 @@
       flex-shrink: 0;
     }
     .radar-empty { font-size: 10px; color: var(--ui-text-dim); font-style: italic; padding: 8px 0; }
+    .datalink-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0 8px; margin-bottom: 4px;
+      border-bottom: 1px solid var(--ui-border-3);
+      font-size: 11px; letter-spacing: 0.07em;
+      color: var(--ui-text-bright);
+    }
+    .datalink-row.active { color: var(--ui-active); }
+    .datalink-label { flex: 1; }
     #radar-count-badge {
       display: inline-block;
       font-size: 9px;
@@ -160,17 +169,6 @@
       padding: 4px 6px; margin-bottom: 10px; outline: none;
     }
     #radar-search::placeholder { color: var(--ui-text-dim); }
-
-    /* Reference aircraft display */
-    #ref-display {
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      color: var(--ui-text-dim);
-      cursor: pointer;
-      user-select: none;
-    }
-    #ref-display.active { color: var(--ui-active); }
-    #ref-display:hover { color: var(--ui-text-bright); }
 
     /* Floating bullseye BRA (follows cursor) */
     #cursor-bra {
@@ -187,19 +185,6 @@
     body.light #cursor-bra { background: none; }
     #cursor-bra.visible { display: block; }
 
-    /* Reference selection dropdown */
-    #ref-dropdown {
-      display: none;
-      position: fixed;
-      top: 32px;
-      background: var(--ui-bg-solid);
-      border: 1px solid var(--ui-border-3);
-      z-index: 40;
-      min-width: 180px;
-      max-height: 320px;
-      overflow-y: auto;
-    }
-    #ref-dropdown.open { display: block; }
     .ref-option {
       padding: 7px 14px;
       font-size: 11px;
@@ -283,7 +268,7 @@
       color: var(--ui-text-dim);
     }
 
-    #btn-settings, #btn-calls, #btn-radars {
+    #btn-settings, #btn-radars, #btn-coalition {
       background: none;
       border: 1px solid var(--ui-border-2);
       color: var(--ui-text);
@@ -293,7 +278,126 @@
       padding: 3px 8px;
       cursor: pointer;
     }
-    #btn-settings:hover, #btn-calls:hover, #btn-radars:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    #btn-settings:hover, #btn-radars:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+
+    /* ── SQWK C/S floating button (below topbar, top-left) ── */
+    #btn-calls {
+      position: fixed;
+      top: 42px; left: 12px;
+      z-index: 20;
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    #btn-calls:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+
+    /* Coalition toggle */
+    #btn-coalition          { color: #4488cc; border-color: #2255884d; }
+    #btn-coalition:hover    { color: #66aaee; border-color: #4488cc; }
+    #btn-coalition.coalition-red          { color: #cc4444; border-color: #882222; }
+    #btn-coalition.coalition-red:hover    { color: #ee6666; border-color: #cc4444; }
+
+    /* ── Track info panel ── */
+    #track-panel {
+      position: fixed;
+      top: 32px; left: 0;
+      width: 260px;
+      background: var(--ui-bg-solid);
+      border-right: 1px solid var(--ui-border);
+      border-bottom: 1px solid var(--ui-border);
+      z-index: 25;
+      transform: translateX(-100%);
+      transition: transform 0.15s ease, top 0.15s ease;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    #track-panel.open { transform: translateX(0); }
+    /* Push down when calls-panel is open */
+    #track-panel.below-calls { top: 32px; }
+    .tp-header {
+      display: flex; align-items: baseline; gap: 6px;
+      padding: 10px 12px 6px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .tp-callsign {
+      font-size: 13px; font-weight: bold;
+      color: var(--ui-text-hi); letter-spacing: 0.12em;
+      flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tp-type-label {
+      font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.1em;
+    }
+    .tp-close {
+      background: none; border: none; color: var(--ui-text-dim);
+      font-family: inherit; font-size: 13px; cursor: pointer;
+      padding: 0 0 0 6px; line-height: 1; flex-shrink: 0;
+    }
+    .tp-close:hover { color: var(--ui-text-bright); }
+    .tp-props {
+      padding: 8px 12px;
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      row-gap: 4px; column-gap: 12px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .tp-key {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; padding-top: 1px;
+    }
+    .tp-val { color: var(--ui-text-bright); }
+    .tp-iff-state {
+      display: inline-block;
+      padding: 1px 6px;
+      border: 1px solid;
+      font-size: 9px; letter-spacing: 0.08em;
+      border-radius: 1px;
+    }
+    .tp-section {
+      padding: 6px 12px 8px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .tp-section:last-child { border-bottom: none; }
+    .tp-section-label {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .tp-iff-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tp-iff-btn {
+      background: none; border: 1px solid transparent;
+      font-family: 'Courier New', monospace; font-size: 9px;
+      letter-spacing: 0.07em; padding: 3px 6px; cursor: pointer;
+    }
+    .tp-iff-btn:hover { filter: brightness(1.3); }
+    .tp-iff-btn.iff-active { background: rgba(255,255,255,0.08); }
+    .tp-iff-clr {
+      background: none; border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim); font-family: 'Courier New', monospace;
+      font-size: 9px; letter-spacing: 0.07em; padding: 3px 6px; cursor: pointer;
+      margin-left: auto;
+    }
+    .tp-iff-clr:hover { color: var(--ui-text-bright); border-color: var(--ui-border-2); }
+    .tp-rename-row { display: flex; gap: 4px; margin-top: 6px; }
+    .tp-rename-input {
+      flex: 1; background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: 'Courier New', monospace;
+      font-size: 10px; letter-spacing: 0.06em; padding: 2px 5px;
+      outline: none; text-transform: uppercase; min-width: 0;
+    }
+    .tp-rename-input:focus { border-color: var(--ui-text-bright); }
+    .tp-rename-input::placeholder { color: var(--ui-text-dim); text-transform: none; }
+    .tp-rename-btn {
+      background: none; border: 1px solid var(--ui-border-3); color: var(--ui-text-bright);
+      font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 0.06em;
+      padding: 2px 7px; cursor: pointer; flex-shrink: 0;
+    }
+    .tp-rename-btn:hover { border-color: var(--ui-text-bright); color: var(--ui-active); }
+    .tp-rename-clr { border-color: var(--ui-border-4); color: var(--ui-text-dim); }
+    .tp-rename-clr:hover { color: #cc4444; border-color: #cc4444; }
 
     /* ── Settings panel ── */
     #settings-panel {
@@ -304,12 +408,42 @@
       background: var(--ui-bg-solid);
       border-left: 1px solid var(--ui-border);
       z-index: 30;
-      padding: 20px 16px;
+      padding: 0;
       transform: translateX(100%);
       transition: transform 0.2s ease;
-      overflow-y: auto;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
     #settings-panel.open { transform: translateX(0); }
+
+    /* Tabs */
+    .settings-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--ui-border-4);
+      flex-shrink: 0;
+    }
+    .stab {
+      flex: 1;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      padding: 9px 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .stab:hover  { color: var(--ui-text-bright); }
+    .stab.active { color: var(--ui-active); border-bottom-color: var(--ui-active); }
+
+    .stab-pane {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 16px 24px;
+    }
 
     .setting-group { margin-bottom: 20px; }
 
@@ -384,6 +518,46 @@
 
     .hr { border: none; border-top: 1px solid var(--ui-border-4); margin: 16px 0; }
 
+    /* Colour tab */
+    .col-group { margin-bottom: 18px; }
+    .col-group-label {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .col-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 7px;
+      font-size: 11px;
+    }
+    .col-swatch {
+      width: 14px; height: 14px;
+      border-radius: 2px;
+      border: 1px solid var(--ui-border-2);
+      display: inline-block;
+      margin-right: 6px;
+      vertical-align: middle;
+      pointer-events: none;
+    }
+    .col-label { display: flex; align-items: center; }
+    .col-reset {
+      background: none;
+      border: none;
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 9px;
+      cursor: pointer;
+      padding: 0 4px;
+      letter-spacing: 0.04em;
+    }
+    .col-reset:hover { color: var(--ui-text-bright); }
+
     /* ── Stale overlay ── */
     #stale-banner {
       position: fixed;
@@ -449,14 +623,14 @@
     /* ── Squawk callsign panel ── */
     #calls-panel {
       position: fixed;
-      top: 32px; right: 0;
+      top: 32px; left: 0;
       width: 260px;
       max-height: calc(100vh - 32px);
       background: var(--ui-bg-solid);
-      border-left: 1px solid var(--ui-border);
+      border-right: 1px solid var(--ui-border);
       z-index: 30;
       padding: 16px;
-      transform: translateX(100%);
+      transform: translateX(-100%);
       transition: transform 0.2s ease;
       overflow-y: auto;
     }
@@ -547,12 +721,16 @@
 <!-- Radar selection panel -->
 <div id="radars-panel">
   <div class="radar-panel-title">Active Radars</div>
+  <div class="datalink-row" id="datalink-row">
+    <span class="datalink-label">DATALINK</span>
+    <label class="toggle">
+      <input type="checkbox" id="datalink-toggle" />
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
   <input type="text" id="radar-search" placeholder="Search airports…" autocomplete="off" />
   <div id="radar-groups"></div>
 </div>
-
-<!-- Reference selection dropdown (populated by JS) -->
-<div id="ref-dropdown"></div>
 
 <!-- Airport selection dropdown -->
 <div id="apt-dropdown">
@@ -560,6 +738,41 @@
     <input type="text" id="apt-search" placeholder="Search…" autocomplete="off" spellcheck="false"/>
   </div>
   <div id="apt-list"></div>
+</div>
+
+<!-- Track info panel -->
+<div id="track-panel">
+  <div class="tp-header">
+    <span class="tp-callsign" id="tp-callsign">—</span>
+    <span class="tp-type-label" id="tp-type"></span>
+    <button class="tp-close" id="tp-close">✕</button>
+  </div>
+  <div class="tp-props" id="tp-props">
+    <span class="tp-key">ALT</span>   <span class="tp-val" id="tp-alt">—</span>
+    <span class="tp-key">V/S</span>   <span class="tp-val" id="tp-vs">—</span>
+    <span class="tp-key">HDG</span>   <span class="tp-val" id="tp-hdg">—</span>
+    <span class="tp-key">SPD</span>   <span class="tp-val" id="tp-spd">—</span>
+    <span class="tp-key">SQWK</span>  <span class="tp-val" id="tp-sqwk">—</span>
+    <span class="tp-key">IFF</span>   <span class="tp-val" id="tp-iff-state">—</span>
+  </div>
+  <div class="tp-section">
+    <div class="tp-section-label">Override IFF</div>
+    <div class="tp-iff-btns">
+      <button class="tp-iff-btn" data-state="friendly">FRIENDLY</button>
+      <button class="tp-iff-btn" data-state="bogey">BOGEY</button>
+      <button class="tp-iff-btn" data-state="neutral">NEUTRAL</button>
+      <button class="tp-iff-btn" data-state="bandit">BANDIT</button>
+      <button class="tp-iff-btn" data-state="hostile">HOSTILE</button>
+      <button class="tp-iff-clr" id="tp-iff-clr">CLR</button>
+    </div>
+    <div class="tp-rename-row">
+      <input type="text" class="tp-rename-input" id="tp-rename-input"
+             maxlength="20" placeholder="callsign override…"
+             autocomplete="off" spellcheck="false" />
+      <button class="tp-rename-btn" id="tp-rename-set">SET</button>
+      <button class="tp-rename-btn tp-rename-clr" id="tp-rename-clr">CLR</button>
+    </div>
+  </div>
 </div>
 
 <!-- Top bar -->
@@ -577,8 +790,8 @@
   </div>
   <span class="sep">|</span>
   <button id="btn-radars">RADARS <span id="radar-count-badge">0</span></button>
-  <span class="sep" id="ref-sep">|</span>
-  <span id="ref-display">REF: NONE</span>
+  <span class="sep">|</span>
+  <button id="btn-coalition">BLUE</button>
   <span class="sep" id="apt-sep">|</span>
   <span id="apt-display">APT: NONE</span>
   <span class="sep" id="rwy-sep" style="display:none">|</span>
@@ -590,9 +803,11 @@
              letter-spacing:0.06em; padding:2px 5px; outline:none; text-align:center;" />
   </div>
   <span id="track-count">0 TRACKS</span>
-  <button id="btn-calls">SQWK C/S</button>
   <button id="btn-settings">SETTINGS</button>
 </div>
+
+<!-- SQWK C/S floating button (below topbar, top-left) -->
+<button id="btn-calls">SQWK C/S</button>
 
 <!-- Stale data warning -->
 <div id="stale-banner">DATA STALE — NO UPDATE IN 10s</div>
@@ -629,131 +844,276 @@
 
 <!-- Settings panel -->
 <div id="settings-panel">
-  <div class="setting-label">Display</div>
 
-  <div class="setting-group">
-    <div class="setting-row">
-      <span>Light Mode</span>
-      <label class="toggle">
-        <input type="checkbox" id="set-light-mode" />
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
+  <div class="settings-tabs">
+    <button class="stab active" data-pane="general">GENERAL</button>
+    <button class="stab" data-pane="colors">COLOURS</button>
+    <button class="stab" data-pane="declutter">DECLTR</button>
   </div>
 
-  <div class="hr"></div>
-  <div class="setting-label">Tracks</div>
+  <!-- ── General tab ──────────────────────────────────────────────────── -->
+  <div id="stab-general" class="stab-pane">
 
-  <div class="setting-group">
-    <div class="setting-row">
-      <span>Projected Position Line</span>
-      <label class="toggle">
-        <input type="checkbox" id="set-ppl-enabled" />
-        <span class="toggle-slider"></span>
-      </label>
+    <div class="setting-label">Display</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Light Mode</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-light-mode" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </div>
-    <div class="setting-row">
-      <span>PPL Duration</span>
-      <span id="set-ppl-val">60s</span>
-    </div>
-    <div class="setting-row">
-      <input type="range" id="set-ppl-duration" min="10" max="300" step="10" value="60" />
-    </div>
-  </div>
 
-  <div class="hr"></div>
-  <div class="setting-label">Track History</div>
-  <div class="setting-group">
-    <div class="setting-row">
-      <span>Show trail</span>
-      <label class="toggle">
-        <input type="checkbox" id="set-trail-enabled" checked />
-        <span class="toggle-slider"></span>
-      </label>
+    <div class="hr"></div>
+    <div class="setting-label">Tracks</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Projected Position Line</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-ppl-enabled" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>PPL Duration</span>
+        <span id="set-ppl-val">60s</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-ppl-duration" min="10" max="300" step="10" value="60" />
+      </div>
     </div>
-    <div class="setting-row">
-      <span>Trail length</span>
-      <span id="set-trail-length-val">10</span>
-    </div>
-    <div class="setting-row">
-      <input type="range" id="set-trail-length" min="0" max="25" step="1" value="10" />
-    </div>
-    <div class="setting-row">
-      <span>Trail interval</span>
-      <span id="set-trail-interval-val">5s</span>
-    </div>
-    <div class="setting-row">
-      <input type="range" id="set-trail-interval" min="1000" max="30000" step="1000" value="5000" />
-    </div>
-    <div class="setting-row">
-      <span>Fade grace</span>
-      <span id="set-fade-grace-val">10s</span>
-    </div>
-    <div class="setting-row">
-      <input type="range" id="set-fade-grace" min="0" max="30000" step="500" value="10000" />
-    </div>
-  </div>
 
-  <div class="hr"></div>
-  <div class="setting-label">Bullseye</div>
-  <div class="setting-group">
-    <div class="setting-row">
-      <span>BRA text color</span>
-      <input type="color" id="set-bra-color" value="#4488cc" />
+    <div class="hr"></div>
+    <div class="setting-label">Track History</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Show trail</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-trail-enabled" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>Trail length</span>
+        <span id="set-trail-length-val">10</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-trail-length" min="0" max="25" step="1" value="10" />
+      </div>
+      <div class="setting-row">
+        <span>Trail interval</span>
+        <span id="set-trail-interval-val">5s</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-trail-interval" min="1000" max="30000" step="1000" value="5000" />
+      </div>
+      <div class="setting-row">
+        <span>Fade grace</span>
+        <span id="set-fade-grace-val">10s</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-fade-grace" min="0" max="30000" step="500" value="10000" />
+      </div>
     </div>
-    <div class="setting-row">
-      <span>Mag variation (°)</span>
-      <input type="number" id="set-mag-var" value="0" min="-30" max="30" step="1" style="width:54px" />
-    </div>
-  </div>
 
-  <div class="hr"></div>
-  <div class="setting-label">Scale</div>
-  <div class="setting-group">
-    <div class="setting-row">
-      <span>Track &amp; Label Size</span>
-      <span id="set-scale-val">1.0×</span>
+    <div class="hr"></div>
+    <div class="setting-label">Bullseye</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Mag variation (°)</span>
+        <input type="number" id="set-mag-var" value="0" min="-30" max="30" step="1" style="width:54px" />
+      </div>
     </div>
-    <div class="setting-row">
-      <input type="range" id="set-scale" min="0.6" max="2.0" step="0.1" value="1.0" />
-    </div>
-  </div>
 
-  <div class="hr"></div>
-  <div class="setting-label">Labels</div>
-  <div class="setting-group">
-    <div class="setting-row">
-      <span>Show AI units</span>
-      <label class="toggle">
-        <input type="checkbox" id="set-ai-enabled" checked />
-        <span class="toggle-slider"></span>
-      </label>
+    <div class="hr"></div>
+    <div class="setting-label">Scale</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Track &amp; Label Size</span>
+        <span id="set-scale-val">1.0×</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-scale" min="0.6" max="2.0" step="0.1" value="1.0" />
+      </div>
     </div>
-    <div class="setting-row">
-      <span>Show ships</span>
-      <label class="toggle">
-        <input type="checkbox" id="set-ships-enabled" />
-        <span class="toggle-slider"></span>
-      </label>
+
+    <div class="hr"></div>
+    <div class="setting-label">Labels</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Radar debug</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-radar-debug" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </div>
-    <div class="setting-row">
-      <span>Radar debug</span>
-      <label class="toggle">
-        <input type="checkbox" id="set-radar-debug" />
-        <span class="toggle-slider"></span>
-      </label>
+
+  </div><!-- /stab-general -->
+
+  <!-- ── Colours tab ──────────────────────────────────────────────────── -->
+  <div id="stab-colors" class="stab-pane" style="display:none">
+
+    <div class="col-group">
+      <div class="col-group-label">IFF States</div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-friendly"></span>Friendly</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colFriendly" data-default="#4488cc">↺</button>
+          <input type="color" id="col-friendly" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-bogey"></span>Bogey</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colBogey" data-default="#ccaa00">↺</button>
+          <input type="color" id="col-bogey" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-neutral"></span>Neutral</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colNeutral" data-default="#888888">↺</button>
+          <input type="color" id="col-neutral" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-bandit"></span>Bandit</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colBandit" data-default="#cc6600">↺</button>
+          <input type="color" id="col-bandit" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-hostile"></span>Hostile</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colHostile" data-default="#cc2222">↺</button>
+          <input type="color" id="col-hostile" />
+        </span>
+      </div>
     </div>
-    <div class="setting-row">
-      <span>Navpoint declutter</span>
-      <label class="toggle">
-        <input type="checkbox" id="set-nav-declutter" checked />
-        <span class="toggle-slider"></span>
-      </label>
+
+    <div class="col-group">
+      <div class="col-group-label">Emergency Squawks</div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-emerg-gen"></span>7700 General</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colEmergGen" data-default="#cc2222">↺</button>
+          <input type="color" id="col-emerg-gen" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-emerg-radio"></span>7600 Radio</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colEmergRadio" data-default="#b8a000">↺</button>
+          <input type="color" id="col-emerg-radio" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-emerg-hijack"></span>7500 Hijack</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colEmergHijack" data-default="#cc6600">↺</button>
+          <input type="color" id="col-emerg-hijack" />
+        </span>
+      </div>
     </div>
-  </div>
+
+    <div class="col-group">
+      <div class="col-group-label">Map &amp; Display</div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-bra"></span>BRA Cursor</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="braColor" data-default="#4488cc">↺</button>
+          <input type="color" id="col-bra" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-range-ring"></span>Range Ring</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colRangeRing" data-default="#8aaa6a">↺</button>
+          <input type="color" id="col-range-ring" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-navpoint"></span>Navpoints</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colNavpoint" data-default="#3a5a3a">↺</button>
+          <input type="color" id="col-navpoint" />
+        </span>
+      </div>
+    </div>
+
+  </div><!-- /stab-colors -->
+
+  <!-- ── Declutter tab ─────────────────────────────────────────────────── -->
+  <div id="stab-declutter" class="stab-pane" style="display:none">
+
+    <div class="setting-label">Formation Label Declutter</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Sequential squawk declutter</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-declutter" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div style="font-size:10px; color:var(--ui-text-dim); line-height:1.6; margin-top:4px;">
+      When aircraft squawks are sequential (e.g. 1101, 1102, 1103) and each
+      aircraft is within <b style="color:var(--ui-text)">0.5 nm</b> horizontally and
+      <b style="color:var(--ui-text)">1 000 ft</b> vertically of the previous,
+      labels for followers are hidden. Lead aircraft (1101) always shows its label.
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Navpoint Declutter</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Hide numbered navpoints</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-nav-declutter" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>5-letter names only</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-nav-declutter-5" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div style="font-size:10px; color:var(--ui-text-dim); line-height:1.6; margin-top:4px;">
+      Numbered: hides navpoints whose names contain digits (e.g. WP1, NAV003).<br>
+      5-letter: hides navpoints whose names are not exactly 5 characters (e.g. KARAX, DOSAD).
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Track Visibility</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Show AI units</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-ai-enabled" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>Show ships</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-ships-enabled" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+  </div><!-- /stab-declutter -->
+
 </div>
 
 <script src="./js/geo.js"></script>
+<script src="./js/iff.js"></script>
 <script src="./js/geojson.js"></script>
 <script src="./js/icons.js"></script>
 <script src="./js/ui.js"></script>

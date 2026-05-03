@@ -34,7 +34,7 @@
     "label": "F-15C Eagle",
     "radar": { "angleFromNose": 120, "rangeNm": 80, "sweepMs": 3500 }
   },
-  "F-15E": {
+  "F-15ESE": {
     "label": "F-15E Strike Eagle",
     "radar": { "angleFromNose": 120, "rangeNm": 80, "sweepMs": 3500 }
   },

@@ -182,13 +182,20 @@ function initMap() {
       layout: {
         'icon-image': [
           'case',
+          // BANDIT / HOSTILE → filled triangle regardless of category
+          ['==', ['get', 'iff'], 'bandit'],  'tri-iff-bandit',
+          ['==', ['get', 'iff'], 'hostile'], 'tri-iff-hostile',
+          // Ground vehicles
           ['==', ['get', 'category'], 3],
-          ['match', ['get', 'coalition'], 1,'gnd-neutral', 2,'gnd-red', 3,'gnd-blue', 'gnd-neutral'],
+          ['match', ['get', 'iff'], 'friendly','gnd-iff-friendly', 'bogey','gnd-iff-bogey', 'gnd-iff-neutral'],
+          // Ships
           ['==', ['get', 'category'], 4],
-          ['match', ['get', 'coalition'], 1,'ship-neutral', 2,'ship-red', 3,'ship-blue', 'ship-neutral'],
+          ['match', ['get', 'iff'], 'friendly','ship-iff-friendly', 'bogey','ship-iff-bogey', 'ship-iff-neutral'],
+          // Aircraft on ground
           ['get', 'onGround'],
-          ['match', ['get', 'coalition'], 1,'ac-neutral', 2,'ac-red', 3,'ac-blue', 'ac-neutral'],
-          ['match', ['get', 'coalition'], 1,'sq-neutral', 2,'sq-red', 3,'sq-blue', 'sq-neutral'],
+          ['match', ['get', 'iff'], 'friendly','ac-iff-friendly', 'bogey','ac-iff-bogey', 'ac-iff-neutral'],
+          // Airborne
+          ['match', ['get', 'iff'], 'friendly','sq-iff-friendly', 'bogey','sq-iff-bogey', 'sq-iff-neutral'],
         ],
         'icon-rotate':             ['case', ['get', 'onGround'], ['get', 'heading'], 0],
         'icon-rotation-alignment': 'map',
@@ -293,14 +300,25 @@ function initMap() {
       map.getCanvas().style.cursor = 'grabbing';
     });
 
-    // ── Left-click on ground vehicle or ship → label popup ───────────────
+    // ── Left-click on track icon ─────────────────────────────────────────
+    // Aircraft (cat 1/2) → IFF assignment popup
+    // Ground vehicles / ships (cat 3/4) → ground label popup (existing behaviour)
     map.on('click', 'unit-squares', (e) => {
       const feat = e.features && e.features[0];
       if (!feat) return;
-      const cat = feat.properties.category;
-      if (cat !== 3 && cat !== 4) return;
       e.preventDefault();
-      showGroundLabelPopup(String(feat.properties.id), e.originalEvent.clientX, e.originalEvent.clientY);
+      const id  = String(feat.properties.id);
+      const cat = feat.properties.category;
+      if (cat === 3 || cat === 4) {
+        showGroundLabelPopup(id, e.originalEvent.clientX, e.originalEvent.clientY);
+      } else {
+        showTrackPanel(id);
+      }
+    });
+
+    // Click on empty map → close track panel
+    map.on('click', (e) => {
+      if (!e.defaultPrevented) closeTrackPanel();
     });
 
     // ── Combined mousemove: BRA + label drag + measure line ───────────────
@@ -360,6 +378,32 @@ function initMap() {
       map.getSource('drawings').setData(buildDrawings());
     }
   });
+}
+
+// ── Colour application ────────────────────────────────────────────────────
+// Called whenever colour settings change (colour-picker input events).
+// Re-registers all colour-sensitive icon images and updates layer paint props.
+
+function applyColors() {
+  if (!mapReady) return;
+  const ring = settings.colRangeRing || '#8aaa6a';
+  const nav  = settings.colNavpoint  || '#3a5a3a';
+
+  // Range rings and selection ring
+  map.setPaintProperty('range-ring-line',  'line-color',          ring);
+  map.setPaintProperty('ground-ring-line', 'line-color',          ring);
+  map.setPaintProperty('ref-dot-ring',     'circle-stroke-color', ring);
+
+  // Navpoints
+  map.updateImage('navpt', createNavpointIcon(nav));
+  map.setPaintProperty('navpt-labels',   'text-color', nav);
+  map.setPaintProperty('airport-labels', 'text-color', nav);
+
+  // IFF + emergency icon images
+  updateIffIcons();
+
+  // Rebuild GeoJSON so label colours and trail colours update immediately
+  updateMap();
 }
 
 // ── Map theme ─────────────────────────────────────────────────────────────
