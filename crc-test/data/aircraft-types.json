@@ -200,11 +200,12 @@
 
   "_comment_carriers": "Carrier / large ship types — use carrierRadar key so they are treated as carrier sensors (illuminates ships, 360°).",
   "CVN_74": { "label": "CVN-74 Stennis",  "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
+  "CVN_75": { "label": "CVN-75 H.S Truman",  "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "Stennis":  { "label": "USS Stennis",    "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "Nimitz":   { "label": "USS Nimitz",     "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "CVN-71":   { "label": "CVN-71 T.Roosevelt", "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "CVN-72":   { "label": "CVN-72 A.Lincoln",   "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "CVN-73":   { "label": "CVN-73 G.Washington","carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
+  "CVN_71":   { "label": "CVN-71 T.Roosevelt", "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
+  "CVN_72":   { "label": "CVN-72 A.Lincoln",   "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
+  "CVN_73":   { "label": "CVN-73 G.Washington","carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "CV_59":    { "label": "CV-59 Forrestal","carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "LHA_Tarawa":{ "label": "LHA Tarawa",    "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "Kuznetsov":{ "label": "Kuznetsov",      "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } }

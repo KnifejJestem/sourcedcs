@@ -260,30 +260,26 @@ function initMap() {
     // ── Cursor ───────────────────────────────────────────────────────────
     map.getCanvas().style.cursor = 'crosshair';
 
-    // ── Label drag ────────────────────────────────────────────────────────
-    // Labels are dragged to geographic positions (zoom-stable after drop).
-    map.on('mouseenter', 'unit-labels', () => {
-      if (!_drag) map.getCanvas().style.cursor = 'grab';
-    });
-    map.on('mouseleave', 'unit-labels', () => {
-      if (!_drag) map.getCanvas().style.cursor = 'crosshair';
-    });
+    // ── Label drag / click ────────────────────────────────────────────────
+    // Labels are dragged to reposition them; a click (no real movement) opens
+    // the track panel.  We do NOT preventDefault on mousedown so that the
+    // browser still fires the click event — the click handler uses a flag to
+    // distinguish a real click from a drag.
+    let _labelDragged = false;
 
     map.on('mousedown', 'unit-labels', (e) => {
       if (e.originalEvent.button !== 0) return;
-      e.preventDefault();
+      // No e.preventDefault() here — we need the click event to fire later.
 
       const id    = String(e.features[0].properties.id);
       const track = tracks.get(id);
       if (!track) return;
 
-      // Compute the label's current relative offset from the track [dLat, dLon]
       let startRelLat, startRelLon;
       const relOff = labelOffsets.get(id);
       if (relOff) {
         [startRelLat, startRelLon] = relOff;
       } else {
-        // Default position: convert em pixel offset to a geo delta at current zoom
         const iconPx   = map.project([track.lon, track.lat]);
         const labelPx  = [
           iconPx.x + TEXT_OFFSET_EM[0] * getTextSizePx(),
@@ -295,21 +291,33 @@ function initMap() {
       }
 
       const startMouse = map.unproject([e.point.x, e.point.y]);
-      _drag = { id, startMouseLat: startMouse.lat, startMouseLon: startMouse.lng, startRelLat, startRelLon };
+      _drag = {
+        id, startX: e.point.x, startY: e.point.y,
+        startMouseLat: startMouse.lat, startMouseLon: startMouse.lng,
+        startRelLat, startRelLon, moved: false,
+      };
       map.dragPan.disable();
-      map.getCanvas().style.cursor = 'grabbing';
+    });
+
+    // Click on a label — open track panel unless the mouse was dragged.
+    // e.preventDefault() stops the map-level click from closing the panel.
+    map.on('click', 'unit-labels', (e) => {
+      e.preventDefault();
+      if (_labelDragged) { _labelDragged = false; return; }
+      const id = String(e.features[0].properties.id);
+      showTrackPanel(id);
     });
 
     // ── Left-click on track icon ─────────────────────────────────────────
-    // Aircraft (cat 1/2) → IFF assignment popup
-    // Ground vehicles / ships (cat 3/4) → ground label popup (existing behaviour)
+    // Aircraft (cat 1/2) + ships (cat 4) → track info panel
+    // Ground vehicles (cat 3) → ground label popup
     map.on('click', 'unit-squares', (e) => {
       const feat = e.features && e.features[0];
       if (!feat) return;
       e.preventDefault();
       const id  = String(feat.properties.id);
       const cat = feat.properties.category;
-      if (cat === 3 || cat === 4) {
+      if (cat === 3) {
         showGroundLabelPopup(id, e.originalEvent.clientX, e.originalEvent.clientY);
       } else {
         showTrackPanel(id);
@@ -327,10 +335,16 @@ function initMap() {
 
       if (_drag) {
         const rect  = map.getCanvas().getBoundingClientRect();
-        const mouse = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
+        const px    = e.clientX - rect.left;
+        const py    = e.clientY - rect.top;
+        // Only move the label once the mouse has travelled more than 5 px
+        const dist  = Math.hypot(px - _drag.startX, py - _drag.startY);
+        if (dist < 5) return;
+        _drag.moved    = true;
+        _labelDragged  = true;
+        const mouse = map.unproject([px, py]);
         const dLat  = mouse.lat - _drag.startMouseLat;
         const dLon  = mouse.lng - _drag.startMouseLon;
-        // Store relative offset [dLat, dLon] from track position so the label follows the track
         labelOffsets.set(_drag.id, [_drag.startRelLat + dLat, _drag.startRelLon + dLon]);
         updateMap();
       }
