@@ -124,7 +124,7 @@
       "type": "line",
       "source": "maptiler_planet",
       "source-layer": "aeroway",
-      "minzoom": 11,
+      "minzoom": 5,
       "paint": {
         "line-color": [
           "match",

@@ -14,8 +14,15 @@
         # Node.js versions matching each service's Dockerfile
         nodejs22 = pkgs.nodejs_22;  # asacs-link
 
-        # Python environment with the one third-party dependency (PyYAML)
-        pythonEnv = pkgs.python3.withPackages (ps: [ ps.pyyaml ps.pytest ]);
+        # Python environment for repo tooling plus lxsrs_v2 development
+        pythonEnv = pkgs.python3.withPackages (ps: [
+          ps.pyyaml
+          ps.pytest
+          ps.numpy
+          ps.sounddevice
+          ps.pynput
+          ps.opuslib
+        ]);
 
         # miztoyaml — DCS .miz → ATO brief YAML CLI tool
         miztoyaml = pkgs.python3Packages.buildPythonApplication {
@@ -40,9 +47,6 @@
         };
 
         # atobrief — tactical briefing web app (Express + js-yaml + socket.io)
-        # Matches Dockerfile: node:20-alpine, exposes port 4000 (set via PORT env var).
-        # Required env vars: CASDOOR_ENDPOINT, ATOBRIEF_CLIENT_ID, ATOBRIEF_CLIENT_SECRET
-        # Run `nix build .#atobrief` once — Nix will report the correct npmDepsHash on failure.
         atobrief = pkgs.buildNpmPackage {
           pname = "atobrief";
           version = "1.0.0";
@@ -66,9 +70,6 @@
         };
 
         # sourcedcs-web — main website (Express)
-        # Matches Dockerfile: node:20-alpine, exposes port 7000 (set via PORT=7000 env var).
-        # Required env vars: see .env.example — CASDOOR_*, DISCORD_BOT_TOKEN, etc.
-        # Run `nix build .#sourcedcs-web` once — Nix will report the correct npmDepsHash on failure.
         sourcedcs-web = pkgs.buildNpmPackage {
           pname = "sourcedcs-web";
           version = "1.0.0";
@@ -92,9 +93,6 @@
         };
 
         # asacs-link — DCS GCI server (WebSocket relay, ESM)
-        # Matches Dockerfile: node:22-alpine, exposes HTTP port 3000 + UDP 7788 for DCS.
-        # Required env vars: ASACS_PASSWORD_{BLUE,RED,NEUTRAL,ADMIN}, ASACS_UDP_HOST
-        # Run `nix build .#asacs-link` once — Nix will report the correct npmDepsHash on failure.
         asacs-link = pkgs.buildNpmPackage {
           pname = "asacs-link";
           version = "1.0.0";
@@ -114,21 +112,59 @@
           '';
         };
 
+        # lxsrs_v2 — Linux-oriented Python SRS client prototype
+        lxsrs_v2 = pkgs.python3Packages.buildPythonApplication {
+          pname = "lxsrs-v2";
+          version = "0.1.0";
+          src = ./.;
+          format = "other";
+          propagatedBuildInputs = [
+            pkgs.python3Packages.numpy
+            pkgs.python3Packages.sounddevice
+            pkgs.python3Packages.pynput
+            pkgs.python3Packages.opuslib
+          ];
+          buildInputs = [
+            pkgs.libopus
+            pkgs.portaudio
+            pkgs.libpulseaudio
+          ];
+          nativeBuildInputs = [
+            pkgs.makeWrapper
+          ];
+          dontBuild = true;
+          installPhase = ''
+            mkdir -p $out/lib/${pkgs.python3.sitePackages}
+            cp -r lxsrs_v2 $out/lib/${pkgs.python3.sitePackages}/
+            mkdir -p $out/bin
+            makeWrapper ${pkgs.python3}/bin/python3 $out/bin/lxsrs_v2 \
+              --prefix PYTHONPATH : $out/lib/${pkgs.python3.sitePackages} \
+              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath [ pkgs.portaudio pkgs.libopus pkgs.libpulseaudio ]} \
+              --add-flags "-m lxsrs_v2"
+          '';
+        };
+
       in {
         packages = {
-          inherit miztoyaml atobrief sourcedcs-web asacs-link;
+          inherit miztoyaml atobrief sourcedcs-web asacs-link lxsrs_v2;
           default = miztoyaml;
         };
 
         devShells.default = pkgs.mkShell {
           name = "sourcedcs";
-          # nodejs_22 is the highest version needed; it can also run the Node 20 apps.
           buildInputs = [
             nodejs22
             pythonEnv
             pkgs.docker
             pkgs.docker-compose
+            pkgs.libopus
+            pkgs.portaudio
+            pkgs.libpulseaudio
+            pkgs.espeak-ng
+            pkgs.ffmpeg
+            pkgs.opus-tools
           ];
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.portaudio pkgs.libopus pkgs.libpulseaudio ];
           shellHook = ''
             echo "SOURCE DCS dev shell"
             echo "  node    $(node --version)"
@@ -139,11 +175,39 @@
             echo "  atobrief:     cd atobrief    && PORT=4000 npm start"
             echo "  sourcedcs-web: cd sourcedcs-web && PORT=7000 npm start"
             echo "  asacs-link:   cd asacs_link  && PORT=3000 npm start"
+            echo "  lxsrs_v2:     python3 -m lxsrs_v2 --freq 251.0 --ui"
             echo "  tests:        python3 -m pytest tools/tests/ -v"
             echo ""
             echo "Full stack (Docker Compose):"
             echo "  cp .env.example infra/.env && \$EDITOR infra/.env"
             echo "  cd infra && docker compose up -d"
+            echo ""
+            echo "lxsrs_v2 dependencies ready:"
+            echo "  tts:   $(espeak-ng --version 2>&1 | head -n1 || echo 'espeak-ng available')"
+          '';
+        };
+
+        # Separate dev shell for just lxsrs_v2 development
+        devShells.srs = pkgs.mkShell {
+          name = "lxsrs-v2-dev";
+          buildInputs = [
+            pythonEnv
+            pkgs.libopus
+            pkgs.portaudio
+            pkgs.libpulseaudio
+            pkgs.espeak-ng
+            pkgs.ffmpeg
+            pkgs.opus-tools
+          ];
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.portaudio pkgs.libopus pkgs.libpulseaudio ];
+
+          shellHook = ''
+            echo "lxsrs_v2 Development Environment"
+            echo "  python: $(python3 --version)"
+            echo ""
+            echo "Run UI:   python3 -m lxsrs_v2 --freq 251.0 --tx-freq 251.0 --ui"
+            echo "Run RX:   python3 -m lxsrs_v2 --freq 251.0"
+            echo "Tests:    python3 -m pytest lxsrs_v2/tests -v"
           '';
         };
       }

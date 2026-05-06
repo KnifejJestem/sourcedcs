@@ -100,8 +100,9 @@ const DEFAULTS = {
   pplDuration:   60,
   trailEnabled:  true,
   trailLength:   10,
-  aiEnabled:     true,
-  shipsEnabled:  false,
+  aiEnabled:         true,
+  shipsEnabled:      false,
+  hideGroundUnits:   false,
   braColor:      '#4488cc',
   magVar:        0,
   radarDebug:    false,
@@ -191,9 +192,26 @@ function pushHistory(id, track) {
 
 const _HELIPAD_RE = /helipad|farp|fob/i;
 
+// Cache for getAllRadars() — valid for one sweep interval (< SWEEP_INTERVAL ms).
+// Avoids rebuilding the radar list on every call within the same tick.
+let _allRadarsCache   = null;
+let _allRadarsCacheMs = 0;
+
+function invalidateRadarsCache() {
+  _allRadarsCache = null;
+}
+
 // Returns every radar that could potentially be active (regardless of user toggle).
 // type: 'airport' | 'approach' | 'awacs' | 'fighter' | 'carrier'
 function getAllRadars() {
+  const now = Date.now();
+  if (_allRadarsCache && now - _allRadarsCacheMs < SWEEP_INTERVAL - 5) return _allRadarsCache;
+  _allRadarsCache   = _buildAllRadars();
+  _allRadarsCacheMs = now;
+  return _allRadarsCache;
+}
+
+function _buildAllRadars() {
   const radars   = [];
   const airports = (missionData && missionData.airports) || [];
 
@@ -288,6 +306,13 @@ setInterval(() => {
   const radars = getActiveRadars();
   let   changed = false;
 
+  // Per-tick on-ground cache: avoids repeating the airport-loop for each radar
+  // that tests the same track. Only computed for cat 1/2 (the only ones checked).
+  const onGroundCache = new Map();
+  for (const [id, t] of latestFromServer) {
+    if (t.category === 1 || t.category === 2) onGroundCache.set(id, checkOnGround(t));
+  }
+
   for (const radar of radars) {
     if (radar.angleFromNose === 360) {
       if (!radarSweepStart.has(radar.id)) radarSweepStart.set(radar.id, now);
@@ -296,7 +321,7 @@ setInterval(() => {
       for (const [id, t] of latestFromServer) {
         if (t.category === 3 && !radar.seesGround) continue;
         if (t.category === 4 && !radar.seesShips) continue;
-        if (radar.noGroundAircraft && (t.category === 1 || t.category === 2) && checkOnGround(t)) continue;
+        if (radar.noGroundAircraft && (t.category === 1 || t.category === 2) && onGroundCache.get(id)) continue;
         const distM = haversineM(radar.lat, radar.lon, t.lat, t.lon);
         if (distM > radar.rangeM) continue;
         const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
@@ -322,7 +347,7 @@ setInterval(() => {
       for (const [id, t] of latestFromServer) {
         if (t.category === 3 && !radar.seesGround) continue;
         if (t.category === 4 && !radar.seesShips) continue;
-        if (radar.noGroundAircraft && (t.category === 1 || t.category === 2) && checkOnGround(t)) continue;
+        if (radar.noGroundAircraft && (t.category === 1 || t.category === 2) && onGroundCache.get(id)) continue;
         const distM = haversineM(radar.lat, radar.lon, t.lat, t.lon);
         if (distM > radar.rangeM) continue;
         const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
@@ -346,7 +371,7 @@ setInterval(() => {
   // These tracks are faded out after the normal grace period even if the radar keeps sweeping them.
   for (const [id, t] of tracks) {
     if (t.category === 3 || t.category === 4) { zeroSpeedSinceMs.delete(id); continue; }
-    if (checkOnGround(t)) { zeroSpeedSinceMs.delete(id); continue; }
+    if (onGroundCache.get(id)) { zeroSpeedSinceMs.delete(id); continue; }
     const hist = history.get(id) || [];
     const { speedKt } = kinematics(hist);
     if (speedKt < 1) {
@@ -401,6 +426,7 @@ function resetSweepState() {
 
 function applySnapshot(trackList) {
   latestFromServer.clear();
+  invalidateRadarsCache();
   resetSweepState();
   for (const t of trackList) latestFromServer.set(t.id, t);
   lastUpdateMs = Date.now();
@@ -418,6 +444,7 @@ function applyDelta(updated, gone) {
     latestFromServer.set(t.id, t);
     // Do NOT update tracks here — position only updates when the radar beam hits the track.
   }
+  invalidateRadarsCache();
 }
 
 // ── Zoom + pan limits ─────────────────────────────────────────────────────
@@ -486,6 +513,7 @@ function connect() {
         break;
       case 'init':
         missionData = msg;
+        invalidateRadarsCache();
         if (mapReady) {
           map.getSource('airports').setData(buildAirports());
           map.getSource('bullseye').setData(buildBullseye());

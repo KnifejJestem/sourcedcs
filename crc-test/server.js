@@ -9,8 +9,9 @@ const SrsClient  = require('./src/srs-client');
 const TrackStore = require('./src/tracks');
 const WsServer   = require('./src/ws-server');
 
-const PUBLIC_DIR = path.join(__dirname, 'public');
-const DATA_DIR   = path.join(__dirname, 'data');
+const PUBLIC_DIR       = path.join(__dirname, 'public');
+const DATA_DIR         = path.join(__dirname, 'data');
+const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -24,6 +25,44 @@ const MIME = {
 // ── HTTP server (static files + WebSocket upgrade) ────────────────────────
 
 const httpServer = http.createServer((req, res) => {
+  // ── SRS radio API proxy → lxsrs_v2 HTTP API ──────────────────────────────
+  if (req.url.startsWith('/srs-api/')) {
+    const upstreamPath = req.url.slice('/srs-api'.length);
+    const opts = {
+      hostname: '127.0.0.1',
+      port: SRS_RADIO_API,
+      path: upstreamPath,
+      method: req.method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(req.headers['content-length'] ? { 'Content-Length': req.headers['content-length'] } : {}),
+      },
+    };
+    const upstream = http.request(opts, (upRes) => {
+      res.writeHead(upRes.statusCode, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      });
+      upRes.pipe(res);
+    });
+    upstream.on('error', () => {
+      if (!res.headersSent) res.writeHead(503);
+      res.end(JSON.stringify({ error: 'SRS radio API unavailable' }));
+    });
+    if (req.method === 'OPTIONS') {
+      res.writeHead(200, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      });
+      res.end();
+      return;
+    }
+    if (req.method === 'POST') req.pipe(upstream);
+    else upstream.end();
+    return;
+  }
+
   // Serve static data files (aircraft-types.json, airports.json, icao.json …)
   if (req.url.startsWith('/data/')) {
     const dataPath = path.normalize(path.join(DATA_DIR, req.url.slice(6).split('?')[0]));
@@ -89,6 +128,14 @@ srsClient.on('status', (state) => {
   wsServer.setSrsStatus(state);
   wsServer.broadcastStatus();
 });
+
+// ── Stale track reaper ────────────────────────────────────────────────────
+// Evicts units not heard from in 12 s (handles players logging out on the
+// ground where DCS never emits a 'gone' event for the slot).
+setInterval(() => {
+  const n = store.expireStale();
+  if (n > 0) console.log(`[crc] expired ${n} stale track(s)`);
+}, 5000);
 
 // ── Start ─────────────────────────────────────────────────────────────────
 // Delta broadcasts are now driven by per-client timers inside WsServer,

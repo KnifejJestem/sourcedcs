@@ -52,6 +52,7 @@ function buildDots() {
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
+    if (settings.hideGroundUnits && t.category === 3) continue;
     const iffState = getIff(t);
     if (iffState === 'invisible') continue;
     const hist       = history.get(id) || [];
@@ -152,6 +153,7 @@ function buildLeaders() {
 
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.category === 4) continue;
+    if (settings.hideGroundUnits && t.category === 3) continue;
     if (getIff(t) === 'invisible') continue;
     if ((t.category === 3 || t.category === 4) && !groundLabels.has(id)) continue;
 
@@ -167,8 +169,8 @@ function buildLeaders() {
       geometry: {
         type: 'LineString',
         coordinates: [
-          [t.lon + dLon * 0.15, t.lat + dLat * 0.15],
-          [t.lon + dLon * 0.70, t.lat + dLat * 0.70],
+          [t.lon + dLon * 0.03, t.lat + dLat * 0.03],
+          [t.lon + dLon * 0.80, t.lat + dLat * 0.80],
         ],
       },
       properties: { color: trackColor(t), opacity: sweepOpacity(id, baseOp) },
@@ -225,6 +227,7 @@ function buildLabels() {
   for (const [id, t] of tracks) {
     if (!settings.aiEnabled && !t.player) continue;
     if (!settings.shipsEnabled && t.category === 4) continue;
+    if (settings.hideGroundUnits && t.category === 3) continue;
     if (getIff(t) === 'invisible') continue;
     if (decluttered.has(id)) continue; // formation follower — suppress label
 
@@ -538,7 +541,17 @@ function buildRadarDebug(radars) {
   return { type: 'FeatureCollection', features };
 }
 
+let _mapRafId = null;
+
 function updateMap() {
+  if (_mapRafId !== null) return;
+  _mapRafId = requestAnimationFrame(() => {
+    _mapRafId = null;
+    _doUpdateMap();
+  });
+}
+
+function _doUpdateMap() {
   if (!mapReady) return;
   map.getSource('range-ring').setData(buildRangeRing());
   map.getSource('ref-dot').setData(buildRefDot());

@@ -1,10 +1,27 @@
 'use strict';
 
+const STALE_MS = 12000; // remove tracks not updated within this window
+
 class TrackStore {
   constructor() {
-    this._tracks = new Map(); // id → track
-    this._log    = [];        // [{seq, type:'update'|'gone', id, track?}]
-    this._seq    = 0;
+    this._tracks   = new Map(); // id → track
+    this._lastSeen = new Map(); // id → Date.now()
+    this._log      = [];        // [{seq, type:'update'|'gone', id, track?}]
+    this._seq      = 0;
+  }
+
+  // Remove tracks whose last update is older than STALE_MS.
+  // Returns the number of tracks expired.
+  expireStale() {
+    const cutoff = Date.now() - STALE_MS;
+    let count = 0;
+    for (const [id, ts] of this._lastSeen) {
+      if (ts < cutoff) {
+        this.remove(id);
+        count++;
+      }
+    }
+    return count;
   }
 
   update(unitData, transponder) {
@@ -28,6 +45,7 @@ class TrackStore {
     }
 
     this._tracks.set(unitData.id, track);
+    this._lastSeen.set(unitData.id, Date.now());
     this._log.push({ seq: ++this._seq, type: 'update', id: unitData.id, track });
     this._pruneLog();
   }
@@ -35,6 +53,7 @@ class TrackStore {
   remove(id) {
     if (!this._tracks.has(id)) return;
     this._tracks.delete(id);
+    this._lastSeen.delete(id);
     this._log.push({ seq: ++this._seq, type: 'gone', id });
     this._pruneLog();
   }
@@ -45,6 +64,7 @@ class TrackStore {
       this._log.push({ seq: ++this._seq, type: 'gone', id });
     }
     this._tracks.clear();
+    this._lastSeen.clear();
     this._pruneLog();
   }
 
