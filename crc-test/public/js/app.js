@@ -55,6 +55,7 @@ let aircraftTypes = {};
 let airportsDb    = {};
 
 let missionData      = null;
+let weather          = { pressurePa: 101325, tempK: 288.15 }; // ISA defaults until server sends live data
 let grpcStatus       = 'disconnected';
 let noRadarsActive   = false; // true when all radars are disabled / none available
 let srsStatus        = 'disconnected';
@@ -116,6 +117,10 @@ const DEFAULTS = {
   trailIntervalMs: 5000, // minimum ms between trail dot recordings
   declutter:       true,  // auto-hide labels for sequential-squawk formation flights
   datalink:        false, // auto-include all friendly aircraft radars
+  transitionAltFt: 18000, // ft — below this use QNH, at/above use standard (FL)
+  gameTimeOffset:  0,     // hours — theater UTC offset subtracted to display Zulu
+  aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO
+  aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO
   // ── Colours ───────────────────────────────────────────────────────────────
   colFriendly:    '#4488cc',
   colBogey:       '#ccaa00',
@@ -140,6 +145,40 @@ function loadSettings() {
 
 function saveSettings() {
   localStorage.setItem('crc-settings', JSON.stringify(settings));
+}
+
+// DCS altimeter model (reverse-engineered from flight test data).
+// Atmosphere: full ISA piecewise (troposphere + isothermal stratosphere).
+// Altimeter inversion: troposphere formula only, with empirical T_REF_ALT.
+const ISA_T0 = 288.15, ISA_P0 = 101325, ISA_L = 0.0065;
+const ISA_G = 9.80665, ISA_R = 287.05287;
+const ISA_EXP = ISA_G / (ISA_R * ISA_L);   // G/(R*L) ≈ 5.2559
+const ISA_INV = (ISA_R * ISA_L) / ISA_G;   // R*L/G ≈ 0.19026
+const H_TROP = 11000.0;                     // m, tropopause
+const T_REF_ALT = 288.97;                   // K, empirical DCS altimeter reference
+
+function _pressureAtAlt(zM, seaPa, T0) {
+  if (zM <= H_TROP) {
+    return seaPa * Math.pow(1 - ISA_L * zM / T0, ISA_EXP);
+  }
+  const T_trop = T0 - ISA_L * H_TROP;
+  const P_trop = seaPa * Math.pow(1 - ISA_L * H_TROP / T0, ISA_EXP);
+  return P_trop * Math.exp(-ISA_G * (zM - H_TROP) / (ISA_R * T_trop));
+}
+
+function indicatedAltFt(trueAltM) {
+  const { pressurePa, tempK } = weather;
+  const trueAltFt = trueAltM / 0.3048;
+  const taFt = settings.transitionAltFt ?? 18000;
+
+  const P = _pressureAtAlt(trueAltM, pressurePa, tempK);
+  if (trueAltFt >= taFt) {
+    // FL: altimeter set to standard pressure (ISA_P0)
+    return ((T_REF_ALT / ISA_L) * (1 - Math.pow(P / ISA_P0, ISA_INV))) / 0.3048;
+  } else {
+    // QNH: altimeter set to live sea-level pressure
+    return ((T_REF_ALT / ISA_L) * (1 - Math.pow(P / pressurePa, ISA_INV))) / 0.3048;
+  }
 }
 
 function loadEnabledRadars() {
@@ -505,6 +544,12 @@ function connect() {
     try { msg = JSON.parse(e.data); } catch (_) { return; }
 
     switch (msg.type) {
+      case 'weather':
+        weather = { pressurePa: msg.pressurePa, tempK: msg.tempK };
+        break;
+      case 'game-time':
+        updateGameTime(msg.datetime);
+        break;
       case 'status':
         grpcStatus = msg.grpc;
         srsStatus  = msg.srs;
@@ -523,6 +568,8 @@ function connect() {
         // Rebuild radar panel so airport radars reflect the new mission
         buildRadarPanelContent();
         updateRadarBadge();
+        // Refresh APRT panel airport list if panel is open
+        refreshAprtAptList();
         break;
       case 'snapshot':
         applySnapshot((msg.tracks || []).map(normaliseTrack));
@@ -586,6 +633,8 @@ initRadarPanel();
 initAptSelector();
 initRwyInput();
 initCoalitionBtn();
+initZuluClock();
+initAprtPanel();
 updateTopbarUI();
 connect();
 

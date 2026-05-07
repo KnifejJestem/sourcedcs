@@ -16,7 +16,7 @@ function trackColor(track) {
 function buildInfo(track, hist) {
   const { speedKt } = kinematics(hist);
   const fpm         = verticalFpm(hist);
-  const fl          = Math.round(track.alt * 3.281 / 100).toString().padStart(3, '0');
+  const fl          = Math.round(indicatedAltFt(track.alt) / 100).toString().padStart(3, '0');
   const gs          = Math.round(speedKt).toString().padStart(3, '0');
   let line;
   if (Math.abs(fpm) > 100) {
@@ -143,13 +143,15 @@ function buildPPL() {
   return { type: 'FeatureCollection', features };
 }
 
-// Leader lines — purely geo, no map.project() calls, zoom-stable length.
-// labelOffsets stores [dLat, dLon] from track to label (set by buildLabels).
-// The line runs 15%→70% of that vector, keeping clear of the icon and label text.
+// Leader lines — pixel-space clipping so gaps are screen-stable at any zoom.
+// Start: LEADER_ICON_GAP px from the track icon.
+// End:   LABEL_HALF_W px from the label anchor (clears the text).
 function buildLeaders() {
   if (!mapReady) return { type: 'FeatureCollection', features: [] };
-  const features = [];
-  const baseOp   = trackOpacity();
+  const features  = [];
+  const baseOp    = trackOpacity();
+  const iconGapPx = getLeaderIconGap();
+  const labelGapPx = getLabelHalfW() + LABEL_EDGE_MARGIN;
 
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.category === 4) continue;
@@ -163,15 +165,25 @@ function buildLeaders() {
     const [dLat, dLon] = relOff;
     if (Math.abs(dLat) < 1e-7 && Math.abs(dLon) < 1e-7) continue;
 
-    // Geo-stable endpoints: 15% from icon, stopping at 70% (30% gap before label)
+    const iconPx  = map.project([t.lon, t.lat]);
+    const labelPx = map.project([t.lon + dLon, t.lat + dLat]);
+    const dx  = labelPx.x - iconPx.x;
+    const dy  = labelPx.y - iconPx.y;
+    const len = Math.hypot(dx, dy);
+    if (len < iconGapPx + labelGapPx + 2) continue; // too close to draw
+
+    const ux = dx / len, uy = dy / len;
+    const startPx = [iconPx.x  + ux * iconGapPx,  iconPx.y  + uy * iconGapPx];
+    const endPx   = [labelPx.x - ux * labelGapPx, labelPx.y - uy * labelGapPx];
+
+    const start = map.unproject(startPx);
+    const end   = map.unproject(endPx);
+
     features.push({
       type: 'Feature',
       geometry: {
         type: 'LineString',
-        coordinates: [
-          [t.lon + dLon * 0.03, t.lat + dLat * 0.03],
-          [t.lon + dLon * 0.80, t.lat + dLat * 0.80],
-        ],
+        coordinates: [[start.lng, start.lat], [end.lng, end.lat]],
       },
       properties: { color: trackColor(t), opacity: sweepOpacity(id, baseOp) },
     });
@@ -569,7 +581,5 @@ function _doUpdateMap() {
   updateZoomLimits();
   updateTopbarUI();
   updateRadarBadge();
-  const n = tracks.size;
-  document.getElementById('track-count').textContent = `${n} TRACK${n !== 1 ? 'S' : ''}`;
   if (typeof updateTrackPanel === 'function') updateTrackPanel();
 }

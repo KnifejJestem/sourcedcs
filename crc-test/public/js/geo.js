@@ -33,16 +33,23 @@ function projectPos(lat, lon, headingDeg, distM) {
 
 function kinematics(hist) {
   if (hist.length < 2) return { heading: 0, speedMs: 0, speedKt: 0 };
-  const p  = hist[hist.length - 2];
-  const c  = hist[hist.length - 1];
-  const dt = (c.timestamp - p.timestamp) / 1000;
-  if (dt <= 0) return { heading: 0, speedMs: 0, speedKt: 0 };
-  const dist = haversineM(p.lat, p.lon, c.lat, c.lon);
-  return {
-    heading: bearingDeg(p.lat, p.lon, c.lat, c.lon),
-    speedMs: dist / dt,
-    speedKt: (dist / dt) * 1.944,
-  };
+
+  // Heading: last two points — most recent direction.
+  const p = hist[hist.length - 2];
+  const c = hist[hist.length - 1];
+  const heading = bearingDeg(p.lat, p.lon, c.lat, c.lon);
+
+  // Speed: sum distance and time across ALL consecutive pairs.
+  // Averaging over the full history window suppresses single-hop noise
+  // that would otherwise cause ±400 kt spikes from a single bad position.
+  let totalDist = 0, totalTime = 0;
+  for (let i = 1; i < hist.length; i++) {
+    totalDist += haversineM(hist[i-1].lat, hist[i-1].lon, hist[i].lat, hist[i].lon);
+    totalTime += (hist[i].timestamp - hist[i-1].timestamp) / 1000;
+  }
+  if (totalTime <= 0) return { heading, speedMs: 0, speedKt: 0 };
+  const speedMs = totalDist / totalTime;
+  return { heading, speedMs, speedKt: speedMs * 1.944 };
 }
 
 function verticalFpm(hist) {

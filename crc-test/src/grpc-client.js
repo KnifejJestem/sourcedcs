@@ -12,6 +12,20 @@ const POLL_RATE = parseInt(process.env.DCS_GRPC_POLL_RATE) || 0;
 // GroupCategory numeric values to include (AIRPLANE=1, HELICOPTER=2, GROUND=3, SHIP=4)
 const ALLOWED_CATS = new Set([1, 2, 3, 4]);
 
+// DCS altimeter constants (reverse-engineered; T_REF_ALT is empirical)
+const ISA_T0     = 288.15;
+const ISA_P0     = 101325;
+const ISA_L      = 0.0065;
+const ISA_G      = 9.80665;
+const ISA_R      = 287.05287;
+const ISA_EXP    = ISA_G / (ISA_R * ISA_L);
+const ISA_INV    = (ISA_R * ISA_L) / ISA_G;
+const H_TROP     = 11000.0;
+const T_REF_ALT  = 288.97;
+
+const WEATHER_POLL_MS   = 60000; // poll atmosphere every 60 s
+const GAMETIME_POLL_MS  =  5000; // poll scenario current time every 5 s
+
 const PROTO_OPTS = { keepCase: true, includeDirs: [PROTO_ROOT] };
 
 // Keep the HTTP/2 connection alive between reconnects
@@ -35,13 +49,23 @@ class GrpcClient extends EventEmitter {
     this._coalSvc      = null;
     this._worldSvc     = null;
     this._customSvc    = null;
+    this._atmSvc       = null;
+    this._timerSvc     = null;
+    this._srsSvc       = null;
     this._unitStream   = null; // current live unit stream reference
     this._eventStream  = null; // current live event stream reference
-    this._unitTimer    = null;
-    this._eventTimer   = null;
+    this._unitTimer      = null;
+    this._eventTimer     = null;
+    this._weatherTimer   = null;
+    this._gameTimeTimer  = null;
     this._statusTimer        = null; // debounce for 'reconnecting' broadcasts
     this._icao               = null;
     this._missionFetchActive = false; // prevents duplicate retry loops
+    // ISA defaults — overwritten by live weather polls
+    this._weather    = { pressurePa: ISA_P0, tempK: ISA_T0 };
+    // Reference position for weather queries (sea level, theater center)
+    // Updated to first airport lat/lon when mission data arrives.
+    this._weatherRef = { lat: 41.0, lon: 41.0 };
   }
 
   connect() {
@@ -50,12 +74,18 @@ class GrpcClient extends EventEmitter {
       const coalPkg    = loadSvc('dcs/coalition/v0/coalition.proto');
       const worldPkg   = loadSvc('dcs/world/v0/world.proto');
       const customPkg  = loadSvc('dcs/custom/v0/custom.proto');
+      const atmPkg     = loadSvc('dcs/atmosphere/v0/atmosphere.proto');
+      const timerPkg   = loadSvc('dcs/timer/v0/timer.proto');
+      const srsPkg     = loadSvc('dcs/srs/v0/srs.proto');
       const creds      = grpc.credentials.createInsecure();
 
       this._missionSvc = new missionPkg.dcs.mission.v0.MissionService(DCS_HOST, creds, CHANNEL_OPTS);
       this._coalSvc    = new coalPkg.dcs.coalition.v0.CoalitionService(DCS_HOST, creds, CHANNEL_OPTS);
       this._worldSvc   = new worldPkg.dcs.world.v0.WorldService(DCS_HOST, creds, CHANNEL_OPTS);
       this._customSvc  = new customPkg.dcs.custom.v0.CustomService(DCS_HOST, creds, CHANNEL_OPTS);
+      this._atmSvc     = new atmPkg.dcs.atmosphere.v0.AtmosphereService(DCS_HOST, creds, CHANNEL_OPTS);
+      this._timerSvc   = new timerPkg.dcs.timer.v0.TimerService(DCS_HOST, creds, CHANNEL_OPTS);
+      this._srsSvc     = new srsPkg.dcs.srs.v0.SrsService(DCS_HOST, creds, CHANNEL_OPTS);
       this._icao       = require('../data/icao.json');
     } catch (e) {
       console.error('[grpc] proto load failed:', e.message);
@@ -65,6 +95,8 @@ class GrpcClient extends EventEmitter {
 
     this._startUnitStream();
     this._startEventStream();
+    this._startWeatherPoll();
+    this._startGameTimePoll();
 
     this._fetchMissionWithRetry();
   }
@@ -88,6 +120,9 @@ class GrpcClient extends EventEmitter {
           return;
         }
         this._missionFetchActive = false;
+        if (data.airports[0]) {
+          this._weatherRef = { lat: data.airports[0].lat, lon: data.airports[0].lon };
+        }
         console.log(`[grpc] mission data ready — ${data.airports.length} airports, ${data.waypoints.length} navpoints, ${data.drawings.length} drawings`);
         this.emit('mission-load', data);
       })
@@ -146,6 +181,59 @@ class GrpcClient extends EventEmitter {
       this._setState('reconnecting');
       this._scheduleUnit();
     });
+  }
+
+  // ── Weather poll ──────────────────────────────────────────────────────────
+
+  _startWeatherPoll() {
+    this._fetchWeather();
+    this._weatherTimer = setInterval(() => this._fetchWeather(), WEATHER_POLL_MS);
+  }
+
+  _fetchWeather() {
+    if (!this._atmSvc) return;
+    const { lat, lon } = this._weatherRef;
+    this._atmSvc.GetTemperatureAndPressure(
+      { position: { lat, lon, alt: 0 } },
+      (err, res) => {
+        if (err || !res) {
+          console.warn('[grpc] weather fetch failed:', err && err.message);
+          return;
+        }
+        this._weather = { pressurePa: res.pressure, tempK: res.temperature };
+        console.log(`[grpc] weather updated — ${res.pressure.toFixed(0)} Pa / ${res.temperature.toFixed(1)} K`);
+        this.emit('weather', this._weather);
+      }
+    );
+  }
+
+  // ── Game time poll ────────────────────────────────────────────────────────
+
+  _startGameTimePoll() {
+    this._fetchGameTime();
+    this._gameTimeTimer = setInterval(() => this._fetchGameTime(), GAMETIME_POLL_MS);
+  }
+
+  _fetchGameTime() {
+    if (!this._missionSvc) return;
+    this._missionSvc.GetScenarioCurrentTime({}, (err, res) => {
+      if (err || !res || !res.datetime) return;
+      this.emit('game-time', res.datetime);
+    });
+  }
+
+  // Convert true MSL altitude (metres) to QNH-indicated altitude (metres).
+  _toPressureAltM(trueAltM) {
+    const { pressurePa, tempK } = this._weather;
+    let P;
+    if (trueAltM <= H_TROP) {
+      P = pressurePa * Math.pow(1 - ISA_L * trueAltM / tempK, ISA_EXP);
+    } else {
+      const T_trop = tempK - ISA_L * H_TROP;
+      const P_trop = pressurePa * Math.pow(1 - ISA_L * H_TROP / tempK, ISA_EXP);
+      P = P_trop * Math.exp(-ISA_G * (trueAltM - H_TROP) / (ISA_R * T_trop));
+    }
+    return (T_REF_ALT / ISA_L) * (1 - Math.pow(P / pressurePa, ISA_INV));
   }
 
   _scheduleUnit() {
@@ -433,7 +521,79 @@ return net.lua2json(result)
     }
   }
 
+  // Transmit ATIS text via SRS TTS.
+  // opts: { text, frequencyHz, coalition, lat, lon, alt, clientName }
+  transmitAtis(opts) {
+    if (!this._srsSvc) return Promise.reject(new Error('not connected'));
+    const coalMap = { 2: 2, 3: 3 }; // red=2, blue=3
+    const req = {
+      ssml:            opts.ssml || opts.text,
+      plaintext:       opts.ssml || opts.text,
+      frequency:       opts.frequency || opts.frequencyHz,
+      srs_client_name: opts.clientName || 'ATIS',
+      async:           false,
+      coalition:       coalMap[opts.coalition] || 0,
+    };
+    const pos = opts.position || opts;
+    if (pos.lat != null && pos.lon != null) {
+      req.position = { lat: pos.lat, lon: pos.lon, alt: pos.alt || 0 };
+    }
+    console.log('[srs] Transmit req:', JSON.stringify(req));
+    return new Promise((resolve, reject) => {
+      this._srsSvc.Transmit(req, (err, res) => {
+        if (err) { console.error('[srs] Transmit error:', err.message); return reject(err); }
+        console.log('[srs] Transmit ok:', JSON.stringify(res));
+        resolve(res);
+      });
+    });
+  }
+
   getStatus() { return this._state; }
+
+  getSrsClients() {
+    if (!this._srsSvc) return Promise.reject(new Error('not connected'));
+    return new Promise((resolve, reject) => {
+      this._srsSvc.GetClients({}, (err, res) => {
+        if (err) return reject(err);
+        const clients = (res.clients || []).map(c => ({
+          name: c.unit && (c.unit.player_name || c.unit.callsign || c.unit.name),
+          frequencies: (c.frequencies || []).map(f => Number(f)),
+        }));
+        resolve(clients);
+      });
+    });
+  }
+
+  // Fetch wind + temp/pressure at a specific lat/lon/alt (metres MSL).
+  // Returns a promise resolving to { windFrom, windKt, tempC, pressureHpa }.
+  getAptWeather(lat, lon, alt) {
+    if (!this._atmSvc) return Promise.reject(new Error('not connected'));
+    // Wind at field elevation; temp/pressure at alt=0 (sea level) for QNH.
+    const windPos = { position: { lat, lon, alt: alt || 0 } };
+    const slPos   = { position: { lat, lon, alt: 0 } };
+    return new Promise((resolve, reject) => {
+      let wind = null, tp = null, done = 0;
+      const tryResolve = () => {
+        if (++done < 2) return;
+        if (!wind || !tp) return reject(new Error('weather fetch failed'));
+        const MPS_TO_KT = 1.94384;
+        resolve({
+          windFrom:    Math.round((wind.heading * 180 / Math.PI + 270) % 360),
+          windKt:      Math.round(wind.strength * MPS_TO_KT),
+          tempC:       Math.round(tp.temperature - 273.15),
+          pressureHpa: Math.round(tp.pressure / 100),
+        });
+      };
+      this._atmSvc.GetWind(windPos, (err, res) => {
+        if (!err && res) wind = res;
+        tryResolve();
+      });
+      this._atmSvc.GetTemperatureAndPressure(slPos, (err, res) => {
+        if (!err && res) tp = res;
+        tryResolve();
+      });
+    });
+  }
 }
 
 module.exports = GrpcClient;

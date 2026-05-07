@@ -308,6 +308,19 @@ function initMap() {
       showTrackPanel(id);
     });
 
+    // ── Left-click on airport label → weather panel ──────────────────────
+    map.on('click', 'airport-labels', (e) => {
+      e.preventDefault();
+      const feat = e.features && e.features[0];
+      if (!feat) return;
+      const coords = feat.geometry.coordinates;
+      const label  = feat.properties.label;
+      const apt    = missionData && missionData.airports &&
+        missionData.airports.find(a => (a.icao || a.name) === label);
+      showAptWeatherPanel(label, coords[1], coords[0], apt ? apt.elev : 0,
+                          e.originalEvent.clientX, e.originalEvent.clientY);
+    });
+
     // ── Left-click on track icon ─────────────────────────────────────────
     // Aircraft (cat 1/2) + ships (cat 4) → track info panel
     // Ground vehicles (cat 3) → ground label popup
@@ -324,9 +337,12 @@ function initMap() {
       }
     });
 
-    // Click on empty map → close track panel
+    // Click on empty map → close track panel + weather panel
     map.on('click', (e) => {
-      if (!e.defaultPrevented) closeTrackPanel();
+      if (!e.defaultPrevented) {
+        closeTrackPanel();
+        closeAptWeatherPanel();
+      }
     });
 
     // ── Combined mousemove: BRA + label drag + measure line ───────────────

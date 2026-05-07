@@ -65,6 +65,7 @@ class SrsApiServer:
                                 "freq_mhz": round(row.freq_mhz, 3),
                                 "modulation": row.modulation,
                                 "tx": row.tx,
+                                "rx": row.rx,
                             }
                             for row in snap["rows"]
                         ],

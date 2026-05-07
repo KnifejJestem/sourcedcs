@@ -23,6 +23,7 @@ class RadioRow:
     freq_mhz: float
     modulation: str
     tx: bool
+    rx: bool = False
 
 
 class CursesUI:

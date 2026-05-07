@@ -123,14 +123,14 @@
 
   // ── Radio slot rendering (diffed so live sliders survive poll redraws) ──────
 
-  function _slotKey(r) { return `${r.slot}|${r.freq_mhz.toFixed(3)}|${r.modulation}|${r.tx}`; }
+  function _slotKey(r) { return `${r.slot}|${r.freq_mhz.toFixed(3)}|${r.modulation}|${r.tx}|${r.rx}`; }
 
   function _buildSlotEl(r, vol) {
     const wrap = document.createElement('div');
     wrap.className = 'srs-slot-wrap';
     wrap.dataset.slot = r.slot;
     const top = document.createElement('div');
-    top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '');
+    top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '') + (r.rx ? ' srs-slot-rx' : '');
     top.innerHTML =
       `<span class="srs-slot-n">${r.slot + 1}</span>` +
       `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>` +
@@ -215,7 +215,7 @@
           cur.dataset.key = newKey;
           const top = cur.querySelector('.srs-slot');
           if (top) {
-            top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '');
+            top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '') + (r.rx ? ' srs-slot-rx' : '');
             top.innerHTML =
               `<span class="srs-slot-n">${r.slot + 1}</span>` +
               `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>` +

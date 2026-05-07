@@ -63,6 +63,65 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // ── ATIS TTS transmit ─────────────────────────────────────────────────────
+  if (req.method === 'POST' && req.url === '/api/atis-transmit') {
+    let body = '';
+    req.on('data', d => { body += d; });
+    req.on('end', () => {
+      let opts;
+      try { opts = JSON.parse(body); } catch (_) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'invalid JSON' }));
+      }
+      grpcClient.transmitAtis(opts)
+        .then(r => {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, duration_ms: r && r.duration_ms }));
+        })
+        .catch(err => {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        });
+    });
+    return;
+  }
+
+  // ── SRS debug: list connected clients + frequencies ──────────────────────
+  if (req.url === '/api/srs-clients') {
+    grpcClient.getSrsClients()
+      .then(data => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+      })
+      .catch(err => {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      });
+    return;
+  }
+
+  // ── Airport weather API ───────────────────────────────────────────────────
+  if (req.url.startsWith('/api/apt-weather')) {
+    const qs  = new URL(req.url, 'http://x').searchParams;
+    const lat = parseFloat(qs.get('lat'));
+    const lon = parseFloat(qs.get('lon'));
+    const alt = parseFloat(qs.get('alt')) || 0;
+    if (isNaN(lat) || isNaN(lon)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'lat/lon required' }));
+    }
+    grpcClient.getAptWeather(lat, lon, alt)
+      .then(data => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+      })
+      .catch(err => {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      });
+    return;
+  }
+
   // Serve static data files (aircraft-types.json, airports.json, icao.json …)
   if (req.url.startsWith('/data/')) {
     const dataPath = path.normalize(path.join(DATA_DIR, req.url.slice(6).split('?')[0]));
@@ -120,6 +179,16 @@ grpcClient.on('mission-load', (missionData) => {
 grpcClient.on('status', (state) => {
   wsServer.setGrpcStatus(state);
   wsServer.broadcastStatus();
+});
+
+grpcClient.on('weather', (data) => {
+  wsServer.setWeather(data);
+  wsServer.broadcastWeather();
+});
+
+grpcClient.on('game-time', (datetime) => {
+  wsServer.setGameTime(datetime);
+  wsServer.broadcastGameTime();
 });
 
 // ── SRS → ws ─────────────────────────────────────────────────────────────

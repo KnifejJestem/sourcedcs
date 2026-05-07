@@ -135,7 +135,6 @@ function initSettings() {
     trailIntervalVal: document.getElementById('set-trail-interval-val'),
     fadeGrace:      document.getElementById('set-fade-grace'),
     fadeGraceVal:   document.getElementById('set-fade-grace-val'),
-    magVar:         document.getElementById('set-mag-var'),
     radarDebug:     document.getElementById('set-radar-debug'),
     scale:          document.getElementById('set-scale'),
     scaleVal:       document.getElementById('set-scale-val'),
@@ -152,7 +151,6 @@ function initSettings() {
   els.trailIntervalVal.textContent = ((settings.trailIntervalMs ?? 5000) / 1000).toFixed(0) + 's';
   els.fadeGrace.value           = settings.fadeGraceMs ?? 10000;
   els.fadeGraceVal.textContent  = ((settings.fadeGraceMs ?? 10000) / 1000).toFixed(1) + 's';
-  els.magVar.value       = settings.magVar;
   els.scale.value        = settings.scale;
   els.scaleVal.textContent = parseFloat(settings.scale).toFixed(1) + '×';
   els.lightMode.checked  = settings.lightMode;
@@ -184,7 +182,6 @@ function initSettings() {
     els.fadeGraceVal.textContent = (settings.fadeGraceMs / 1000).toFixed(1) + 's';
     saveSettings(); updateMap();
   });
-  els.magVar.addEventListener('input', () => persist('magVar', parseInt(els.magVar.value) || 0));
   els.scale.addEventListener('input', () => {
     settings.scale = parseFloat(els.scale.value);
     els.scaleVal.textContent = settings.scale.toFixed(1) + '×';
@@ -200,6 +197,9 @@ function initSettings() {
 
   // ── Colours tab ───────────────────────────────────────────────────────
   initColorSettings();
+
+  // ── Tools tab ─────────────────────────────────────────────────────────
+  initToolsTab();
 }
 
 function initColorSettings() {
@@ -805,7 +805,7 @@ function updateTrackPanel() {
   const hist     = history.get(_trackPanelId) || [];
   const { heading, speedKt } = kinematics(hist);
   const fpm      = verticalFpm(hist);
-  const altFt    = Math.round((t.alt || 0) * 3.281);
+  const altFt    = Math.round(indicatedAltFt(t.alt || 0));
   const fl       = Math.round(altFt / 100);
   const spec     = aircraftTypes && aircraftTypes[t.type];
 
@@ -814,8 +814,10 @@ function updateTrackPanel() {
   document.getElementById('tp-type').textContent     = (spec && spec.label) || t.type || '';
 
   // Properties
-  document.getElementById('tp-alt').textContent  =
-    `FL${String(fl).padStart(3,'0')}  (${altFt.toLocaleString()} ft)`;
+  const taFt = settings.transitionAltFt ?? 18000;
+  document.getElementById('tp-alt').textContent  = altFt >= taFt
+    ? `FL${String(fl).padStart(3,'0')}`
+    : altFt.toLocaleString();
   const vsSign = fpm >  50 ? '+' : fpm < -50 ? '' : '±';
   document.getElementById('tp-vs').textContent   =
     Math.abs(fpm) < 50 ? 'level' : `${vsSign}${Math.round(fpm)} fpm`;
@@ -892,4 +894,602 @@ function showGroundLabelPopup(id, clientX, clientY) {
   // Delay attaching the outside-click listener so the current click event
   // that triggered the popup doesn't immediately dismiss it.
   setTimeout(() => document.addEventListener('click', onOutside, true), 0);
+}
+
+// ── Tools tab: altitude calculator ────────────────────────────────────────
+
+function initToolsTab() {
+  const btnCalc = document.getElementById('tool-alt-calc');
+  const result  = document.getElementById('tool-alt-result');
+
+  // DCS altimeter constants (must mirror app.js)
+  const _L = 0.0065, _G = 9.80665, _R = 287.05287;
+  const _EXP = _G / (_R * _L);
+  const _INV = (_R * _L) / _G;
+  const _H_TROP = 11000.0;
+  const _T_REF  = 288.97;
+  const INHG_TO_PA = 3386.389;
+  const FT_TO_M = 0.3048;
+
+  function pressureAtAlt(zM, seaPa, T0) {
+    if (zM <= _H_TROP) return seaPa * Math.pow(1 - _L * zM / T0, _EXP);
+    const T_trop = T0 - _L * _H_TROP;
+    const P_trop = seaPa * Math.pow(1 - _L * _H_TROP / T0, _EXP);
+    return P_trop * Math.exp(-_G * (zM - _H_TROP) / (_R * T_trop));
+  }
+
+  // api altitude (ft) -> indicated altitude (ft) for given conditions
+  function apiToIndicated(apiFt, seaPa, T0) {
+    const P = pressureAtAlt(apiFt * FT_TO_M, seaPa, T0);
+    return ((_T_REF / _L) * (1 - Math.pow(P / seaPa, _INV))) / FT_TO_M;
+  }
+
+  // bisect to find api altitude that yields the desired indicated altitude
+  function indicatedToApi(indFt, seaPa, T0) {
+    let lo = indFt - Math.max(2000, Math.abs(indFt) * 0.5);
+    let hi = indFt + Math.max(2000, Math.abs(indFt) * 0.5);
+    let fLo = apiToIndicated(lo, seaPa, T0) - indFt;
+    let fHi = apiToIndicated(hi, seaPa, T0) - indFt;
+    for (let i = 0; i < 20 && fLo * fHi > 0; i++) {
+      lo -= 5000; hi += 5000;
+      fLo = apiToIndicated(lo, seaPa, T0) - indFt;
+      fHi = apiToIndicated(hi, seaPa, T0) - indFt;
+    }
+    for (let i = 0; i < 100; i++) {
+      const mid = 0.5 * (lo + hi);
+      const fMid = apiToIndicated(mid, seaPa, T0) - indFt;
+      if (Math.abs(fMid) < 0.001) return mid;
+      if (fLo * fMid <= 0) { hi = mid; fHi = fMid; } else { lo = mid; fLo = fMid; }
+    }
+    return 0.5 * (lo + hi);
+  }
+
+  function calculate() {
+    const tempC = parseFloat(document.getElementById('tool-alt-temp').value);
+    const qnhInhg = parseFloat(document.getElementById('tool-alt-qnh').value);
+    const indFt = parseFloat(document.getElementById('tool-alt-ind').value);
+    if (isNaN(tempC) || isNaN(qnhInhg) || isNaN(indFt)) {
+      result.textContent = 'ERR';
+      return;
+    }
+    const T0 = tempC + 273.15;
+    const seaPa = qnhInhg * INHG_TO_PA;
+    const apiFt = indicatedToApi(indFt, seaPa, T0);
+    result.textContent = Math.round(apiFt).toLocaleString() + ' ft';
+  }
+
+  btnCalc.addEventListener('click', calculate);
+  document.getElementById('tool-alt-ind').addEventListener('keydown', e => {
+    if (e.key === 'Enter') calculate();
+  });
+}
+
+// ── Airport weather panel ─────────────────────────────────────────────────
+// Shown when the user left-clicks an airport label on the map.
+
+function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
+  const panel = document.getElementById('apt-weather-panel');
+  if (!panel) return;
+
+  panel.innerHTML =
+    `<div class="awp-header"><span class="awp-label">${label}</span>` +
+    `<button class="awp-close" id="awp-close">✕</button></div>` +
+    `<div class="awp-body" id="awp-body"><div class="awp-loading">FETCHING…</div></div>`;
+
+  // Position near click, keep inside viewport
+  const W = 170, H = 120;
+  let left = clientX + 12;
+  let top  = clientY + 12;
+  if (left + W > window.innerWidth)  left = clientX - W - 4;
+  if (top  + H > window.innerHeight) top  = clientY - H - 4;
+  panel.style.left    = left + 'px';
+  panel.style.top     = top  + 'px';
+  panel.style.display = 'block';
+
+  document.getElementById('awp-close').addEventListener('click', closeAptWeatherPanel);
+
+  fetch(`/api/apt-weather?lat=${lat}&lon=${lon}&alt=${elevM}`)
+    .then(r => r.json())
+    .then(d => {
+      const body = document.getElementById('awp-body');
+      if (!body) return;
+      if (d.error) {
+        body.innerHTML = `<div class="awp-err">${d.error}</div>`;
+        return;
+      }
+      const inhg  = (d.pressureHpa / 33.8639).toFixed(2);
+      const windDir = String(d.windFrom).padStart(3, '0');
+      body.innerHTML =
+        `<div class="awp-row"><span class="awp-k">QNH</span><span class="awp-v">${d.pressureHpa} hPa / ${inhg} inHg</span></div>` +
+        `<div class="awp-row"><span class="awp-k">TEMP</span><span class="awp-v">${d.tempC}°C</span></div>` +
+        `<div class="awp-row"><span class="awp-k">WIND</span><span class="awp-v">${windDir}° @ ${d.windKt} kt</span></div>`;
+    })
+    .catch(() => {
+      const body = document.getElementById('awp-body');
+      if (body) body.innerHTML = '<div class="awp-err">UNAVAILABLE</div>';
+    });
+}
+
+function closeAptWeatherPanel() {
+  const panel = document.getElementById('apt-weather-panel');
+  if (panel) panel.style.display = 'none';
+}
+
+// ── Zulu clock (DCS in-game time) ─────────────────────────────────────────
+// Server pushes GetScenarioCurrentTime every 5 s as an ISO 8601 string.
+// We anchor that to a local timestamp and advance the display in real-time
+// between server updates.
+
+let _gameTimeBaseMs  = null; // real Date.now() when the anchor was set
+let _gameTimeBaseSec = null; // game seconds-of-day at the anchor
+
+function updateGameTime(isoDatetime) {
+  // Parse HH:MM:SS directly from the ISO string — avoids browser local/UTC
+  // ambiguity with Date(). DCS returns theater local time, not UTC.
+  const m = isoDatetime.match(/T(\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return;
+  _gameTimeBaseMs  = Date.now();
+  _gameTimeBaseSec = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]);
+}
+
+function initZuluClock() {
+  const $el = document.getElementById('zulu-clock');
+  if (!$el) return;
+  setInterval(() => {
+    if (_gameTimeBaseSec === null) {
+      $el.textContent = '--:--:--Z';
+      return;
+    }
+    const elapsed    = Math.floor((Date.now() - _gameTimeBaseMs) / 1000);
+    const offsetSec  = (settings.gameTimeOffset || 0) * 3600;
+    const total      = ((_gameTimeBaseSec + elapsed - offsetSec) % 86400 + 86400) % 86400;
+    const hh = String(Math.floor(total / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+    const ss = String(total % 60).padStart(2, '0');
+    $el.textContent = `${hh}:${mm}:${ss}Z`;
+  }, 1000);
+}
+
+// ── APRT / Theater side panel ─────────────────────────────────────────────
+
+let _aprtSelectedApt = null;
+
+function _updateAprtRefCard() {
+  const $card = document.getElementById('aprt-ref-card');
+  if (!$card) return;
+
+  const apt = _aprtSelectedApt;
+  if (!apt) { $card.style.display = 'none'; return; }
+  $card.style.display = 'block';
+
+  const wx       = _aprtLastFetchedWx;
+  const key      = apt.icao || apt.name;
+  const manualWx = (settings.aprtManualWx && settings.aprtManualWx[key]) || {};
+
+  // Header
+  document.getElementById('aprt-ref-name').textContent = apt.name || apt.icao;
+  const $icaoBadge = document.getElementById('aprt-ref-icao');
+  if ($icaoBadge) $icaoBadge.textContent = (apt.icao && apt.name) ? apt.icao : '';
+
+  // Weather (from gRPC)
+  const $wind = document.getElementById('aprt-ref-wind');
+  const $qnh  = document.getElementById('aprt-ref-qnh');
+  const $temp = document.getElementById('aprt-ref-temp');
+  if (wx) {
+    const windDir = String(wx.windFrom).padStart(3, '0');
+    const inhg    = (wx.pressureHpa / 33.8639).toFixed(2);
+    if ($wind) { $wind.textContent = `${windDir}° @ ${wx.windKt} kt`; $wind.className = 'aprt-ref-v'; }
+    if ($qnh)  { $qnh.textContent  = `${wx.pressureHpa} hPa  /  ${inhg} inHg`; $qnh.className = 'aprt-ref-v'; }
+    if ($temp) { $temp.textContent = `${wx.tempC > 0 ? '+' : ''}${wx.tempC}°C`; $temp.className = 'aprt-ref-v'; }
+  } else {
+    if ($wind) { $wind.textContent = '—'; $wind.className = 'aprt-ref-v dim'; }
+    if ($qnh)  { $qnh.textContent  = '—'; $qnh.className  = 'aprt-ref-v dim'; }
+    if ($temp) { $temp.textContent = '—'; $temp.className = 'aprt-ref-v dim'; }
+  }
+
+  // VIS (manual)
+  const $vis = document.getElementById('aprt-ref-vis');
+  if ($vis) {
+    const visVal = manualWx.vis !== '' && manualWx.vis != null ? manualWx.vis : null;
+    $vis.textContent = visVal != null ? `${visVal} km` : '—';
+    $vis.className   = visVal != null ? 'aprt-ref-v' : 'aprt-ref-v dim';
+  }
+
+  // Cloud layers (manual)
+  const $cldRows = document.getElementById('aprt-ref-cld-rows');
+  if ($cldRows) {
+    const CLOUD_LABELS = { SKC:'SKC', FEW:'FEW', SCT:'SCT', BKN:'BKN', OVC:'OVC' };
+    const clouds = (manualWx.clouds || []).filter(c => c.cover);
+    if (clouds.length === 0) {
+      $cldRows.innerHTML = '<div class="aprt-ref-row"><span class="aprt-ref-k">CLD</span><span class="aprt-ref-v dim">—</span></div>';
+    } else {
+      $cldRows.innerHTML = clouds.map((c, i) =>
+        `<div class="aprt-ref-row"><span class="aprt-ref-k">${i === 0 ? 'CLD' : ''}</span>` +
+        `<span class="aprt-ref-v">${CLOUD_LABELS[c.cover] || c.cover}${c.base ? ' ' + Number(c.base).toLocaleString() + ' ft' : ''}</span></div>`
+      ).join('');
+    }
+  }
+
+  // ATIS ops
+  const rwyRaw  = ((document.getElementById('aprt-atis-rwy')  || {}).value || '').toUpperCase().trim();
+  const info    = ((document.getElementById('aprt-atis-info') || {}).value || '').toUpperCase().charAt(0);
+  const freq    = (document.getElementById('aprt-atis-freq')  || {}).value || '';
+  const taFt    = settings.transitionAltFt ?? 18000;
+
+  const $rwy  = document.getElementById('aprt-ref-rwy');
+  const $info = document.getElementById('aprt-ref-info');
+  const $freq = document.getElementById('aprt-ref-freq');
+  const $ta   = document.getElementById('aprt-ref-ta');
+
+  if ($rwy)  { $rwy.textContent  = rwyRaw || '—';  $rwy.className  = rwyRaw  ? 'aprt-ref-v' : 'aprt-ref-v dim'; }
+  if ($info) { $info.textContent = info || '—'; $info.className = info ? 'aprt-ref-v' : 'aprt-ref-v dim'; }
+  if ($freq) { $freq.textContent = freq   ? `${freq} MHz` : '—'; $freq.className = freq ? 'aprt-ref-v' : 'aprt-ref-v dim'; }
+  if ($ta)   { $ta.textContent   = taFt ? `${taFt.toLocaleString()} ft` : '—'; $ta.className = 'aprt-ref-v'; }
+}
+
+function initAprtPanel() {
+  const $btn    = document.getElementById('btn-aprt');
+  const $panel  = document.getElementById('aprt-panel');
+  const $close  = document.getElementById('aprt-close');
+  const $search = document.getElementById('aprt-search');
+  if (!$btn || !$panel) return;
+
+  $btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const opening = !$panel.classList.contains('open');
+    $panel.classList.toggle('open');
+    $btn.classList.toggle('active', $panel.classList.contains('open'));
+    if (opening) {
+      if ($search) { $search.value = ''; setTimeout(() => $search.focus(), 40); }
+      _renderAprtAptList('');
+    }
+  });
+
+  if ($close) {
+    $close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      $panel.classList.remove('open');
+      $btn.classList.remove('active');
+    });
+  }
+
+  if ($search) {
+    $search.addEventListener('input', () => _renderAprtAptList($search.value));
+    $search.addEventListener('click', e => e.stopPropagation());
+  }
+
+  // Edit section toggle
+  const $editToggle = document.getElementById('aprt-edit-toggle');
+  const $editBody   = document.getElementById('aprt-edit-body');
+  if ($editToggle && $editBody) {
+    $editToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = $editBody.classList.toggle('open');
+      $editToggle.classList.toggle('open', open);
+    });
+  }
+
+  // Manual wx inputs — save on every change and refresh ref card
+  ['aprt-wx-vis',
+   'aprt-cld-1-cov', 'aprt-cld-1-base',
+   'aprt-cld-2-cov', 'aprt-cld-2-base',
+   'aprt-cld-3-cov', 'aprt-cld-3-base',
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { _saveAprtManualWx(); _updateAprtRefCard(); });
+  });
+
+  // ATIS inputs that affect the ref card; freq also persisted per airport
+  const $freqEl = document.getElementById('aprt-atis-freq');
+  if ($freqEl) {
+    $freqEl.addEventListener('input', () => {
+      _updateAprtRefCard();
+      if (_aprtSelectedApt) {
+        const k = _aprtSelectedApt.icao || _aprtSelectedApt.name;
+        if (!settings.aprtAtisFreq) settings.aprtAtisFreq = {};
+        settings.aprtAtisFreq[k] = $freqEl.value;
+        saveSettings();
+      }
+    });
+  }
+  ['aprt-atis-info', 'aprt-atis-rwy'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', _updateAprtRefCard);
+  });
+
+  // Theater settings
+  const $transAlt   = document.getElementById('aprt-transition-alt');
+  const $magVar     = document.getElementById('aprt-mag-var');
+  const $timeOffset = document.getElementById('aprt-time-offset');
+
+  if ($transAlt) {
+    $transAlt.value = settings.transitionAltFt ?? 18000;
+    $transAlt.addEventListener('change', () => {
+      settings.transitionAltFt = parseInt($transAlt.value) || 18000;
+      saveSettings(); updateMap(); _updateAprtRefCard();
+    });
+  }
+  if ($magVar) {
+    $magVar.value = settings.magVar ?? 0;
+    $magVar.addEventListener('input', () => {
+      settings.magVar = parseInt($magVar.value) || 0;
+      saveSettings(); updateMap();
+    });
+  }
+  if ($timeOffset) {
+    $timeOffset.value = settings.gameTimeOffset ?? 0;
+    $timeOffset.addEventListener('change', () => {
+      settings.gameTimeOffset = parseInt($timeOffset.value) || 0;
+      saveSettings();
+    });
+  }
+
+  // ATIS BUILD button
+  const $build = document.getElementById('aprt-atis-build');
+  if ($build) {
+    $build.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _buildAtisText();
+    });
+  }
+
+  // ATIS transmit — press to start looping, press again to stop
+  let _atisLooping    = false;
+  let _atisPauseTimer = null;
+
+  const $tx     = document.getElementById('aprt-atis-tx');
+  const $status = document.getElementById('aprt-atis-status');
+
+  function _stopAtisLoop() {
+    _atisLooping = false;
+    clearTimeout(_atisPauseTimer);
+    if ($tx) { $tx.textContent = 'TRANSMIT'; $tx.classList.remove('aprt-btn-active'); $tx.disabled = false; }
+    if ($status) { $status.textContent = 'STOPPED'; $status.className = 'aprt-atis-status'; }
+  }
+
+  function _doAtisTransmit() {
+    if (!_atisLooping) return;
+
+    const freqMhz = parseFloat(document.getElementById('aprt-atis-freq').value);
+    const text    = (document.getElementById('aprt-atis-text').value || '').trim();
+    if (!freqMhz || !text) { _stopAtisLoop(); return; }
+
+    const pos  = _aprtSelectedApt
+      ? { lat: _aprtSelectedApt.lat, lon: _aprtSelectedApt.lon, alt: _aprtSelectedApt.elev || 0 }
+      : { lat: 0, lon: 0, alt: 0 };
+    const coal = getUserCoalition();
+
+    if ($status) { $status.textContent = 'TRANSMITTING…'; $status.className = 'aprt-atis-status'; }
+
+    fetch('/api/atis-transmit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssml: text, frequency: Math.round(freqMhz * 1e6), coalition: coal, position: pos }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!_atisLooping) return;
+        if (!d.ok) { _stopAtisLoop(); if ($status) { $status.textContent = d.error || 'Error'; $status.className = 'aprt-atis-status err'; } return; }
+        if ($status) { $status.textContent = 'WAITING…'; $status.className = 'aprt-atis-status'; }
+        _atisPauseTimer = setTimeout(_doAtisTransmit, 5000);
+      })
+      .catch(() => {
+        if (_atisLooping) { _stopAtisLoop(); if ($status) { $status.textContent = 'UNAVAILABLE'; $status.className = 'aprt-atis-status err'; } }
+      });
+  }
+
+  if ($tx) {
+    $tx.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (_atisLooping) { _stopAtisLoop(); return; }
+
+      const freqMhz = parseFloat(document.getElementById('aprt-atis-freq').value);
+      const text    = (document.getElementById('aprt-atis-text').value || '').trim();
+      if (!freqMhz || !text) {
+        if ($status) { $status.textContent = 'Freq and text required.'; $status.className = 'aprt-atis-status err'; }
+        return;
+      }
+
+      _atisLooping = true;
+      $tx.textContent = 'STOP';
+      $tx.classList.add('aprt-btn-active');
+      _doAtisTransmit();
+    });
+  }
+}
+
+function _renderAprtAptList(filter) {
+  const $list = document.getElementById('aprt-apt-list');
+  if (!$list) return;
+
+  const term     = (filter || '').trim().toLowerCase();
+  const airports = (missionData && missionData.airports) || [];
+  const filtered = airports
+    .filter(a => a.lat && a.lon && a.name !== 'H' && !/helipad|farp|fob/i.test(a.name))
+    .sort((a, b) => (a.icao || a.name).localeCompare(b.icao || b.name))
+    .filter(a => !term ||
+      (a.icao || '').toLowerCase().includes(term) ||
+      (a.name || '').toLowerCase().includes(term));
+
+  $list.innerHTML = '';
+
+  if (filtered.length === 0) {
+    $list.innerHTML = '<div style="font-size:10px;color:var(--ui-text-dim);font-style:italic;padding:4px 14px">' +
+      (term ? 'No match.' : 'No airports.') + '</div>';
+    return;
+  }
+
+  for (const a of filtered) {
+    const row      = document.createElement('div');
+    const isActive = _aprtSelectedApt && _aprtSelectedApt.name === a.name;
+    row.className  = 'aprt-apt-row' + (isActive ? ' active' : '');
+    row.innerHTML  =
+      `<span>${a.icao || a.name}</span>` +
+      `<span class="aprt-apt-sub">${a.icao ? a.name : ''}</span>`;
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _aprtSelectedApt = a;
+      _renderAprtAptList(document.getElementById('aprt-search').value || '');
+      // Restore saved ATIS freq for this airport
+      const $f = document.getElementById('aprt-atis-freq');
+      if ($f) {
+        const savedFreq = (settings.aprtAtisFreq || {})[a.icao || a.name] || '';
+        $f.value = savedFreq;
+      }
+      _fetchAndShowAprtWeather(a);
+    });
+    $list.appendChild(row);
+  }
+}
+
+let _aprtLastFetchedWx = null; // cache of last successful weather fetch
+
+function _fetchAndShowAprtWeather(apt) {
+  _aprtLastFetchedWx = null;
+  _loadAprtManualWx(apt);
+  _updateAprtRefCard();
+
+  fetch(`/api/apt-weather?lat=${apt.lat}&lon=${apt.lon}&alt=${apt.elev || 0}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.error) {
+        _aprtLastFetchedWx = d;
+        _updateAprtRefCard();
+      }
+    })
+    .catch(() => {});
+}
+
+function _buildAtisText() {
+  // ── TTS helpers ─────────────────────────────────────────────────────────
+  const NATO = {
+    A:'Alpha', B:'Bravo',   C:'Charlie', D:'Delta',   E:'Echo',    F:'Foxtrot',
+    G:'Golf',  H:'Hotel',   I:'India',   J:'Juliet',  K:'Kilo',    L:'Lima',
+    M:'Mike',  N:'November',O:'Oscar',   P:'Papa',    Q:'Quebec',  R:'Romeo',
+    S:'Sierra',T:'Tango',   U:'Uniform', V:'Victor',  W:'Whiskey', X:'X-ray',
+    Y:'Yankee',Z:'Zulu',
+  };
+  const CLOUD_WORDS = { SKC:'sky clear', FEW:'few', SCT:'scattered', BKN:'broken', OVC:'overcast' };
+  const RWY_SUFFIX  = { L:'Left', R:'Right', C:'Center' };
+
+  // Space every digit individually; replace decimal point with "decimal"
+  const spellDigits = s =>
+    String(s).replace(/\./g, '§').split('')
+      .map(c => c === '§' ? 'decimal' : c)
+      .join(' ').replace(/\s+/g, ' ').trim();
+
+  // Handle negative numbers: "-5" → "minus 5"
+  const spellNum = s => {
+    const str = String(s);
+    return str.startsWith('-') ? 'minus ' + spellDigits(str.slice(1)) : spellDigits(str);
+  };
+
+  // Runway: "28R" → "2 8 Right", "05" → "0 5"
+  const spellRwy = s => {
+    const m = String(s).toUpperCase().match(/^(\d{1,2})([LRC]?)$/);
+    if (!m) return s;
+    return spellDigits(m[1].padStart(2,'0')) + (RWY_SUFFIX[m[2]] ? ' ' + RWY_SUFFIX[m[2]] : '');
+  };
+
+  // ── Data ─────────────────────────────────────────────────────────────────
+  const apt      = _aprtSelectedApt;
+  const wx       = _aprtLastFetchedWx;
+  const key      = apt ? (apt.icao || apt.name) : null;
+  const manualWx = (key && settings.aprtManualWx && settings.aprtManualWx[key]) || {};
+
+  const infoLetter = ((document.getElementById('aprt-atis-info')    || {}).value || 'A').toUpperCase().charAt(0);
+  const rwyRaw     = ((document.getElementById('aprt-atis-rwy')     || {}).value || '').toUpperCase().trim();
+  const comment    = ((document.getElementById('aprt-atis-comment') || {}).value || '').trim();
+  const taFt       = settings.transitionAltFt ?? 18000;
+
+  const aptName  = apt ? (apt.name || apt.icao) : 'THIS STATION';
+  const windDir  = wx ? String(wx.windFrom).padStart(3, '0') : '000';
+  const windKt   = wx ? wx.windKt   : 0;
+  const tempC    = wx ? wx.tempC    : 0;
+  const qnhHpa   = wx ? wx.pressureHpa : 1013;
+  const qnhInhg  = (qnhHpa / 33.8639).toFixed(2);
+  const visRaw   = manualWx.vis !== '' && manualWx.vis != null ? String(manualWx.vis) : '10';
+  const vis      = spellDigits(visRaw) + ' kilometers';
+  const taK      = Math.round(taFt / 1000);
+
+  // ── TTS-ready values ──────────────────────────────────────────────────────
+  const infoPhon    = NATO[infoLetter] || infoLetter;
+  const rwySpelled  = rwyRaw  ? spellRwy(rwyRaw)            : '—';
+  const taSpelled   = spellDigits(taK)  + ' thousand';
+  const windDirSp   = spellDigits(windDir);
+  const windKtSp    = spellNum(windKt);
+  const tempSp      = spellNum(tempC);
+  const qnhHpaSp    = spellDigits(qnhHpa);
+  const qnhInhgSp   = spellDigits(qnhInhg);
+
+  // Cloud layers
+  const cloudLayers = (manualWx.clouds || []).filter(c => c.cover && c.base);
+  const hasClouds   = cloudLayers.some(c => c.cover !== 'SKC');
+
+  const cloudLines = hasClouds
+    ? cloudLayers
+        .filter(c => c.cover && c.cover !== 'SKC' && c.base)
+        .map(c => {
+          const word    = CLOUD_WORDS[c.cover] || c.cover.toLowerCase();
+          const baseStr = Math.round(Number(c.base) / 100).toString().padStart(3, '0');
+          return `Cloud base ${word} at ${spellDigits(baseStr)}.`;
+        })
+    : ['Sky clear.'];
+
+  const lines = [
+    `This is ${aptName} ATIS information ${infoPhon}.`,
+    `Expect runway ${rwySpelled}.`,
+    `Transition altitude ${taSpelled}.`,
+    `Wind ${windDirSp} degrees, ${windKtSp} knots.`,
+    `Visibility ${vis}.`,
+    ...cloudLines,
+    `Temperature ${tempSp} degrees.`,
+    `Q N H ${qnhHpaSp} hectopascal or ${qnhInhgSp} inches.`,
+    ...(comment ? [comment] : []),
+    `Advise on initial contact you have information ${infoPhon}.`,
+  ];
+
+  const $text = document.getElementById('aprt-atis-text');
+  if ($text) $text.value = lines.join('\n');
+}
+
+function _saveAprtManualWx() {
+  if (!_aprtSelectedApt) return;
+  const key = _aprtSelectedApt.icao || _aprtSelectedApt.name;
+  if (!settings.aprtManualWx) settings.aprtManualWx = {};
+  settings.aprtManualWx[key] = {
+    vis: (document.getElementById('aprt-wx-vis') || {}).value || '',
+    clouds: [1, 2, 3].map(i => ({
+      cover: (document.getElementById(`aprt-cld-${i}-cov`) || {}).value || '',
+      base:  (document.getElementById(`aprt-cld-${i}-base`) || {}).value || '',
+    })),
+  };
+  saveSettings();
+}
+
+function _loadAprtManualWx(apt) {
+  const key = apt.icao || apt.name;
+  const wx  = (settings.aprtManualWx || {})[key] || {};
+  const $vis = document.getElementById('aprt-wx-vis');
+  if ($vis) $vis.value = wx.vis || '';
+  (wx.clouds || []).forEach((c, i) => {
+    const $cov  = document.getElementById(`aprt-cld-${i + 1}-cov`);
+    const $base = document.getElementById(`aprt-cld-${i + 1}-base`);
+    if ($cov)  $cov.value  = c.cover || '';
+    if ($base) $base.value = c.base  || '';
+  });
+  // Clear layers not in saved data
+  for (let i = (wx.clouds || []).length + 1; i <= 3; i++) {
+    const $cov  = document.getElementById(`aprt-cld-${i}-cov`);
+    const $base = document.getElementById(`aprt-cld-${i}-base`);
+    if ($cov)  $cov.value  = '';
+    if ($base) $base.value = '';
+  }
+}
+
+// Called when airport list changes (new mission) while panel is open
+function refreshAprtAptList() {
+  const $panel = document.getElementById('aprt-panel');
+  if (!$panel || !$panel.classList.contains('open')) return;
+  _renderAprtAptList(document.getElementById('aprt-search').value || '');
 }

@@ -67,6 +67,7 @@ class SRSClient:
     _device_generation: int = field(init=False, default=0)
     _status_message: str = field(init=False, default="Ready")
     _remote_active: dict[str, float] = field(init=False, default_factory=dict)  # guid → last-seen monotonic
+    _rx_freqs: dict[int, float] = field(init=False, default_factory=dict)       # freq_hz → last-seen monotonic
     _rx_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
 
     @property
@@ -206,6 +207,8 @@ class SRSClient:
         with self._rx_lock:
             is_new = guid not in self._remote_active
             self._remote_active[guid] = now
+            for freq_hz in packet.frequencies:
+                self._rx_freqs[int(freq_hz)] = now
         if is_new:
             if self._effects:
                 self._effects.play_tx_start(self.sound_set)
@@ -542,6 +545,8 @@ class SRSClient:
         return 1.0
 
     def get_ui_snapshot(self) -> dict[str, Any]:
+        with self._rx_lock:
+            rx_freqs = dict(self._rx_freqs)
         with self._state_lock:
             rows = [
                 RadioRow(
@@ -549,6 +554,7 @@ class SRSClient:
                     freq_mhz=radio.freq / 1_000_000 if radio.freq > 10000 else 0.0,
                     modulation=radio.modulation.name,
                     tx=idx == self._tx_slot,
+                    rx=int(radio.freq) in rx_freqs,
                 )
                 for idx, radio in enumerate(self._radio_info.radios)
             ]
@@ -681,6 +687,8 @@ class SRSClient:
                         timed_out.append(guid)
                 for guid in timed_out:
                     del self._remote_active[guid]
+                for freq_hz in [f for f, t in list(self._rx_freqs.items()) if now - t > RX_TIMEOUT]:
+                    del self._rx_freqs[freq_hz]
             for guid in timed_out:
                 if self._effects:
                     self._effects.play_tx_end(self.sound_set)

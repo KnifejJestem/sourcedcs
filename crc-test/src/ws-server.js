@@ -11,6 +11,8 @@ class WsServer {
     this._grpcStatus  = 'disconnected';
     this._srsStatus   = 'disconnected';
     this._missionData = null;
+    this._weather     = null;
+    this._gameTime    = null; // last known ISO datetime string
     this._onNeedInit  = null;
     this._sessions    = new Map(); // ws → session
     this._nextId      = 1;
@@ -27,6 +29,8 @@ class WsServer {
   setGrpcStatus(state)  { this._grpcStatus  = state; }
   setSrsStatus(state)   { this._srsStatus   = state; }
   setMissionData(data)  { this._missionData = data; }
+  setWeather(data)      { this._weather     = data; }
+  setGameTime(dt)       { this._gameTime    = dt; }
 
   // ── Per-client lifecycle ─────────────────────────────────────────────────
 
@@ -40,6 +44,14 @@ class WsServer {
       ws.send(JSON.stringify(this._initMsg()));
     } else if (this._onNeedInit) {
       this._onNeedInit();
+    }
+
+    if (this._weather) {
+      ws.send(JSON.stringify(this._weatherMsg()));
+    }
+
+    if (this._gameTime) {
+      ws.send(JSON.stringify(this._gameTimeMsg()));
     }
 
     // Full snapshot of ALL current tracks — client does all range/radar filtering
@@ -83,6 +95,14 @@ class WsServer {
 
   broadcastStatus() { this._broadcast(this._statusMsg()); }
 
+  broadcastWeather() {
+    if (this._weather) this._broadcast(this._weatherMsg());
+  }
+
+  broadcastGameTime() {
+    if (this._gameTime) this._broadcast(this._gameTimeMsg());
+  }
+
   broadcastInit() {
     if (!this._missionData) return;
     this._broadcast(this._initMsg());
@@ -97,6 +117,14 @@ class WsServer {
 
   _statusMsg() {
     return { version: VERSION, type: 'status', grpc: this._grpcStatus, srs: this._srsStatus };
+  }
+
+  _weatherMsg() {
+    return { version: VERSION, type: 'weather', pressurePa: this._weather.pressurePa, tempK: this._weather.tempK };
+  }
+
+  _gameTimeMsg() {
+    return { version: VERSION, type: 'game-time', datetime: this._gameTime };
   }
 
   _initMsg() {
