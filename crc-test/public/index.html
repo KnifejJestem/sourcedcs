@@ -603,6 +603,13 @@
     .tp-rename-btn:hover { border-color: var(--ui-text-bright); color: var(--ui-active); }
     .tp-rename-clr { border-color: var(--ui-border-4); color: var(--ui-text-dim); }
     .tp-rename-clr:hover { color: #cc4444; border-color: #cc4444; }
+    .tp-fpl-pre {
+      font-family: 'Courier New', monospace; font-size: 9px; line-height: 1.55;
+      color: var(--ui-text-bright); background: rgba(0,0,0,0.25);
+      border: 1px solid var(--ui-border-2); padding: 6px 8px;
+      white-space: pre-wrap; word-break: break-all; margin: 0;
+    }
+    #tp-fpl-section { display: none; }
 
     /* ── Settings panel ── */
     #settings-panel {
@@ -1293,6 +1300,10 @@
       <button class="tp-rename-btn" id="tp-rename-set">SET</button>
       <button class="tp-rename-btn tp-rename-clr" id="tp-rename-clr">CLR</button>
     </div>
+  </div>
+  <div class="tp-section" id="tp-fpl-section">
+    <div class="tp-section-label">Flight Plan</div>
+    <pre class="tp-fpl-pre" id="tp-fpl-msg"></pre>
   </div>
 </div>
 

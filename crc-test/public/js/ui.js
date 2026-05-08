@@ -794,7 +794,42 @@ function showTrackPanel(id) {
 function closeTrackPanel() {
   const $panel = document.getElementById('track-panel');
   if ($panel) $panel.classList.remove('open');
-  _trackPanelId = null;
+  _trackPanelId    = null;
+  _fplFetchCallsign = null;
+  const $fplSec = document.getElementById('tp-fpl-section');
+  if ($fplSec) $fplSec.style.display = 'none';
+}
+
+// Fetch and display the flight plan for the resolved callsign of the current track.
+// Aborts silently if the panel is closed or a newer fetch has started.
+let _fplFetchCallsign = null;
+
+function _refreshTrackFpl(callsign) {
+  const $section = document.getElementById('tp-fpl-section');
+  const $msg     = document.getElementById('tp-fpl-msg');
+  if (!$section || !$msg) return;
+
+  if (!callsign) {
+    $section.style.display = 'none';
+    return;
+  }
+
+  _fplFetchCallsign = callsign;
+  fetch('/api/fpl/' + encodeURIComponent(callsign))
+    .then(r => r.json().then(j => ({ ok: r.ok, body: j })))
+    .then(({ ok, body }) => {
+      if (_fplFetchCallsign !== callsign) return; // stale
+      if (!ok || !body.fplMessage) {
+        $section.style.display = 'none';
+        return;
+      }
+      $msg.textContent       = body.fplMessage;
+      $section.style.display = 'block';
+    })
+    .catch(() => {
+      if (_fplFetchCallsign !== callsign) return;
+      $section.style.display = 'none';
+    });
 }
 
 function updateTrackPanel() {
@@ -810,7 +845,8 @@ function updateTrackPanel() {
   const spec     = aircraftTypes && aircraftTypes[t.type];
 
   // Header
-  document.getElementById('tp-callsign').textContent = resolveCallsign(t);
+  const cs = resolveCallsign(t);
+  document.getElementById('tp-callsign').textContent = cs;
   document.getElementById('tp-type').textContent     = (spec && spec.label) || t.type || '';
 
   // Properties
@@ -839,6 +875,9 @@ function updateTrackPanel() {
   if ($ri && document.activeElement !== $ri) {
     $ri.value = trackRenames.get(_trackPanelId) || '';
   }
+
+  // Flight plan (fetched once per callsign change; compare uppercase to avoid case-drift stalls)
+  if ((cs || '').toUpperCase() !== (_fplFetchCallsign || '').toUpperCase()) _refreshTrackFpl(cs);
 }
 
 // ── Ground vehicle label popup ────────────────────────────────────────────
