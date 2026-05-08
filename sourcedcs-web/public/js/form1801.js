@@ -53,6 +53,7 @@ var currentToken = getToken();
     document.getElementById('fpLoginPrompt').style.display = '';
   } else {
     document.getElementById('fpMain').style.display = '';
+    fpl1801AutofillDof();
     fpl1801AttachLivePreview();
     fpl1801UpdatePreview();
     fpl1801LoadConfig();
@@ -78,6 +79,19 @@ var currentToken = getToken();
     link.addEventListener('click', closeNav);
   });
 })();
+
+/* ════════════════════════════════════════════════════════════
+   DOF AUTOFILL
+════════════════════════════════════════════════════════════ */
+function fpl1801AutofillDof() {
+  var el = document.getElementById('fpl18');
+  if (!el) return;
+  var now = new Date();
+  var yy  = String(now.getUTCFullYear()).slice(2);
+  var mm  = String(now.getUTCMonth() + 1).padStart(2, '0');
+  var dd  = String(now.getUTCDate()).padStart(2, '0');
+  el.value = el.value.replace('YY-MM-DD', yy + mm + dd);
+}
 
 /* ════════════════════════════════════════════════════════════
    FPL MESSAGE BUILDER
@@ -474,7 +488,9 @@ function fpl1801ShowDetailOverlay(plan) {
   overlay.className = 'fp-detail-overlay';
   overlay.id = 'fpl1801DetailOverlay';
 
-  var canDelete = isAdminRole(currentToken) || fpl1801UserIsController;
+  var user      = getUser();
+  var isOwner   = user && plan.submittedBy && plan.submittedBy.sub === user.sub;
+  var canDelete = isAdminRole(currentToken) || fpl1801UserIsController || isOwner;
   overlay.innerHTML =
     '<div class="fp-detail-box">' +
       '<div class="fp-detail-header">' +

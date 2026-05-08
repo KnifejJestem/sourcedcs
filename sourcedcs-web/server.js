@@ -1625,6 +1625,52 @@ api.delete('/flight-plans/:id', writeOpsLimiter, requireAuth, (req, res) => {
 /* ─── DD Form 1801 (ICAO IFR Flight Plan) ────────────────── */
 /* Config reuses fpConfig / fpIsControllerUser / fpIsAdminUser from the DD 175 section */
 
+/* Parse DOF/YYMMDD from field 18 otherInfo; returns a UTC Date or null */
+function parseFpl1801Dof(otherInfo) {
+  const m = (otherInfo || '').match(/\bDOF\/(\d{2})(\d{2})(\d{2})\b/i);
+  if (!m) return null;
+  return new Date(Date.UTC(2000 + parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)));
+}
+
+/* Delete plans whose DOF is more than 2 days in the past */
+function cleanupExpiredFpl1801() {
+  const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
+  const before = fpl1801Plans.length;
+  fpl1801Plans = fpl1801Plans.filter(fp => {
+    const dof = parseFpl1801Dof(fp.otherInfo);
+    return !dof || dof.getTime() >= cutoff;
+  });
+  const removed = before - fpl1801Plans.length;
+  if (removed > 0) {
+    saveJSON(FPL1801_FILE, fpl1801Plans);
+    console.debug('[fpl1801] Removed ' + removed + ' expired plan(s)');
+  }
+}
+
+/* Run cleanup on startup and every hour */
+cleanupExpiredFpl1801();
+setInterval(cleanupExpiredFpl1801, 60 * 60 * 1000);
+
+/* Send a plain-text FPL message to the configured notify channel */
+async function sendFpl1801ToDiscord(plan) {
+  if (!DISCORD_BOT_TOKEN) return;
+  const chId = fpConfig.notifyChannelId;
+  if (!chId) return;
+  const msg = (plan.fplMessage || '').trim();
+  if (!msg) return;
+  await discordPost('/channels/' + chId + '/messages', { content: '```\n' + msg + '\n```' });
+  console.debug('[fpl1801] FPL-' + plan.id + ' posted to Discord channel ' + chId);
+}
+
+/* GET /api/fpl1801/by-callsign/:callsign — public, returns active plan for a callsign */
+api.get('/fpl1801/by-callsign/:callsign', (req, res) => {
+  const callsign = (req.params.callsign || '').toUpperCase().trim();
+  if (!callsign) return res.status(400).json({ error: 'callsign is required' });
+  const plan = fpl1801Plans.find(fp => fp.aircraftId === callsign);
+  if (!plan) return res.status(404).json({ error: 'No active flight plan for callsign ' + callsign });
+  res.json({ ...plan, submittedBy: plan.submittedBy ? { name: plan.submittedBy.name } : null });
+});
+
 /* GET /api/fpl1801 */
 api.get('/fpl1801', requireAuth, (req, res) => {
   if (fpIsAdminUser(req) || fpIsControllerUser(req)) return res.json(fpl1801Plans);
@@ -1641,6 +1687,11 @@ api.post('/fpl1801', writeOpsLimiter, requireAuth, (req, res) => {
   if (!aircraftId)       return res.status(400).json({ error: 'Field 7 (Aircraft Identification) is required.' });
   if (!b.depAerodrome)   return res.status(400).json({ error: 'Field 13 (Departure Aerodrome) is required.' });
   if (!b.destAerodrome)  return res.status(400).json({ error: 'Field 16 (Destination Aerodrome) is required.' });
+
+  const existing = fpl1801Plans.find(fp => fp.aircraftId === aircraftId);
+  if (existing) {
+    return res.status(409).json({ error: 'An active flight plan already exists for callsign ' + aircraftId + ' (FPL-' + existing.id + '). Delete it before filing a new one.' });
+  }
 
   const plan = {
     id:            nextFpl1801Id++,
@@ -1679,16 +1730,22 @@ api.post('/fpl1801', writeOpsLimiter, requireAuth, (req, res) => {
   saveJSON(FPL1801_FILE, fpl1801Plans);
   console.debug('[fpl1801] Plan ' + plan.id + ' submitted by ' + plan.submittedBy.name);
   res.status(201).json(plan);
+
+  sendFpl1801ToDiscord(plan).catch(err =>
+    console.error('[fpl1801] Discord notify failed:', err.message)
+  );
 });
 
 /* DELETE /api/fpl1801/:id */
 api.delete('/fpl1801/:id', writeOpsLimiter, requireAuth, (req, res) => {
-  if (!fpIsAdminUser(req) && !fpIsControllerUser(req)) {
-    return res.status(403).json({ error: 'Controller squadron or admin access required' });
-  }
   const id  = Number(req.params.id);
   const idx = fpl1801Plans.findIndex(fp => fp.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Flight plan not found' });
+  const plan   = fpl1801Plans[idx];
+  const isOwner = plan.submittedBy && plan.submittedBy.sub === req.user.sub;
+  if (!fpIsAdminUser(req) && !fpIsControllerUser(req) && !isOwner) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
   fpl1801Plans.splice(idx, 1);
   saveJSON(FPL1801_FILE, fpl1801Plans);
   console.debug('[fpl1801] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));
