@@ -1,0 +1,11 @@
+{
+  "dcsGrpcHost": "server.sourcedcs.page:50051",
+  "srsHost": "server.sourcedcs.page",
+  "srsPort": 5002,
+  "srsApiPort": 5003,
+  "wsPort": 3100,
+  "wsBroadcastIntervalMs": 5000,
+  "sourcedcsWebUrl": "https://sourcedcs.page",
+  "freqs": ["251.000", "305.500"],
+  "txFreq": "251.000"
+}

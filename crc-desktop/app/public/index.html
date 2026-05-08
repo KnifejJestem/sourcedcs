@@ -1,0 +1,1985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CRC</title>
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --ui-bg:          rgba(13,13,13,0.85);
+      --ui-bg-solid:    rgba(13,13,13,0.95);
+      --ui-bg-input:    #111;
+      --ui-border:      #1e2e1e;
+      --ui-border-2:    #2a3a2a;
+      --ui-border-3:    #2a4a2a;
+      --ui-border-4:    #1a2a1a;
+      --ui-text:        #4a6a4a;
+      --ui-text-dim:    #3a5a3a;
+      --ui-text-bright: #6a9a6a;
+      --ui-text-hi:     #8aca8a;
+      --ui-text-input:  #8aaa8a;
+      --ui-title:       #6a9a6a;
+      --ui-active:      #8aaa6a;
+      --ui-hover-bg:    #0d1f0d;
+      --ui-option-text: #4a7a4a;
+      --ui-sep:         #2a3a2a;
+    }
+    body.light {
+      --ui-bg:          rgba(237,236,234,0.92);
+      --ui-bg-solid:    rgba(237,236,234,0.98);
+      --ui-bg-input:    #f4f3f0;
+      --ui-border:      #c8c5bf;
+      --ui-border-2:    #9a9690;
+      --ui-border-3:    #9a9690;
+      --ui-border-4:    #c8c5bf;
+      --ui-text:        #4a4845;
+      --ui-text-dim:    #7a7875;
+      --ui-text-bright: #1a1917;
+      --ui-text-hi:     #1a1917;
+      --ui-text-input:  #1a1917;
+      --ui-title:       #1a1917;
+      --ui-active:      #1a5c2e;
+      --ui-hover-bg:    #e5e4e0;
+      --ui-option-text: #4a4845;
+      --ui-sep:         #9a9690;
+    }
+
+    body {
+      background: #0d0d0d;
+      font-family: 'Courier New', monospace;
+      color: var(--ui-text);
+      overflow: hidden;
+    }
+
+    #map { width: 100vw; height: calc(100vh - 62px); } /* 32px topbar + ~30px radio panel; JS ResizeObserver overrides */
+
+    /* ── Top bar ── */
+    #topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 32px;
+      background: var(--ui-bg);
+      border-bottom: 1px solid var(--ui-border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 16px;
+      z-index: 20;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+
+    #topbar-title {
+      font-size: 13px;
+      font-weight: bold;
+      color: var(--ui-title);
+      letter-spacing: 0.15em;
+    }
+
+    .sep { color: var(--ui-sep); }
+
+    #status-grpc, #status-srs {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #333;
+    }
+    .dot.connected    { background: #4a9a4a; box-shadow: 0 0 4px #4a9a4a88; }
+    .dot.reconnecting { background: #9a7a4a; box-shadow: 0 0 4px #9a7a4a88; }
+    .dot.disconnected { background: #6a3a3a; }
+
+    /* Radar panel */
+    #radars-panel {
+      position: fixed;
+      top: 32px; left: 0;
+      width: 240px;
+      max-height: calc(100vh - 32px);
+      background: var(--ui-bg-solid);
+      border-right: 1px solid var(--ui-border);
+      z-index: 30;
+      padding: 14px 14px 20px;
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+      overflow-y: auto;
+    }
+    #radars-panel.open { transform: translateX(0); }
+    .radar-panel-title {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .radar-group-heading {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      padding: 8px 0 4px;
+      border-bottom: 1px solid var(--ui-border-4);
+      margin-bottom: 4px;
+    }
+    .radar-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 0;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--ui-text-bright);
+    }
+    .radar-row.disabled { color: var(--ui-text-dim); }
+    .radar-check { accent-color: var(--ui-active); cursor: pointer; flex-shrink: 0; }
+    .radar-row-label { flex: 1; }
+    .radar-row-range {
+      font-size: 9px;
+      color: var(--ui-text-dim);
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    .radar-empty { font-size: 10px; color: var(--ui-text-dim); font-style: italic; padding: 8px 0; }
+    .datalink-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0 8px; margin-bottom: 4px;
+      border-bottom: 1px solid var(--ui-border-3);
+      font-size: 11px; letter-spacing: 0.07em;
+      color: var(--ui-text-bright);
+    }
+    .datalink-row.active { color: var(--ui-active); }
+    .datalink-label { flex: 1; }
+    #radar-count-badge {
+      display: inline-block;
+      font-size: 9px;
+      color: var(--ui-active);
+      margin-left: 3px;
+    }
+    #radar-search {
+      width: 100%; box-sizing: border-box;
+      background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: inherit; font-size: 10px;
+      padding: 4px 6px; margin-bottom: 10px; outline: none;
+    }
+    #radar-search::placeholder { color: var(--ui-text-dim); }
+
+    /* Floating bullseye BRA (follows cursor) */
+    #cursor-bra {
+      position: fixed;
+      pointer-events: none;
+      z-index: 50;
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      color: #4488cc;
+      background: rgba(0,0,0,0.55);
+      padding: 2px 6px;
+      display: none;
+    }
+    body.light #cursor-bra { background: none; }
+    #cursor-bra.visible { display: block; }
+
+    .ref-option {
+      padding: 7px 14px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--ui-option-text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .ref-option:hover { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
+    .ref-option.active { color: var(--ui-active); }
+    .ref-option.none-opt { color: var(--ui-text-dim); border-bottom: 1px solid var(--ui-border-4); }
+    .ref-option.none-opt:hover { color: var(--ui-text-bright); }
+    .ref-option.disabled { color: var(--ui-border-2); cursor: default; font-size: 10px; }
+    .ref-opt-type  { font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.04em; }
+    .ref-opt-badge { font-size: 9px; color: var(--ui-option-text); letter-spacing: 0.04em; margin-left: 4px; }
+
+    /* Airport selector */
+    #apt-dropdown {
+      display: none;
+      position: fixed;
+      top: 32px;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      z-index: 40;
+      min-width: 180px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    #apt-dropdown.open { display: block; }
+    .apt-option {
+      padding: 7px 14px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--ui-option-text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .apt-option:hover  { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
+    .apt-option.active { color: var(--ui-active); }
+    .apt-opt-name      { font-size: 9px; color: var(--ui-text-dim); }
+
+    /* Airport search input */
+    #apt-search-row {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    #apt-search {
+      width: 100%;
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 3px 6px;
+      outline: none;
+    }
+    #apt-search::placeholder { color: var(--ui-text-dim); }
+    #apt-search:focus { border-color: var(--ui-text-bright); }
+
+    /* Airport display button (only shown in airport view) */
+    #apt-sep, #apt-display { display: none; }
+    #apt-display {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+    #apt-display.active { color: var(--ui-active); }
+    #apt-display:hover  { color: var(--ui-text-bright); }
+
+    #btn-settings, #btn-radars, #btn-coalition {
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    #btn-settings:hover, #btn-radars:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+
+    /* ── Floating buttons below topbar (top-left) ── */
+    #float-btns {
+      position: fixed;
+      top: 42px; left: 12px;
+      z-index: 20;
+      display: flex;
+      gap: 6px;
+    }
+    #btn-calls, #btn-aprt {
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    #btn-calls:hover,
+    #btn-aprt:hover  { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    #btn-aprt.active { border-color: var(--ui-active); color: var(--ui-active); }
+
+    /* ── APRT / Theater side panel ── */
+    #aprt-panel {
+      position: fixed;
+      top: 32px; left: 0;
+      width: 310px;
+      height: calc(100vh - 32px);
+      background: var(--ui-bg-solid);
+      border-right: 1px solid var(--ui-border);
+      z-index: 29;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+      overflow: hidden;
+    }
+    #aprt-panel.open { transform: translateX(0); }
+    .aprt-panel-header {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px 9px;
+      border-bottom: 1px solid var(--ui-border-4);
+      flex-shrink: 0;
+    }
+    .aprt-panel-title {
+      flex: 1;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+    }
+    .aprt-close {
+      background: none; border: none; color: var(--ui-text-dim);
+      font-family: inherit; font-size: 13px; cursor: pointer; padding: 0;
+    }
+    .aprt-close:hover { color: var(--ui-text-bright); }
+    /* scrollable body */
+    #aprt-panel > *:not(.aprt-panel-header) { flex-shrink: 0; }
+    #aprt-panel {
+      overflow-y: auto;
+    }
+    .aprt-panel-header { position: sticky; top: 0; background: var(--ui-bg-solid); z-index: 1; }
+    .aprt-section-label {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      padding: 12px 14px 5px;
+    }
+    #aprt-search {
+      display: block;
+      width: calc(100% - 28px);
+      margin: 0 14px 6px;
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 4px 6px;
+      outline: none;
+    }
+    #aprt-search::placeholder { color: var(--ui-text-dim); }
+    #aprt-search:focus { border-color: var(--ui-text-bright); }
+    #aprt-apt-list { max-height: 160px; overflow-y: auto; }
+    .aprt-apt-row {
+      padding: 5px 14px;
+      font-size: 11px;
+      letter-spacing: 0.07em;
+      color: var(--ui-option-text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .aprt-apt-row:hover  { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
+    .aprt-apt-row.active { color: var(--ui-active); }
+    .aprt-apt-sub { font-size: 9px; color: var(--ui-text-dim); }
+    #aprt-weather-block { padding: 6px 14px 4px; }
+    .aprt-sub-label {
+      font-size: 10px; font-weight: bold;
+      letter-spacing: 0.1em; color: var(--ui-text-hi);
+      margin-bottom: 6px;
+    }
+    .aprt-wx-row {
+      display: flex; gap: 8px; margin-bottom: 4px; font-size: 11px;
+    }
+    .aprt-wx-k {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; padding-top: 1px; min-width: 36px;
+    }
+    .aprt-wx-v { color: var(--ui-text-bright); }
+    .aprt-loading, .aprt-err { font-size: 10px; color: var(--ui-text-dim); font-style: italic; }
+    .aprt-cld-cover {
+      background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: inherit; font-size: 10px;
+      padding: 2px 3px; width: 52px; cursor: pointer; outline: none;
+    }
+    .aprt-cld-base {
+      background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: inherit; font-size: 10px;
+      padding: 2px 4px; width: 60px; outline: none;
+    }
+    /* Reference card */
+    #aprt-ref-card {
+      margin: 0 12px 10px;
+      border: 1px solid var(--ui-border-3);
+      background: rgba(0,0,0,0.2);
+      padding: 9px 11px 10px;
+      display: none;
+    }
+    body.light #aprt-ref-card { background: rgba(0,0,0,0.04); }
+    .aprt-ref-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 7px;
+    }
+    .aprt-ref-name {
+      font-size: 13px; font-weight: bold; letter-spacing: 0.12em;
+      color: var(--ui-text-hi);
+    }
+    .aprt-ref-icao-badge {
+      font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.1em;
+    }
+    .aprt-ref-row {
+      display: flex; gap: 8px; margin-bottom: 3px; font-size: 11px;
+      align-items: baseline;
+    }
+    .aprt-ref-k {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; min-width: 38px; padding-top: 1px;
+      flex-shrink: 0;
+    }
+    .aprt-ref-v {
+      color: var(--ui-text-hi); letter-spacing: 0.04em;
+    }
+    .aprt-ref-v.dim { color: var(--ui-text-dim); font-style: italic; }
+    .aprt-ref-sep {
+      border: none; border-top: 1px solid var(--ui-border-4); margin: 6px 0 5px;
+    }
+    /* collapsible edit section */
+    .aprt-edit-toggle {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px 4px; cursor: pointer; user-select: none;
+      font-size: 9px; letter-spacing: 0.12em; color: var(--ui-text-dim);
+      text-transform: uppercase;
+    }
+    .aprt-edit-toggle:hover { color: var(--ui-text-bright); }
+    .aprt-edit-toggle .aprt-edit-caret { font-size: 8px; transition: transform 0.15s; }
+    .aprt-edit-toggle.open .aprt-edit-caret { transform: rotate(90deg); }
+    #aprt-edit-body { display: none; }
+    #aprt-edit-body.open { display: block; }
+
+    .aprt-hr { border: none; border-top: 1px solid var(--ui-border-4); margin: 10px 0; }
+    .aprt-row {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 0 14px; margin-bottom: 8px;
+      font-size: 11px; gap: 8px;
+    }
+    .aprt-k {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; flex: 1;
+    }
+    .aprt-radio-lbl {
+      font-size: 10px; color: var(--ui-text-bright);
+      cursor: pointer; display: flex; align-items: center; gap: 4px;
+    }
+    #aprt-atis-text {
+      display: block;
+      width: calc(100% - 28px);
+      margin: 6px 14px 0;
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      padding: 5px 7px;
+      outline: none;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    #aprt-atis-text::placeholder { color: var(--ui-text-dim); }
+    #aprt-atis-text:focus { border-color: var(--ui-text-bright); }
+    .aprt-btn {
+      background: none;
+      border: 1px solid var(--ui-border-3);
+      color: var(--ui-text-bright);
+      font-family: inherit; font-size: 10px;
+      letter-spacing: 0.08em; padding: 4px 10px; cursor: pointer;
+    }
+    .aprt-btn:hover { border-color: var(--ui-active); color: var(--ui-active); }
+    .aprt-btn:disabled { opacity: 0.4; cursor: default; }
+    .aprt-btn-active { border-color: #cc4444 !important; color: #cc4444 !important; }
+    #aprt-atis-tx { margin-left: 14px; }
+    .aprt-atis-status { font-size: 10px; color: var(--ui-text-dim); letter-spacing: 0.06em; }
+    .aprt-atis-status.ok  { color: var(--ui-active); }
+    .aprt-atis-status.err { color: #cc4444; }
+    #aprt-panel input[type="number"] {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: inherit; font-size: 11px; padding: 3px 6px;
+    }
+
+    /* Coalition toggle */
+    #btn-coalition          { color: #4488cc; border-color: #2255884d; }
+    #btn-coalition:hover    { color: #66aaee; border-color: #4488cc; }
+    #btn-coalition.coalition-red          { color: #cc4444; border-color: #882222; }
+    #btn-coalition.coalition-red:hover    { color: #ee6666; border-color: #cc4444; }
+
+    /* ── Track info panel ── */
+    #track-panel {
+      position: fixed;
+      top: 32px; left: 0;
+      width: 260px;
+      background: var(--ui-bg-solid);
+      border-right: 1px solid var(--ui-border);
+      border-bottom: 1px solid var(--ui-border);
+      z-index: 25;
+      transform: translateX(-100%);
+      transition: transform 0.15s ease, top 0.15s ease;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    #track-panel.open { transform: translateX(0); }
+    /* Push down when calls-panel is open */
+    #track-panel.below-calls { top: 32px; }
+    .tp-header {
+      display: flex; align-items: baseline; gap: 6px;
+      padding: 10px 12px 6px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .tp-callsign {
+      font-size: 13px; font-weight: bold;
+      color: var(--ui-text-hi); letter-spacing: 0.12em;
+      flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tp-type-label {
+      font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.1em;
+    }
+    .tp-close {
+      background: none; border: none; color: var(--ui-text-dim);
+      font-family: inherit; font-size: 13px; cursor: pointer;
+      padding: 0 0 0 6px; line-height: 1; flex-shrink: 0;
+    }
+    .tp-close:hover { color: var(--ui-text-bright); }
+    .tp-props {
+      padding: 8px 12px;
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      row-gap: 4px; column-gap: 12px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .tp-key {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; padding-top: 1px;
+    }
+    .tp-val { color: var(--ui-text-bright); }
+    .tp-iff-state {
+      display: inline-block;
+      padding: 1px 6px;
+      border: 1px solid;
+      font-size: 9px; letter-spacing: 0.08em;
+      border-radius: 1px;
+    }
+    .tp-section {
+      padding: 6px 12px 8px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .tp-section:last-child { border-bottom: none; }
+    .tp-section-label {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .tp-iff-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tp-iff-btn {
+      background: none; border: 1px solid transparent;
+      font-family: 'Courier New', monospace; font-size: 9px;
+      letter-spacing: 0.07em; padding: 3px 6px; cursor: pointer;
+    }
+    .tp-iff-btn:hover { filter: brightness(1.3); }
+    .tp-iff-btn.iff-active { background: rgba(255,255,255,0.08); }
+    .tp-iff-clr {
+      background: none; border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim); font-family: 'Courier New', monospace;
+      font-size: 9px; letter-spacing: 0.07em; padding: 3px 6px; cursor: pointer;
+      margin-left: auto;
+    }
+    .tp-iff-clr:hover { color: var(--ui-text-bright); border-color: var(--ui-border-2); }
+    .tp-rename-row { display: flex; gap: 4px; margin-top: 6px; }
+    .tp-rename-input {
+      flex: 1; background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: 'Courier New', monospace;
+      font-size: 10px; letter-spacing: 0.06em; padding: 2px 5px;
+      outline: none; text-transform: uppercase; min-width: 0;
+    }
+    .tp-rename-input:focus { border-color: var(--ui-text-bright); }
+    .tp-rename-input::placeholder { color: var(--ui-text-dim); text-transform: none; }
+    .tp-rename-btn {
+      background: none; border: 1px solid var(--ui-border-3); color: var(--ui-text-bright);
+      font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 0.06em;
+      padding: 2px 7px; cursor: pointer; flex-shrink: 0;
+    }
+    .tp-rename-btn:hover { border-color: var(--ui-text-bright); color: var(--ui-active); }
+    .tp-rename-clr { border-color: var(--ui-border-4); color: var(--ui-text-dim); }
+    .tp-rename-clr:hover { color: #cc4444; border-color: #cc4444; }
+    .tp-fpl-pre {
+      font-family: 'Courier New', monospace; font-size: 9px; line-height: 1.55;
+      color: var(--ui-text-bright); background: rgba(0,0,0,0.25);
+      border: 1px solid var(--ui-border-2); padding: 6px 8px;
+      white-space: pre-wrap; word-break: break-all; margin: 0;
+    }
+    #tp-fpl-section { display: none; }
+
+    /* ── Settings panel ── */
+    #settings-panel {
+      position: fixed;
+      top: 32px; right: 0;
+      width: 320px;
+      height: calc(100vh - 32px);
+      background: var(--ui-bg-solid);
+      border-left: 1px solid var(--ui-border);
+      z-index: 30;
+      padding: 0;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    #settings-panel.open { transform: translateX(0); }
+
+    /* Tabs */
+    .settings-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--ui-border-4);
+      flex-shrink: 0;
+    }
+    .stab {
+      flex: 1;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      padding: 9px 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .stab:hover  { color: var(--ui-text-bright); }
+    .stab.active { color: var(--ui-active); border-bottom-color: var(--ui-active); }
+
+    .stab-pane {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 16px 24px;
+    }
+
+    .setting-group { margin-bottom: 20px; }
+
+    .setting-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 11px;
+    }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 36px; height: 20px;
+      cursor: pointer;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--ui-border);
+      border: 1px solid var(--ui-border-2);
+      border-radius: 10px;
+      transition: 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      top: 2px; left: 2px;
+      background: var(--ui-text-dim);
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--ui-border-3); border-color: var(--ui-active); }
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(16px);
+      background: var(--ui-active);
+    }
+
+    input[type="number"], input[type="range"] {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 3px 6px;
+      width: 70px;
+    }
+    input[type="range"] {
+      width: 120px;
+      padding: 0;
+      accent-color: var(--ui-active);
+    }
+    input[type="color"] {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      padding: 1px;
+      width: 34px;
+      height: 22px;
+      cursor: pointer;
+    }
+
+    .hr { border: none; border-top: 1px solid var(--ui-border-4); margin: 16px 0; }
+
+    .setting-select {
+      background: var(--ui-bg-2);
+      border: 1px solid var(--ui-border-3);
+      color: var(--ui-text-bright);
+      font-family: inherit;
+      font-size: 10px;
+      padding: 2px 4px;
+      max-width: 160px;
+      cursor: pointer;
+    }
+    .setting-select:focus { outline: none; border-color: var(--ui-active); }
+
+    .setting-btn {
+      background: none;
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      padding: 2px 7px;
+      cursor: pointer;
+      letter-spacing: 0.06em;
+    }
+    .setting-btn:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+
+    /* Colour tab */
+    .col-group { margin-bottom: 18px; }
+    .col-group-label {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .col-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 7px;
+      font-size: 11px;
+    }
+    .col-swatch {
+      width: 14px; height: 14px;
+      border-radius: 2px;
+      border: 1px solid var(--ui-border-2);
+      display: inline-block;
+      margin-right: 6px;
+      vertical-align: middle;
+      pointer-events: none;
+    }
+    .col-label { display: flex; align-items: center; }
+    .col-reset {
+      background: none;
+      border: none;
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 9px;
+      cursor: pointer;
+      padding: 0 4px;
+      letter-spacing: 0.04em;
+    }
+    .col-reset:hover { color: var(--ui-text-bright); }
+
+    /* ── Stale overlay ── */
+    #stale-banner {
+      position: fixed;
+      top: 32px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(60,30,10,0.9);
+      border: 1px solid #6a3a1a;
+      color: #9a5a3a;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      padding: 4px 14px;
+      z-index: 25;
+      display: none;
+    }
+    #stale-banner.visible { display: block; }
+
+    /* ── Disconnect overlay ── */
+    #disc-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #disc-overlay.visible { opacity: 1; }
+    #disc-msg {
+      color: #6a3a3a;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      border: 1px solid #3a1a1a;
+      padding: 10px 24px;
+      background: rgba(13,13,13,0.9);
+    }
+
+    /* ── No AWACS overlay ── */
+    #no-awacs-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 14;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #no-awacs-overlay.visible { opacity: 1; }
+    #no-awacs-msg {
+      color: #4a6a9a;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      border: 1px solid #1a2a4a;
+      padding: 10px 24px;
+      background: rgba(13,13,13,0.9);
+    }
+
+    /* ── Squawk callsign panel ── */
+    #calls-panel {
+      position: fixed;
+      top: 32px; left: 0;
+      width: 260px;
+      max-height: calc(100vh - 32px);
+      background: var(--ui-bg-solid);
+      border-right: 1px solid var(--ui-border);
+      z-index: 30;
+      padding: 16px;
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+      overflow-y: auto;
+    }
+    #calls-panel.open { transform: translateX(0); }
+    .calls-title {
+      font-size: 10px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; margin-bottom: 12px;
+    }
+    .sqmap-add-row {
+      display: flex; gap: 4px; margin-bottom: 12px;
+    }
+    .sqmap-add-row input {
+      background: var(--ui-bg-input); border: 1px solid var(--ui-border-2); color: var(--ui-text-input);
+      font-family: inherit; font-size: 10px; padding: 4px 6px;
+    }
+    #sqmap-code-input  { width: 54px; }
+    #sqmap-name-input  { flex: 1; }
+    #sqmap-add {
+      background: none; border: 1px solid var(--ui-border-3); color: var(--ui-text-bright);
+      font-family: inherit; font-size: 10px; padding: 4px 8px; cursor: pointer;
+    }
+    #sqmap-add:hover { border-color: var(--ui-text-bright); color: var(--ui-active); }
+    #sqmap-list { display: flex; flex-direction: column; gap: 4px; }
+    .sqmap-row {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; padding: 3px 0; border-bottom: 1px solid var(--ui-border-4);
+    }
+    .sqmap-code  { color: var(--ui-active); min-width: 36px; }
+    .sqmap-arrow { color: var(--ui-text-dim); }
+    .sqmap-name  { flex: 1; color: var(--ui-text-input); letter-spacing: 0.05em; }
+    .sqmap-del   {
+      background: none; border: none; color: #6a3a3a; cursor: pointer;
+      font-size: 12px; padding: 0 4px; line-height: 1;
+    }
+    .sqmap-del:hover { color: #cc4444; }
+    .sqmap-edit  {
+      background: none; border: none; color: var(--ui-text-dim); cursor: pointer;
+      font-size: 11px; padding: 0 2px; line-height: 1;
+    }
+    .sqmap-edit:hover { color: var(--ui-text-bright); }
+    .sqmap-empty { font-size: 10px; color: var(--ui-text-dim); font-style: italic; }
+    .sqmap-seq-badge {
+      font-size: 8px; letter-spacing: 0.08em;
+      color: var(--ui-active); opacity: 0.75;
+      margin-left: 2px; vertical-align: middle;
+    }
+    .sqmap-seq-row {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: var(--ui-text-dim);
+      margin-top: 4px; margin-bottom: 10px;
+    }
+    #sqmap-seq-toggle { accent-color: var(--ui-active); cursor: pointer; }
+    .sqmap-seq-label { cursor: pointer; user-select: none; }
+
+    /* ── Ground vehicle label popup ── */
+    #gnd-label-popup {
+      display: none;
+      position: fixed;
+      z-index: 100;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      padding: 4px 6px;
+      border-radius: 2px;
+    }
+    #gnd-label-input {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      padding: 3px 6px;
+      outline: none;
+      width: 140px;
+      text-transform: uppercase;
+    }
+    #gnd-label-input:focus { border-color: var(--ui-text-bright); }
+    #gnd-label-input::placeholder { color: var(--ui-text-dim); text-transform: none; }
+
+    /* ── SRS Frequency modal ── */
+    #srs-freq-modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.55);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #srs-freq-modal-overlay.hidden { display: none; }
+    #srs-freq-modal {
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: var(--ui-text-bright);
+      padding: 16px 20px;
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #srs-freq-modal label {
+      color: var(--ui-text-dim);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    #srs-freq-modal-input {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      padding: 4px 8px;
+      width: 100%;
+      box-sizing: border-box;
+      outline: none;
+      letter-spacing: 0.05em;
+    }
+    #srs-freq-modal-input:focus { border-color: var(--ui-active); }
+    #srs-freq-modal-btns {
+      display: flex; gap: 6px; justify-content: flex-end;
+    }
+    #srs-freq-modal-btns button {
+      background: transparent;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-dim);
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    #srs-freq-modal-btns button:hover { border-color: var(--ui-border-3); color: var(--ui-text-bright); }
+    #srs-freq-modal-confirm { color: var(--ui-active) !important; border-color: var(--ui-active) !important; }
+    #srs-freq-modal-confirm:hover { background: rgba(138,170,106,0.08) !important; }
+
+    /* ── SRS Radio panel ── */
+    #srs-radio-panel {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 30;
+      background: var(--ui-bg-solid);
+      border-top: 1px solid var(--ui-border-3);
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.05em;
+      user-select: none;
+    }
+
+    #srs-main-row {
+      display: flex;
+      align-items: flex-start;
+      padding: 4px 8px;
+      gap: 6px;
+    }
+
+    #srs-dot-wrap {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      height: 28px; /* aligns dot centre to first radio row */
+    }
+
+    /* Override base dot size for the radio status indicator */
+    #srs-dot {
+      width: 9px;
+      height: 9px;
+    }
+    #srs-dot.connected    { background: #4ec94e; box-shadow: 0 0 5px #4ec94e99; }
+    #srs-dot.reconnecting { background: #d4a017; box-shadow: 0 0 5px #d4a01799; }
+    #srs-dot.disconnected { background: #5a3a3a; box-shadow: none; }
+
+    #srs-radio-list {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .srs-no-radios {
+      font-size: 10px;
+      color: var(--ui-text-dim);
+      font-style: italic;
+    }
+
+    .srs-slot-wrap {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      border: 1px solid var(--ui-border-4);
+      cursor: pointer;
+    }
+    .srs-slot-wrap:hover { border-color: var(--ui-border-2); }
+
+    .srs-slot {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 18px 2px 6px; /* right padding leaves room for the X */
+      background: transparent;
+      border: none;
+    }
+    .srs-slot.srs-slot-tx {
+      background: rgba(100,160,80,0.07);
+    }
+    .srs-slot.srs-slot-rx {
+      background: rgba(60,160,220,0.18);
+      box-shadow: inset 0 0 0 1px rgba(60,160,220,0.5);
+      animation: srs-rx-pulse 0.6s ease-in-out infinite alternate;
+    }
+    @keyframes srs-rx-pulse {
+      from { background: rgba(60,160,220,0.12); }
+      to   { background: rgba(60,160,220,0.28); }
+    }
+
+    .srs-slot-volrow {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 4px 2px;
+      border-top: 1px solid var(--ui-border-4);
+    }
+
+    .srs-slot-n {
+      font-size: 9px;
+      color: var(--ui-text-dim);
+      min-width: 10px;
+    }
+
+    .srs-slot-freq {
+      color: var(--ui-text-bright);
+      cursor: pointer;
+      letter-spacing: 0.04em;
+    }
+    .srs-slot-freq:hover { color: var(--ui-text-hi); }
+
+    .srs-slot-mod {
+      font-size: 9px;
+      color: var(--ui-active);
+      cursor: pointer;
+      padding: 0 2px;
+      border: 1px solid transparent;
+    }
+    .srs-slot-mod:hover { border-color: var(--ui-border-2); }
+
+    .srs-slot-txbadge {
+      font-size: 9px;
+      color: var(--ui-active);
+      letter-spacing: 0.08em;
+    }
+
+    .srs-slot-settx {
+      font-size: 12px;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .srs-slot-settx:hover { color: var(--ui-text-bright); }
+
+    .srs-slot-rm {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 9px;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      padding: 1px 3px;
+      line-height: 1;
+      opacity: 0.4;
+    }
+    .srs-slot-rm:hover { color: #e06c75; opacity: 1; }
+
+    .srs-slot-vol {
+      flex: 1;
+      height: 4px;
+      cursor: pointer;
+      accent-color: var(--ui-accent, #61afef);
+      min-width: 0;
+    }
+
+    .srs-slot-vol-lbl {
+      font-size: 9px;
+      color: var(--ui-text-dim);
+      min-width: 22px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    #srs-ptt-btn {
+      background: none;
+      border: 1px solid var(--ui-border-3);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      padding: 0 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+      align-self: stretch;
+      min-height: 28px;
+      transition: background 0.05s, color 0.05s, border-color 0.05s;
+    }
+    #srs-ptt-btn:hover { border-color: var(--ui-active); color: var(--ui-active); }
+    #srs-ptt-btn.ptt-active {
+      background: rgba(100,160,80,0.2);
+      border-color: var(--ui-active);
+      color: var(--ui-active);
+      box-shadow: 0 0 6px rgba(100,160,80,0.3);
+    }
+
+    .srs-vol-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--ui-text-dim);
+    }
+
+    .srs-vol-label {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ui-text-dim);
+    }
+
+    .srs-vol-val {
+      color: var(--ui-text-bright);
+      min-width: 26px;
+    }
+
+    .srs-vol-btn {
+      background: none;
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      padding: 1px 5px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .srs-vol-btn:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+
+    #srs-add-radio {
+      background: none;
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1;
+      padding: 0 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+      align-self: stretch;  /* match the height of adjacent slot-wraps */
+      min-height: 28px;
+    }
+    #srs-add-radio:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+
+    .srs-ptt-key-input {
+      background: var(--ui-bg-2);
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-bright);
+      font-family: inherit;
+      font-size: 10px;
+      width: 52px;
+      padding: 1px 4px;
+      text-align: center;
+      cursor: pointer;
+    }
+    .srs-ptt-key-input:focus { border-color: var(--ui-active); outline: none; }
+    .srs-ptt-key-input.listening { border-color: var(--ui-warn, #e8a); color: var(--ui-warn, #e8a); }
+
+    /* ── Airport weather panel ── */
+    #apt-weather-panel {
+      display: none;
+      position: fixed;
+      z-index: 100;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      min-width: 160px;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    .awp-header {
+      display: flex;
+      align-items: center;
+      padding: 6px 8px 5px;
+      border-bottom: 1px solid var(--ui-border-4);
+      gap: 6px;
+    }
+    .awp-label {
+      flex: 1;
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--ui-text-hi);
+      letter-spacing: 0.12em;
+    }
+    .awp-close {
+      background: none; border: none; color: var(--ui-text-dim);
+      font-family: inherit; font-size: 12px; cursor: pointer;
+      padding: 0; line-height: 1;
+    }
+    .awp-close:hover { color: var(--ui-text-bright); }
+    .awp-body { padding: 7px 8px 9px; }
+    .awp-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .awp-row:last-child { margin-bottom: 0; }
+    .awp-k {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      padding-top: 1px;
+      min-width: 36px;
+    }
+    .awp-v { color: var(--ui-text-bright); }
+    .awp-loading, .awp-err {
+      font-size: 10px;
+      color: var(--ui-text-dim);
+      font-style: italic;
+      padding: 2px 0;
+    }
+
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- Floating bullseye BRA label (follows mouse cursor) -->
+<div id="cursor-bra"></div>
+
+<!-- Radar selection panel -->
+<div id="radars-panel">
+  <div class="radar-panel-title">Active Radars</div>
+  <div class="datalink-row" id="datalink-row">
+    <span class="datalink-label">DATALINK</span>
+    <label class="toggle">
+      <input type="checkbox" id="datalink-toggle" />
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+  <input type="text" id="radar-search" placeholder="Search airports…" autocomplete="off" />
+  <div id="radar-groups"></div>
+</div>
+
+<!-- Airport selection dropdown -->
+<div id="apt-dropdown">
+  <div id="apt-search-row">
+    <input type="text" id="apt-search" placeholder="Search…" autocomplete="off" spellcheck="false"/>
+  </div>
+  <div id="apt-list"></div>
+</div>
+
+<!-- Track info panel -->
+<div id="track-panel">
+  <div class="tp-header">
+    <span class="tp-callsign" id="tp-callsign">—</span>
+    <span class="tp-type-label" id="tp-type"></span>
+    <button class="tp-close" id="tp-close">✕</button>
+  </div>
+  <div class="tp-props" id="tp-props">
+    <span class="tp-key">ALT</span>   <span class="tp-val" id="tp-alt">—</span>
+    <span class="tp-key">V/S</span>   <span class="tp-val" id="tp-vs">—</span>
+    <span class="tp-key">HDG</span>   <span class="tp-val" id="tp-hdg">—</span>
+    <span class="tp-key">SPD</span>   <span class="tp-val" id="tp-spd">—</span>
+    <span class="tp-key">SQWK</span>  <span class="tp-val" id="tp-sqwk">—</span>
+    <span class="tp-key">IFF</span>   <span class="tp-val" id="tp-iff-state">—</span>
+  </div>
+  <div class="tp-section">
+    <div class="tp-section-label">Override IFF</div>
+    <div class="tp-iff-btns">
+      <button class="tp-iff-btn" data-state="friendly">FRIENDLY</button>
+      <button class="tp-iff-btn" data-state="bogey">BOGEY</button>
+      <button class="tp-iff-btn" data-state="neutral">NEUTRAL</button>
+      <button class="tp-iff-btn" data-state="bandit">BANDIT</button>
+      <button class="tp-iff-btn" data-state="hostile">HOSTILE</button>
+      <button class="tp-iff-clr" id="tp-iff-clr">CLR</button>
+    </div>
+    <div class="tp-rename-row">
+      <input type="text" class="tp-rename-input" id="tp-rename-input"
+             maxlength="20" placeholder="callsign override…"
+             autocomplete="off" spellcheck="false" />
+      <button class="tp-rename-btn" id="tp-rename-set">SET</button>
+      <button class="tp-rename-btn tp-rename-clr" id="tp-rename-clr">CLR</button>
+    </div>
+  </div>
+  <div class="tp-section" id="tp-fpl-section">
+    <div class="tp-section-label">Flight Plan</div>
+    <pre class="tp-fpl-pre" id="tp-fpl-msg"></pre>
+  </div>
+</div>
+
+<!-- Top bar -->
+<div id="topbar">
+  <span id="topbar-title">CRC</span>
+  <span class="sep">|</span>
+  <div id="status-grpc">
+    <div class="dot disconnected" id="dot-grpc"></div>
+    <span id="lbl-grpc">GRPC</span>
+  </div>
+  <span class="sep">|</span>
+  <div id="status-srs">
+    <div class="dot disconnected" id="dot-srs"></div>
+    <span id="lbl-srs">SRS</span>
+  </div>
+  <span class="sep">|</span>
+  <button id="btn-radars">RADARS <span id="radar-count-badge">0</span></button>
+  <span class="sep">|</span>
+  <button id="btn-coalition">BLUE</button>
+  <span class="sep" id="apt-sep">|</span>
+  <span id="apt-display">APT: NONE</span>
+  <span class="sep" id="rwy-sep" style="display:none">|</span>
+  <div id="rwy-row" style="display:none; align-items:center; gap:5px; font-size:10px; letter-spacing:0.08em;">
+    <span style="color:var(--ui-text-dim)">RWY</span>
+    <input type="text" id="rwy-input" maxlength="3" placeholder="360"
+      style="width:46px; background:var(--ui-bg-input); border:1px solid var(--ui-border-2);
+             color:var(--ui-text-input); font-family:inherit; font-size:10px;
+             letter-spacing:0.06em; padding:2px 5px; outline:none; text-align:center;" />
+  </div>
+  <span id="zulu-clock" style="margin-left:auto; color:var(--ui-text-dim); letter-spacing:0.1em; font-size:10px;">00:00:00Z</span>
+  <button id="btn-settings">SETTINGS</button>
+</div>
+
+<!-- Floating buttons below topbar, top-left -->
+<div id="float-btns">
+  <button id="btn-calls">SQWK C/S</button>
+  <button id="btn-aprt">APRT</button>
+</div>
+
+<!-- Stale data warning -->
+<div id="stale-banner">DATA STALE — NO UPDATE IN 10s</div>
+
+<!-- Disconnect overlay -->
+<div id="disc-overlay">
+  <div id="disc-msg">GRD DISCONNECTED</div>
+</div>
+
+<!-- No radars active overlay -->
+<div id="no-awacs-overlay">
+  <div id="no-awacs-msg">NO RADARS ACTIVE</div>
+</div>
+
+<!-- Squawk → callsign mapping panel -->
+<div id="calls-panel">
+  <div class="calls-title">Squawk Callsign Map</div>
+  <div class="sqmap-add-row">
+    <input type="text" id="sqmap-code-input" maxlength="4" placeholder="1101" />
+    <input type="text" id="sqmap-name-input" placeholder="SHADOW11" />
+    <button id="sqmap-add">ADD</button>
+  </div>
+  <div class="sqmap-seq-row">
+    <input type="checkbox" id="sqmap-seq-toggle" />
+    <label class="sqmap-seq-label" for="sqmap-seq-toggle">Sequential (SEQ) — <span style="color:var(--ui-active)">1101→HAT11</span></label>
+  </div>
+  <div id="sqmap-list"></div>
+</div>
+
+<!-- Airport weather panel (floating, click on map airport) -->
+<div id="apt-weather-panel"></div>
+
+<!-- Airport / Theater manager panel -->
+<div id="aprt-panel">
+
+  <div class="aprt-panel-header">
+    <span class="aprt-panel-title">AIRPORT / THEATER</span>
+    <button class="aprt-close" id="aprt-close">✕</button>
+  </div>
+
+  <!-- ── Airport selection ── -->
+  <div class="aprt-section-label">Airport</div>
+  <input type="text" id="aprt-search" placeholder="Search…" autocomplete="off" spellcheck="false" />
+  <div id="aprt-apt-list"></div>
+
+  <!-- ── Reference card (shown once an airport is selected) ── -->
+  <div id="aprt-ref-card">
+    <div class="aprt-ref-header">
+      <span id="aprt-ref-name" class="aprt-ref-name">—</span>
+      <span id="aprt-ref-icao" class="aprt-ref-icao-badge"></span>
+    </div>
+    <hr class="aprt-ref-sep">
+    <div class="aprt-ref-row"><span class="aprt-ref-k">WIND</span><span id="aprt-ref-wind" class="aprt-ref-v dim">—</span></div>
+    <div class="aprt-ref-row"><span class="aprt-ref-k">QNH</span><span id="aprt-ref-qnh" class="aprt-ref-v dim">—</span></div>
+    <div class="aprt-ref-row"><span class="aprt-ref-k">TEMP</span><span id="aprt-ref-temp" class="aprt-ref-v dim">—</span></div>
+    <div class="aprt-ref-row"><span class="aprt-ref-k">VIS</span><span id="aprt-ref-vis" class="aprt-ref-v dim">—</span></div>
+    <div id="aprt-ref-cld-rows"></div>
+    <hr class="aprt-ref-sep">
+    <div class="aprt-ref-row"><span class="aprt-ref-k">RWY</span><span id="aprt-ref-rwy" class="aprt-ref-v dim">—</span></div>
+    <div class="aprt-ref-row"><span class="aprt-ref-k">INFO</span><span id="aprt-ref-info" class="aprt-ref-v dim">—</span></div>
+    <div class="aprt-ref-row"><span class="aprt-ref-k">FREQ</span><span id="aprt-ref-freq" class="aprt-ref-v dim">—</span></div>
+    <div class="aprt-ref-row"><span class="aprt-ref-k">TA</span><span id="aprt-ref-ta" class="aprt-ref-v dim">—</span></div>
+  </div>
+
+  <!-- ── Collapsible edit section ── -->
+  <div class="aprt-edit-toggle" id="aprt-edit-toggle">
+    <span class="aprt-edit-caret">▶</span>
+    <span>Edit / ATIS</span>
+  </div>
+  <div id="aprt-edit-body">
+
+    <!-- Weather entry -->
+    <div id="aprt-weather-block" style="padding:0 14px 8px">
+      <div style="font-size:9px;letter-spacing:0.1em;color:var(--ui-text-dim);text-transform:uppercase;margin-bottom:6px">Manual Weather</div>
+      <div class="aprt-wx-row">
+        <span class="aprt-wx-k">VIS</span>
+        <input type="number" id="aprt-wx-vis" placeholder="10" min="0" max="99" step="0.5"
+               style="width:60px;background:var(--ui-bg-input);border:1px solid var(--ui-border-2);color:var(--ui-text-input);font-family:inherit;font-size:10px;padding:2px 5px;outline:none" />
+        <span style="font-size:10px;color:var(--ui-text-dim)">km</span>
+      </div>
+      <div class="aprt-wx-row" style="margin-top:3px">
+        <span class="aprt-wx-k">CLD 1</span>
+        <select id="aprt-cld-1-cov" class="aprt-cld-cover">
+          <option value="">—</option><option value="SKC">SKC</option><option value="FEW">FEW</option>
+          <option value="SCT">SCT</option><option value="BKN">BKN</option><option value="OVC">OVC</option>
+        </select>
+        <input type="number" id="aprt-cld-1-base" class="aprt-cld-base" placeholder="ft" min="0" max="50000" step="100" />
+      </div>
+      <div class="aprt-wx-row" style="margin-top:3px">
+        <span class="aprt-wx-k">CLD 2</span>
+        <select id="aprt-cld-2-cov" class="aprt-cld-cover">
+          <option value="">—</option><option value="SKC">SKC</option><option value="FEW">FEW</option>
+          <option value="SCT">SCT</option><option value="BKN">BKN</option><option value="OVC">OVC</option>
+        </select>
+        <input type="number" id="aprt-cld-2-base" class="aprt-cld-base" placeholder="ft" min="0" max="50000" step="100" />
+      </div>
+      <div class="aprt-wx-row" style="margin-top:3px">
+        <span class="aprt-wx-k">CLD 3</span>
+        <select id="aprt-cld-3-cov" class="aprt-cld-cover">
+          <option value="">—</option><option value="SKC">SKC</option><option value="FEW">FEW</option>
+          <option value="SCT">SCT</option><option value="BKN">BKN</option><option value="OVC">OVC</option>
+        </select>
+        <input type="number" id="aprt-cld-3-base" class="aprt-cld-base" placeholder="ft" min="0" max="50000" step="100" />
+      </div>
+    </div>
+
+    <div class="aprt-hr" style="margin:4px 0 8px"></div>
+
+    <!-- ATIS -->
+    <div style="padding:0 14px">
+      <div style="font-size:9px;letter-spacing:0.1em;color:var(--ui-text-dim);text-transform:uppercase;margin-bottom:6px">ATIS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-bottom:6px">
+        <div>
+          <div style="font-size:9px;color:var(--ui-text-dim);letter-spacing:0.08em;margin-bottom:3px">FREQ (MHz)</div>
+          <input type="text" id="aprt-atis-freq" placeholder="121.500" maxlength="10"
+                 style="width:100%;background:var(--ui-bg-input);border:1px solid var(--ui-border-2);color:var(--ui-text-input);font-family:inherit;font-size:11px;padding:3px 5px;outline:none" autocomplete="off" />
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--ui-text-dim);letter-spacing:0.08em;margin-bottom:3px">INFO</div>
+          <input type="text" id="aprt-atis-info" placeholder="A" maxlength="1"
+                 style="width:100%;background:var(--ui-bg-input);border:1px solid var(--ui-border-2);color:var(--ui-text-input);font-family:inherit;font-size:11px;padding:3px 5px;outline:none;text-transform:uppercase;text-align:center" autocomplete="off" />
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--ui-text-dim);letter-spacing:0.08em;margin-bottom:3px">RUNWAY</div>
+          <input type="text" id="aprt-atis-rwy" placeholder="28R" maxlength="4"
+                 style="width:100%;background:var(--ui-bg-input);border:1px solid var(--ui-border-2);color:var(--ui-text-input);font-family:inherit;font-size:11px;padding:3px 5px;outline:none;text-transform:uppercase" autocomplete="off" />
+        </div>
+      </div>
+      <div style="font-size:9px;color:var(--ui-text-dim);letter-spacing:0.08em;margin-bottom:3px">COMMENT</div>
+      <textarea id="aprt-atis-comment" placeholder="Optional remark…" rows="2" spellcheck="false"
+                style="display:block;width:100%;background:var(--ui-bg-input);border:1px solid var(--ui-border-2);color:var(--ui-text-input);font-family:'Courier New',monospace;font-size:10px;letter-spacing:0.04em;padding:4px 6px;outline:none;resize:vertical;line-height:1.5;margin-bottom:6px"></textarea>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <button id="aprt-atis-build" class="aprt-btn">BUILD</button>
+        <button id="aprt-atis-tx" class="aprt-btn">TRANSMIT</button>
+        <span id="aprt-atis-status" class="aprt-atis-status"></span>
+      </div>
+      <textarea id="aprt-atis-text" placeholder="ATIS text (auto-filled by BUILD or edit manually)…" rows="5" spellcheck="false"
+                style="display:block;width:100%;background:var(--ui-bg-input);border:1px solid var(--ui-border-2);color:var(--ui-text-input);font-family:'Courier New',monospace;font-size:10px;letter-spacing:0.04em;padding:5px 7px;outline:none;resize:vertical;line-height:1.5;margin-bottom:8px"></textarea>
+    </div>
+
+    <div class="aprt-hr" style="margin:4px 0 8px"></div>
+
+    <!-- Theater settings -->
+    <div style="padding:0 14px 14px">
+      <div style="font-size:9px;letter-spacing:0.1em;color:var(--ui-text-dim);text-transform:uppercase;margin-bottom:6px">Theater</div>
+      <div class="aprt-row">
+        <span class="aprt-k">Transition alt (ft)</span>
+        <input type="number" id="aprt-transition-alt" value="18000" min="0" max="60000" step="500" style="width:70px" />
+      </div>
+      <div class="aprt-row">
+        <span class="aprt-k">Mag variation (°)</span>
+        <input type="number" id="aprt-mag-var" value="0" min="-30" max="30" step="1" style="width:54px" />
+      </div>
+      <div class="aprt-row">
+        <span class="aprt-k">UTC offset (h)</span>
+        <input type="number" id="aprt-time-offset" value="0" min="-12" max="14" step="1" style="width:54px" />
+      </div>
+      <div style="font-size:9px;color:var(--ui-text-dim);margin-top:4px;line-height:1.5">
+        UTC offset: subtract theater offset from DCS local to display Zulu<br>(Syria +3, Caucasus +4, Persian Gulf +4)
+      </div>
+    </div>
+
+  </div><!-- #aprt-edit-body -->
+
+</div>
+
+<!-- Ground vehicle label popup -->
+<div id="gnd-label-popup">
+  <input type="text" id="gnd-label-input" placeholder="Label…" maxlength="20" autocomplete="off" spellcheck="false" />
+</div>
+
+<!-- Settings panel -->
+<div id="settings-panel">
+
+  <div class="settings-tabs">
+    <button class="stab active" data-pane="general">GENERAL</button>
+    <button class="stab" data-pane="colors">COLOURS</button>
+    <button class="stab" data-pane="declutter">DECLTR</button>
+    <button class="stab" data-pane="radio">RADIO</button>
+    <button class="stab" data-pane="tools">TOOLS</button>
+  </div>
+
+  <!-- ── General tab ──────────────────────────────────────────────────── -->
+  <div id="stab-general" class="stab-pane">
+
+    <div class="setting-label">Display</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Light Mode</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-light-mode" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Tracks</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Projected Position Line</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-ppl-enabled" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>PPL Duration</span>
+        <span id="set-ppl-val">60s</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-ppl-duration" min="10" max="300" step="10" value="60" />
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Track History</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Show trail</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-trail-enabled" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>Trail length</span>
+        <span id="set-trail-length-val">10</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-trail-length" min="0" max="25" step="1" value="10" />
+      </div>
+      <div class="setting-row">
+        <span>Trail interval</span>
+        <span id="set-trail-interval-val">5s</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-trail-interval" min="1000" max="30000" step="1000" value="5000" />
+      </div>
+      <div class="setting-row">
+        <span>Fade grace</span>
+        <span id="set-fade-grace-val">10s</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-fade-grace" min="0" max="30000" step="500" value="10000" />
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Scale</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Track &amp; Label Size</span>
+        <span id="set-scale-val">1.0×</span>
+      </div>
+      <div class="setting-row">
+        <input type="range" id="set-scale" min="0.6" max="2.0" step="0.1" value="1.0" />
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Labels</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Radar debug</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-radar-debug" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+  </div><!-- /stab-general -->
+
+  <!-- ── Colours tab ──────────────────────────────────────────────────── -->
+  <div id="stab-colors" class="stab-pane" style="display:none">
+
+    <div class="col-group">
+      <div class="col-group-label">IFF States</div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-friendly"></span>Friendly</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colFriendly" data-default="#4488cc">↺</button>
+          <input type="color" id="col-friendly" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-bogey"></span>Bogey</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colBogey" data-default="#ccaa00">↺</button>
+          <input type="color" id="col-bogey" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-neutral"></span>Neutral</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colNeutral" data-default="#888888">↺</button>
+          <input type="color" id="col-neutral" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-bandit"></span>Bandit</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colBandit" data-default="#cc6600">↺</button>
+          <input type="color" id="col-bandit" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-hostile"></span>Hostile</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colHostile" data-default="#cc2222">↺</button>
+          <input type="color" id="col-hostile" />
+        </span>
+      </div>
+    </div>
+
+    <div class="col-group">
+      <div class="col-group-label">Emergency Squawks</div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-emerg-gen"></span>7700 General</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colEmergGen" data-default="#cc2222">↺</button>
+          <input type="color" id="col-emerg-gen" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-emerg-radio"></span>7600 Radio</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colEmergRadio" data-default="#b8a000">↺</button>
+          <input type="color" id="col-emerg-radio" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-emerg-hijack"></span>7500 Hijack</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colEmergHijack" data-default="#cc6600">↺</button>
+          <input type="color" id="col-emerg-hijack" />
+        </span>
+      </div>
+    </div>
+
+    <div class="col-group">
+      <div class="col-group-label">Map &amp; Display</div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-bra"></span>BRA Cursor</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="braColor" data-default="#4488cc">↺</button>
+          <input type="color" id="col-bra" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-range-ring"></span>Range Ring</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colRangeRing" data-default="#8aaa6a">↺</button>
+          <input type="color" id="col-range-ring" />
+        </span>
+      </div>
+      <div class="col-row">
+        <span class="col-label"><span class="col-swatch" id="sw-navpoint"></span>Navpoints</span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <button class="col-reset" data-key="colNavpoint" data-default="#3a5a3a">↺</button>
+          <input type="color" id="col-navpoint" />
+        </span>
+      </div>
+    </div>
+
+  </div><!-- /stab-colors -->
+
+  <!-- ── Declutter tab ─────────────────────────────────────────────────── -->
+  <div id="stab-declutter" class="stab-pane" style="display:none">
+
+    <div class="setting-label">Formation Label Declutter</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Sequential squawk declutter</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-declutter" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div style="font-size:10px; color:var(--ui-text-dim); line-height:1.6; margin-top:4px;">
+      When aircraft squawks are sequential (e.g. 1101, 1102, 1103) and each
+      aircraft is within <b style="color:var(--ui-text)">0.5 nm</b> horizontally and
+      <b style="color:var(--ui-text)">1 000 ft</b> vertically of the previous,
+      labels for followers are hidden. Lead aircraft (1101) always shows its label.
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Navpoint Declutter</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Hide numbered navpoints</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-nav-declutter" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>5-letter names only</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-nav-declutter-5" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div style="font-size:10px; color:var(--ui-text-dim); line-height:1.6; margin-top:4px;">
+      Numbered: hides navpoints whose names contain digits (e.g. WP1, NAV003).<br>
+      5-letter: hides navpoints whose names are not exactly 5 characters (e.g. KARAX, DOSAD).
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Track Visibility</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Show AI units</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-ai-enabled" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>Show ships</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-ships-enabled" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>Hide ground units</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-hide-ground-units" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+  </div><!-- /stab-declutter -->
+
+  <!-- ── Radio tab ─────────────────────────────────────────────────────── -->
+  <div id="stab-radio" class="stab-pane" style="display:none">
+
+    <div class="setting-label">Microphone</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Input device</span>
+        <div style="display:flex;gap:4px;align-items:center">
+          <select id="srs-mic-select" class="setting-select" title="Microphone input device">
+            <option value="default">default</option>
+          </select>
+          <button class="setting-btn" id="srs-mic-test">TEST</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span>Input volume</span>
+        <div class="srs-vol-group">
+          <button class="srs-vol-btn" id="srs-invol-dn">−</button>
+          <span class="srs-vol-val" id="srs-in-vol-lbl">0.5x</span>
+          <button class="srs-vol-btn" id="srs-invol-up">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Speaker</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Output device</span>
+        <select id="srs-sink-select" class="setting-select" title="Speaker output sink">
+          <option value="default">default</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span>Output volume</span>
+        <div class="srs-vol-group">
+          <button class="srs-vol-btn" id="srs-outvol-dn">−</button>
+          <span class="srs-vol-val" id="srs-out-vol-lbl">1.0x</span>
+          <button class="srs-vol-btn" id="srs-outvol-up">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Keybind</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>PTT key</span>
+        <input id="srs-ptt-key-input" class="srs-ptt-key-input" readonly placeholder="Space" title="Click then press key" />
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Audio Effects</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>TX sound set</span>
+        <select id="srs-sound-set-select" class="setting-select" title="Click sound played on TX start/end">
+          <option value="RADIO_TRANS">RADIO_TRANS</option>
+          <option value="RADIO_TRANS_ALTERNATE">RADIO_TRANS_ALTERNATE</option>
+          <option value="RADIO_TRANS_APACHE">RADIO_TRANS_APACHE</option>
+          <option value="MIDS">MIDS</option>
+          <option value="INTERCOM">INTERCOM</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span>Background noise</span>
+        <label class="toggle">
+          <input type="checkbox" id="srs-noise-enabled" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+  </div><!-- /stab-radio -->
+
+  <!-- ── Tools tab ─────────────────────────────────────────────────────── -->
+  <div id="stab-tools" class="stab-pane" style="display:none">
+
+    <div class="setting-label">Altitude Calculator</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Temp (°C)</span>
+        <input type="number" id="tool-alt-temp" value="15" step="1" style="width:70px" />
+      </div>
+      <div class="setting-row">
+        <span>QNH (inHg)</span>
+        <input type="number" id="tool-alt-qnh" value="29.92" step="0.01" style="width:70px" />
+      </div>
+      <div class="setting-row">
+        <span>Indicated Alt (ft)</span>
+        <input type="number" id="tool-alt-ind" value="10000" step="100" style="width:70px" />
+      </div>
+      <div class="setting-row" style="margin-top:8px">
+        <span></span>
+        <button class="setting-btn" id="tool-alt-calc">CALCULATE</button>
+      </div>
+      <div class="setting-row" style="margin-top:4px">
+        <span style="color:var(--ui-text-dim)">API Altitude (ft)</span>
+        <span id="tool-alt-result" style="color:var(--ui-active);font-size:13px;font-weight:600">—</span>
+      </div>
+    </div>
+
+  </div><!-- /stab-tools -->
+
+</div>
+
+<!-- SRS Radio panel -->
+<div id="srs-freq-modal-overlay" class="hidden">
+  <div id="srs-freq-modal">
+    <label id="srs-freq-modal-label">Frequency MHz — slot 1:</label>
+    <input id="srs-freq-modal-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
+    <div id="srs-freq-modal-btns">
+      <button id="srs-freq-modal-cancel">Cancel</button>
+      <button id="srs-freq-modal-confirm">Set</button>
+    </div>
+  </div>
+</div>
+
+<div id="srs-radio-panel">
+  <div id="srs-main-row">
+    <div id="srs-dot-wrap">
+      <div class="dot disconnected" id="srs-dot"></div>
+    </div>
+    <div id="srs-radio-list">
+      <!-- slot wraps injected by JS; + button is always last child -->
+      <button id="srs-add-radio" title="Add radio slot">+</button>
+    </div>
+    <button id="srs-ptt-btn" title="Hold to transmit (or press PTT key)">PTT</button>
+  </div>
+</div>
+
+<script src="./js/geo.js"></script>
+<script src="./js/iff.js"></script>
+<script src="./js/geojson.js"></script>
+<script src="./js/icons.js"></script>
+<script src="./js/ui.js"></script>
+<script src="./js/map-setup.js"></script>
+<script src="./js/views/crc.js"></script>
+<script src="./js/views/airport.js"></script>
+<script src="./js/views/approach.js"></script>
+<script src="./js/app.js"></script>
+<script src="./js/srs-radio.js"></script>
+</body>
+</html>

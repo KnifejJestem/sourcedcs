@@ -1,0 +1,15 @@
+{
+  "name": "crc-desktop",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack:linux": "electron-packager . crc --platform=linux --arch=x64 --out=dist --overwrite --ignore='^/dist'",
+    "pack:win":   "electron-packager . crc --platform=win32 --arch=x64 --out=dist --overwrite --ignore='^/dist' --ignore='^/python-pkg'"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-packager": "^17.0.0"
+  }
+
+}

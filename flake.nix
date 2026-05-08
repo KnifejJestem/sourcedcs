@@ -163,6 +163,7 @@
             pkgs.espeak-ng
             pkgs.ffmpeg
             pkgs.opus-tools
+            pkgs.wine64
           ];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.portaudio pkgs.libopus pkgs.libpulseaudio ];
           shellHook = ''
@@ -184,6 +185,13 @@
             echo ""
             echo "lxsrs_v2 dependencies ready:"
             echo "  tts:   $(espeak-ng --version 2>&1 | head -n1 || echo 'espeak-ng available')"
+              # electron-packager expects wine64
+              mkdir -p $HOME/.local/bin
+              ln -sf $(which wine) $HOME/.local/bin/wine64
+              export PATH="$HOME/.local/bin:$PATH"
+
+              echo "SOURCE DCS dev shell"
+
           '';
         };
 
@@ -191,14 +199,16 @@
         devShells.srs = pkgs.mkShell {
           name = "lxsrs-v2-dev";
           buildInputs = [
-            pythonEnv
-            pkgs.libopus
-            pkgs.portaudio
-            pkgs.libpulseaudio
-            pkgs.espeak-ng
-            pkgs.ffmpeg
-            pkgs.opus-tools
-          ];
+              pythonEnv
+              pkgs.libopus
+              pkgs.portaudio
+              pkgs.libpulseaudio
+              pkgs.espeak-ng
+              pkgs.ffmpeg
+              pkgs.opus-tools
+              pkgs.python3Packages.evdev   # ← add this
+              pkgs.python3                 # ← provides Python.h
+            ];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.portaudio pkgs.libopus pkgs.libpulseaudio ];
 
           shellHook = ''
