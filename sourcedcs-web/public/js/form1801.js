@@ -31,6 +31,7 @@ function logout() {
 var fpl1801ControllerSquadron = '';
 var fpl1801AvailableSquadrons = [];
 var fpl1801UserIsController   = false;
+var fpl1801NotifyChannelId    = '';
 var fpl1801AllPlans           = [];
 var currentToken = getToken();
 
@@ -207,6 +208,7 @@ function fpl1801LoadConfig() {
     fpl1801ControllerSquadron = cfg.controllerSquadron || '';
     fpl1801AvailableSquadrons = cfg.availableSquadrons || [];
     fpl1801UserIsController   = Boolean(cfg.isController);
+    fpl1801NotifyChannelId    = cfg.notifyChannelId    || '';
     fpl1801RenderAdminPanel();
     fpl1801LoadPlans();
   })
@@ -233,13 +235,17 @@ function fpl1801RenderAdminPanel() {
   }
 
   panel.innerHTML =
-    '<div class="fp-admin-label">ADMIN — CONTROLLER SQUADRON</div>' +
+    '<div class="fp-admin-label">ADMIN — FLIGHT PLAN SETTINGS</div>' +
     '<div class="fp-admin-body">' +
-      '<div class="fp-admin-desc">Select which squadron can view all submitted 1801 flight plans.</div>' +
+      '<div class="fp-admin-desc">Configure which squadron can view all submitted flight plans and which Discord channel receives notifications.</div>' +
       '<div class="fp-admin-row">' +
-        '<div class="fp-field" style="flex:1;min-width:200px">' +
+        '<div class="fp-field" style="flex:2;min-width:200px">' +
           '<label class="fp-label" for="fpl1801CtrlSqSelect">CONTROLLER SQUADRON</label>' +
           '<select class="fp-input" id="fpl1801CtrlSqSelect">' + opts.join('') + '</select>' +
+        '</div>' +
+        '<div class="fp-field" style="flex:1;min-width:160px">' +
+          '<label class="fp-label" for="fpl1801NotifyChannel">DISCORD NOTIFY CHANNEL ID</label>' +
+          '<input class="fp-input" id="fpl1801NotifyChannel" type="text" maxlength="32" placeholder="000000000000000000" autocomplete="off" value="' + esc(fpl1801NotifyChannelId) + '">' +
         '</div>' +
         '<div style="align-self:flex-end">' +
           '<button class="btn btn-primary" style="font-size:9px;padding:6px 16px" onclick="fpl1801SaveConfig()">SAVE</button>' +
@@ -252,6 +258,7 @@ function fpl1801RenderAdminPanel() {
 
 function fpl1801SaveConfig() {
   var sel   = document.getElementById('fpl1801CtrlSqSelect');
+  var chEl  = document.getElementById('fpl1801NotifyChannel');
   var errEl = document.getElementById('fpl1801AdminError');
   var okEl  = document.getElementById('fpl1801AdminSuccess');
   if (!sel) return;
@@ -264,7 +271,10 @@ function fpl1801SaveConfig() {
       'Content-Type':  'application/json',
       'Authorization': 'Bearer ' + (currentToken || ''),
     },
-    body: JSON.stringify({ controllerSquadron: sel.value }),
+    body: JSON.stringify({
+      controllerSquadron: sel.value,
+      notifyChannelId:    chEl ? chEl.value.trim() : '',
+    }),
   })
   .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
   .then(function(res) {
@@ -274,6 +284,7 @@ function fpl1801SaveConfig() {
       return;
     }
     fpl1801ControllerSquadron = res.body.controllerSquadron || '';
+    fpl1801NotifyChannelId    = res.body.notifyChannelId    || '';
     okEl.textContent   = 'Config saved.';
     okEl.style.display = '';
   })

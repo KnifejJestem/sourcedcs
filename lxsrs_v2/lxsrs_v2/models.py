@@ -120,6 +120,7 @@ class PlayerRadioInfo:
     radios: list[Radio] = field(default_factory=lambda: [Radio() for _ in range(MAX_RADIOS)])
     unit: str = ""
     unitId: int = 0
+    selected: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -128,6 +129,7 @@ class PlayerRadioInfo:
             "radios": [radio.to_dict() for radio in self.radios],
             "unit": self.unit,
             "unitId": self.unitId,
+            "radioIndex": self.selected,
         }
 
 

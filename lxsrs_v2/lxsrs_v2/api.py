@@ -59,6 +59,8 @@ class SrsApiServer:
                         "radio_volumes": snap.get("radio_volumes", []),
                         "sound_set": snap.get("sound_set", "RADIO_TRANS"),
                         "noise_enabled": snap.get("noise_enabled", True),
+                        "unit_id": snap.get("unit_id", 1),
+                        "srs_clients": snap.get("srs_clients", []),
                         "radios": [
                             {
                                 "slot": row.slot,
@@ -108,6 +110,10 @@ class SrsApiServer:
                         ).start()
                     elif path == "/api/radio/add":
                         client.add_radio()
+                    elif path == "/api/radio/add-intercom":
+                        client.add_intercom()
+                    elif path == "/api/radio/intercom-unit":
+                        client.set_intercom_unit(int(body["unit_id"]))
                     elif path == "/api/volume/input":
                         client.set_input_volume(float(body["volume"]))
                     elif path == "/api/volume/output":

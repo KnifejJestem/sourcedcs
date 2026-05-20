@@ -68,6 +68,11 @@ function clearIffOverride(id) {
   saveIffOverrides();
 }
 
+function clearAllIffOverrides() {
+  iffOverrides.clear();
+  localStorage.removeItem('crc-desktop-iff-overrides');
+}
+
 // ── Transponder check ─────────────────────────────────────────────────────
 // Active = squawk is a finite number in the valid 4-digit range 0–7777.
 

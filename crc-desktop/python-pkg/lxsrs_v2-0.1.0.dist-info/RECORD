@@ -90,11 +90,11 @@ lxsrs_v2/__pycache__/protocol.cpython-314.pyc,,
 lxsrs_v2/__pycache__/pulse.cpython-314.pyc,,
 lxsrs_v2/__pycache__/test_output.cpython-314.pyc,,
 lxsrs_v2/__pycache__/ui.cpython-314.pyc,,
-lxsrs_v2/api.py,sha256=cLiPQcuznyq6mQbyPE-kTZio9aXcws7lfOwtNhH1qOk,7259
-lxsrs_v2/audio.py,sha256=8qgzWgcW8k950IdvxkRWsfcuqscnjtf5S8mwUuQRg8g,19214
-lxsrs_v2/client.py,sha256=yHm_c-w52AxxB3WmtfazpJjzaerfq3d7wHBvT-lMN5Y,34081
+lxsrs_v2/api.py,sha256=PGtj3j3T7cqwVCuOomiA4NzXSOiRwVlR93RDnQczNN8,7624
+lxsrs_v2/audio.py,sha256=3h6L8QD-GUP5AMwT91UPJeloaiOFnMwNlVHVgLPGj6g,22474
+lxsrs_v2/client.py,sha256=kCd2tbPd0gTE_fSatJ23ZN5Mz5N2_qynABQxBmSnmPY,37050
 lxsrs_v2/effects.py,sha256=ejXKn7klGajatVgmVwkuUxHIsBxBC6dOYQtMf3bI2co,7549
-lxsrs_v2/models.py,sha256=WlQP2pvcagjXMHFLZayQBt5zCTBHgu_QF4UK0G101Ns,4840
+lxsrs_v2/models.py,sha256=6DA8J2hp0nmxvkwuOk3Wl7apz82pKLy0BQq8R17dZdk,4903
 lxsrs_v2/protocol.py,sha256=ckj2Uv308rGl28U7n9kg1Pb7gi2ed3sAtPXjnDsamiM,3553
 lxsrs_v2/pulse.py,sha256=aNAogHZTsJ1zsRu9KWdDATY2skA6YSq9W2gZDPMo7-Q,12025
 lxsrs_v2/test_output.py,sha256=FTBJ1h9EB6GNf3lQBQ6ukeLh_c0dJoFclKAeNU40QOw,2419

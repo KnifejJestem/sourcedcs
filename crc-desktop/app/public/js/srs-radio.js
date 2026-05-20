@@ -164,15 +164,19 @@
   function _slotKey(r) { return `${r.slot}|${r.freq_mhz.toFixed(3)}|${r.modulation}|${r.tx}|${r.rx}`; }
 
   function _buildSlotEl(r, vol) {
+    const isIntercom = r.modulation === 'INTERCOM';
     const wrap = document.createElement('div');
     wrap.className = 'srs-slot-wrap';
     wrap.dataset.slot = r.slot;
     const top = document.createElement('div');
     top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '') + (r.rx ? ' srs-slot-rx' : '');
+    const modBadge = isIntercom
+      ? `<span class="srs-slot-mod srs-slot-mod-fixed" title="Intercom">IC</span>`
+      : `<span class="srs-slot-mod" data-slot="${r.slot}" title="Click to cycle modulation">${r.modulation.slice(0,2)}</span>`;
     top.innerHTML =
       `<span class="srs-slot-n">${r.slot + 1}</span>` +
-      `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>` +
-      `<span class="srs-slot-mod" data-slot="${r.slot}" title="Click to cycle modulation">${r.modulation.slice(0,2)}</span>` +
+      (isIntercom ? `` : `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>`) +
+      modBadge +
       (r.tx ? `<span class="srs-slot-txbadge">TX</span>` : '');
     const rm = document.createElement('span');
     rm.className = 'srs-slot-rm';
@@ -197,6 +201,13 @@
     const vols   = _state.radio_volumes || [];
     const addBtn = document.getElementById('srs-add-radio');
     addBtn.style.display = active.length >= MAX_RADIOS ? 'none' : '';
+    const addIcBtn = document.getElementById('srs-add-intercom');
+    if (addIcBtn) {
+      const hasIntercom = active.some(r => r.modulation === 'INTERCOM');
+      addIcBtn.classList.toggle('srs-intercom-active', hasIntercom);
+      addIcBtn.disabled = hasIntercom || active.length >= MAX_RADIOS;
+      addIcBtn.style.display = active.length >= MAX_RADIOS && !hasIntercom ? 'none' : '';
+    }
 
     // Map current rendered wraps by slot
     const existing = new Map();
@@ -254,10 +265,13 @@
           const top = cur.querySelector('.srs-slot');
           if (top) {
             top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '') + (r.rx ? ' srs-slot-rx' : '');
+            const _isIcom = r.modulation === 'INTERCOM';
             top.innerHTML =
               `<span class="srs-slot-n">${r.slot + 1}</span>` +
-              `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>` +
-              `<span class="srs-slot-mod" data-slot="${r.slot}" title="Click to cycle modulation">${r.modulation.slice(0,2)}</span>` +
+              (_isIcom ? `` : `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>`) +
+              (_isIcom
+                ? `<span class="srs-slot-mod srs-slot-mod-fixed" title="Intercom">IC</span>`
+                : `<span class="srs-slot-mod" data-slot="${r.slot}" title="Click to cycle modulation">${r.modulation.slice(0,2)}</span>`) +
               (r.tx ? `<span class="srs-slot-txbadge">TX</span>` : '') +
               `<span class="srs-slot-rm" data-slot="${r.slot}" title="Remove radio">✕</span>`;
           }
@@ -306,6 +320,9 @@
     }
     if (_noiseChk && !_noiseChk._userChanging) {
       _noiseChk.checked = _state.noise_enabled !== false;
+    }
+    if (_icUnitSel && document.activeElement !== _icUnitSel) {
+      _syncSelectValue(_icUnitSel, String(_state.unit_id || 1));
     }
   }
 
@@ -506,7 +523,8 @@
   _wire('srs-invol-dn',  () => _post('/volume/input',  { volume: Math.max(0.0, +(_state.input_volume  - 0.1).toFixed(1)) }));
   _wire('srs-outvol-up', () => _post('/volume/output', { volume: Math.min(5.0, +(_state.output_volume + 0.1).toFixed(1)) }));
   _wire('srs-outvol-dn', () => _post('/volume/output', { volume: Math.max(0.0, +(_state.output_volume - 0.1).toFixed(1)) }));
-  _wire('srs-add-radio', () => _post('/radio/add'));
+  _wire('srs-add-radio',     () => _post('/radio/add'));
+  _wire('srs-add-intercom', () => _post('/radio/add-intercom'));
   _wire('srs-mic-test',  () => _post('/device/test-input'));
 
   // ── Settings tab — audio effects ───────────────────────────────────────────
@@ -562,10 +580,74 @@
     }, true); // capture phase — fires before PTT keydown handler
   }
 
+  // ── Intercom unit select ────────────────────────────────────────────────────
+
+  const _icUnitSel = document.getElementById('srs-intercom-unit-sel');
+
+  function _rebuildIntercomUnitSelect(currentUnitId) {
+    if (!_icUnitSel) return;
+    const prev = _icUnitSel.value;
+    _icUnitSel.innerHTML = '';
+
+    // "none / shared" option — unitId 1 = all lxsrs_v2 clients share intercom
+    const shared = document.createElement('option');
+    shared.value = '1';
+    shared.textContent = '— shared (non-DCS) —';
+    _icUnitSel.appendChild(shared);
+
+    // SRS-connected clients (EAM, other lxsrs_v2, etc.)
+    const srsClients = (_state.srs_clients || []).slice()
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    if (srsClients.length) {
+      const grp = document.createElement('optgroup');
+      grp.label = 'SRS clients';
+      for (const c of srsClients) {
+        const opt = document.createElement('option');
+        opt.value = String(c.unit_id);
+        opt.textContent = `${c.name} (ID ${c.unit_id})`;
+        grp.appendChild(opt);
+      }
+      _icUnitSel.appendChild(grp);
+    }
+
+    // Live DCS tracks — blue coalition
+    if (typeof window.getAllTracks === 'function') {
+      const units = window.getAllTracks()
+        .filter(t => t.coalition === 3) // blue (coalition 3 = COALITION_BLUE)
+        .sort((a, b) => (a.callsign || '').localeCompare(b.callsign || ''));
+      if (units.length) {
+        const grp = document.createElement('optgroup');
+        grp.label = 'DCS units';
+        for (const t of units) {
+          const opt = document.createElement('option');
+          opt.value = String(t.id);
+          opt.textContent = `${t.callsign || t.type || '?'} (ID ${t.id})`;
+          grp.appendChild(opt);
+        }
+        _icUnitSel.appendChild(grp);
+      }
+    }
+
+    // Restore selection
+    const target = String(currentUnitId || prev || '1');
+    _icUnitSel.value = target;
+    if (!_icUnitSel.value) _icUnitSel.value = '1';
+  }
+
+  if (_icUnitSel) {
+    _icUnitSel.addEventListener('change', () => {
+      const uid = parseInt(_icUnitSel.value, 10);
+      if (!isNaN(uid) && uid > 0) _post('/radio/intercom-unit', { unit_id: uid });
+    });
+  }
+
   // ── Settings tab wiring (refresh devices when RADIO tab opens) ─────────────
 
   document.querySelectorAll('.stab[data-pane="radio"]').forEach(btn => {
-    btn.addEventListener('click', () => _pollDevices());
+    btn.addEventListener('click', () => {
+      _pollDevices();
+      _rebuildIntercomUnitSelect(_state.unit_id);
+    });
   });
 
   // ── Init ───────────────────────────────────────────────────────────────────

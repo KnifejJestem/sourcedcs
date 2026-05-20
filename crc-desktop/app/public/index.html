@@ -1112,6 +1112,8 @@
       border: 1px solid transparent;
     }
     .srs-slot-mod:hover { border-color: var(--ui-border-2); }
+    .srs-slot-mod-fixed { cursor: default; color: var(--ui-text-dim); }
+    .srs-slot-mod-fixed:hover { border-color: transparent; }
 
     .srs-slot-txbadge {
       font-size: 9px;
@@ -1224,6 +1226,23 @@
       min-height: 28px;
     }
     #srs-add-radio:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+
+    #srs-add-intercom {
+      background: none;
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 11px;
+      line-height: 1;
+      padding: 0 6px;
+      cursor: pointer;
+      flex-shrink: 0;
+      align-self: stretch;
+      min-height: 28px;
+      letter-spacing: 0.05em;
+    }
+    #srs-add-intercom:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+    #srs-add-intercom.srs-intercom-active { opacity: 0.35; cursor: default; }
 
     .srs-ptt-key-input {
       background: var(--ui-bg-2);
@@ -1912,6 +1931,17 @@
       </div>
     </div>
 
+    <div class="hr"></div>
+    <div class="setting-label">Intercom</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Unit</span>
+        <select id="srs-intercom-unit-sel" class="setting-select" title="DCS unit to join on intercom">
+          <option value="1">— select unit —</option>
+        </select>
+      </div>
+    </div>
+
   </div><!-- /stab-radio -->
 
   <!-- ── Tools tab ─────────────────────────────────────────────────────── -->
@@ -1965,6 +1995,7 @@
     <div id="srs-radio-list">
       <!-- slot wraps injected by JS; + button is always last child -->
       <button id="srs-add-radio" title="Add radio slot">+</button>
+      <button id="srs-add-intercom" title="Add intercom (one allowed)">IC</button>
     </div>
     <button id="srs-ptt-btn" title="Hold to transmit (or press PTT key)">PTT</button>
   </div>

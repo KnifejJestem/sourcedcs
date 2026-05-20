@@ -38,6 +38,7 @@ const SWEEP_INTERVAL  = 50;  // ms between sweep ticks
 // lastSweepMs: when each track was last hit by a radar beam.
 const latestFromServer = new Map(); // id → track (raw server data)
 const tracks           = new Map(); // id → track (displayed)
+window.getAllTracks    = () => [...latestFromServer.values()];
 const history          = new Map(); // id → [{lat, lon, alt, timestamp}, ...]
 const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
 
@@ -556,7 +557,16 @@ function connect() {
         updateStatusUI();
         updateMap();
         break;
-      case 'init':
+      case 'init': {
+        // Clear per-track overrides when a new mission is loaded (IDs are recycled between missions).
+        // On reconnect to the same running mission the missionId is unchanged, so we don't clear.
+        const prevMissionId = localStorage.getItem('crc-desktop-mission-id');
+        if (msg.missionId && msg.missionId !== prevMissionId) {
+          clearAllIffOverrides();
+          clearAllTrackRenames();
+          clearAllTrackNumbers();
+          localStorage.setItem('crc-desktop-mission-id', msg.missionId);
+        }
         missionData = msg;
         invalidateRadarsCache();
         if (mapReady) {
@@ -571,6 +581,7 @@ function connect() {
         // Refresh APRT panel airport list if panel is open
         refreshAprtAptList();
         break;
+      }
       case 'snapshot':
         applySnapshot((msg.tracks || []).map(normaliseTrack));
         break;

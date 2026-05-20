@@ -11,6 +11,7 @@ class WsServer {
     this._grpcStatus  = 'disconnected';
     this._srsStatus   = 'disconnected';
     this._missionData = null;
+    this._missionId   = null; // changes on every mission-load
     this._weather     = null;
     this._gameTime    = null; // last known ISO datetime string
     this._onNeedInit  = null;
@@ -28,7 +29,10 @@ class WsServer {
 
   setGrpcStatus(state)  { this._grpcStatus  = state; }
   setSrsStatus(state)   { this._srsStatus   = state; }
-  setMissionData(data)  { this._missionData = data; }
+  setMissionData(data)  {
+    this._missionData = data;
+    this._missionId   = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
   setWeather(data)      { this._weather     = data; }
   setGameTime(dt)       { this._gameTime    = dt; }
 
@@ -129,12 +133,13 @@ class WsServer {
 
   _initMsg() {
     return {
-      version:   VERSION,
-      type:      'init',
-      bullseye:  this._missionData.bullseye,
-      airports:  this._missionData.airports,
-      waypoints: this._missionData.waypoints,
-      drawings:  this._missionData.drawings,
+      version:    VERSION,
+      type:       'init',
+      missionId:  this._missionId,
+      bullseye:   this._missionData.bullseye,
+      airports:   this._missionData.airports,
+      waypoints:  this._missionData.waypoints,
+      drawings:   this._missionData.drawings,
     };
   }
 }

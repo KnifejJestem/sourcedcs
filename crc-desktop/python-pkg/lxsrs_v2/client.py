@@ -82,6 +82,10 @@ class SRSClient:
         frequencies_hz = [freq * 1_000_000 for freq in self.frequencies_mhz]
         self._radio_info = default_radio_info(frequencies_hz, Modulation.AM)
         self._radio_info.unit = self.name
+        # unitId must be > 0 for intercom routing.
+        # Use a fixed shared value so all lxsrs_v2 clients land on the same intercom group.
+        if self.unit_id == 0:
+            self.unit_id = 1
         self._radio_info.unitId = self.unit_id
         n = len(self._radio_info.radios)
         self._radio_volumes = [1.0] * n
@@ -100,6 +104,7 @@ class SRSClient:
                 radios=[radio for radio in self._radio_info.radios],
                 unit=self._radio_info.unit,
                 unitId=self._radio_info.unitId,
+                selected=self._tx_slot,
             )
         return Client(
             ClientGuid=self.guid,
@@ -214,7 +219,7 @@ class SRSClient:
                 self._effects.play_tx_start(self.sound_set)
             self._update_noise()
         radio_vol = self._get_radio_volume(packet.frequencies[0]) if packet.frequencies else 1.0
-        self.audio_sink.play(packet.audio_part1, volume=radio_vol)
+        self.audio_sink.play(packet.audio_part1, volume=radio_vol, sender_id=guid)
         LOG.info(
             "voice from=%s tx=%s freqs=%s bytes=%d packet=%d",
             packet.client_guid.decode("ascii", errors="replace"),
@@ -228,7 +233,11 @@ class SRSClient:
         self._ptt_heartbeat_at = time.monotonic()
         if not self._ptt_active.is_set():
             self._ptt_active.set()
-            LOG.info("tx start freq=%.3f", self._get_tx_frequency_hz() / 1_000_000)
+            _tx_hz = self._get_tx_frequency_hz()
+            if _tx_hz < 10000:
+                LOG.info("tx start freq=%.0f Hz (intercom)", _tx_hz)
+            else:
+                LOG.info("tx start freq=%.3f MHz", _tx_hz / 1_000_000)
 
     def transmit_ptt_up(self) -> None:
         if self._ptt_active.is_set():
@@ -428,6 +437,39 @@ class SRSClient:
                     return idx
         return -1
 
+    def add_intercom(self) -> int:
+        with self._state_lock:
+            active = [r for r in self._radio_info.radios if r.modulation != Modulation.DISABLED]
+            if len(active) >= self._MAX_RADIOS:
+                return -1
+            # Only one intercom allowed
+            if any(r.modulation == Modulation.INTERCOM for r in self._radio_info.radios):
+                return -1
+            # Intercom must always live at slot 0 — shift existing radio if needed
+            if self._radio_info.radios[0].modulation != Modulation.DISABLED:
+                for idx in range(1, len(self._radio_info.radios)):
+                    if self._radio_info.radios[idx].modulation == Modulation.DISABLED:
+                        self._radio_info.radios[idx] = self._radio_info.radios[0]
+                        break
+            radio = make_radio(100.0, modulation=Modulation.INTERCOM, name="intercom")
+            radio.IntercomUnitId = self.unit_id  # must equal sender's unitId for routing to work
+            self._radio_info.radios[0] = radio
+            self._tx_slot = 0
+            self._schedule_radio_update()
+            self.save_state()
+            return 0
+
+    def set_intercom_unit(self, unit_id: int) -> None:
+        with self._state_lock:
+            self.unit_id = unit_id
+            self._radio_info.unitId = unit_id
+            for radio in self._radio_info.radios:
+                if radio.modulation == Modulation.INTERCOM:
+                    radio.IntercomUnitId = unit_id
+                    break
+        self._schedule_radio_update()
+        self.save_state()
+
     def disable_radio(self, slot: int) -> None:
         with self._state_lock:
             if 0 <= slot < len(self._radio_info.radios):
@@ -460,10 +502,12 @@ class SRSClient:
         self.set_frequency(slot, max(0.001, current + delta_mhz))
 
     def cycle_modulation(self, slot: int) -> None:
-        order = [Modulation.AM, Modulation.FM, Modulation.INTERCOM]  # DISABLED via explicit remove
+        order = [Modulation.AM, Modulation.FM]  # INTERCOM is a dedicated radio, not a modulation type
         with self._state_lock:
             if 0 <= slot < len(self._radio_info.radios):
                 radio = self._radio_info.radios[slot]
+                if radio.modulation == Modulation.INTERCOM:
+                    return  # intercom slot modulation is fixed
                 try:
                     index = order.index(radio.modulation)
                 except ValueError:
@@ -497,8 +541,8 @@ class SRSClient:
                     mod = Modulation[mod_name]
                 except KeyError:
                     mod = Modulation.AM
-                self._radio_info.radios[i].freq = freq
                 self._radio_info.radios[i].modulation = mod
+                self._radio_info.radios[i].freq = 100.0 if mod == Modulation.INTERCOM else freq
             vols = data.get("radio_volumes", [])
             for i, v in enumerate(vols):
                 if i < len(self._radio_volumes):
@@ -509,6 +553,9 @@ class SRSClient:
                 self.sound_set = data["sound_set"]
             if "noise_enabled" in data:
                 self.noise_enabled = bool(data["noise_enabled"])
+            if "unit_id" in data and int(data["unit_id"]) > 0:
+                self.unit_id = int(data["unit_id"])
+                self._radio_info.unitId = self.unit_id
         except Exception:
             LOG.exception("failed to apply saved state")
 
@@ -525,7 +572,8 @@ class SRSClient:
         try:
             self._state_path.write_text(json.dumps(
                 {"radios": radios, "radio_volumes": vols, "tx_slot": tx,
-                 "sound_set": sound_set, "noise_enabled": noise_enabled}, indent=2
+                 "sound_set": sound_set, "noise_enabled": noise_enabled,
+                 "unit_id": self.unit_id}, indent=2
             ))
         except Exception:
             LOG.warning("failed to save state")
@@ -551,7 +599,7 @@ class SRSClient:
             rows = [
                 RadioRow(
                     slot=idx,
-                    freq_mhz=radio.freq / 1_000_000 if radio.freq > 10000 else 0.0,
+                    freq_mhz=radio.freq / 1_000_000 if radio.freq > 1.0 else 0.0,
                     modulation=radio.modulation.name,
                     tx=idx == self._tx_slot,
                     rx=int(radio.freq) in rx_freqs,
@@ -580,6 +628,16 @@ class SRSClient:
             "sound_set": sound_set,
             "noise_enabled": noise_enabled,
             "status_message": status_message,
+            "unit_id": self.unit_id,
+            "srs_clients": [
+                {
+                    "name": c.get("Name", ""),
+                    "unit_id": (c.get("RadioInfo") or {}).get("unitId", 0),
+                }
+                for c in self._clients.values()
+                if c.get("ClientGuid") != self.guid
+                and (c.get("RadioInfo") or {}).get("unitId", 0) > 0
+            ],
         }
 
     def request_shutdown(self) -> None:
@@ -811,6 +869,14 @@ def _summarize_radios(radio_info: dict[str, Any] | None) -> str:
     radios = radio_info.get("radios") or []
     active = []
     for radio in radios:
-        if radio and radio.get("modulation") != int(Modulation.DISABLED) and radio.get("freq", 0) > 10000:
-            active.append(f"{radio['freq'] / 1_000_000:.3f}")
+        if not radio:
+            continue
+        mod = radio.get("modulation")
+        freq = radio.get("freq", 0)
+        if mod == int(Modulation.DISABLED):
+            continue
+        if mod == int(Modulation.INTERCOM):
+            active.append("INTERCOM")
+        elif freq > 10000:
+            active.append(f"{freq / 1_000_000:.3f}")
     return ",".join(active) if active else "-"

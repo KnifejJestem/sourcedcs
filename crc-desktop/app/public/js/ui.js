@@ -90,7 +90,7 @@ function updateMeasureLine(lng1, lat1, lng2, lat2) {
   if (!mapReady) return;
   const distNm  = Math.round(haversineM(lat1, lng1, lat2, lng2) / 1852);
   const bearing = (Math.round(bearingDeg(lat1, lng1, lat2, lng2)) + (settings.magVar || 0) + 360) % 360;
-  const label   = `${distNm.toString().padStart(3,'0')} / ${bearing.toString().padStart(3,'0')}`;
+  const label   = `${bearing.toString().padStart(3,'0')} / ${distNm.toString().padStart(3,'0')}`;
   map.getSource('measure').setData({
     type: 'FeatureCollection',
     features: [

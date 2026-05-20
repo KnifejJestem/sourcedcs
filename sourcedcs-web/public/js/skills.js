@@ -286,32 +286,32 @@ function buildCatSection(cat, myOpenReq) {
         gName.textContent = GRADE_NAMES[gradeRec.grade] || '';
         row.appendChild(gBadge);
         row.appendChild(gName);
-      } else if (state !== 'locked') {
+      } else {
         var noGrade = document.createElement('span');
         noGrade.className   = 'slm-grade-name';
-        noGrade.textContent = state === 'not-started' ? 'Not started' : 'In progress';
+        if (state === 'locked') noGrade.textContent = 'Prerequisites not met';
+        else if (state === 'not-started') noGrade.textContent = 'Not started';
+        else noGrade.textContent = 'In progress';
         row.appendChild(noGrade);
       }
 
-      /* Expand toggle (not for locked modules) */
-      if (state !== 'locked') {
-        var chevron = document.createElement('span');
-        chevron.className   = 'slm-chevron';
-        chevron.textContent = isOpen ? '▲' : '▼';
-        row.appendChild(chevron);
+      /* Expand toggle (all modules, including locked) */
+      var chevron = document.createElement('span');
+      chevron.className   = 'slm-chevron';
+      chevron.textContent = isOpen ? '▲' : '▼';
+      row.appendChild(chevron);
 
-        (function (mid) {
-          row.addEventListener('click', function () {
-            _openMods[mid] = !_openMods[mid];
-            render();
-          });
-        })(mod.id);
-      }
+      (function (mid) {
+        row.addEventListener('click', function () {
+          _openMods[mid] = !_openMods[mid];
+          render();
+        });
+      })(mod.id);
 
       modList.appendChild(row);
 
       /* ── Detail panel ── */
-      if (isOpen && state !== 'locked') {
+      if (isOpen) {
         var detail = document.createElement('div');
         detail.className = 'skill-list-mod-detail';
 
@@ -338,6 +338,11 @@ function buildCatSection(cat, myOpenReq) {
           });
           preDiv.textContent = 'Requires: ' + preParts.join(', ');
           detail.appendChild(preDiv);
+        }
+
+        if (state === 'locked') {
+          modList.appendChild(detail);
+          return;
         }
 
         /* Grade record */

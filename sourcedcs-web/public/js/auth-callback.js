@@ -71,6 +71,7 @@
       if (parts.length !== 3) throw new Error('Not a valid JWT');
       var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
       var user    = {
+        sub:   payload.sub || '',
         name:  payload.name || payload.preferred_username || payload.sub || '',
         email: payload.email || ''
       };

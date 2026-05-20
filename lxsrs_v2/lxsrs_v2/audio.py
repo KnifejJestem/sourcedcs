@@ -26,7 +26,7 @@ class AudioDevice:
 
 
 class AudioSink:
-    def play(self, opus_frame: bytes, volume: float = 1.0) -> None:
+    def play(self, opus_frame: bytes, volume: float = 1.0, sender_id: str = "default") -> None:
         raise NotImplementedError
 
 
@@ -35,12 +35,26 @@ class NullAudioSink(AudioSink):
         self.frames = 0
         self.bytes = 0
 
-    def play(self, opus_frame: bytes, volume: float = 1.0) -> None:
+    def play(self, opus_frame: bytes, volume: float = 1.0, sender_id: str = "default") -> None:
         self.frames += 1
         self.bytes += len(opus_frame)
 
 
 class OptionalOpusPlaybackSink(AudioSink):
+    """Mixing audio sink — per-sender Opus decoders, mixed to a single output stream.
+
+    A background thread wakes every MIX_INTERVAL_MS milliseconds, sums all
+    pending PCM buffers from active senders, and writes the result to PulseAudio.
+    This prevents back-to-back writes from different senders and eliminates the
+    single-decoder state corruption that occurs when simultaneous transmissions
+    are decoded through the same Opus decoder.
+    """
+
+    SAMPLE_RATE    = 48000
+    CHANNELS       = 1
+    MIX_INTERVAL_MS = 20                               # mix tick interval
+    FRAMES_PER_TICK = SAMPLE_RATE * MIX_INTERVAL_MS // 1000   # 960 samples @ 48 kHz
+
     def __init__(self, sink_name: str | None = None, volume: float = 1.0) -> None:
         try:
             import opuslib  # type: ignore
@@ -48,12 +62,20 @@ class OptionalOpusPlaybackSink(AudioSink):
         except ImportError as exc:
             raise RuntimeError("audio playback requires opuslib and numpy") from exc
 
-        self._opuslib = opuslib
-        self._np = np
-        self._decoder = opuslib.Decoder(48000, 1)
-        self._buffer: Deque["np.ndarray"] = deque(maxlen=100)
-        self._player = PulseSimplePlayer(sink_name=sink_name)
-        self._volume = volume
+        self._opuslib  = opuslib
+        self._np       = np
+        self._player   = PulseSimplePlayer(sink_name=sink_name)
+        self._volume   = volume
+
+        # Per-sender state — keyed by sender GUID string
+        self._lock: threading.Lock = threading.Lock()
+        self._decoders: dict[str, object]              = {}   # guid → opuslib.Decoder
+        self._buffers:  dict[str, deque]               = {}   # guid → deque[np.ndarray]
+        self._volumes:  dict[str, float]               = {}   # guid → per-radio volume
+
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._mix_loop, daemon=True, name="audio-mixer")
+        self._thread.start()
 
     def set_sink(self, sink_name: str | None) -> None:
         self._player.set_sink(sink_name)
@@ -61,18 +83,65 @@ class OptionalOpusPlaybackSink(AudioSink):
     def set_volume(self, volume: float) -> None:
         self._volume = volume
 
-    def play(self, opus_frame: bytes, volume: float = 1.0) -> None:
-        try:
-            pcm = self._decoder.decode(opus_frame, OPUS_MAX_FRAME_SIZE)
-            samples = self._np.frombuffer(pcm, dtype=self._np.int16).astype(self._np.float32) / 32768.0
-            combined = self._volume * volume
-            if combined != 1.0:
-                samples *= combined
-            self._buffer.append(samples)
-            pcm_scaled = (samples.clip(-1.0, 1.0) * 32767.0).astype(self._np.int16).tobytes()
-            self._player.write(pcm_scaled)
-        except Exception:
-            LOG.exception("audio playback failed")
+    def play(self, opus_frame: bytes, volume: float = 1.0, sender_id: str = "default") -> None:
+        np = self._np
+        with self._lock:
+            if sender_id not in self._decoders:
+                self._decoders[sender_id] = self._opuslib.Decoder(self.SAMPLE_RATE, self.CHANNELS)
+                self._buffers[sender_id]  = deque(maxlen=50)
+            self._volumes[sender_id] = volume
+            try:
+                pcm = self._decoders[sender_id].decode(opus_frame, OPUS_MAX_FRAME_SIZE)
+                samples = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+                self._buffers[sender_id].append(samples)
+            except Exception:
+                LOG.exception("opus decode failed for sender %s", sender_id)
+
+    def _mix_loop(self) -> None:
+        np    = self._np
+        interval = self.MIX_INTERVAL_MS / 1000.0
+        n     = self.FRAMES_PER_TICK
+        silence = np.zeros(n, dtype=np.float32)
+
+        while not self._stop.is_set():
+            time.sleep(interval)
+            with self._lock:
+                mixed = silence.copy()
+                active_senders = [sid for sid, buf in self._buffers.items() if buf]
+                for sid in active_senders:
+                    buf  = self._buffers[sid]
+                    vol  = self._volumes.get(sid, 1.0) * self._volume
+                    # Consume frames until we have enough samples for this tick
+                    chunk = np.zeros(n, dtype=np.float32)
+                    filled = 0
+                    while filled < n and buf:
+                        frame = buf[0]
+                        take  = min(len(frame), n - filled)
+                        chunk[filled:filled + take] = frame[:take]
+                        filled += take
+                        if take < len(frame):
+                            self._buffers[sid][0] = frame[take:]
+                            break
+                        buf.popleft()
+                    if vol != 1.0:
+                        chunk *= vol
+                    mixed += chunk
+                # Remove senders whose buffers have been empty for a while
+                stale = [sid for sid, buf in self._buffers.items() if not buf]
+                for sid in stale:
+                    del self._buffers[sid]
+                    del self._decoders[sid]
+                    self._volumes.pop(sid, None)
+
+            if active_senders:
+                try:
+                    pcm_out = (mixed.clip(-1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
+                    self._player.write(pcm_out)
+                except Exception:
+                    LOG.exception("audio mix write failed")
+
+    def close(self) -> None:
+        self._stop.set()
 
 
 class MicrophoneCapture:

@@ -153,10 +153,13 @@ function buildLeaders() {
   const iconGapPx = getLeaderIconGap();
   const labelGapPx = getLabelHalfW() + LABEL_EDGE_MARGIN;
 
+  const decluttered = getDeclutteredIds();
+
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.category === 4) continue;
     if (settings.hideGroundUnits && t.category === 3) continue;
     if (getIff(t) === 'invisible') continue;
+    if (decluttered.has(id)) continue;
     if ((t.category === 3 || t.category === 4) && !groundLabels.has(id)) continue;
 
     const relOff = labelOffsets.get(id);

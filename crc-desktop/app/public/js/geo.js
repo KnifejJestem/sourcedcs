@@ -110,6 +110,11 @@ function saveTrackNumbers() {
   localStorage.setItem('crc-desktop-track-numbers', JSON.stringify(obj));
 }
 
+function clearAllTrackNumbers() {
+  trackNumbers.clear();
+  localStorage.removeItem('crc-desktop-track-numbers');
+}
+
 function getOrAssignTrackNumber(id) {
   const key = String(id);
   if (trackNumbers.has(key)) return trackNumbers.get(key);
@@ -153,6 +158,11 @@ function setTrackRename(id, name) {
 function clearTrackRename(id) {
   trackRenames.delete(String(id));
   saveTrackRenames();
+}
+
+function clearAllTrackRenames() {
+  trackRenames.clear();
+  localStorage.removeItem('crc-desktop-track-renames');
 }
 
 // Resolves the display callsign for a track.
