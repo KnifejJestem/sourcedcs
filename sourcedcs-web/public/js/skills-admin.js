@@ -301,7 +301,7 @@ function renderPilotList() {
   el.innerHTML = '';
   groups.forEach(function (g) {
     if (!Object.prototype.hasOwnProperty.call(_sqGroupCollapsed, g.key)) {
-      _sqGroupCollapsed[g.key] = false;
+      _sqGroupCollapsed[g.key] = true;
     }
     var collapsed = !!_sqGroupCollapsed[g.key];
 
@@ -819,7 +819,7 @@ function renderTreeEditor() {
 
   var generalCats = cats.filter(function (c) { return !(c.squadrons && c.squadrons.length); });
   generalCats.forEach(function (c) { shown.add(c); });
-  appendTreeCatGroup(catList, '__general', 'GENERAL — ALL SQUADRONS', generalCats, cats, allMods, false);
+  appendTreeCatGroup(catList, '__general', 'GENERAL — ALL SQUADRONS', generalCats, cats, allMods, true);
 
   _squadrons.forEach(function (sq) {
     var sqCats = cats.filter(function (c) { return c.squadrons && c.squadrons.indexOf(sq.id) !== -1; });
@@ -832,7 +832,7 @@ function renderTreeEditor() {
      (e.g. a deleted squadron) would otherwise silently vanish from view. */
   var orphanedCats = cats.filter(function (c) { return !shown.has(c); });
   if (orphanedCats.length) {
-    appendTreeCatGroup(catList, '__orphaned', 'UNKNOWN SQUADRON (stale reference)', orphanedCats, cats, allMods, false);
+    appendTreeCatGroup(catList, '__orphaned', 'UNKNOWN SQUADRON (stale reference)', orphanedCats, cats, allMods, true);
   }
 
   el.appendChild(catList);
