@@ -36,6 +36,7 @@ var _pilotSquadrons     = {};    /* { [sub]: squadronId | null } — server-reso
 var _activeSub          = null;
 var _editorCollapsed    = {};    /* { [catId]: bool } collapse state for tree editor */
 var _detailCollapsed    = {};    /* { [catId]: bool } collapse state for pilot detail */
+var _sqGroupCollapsed   = {};    /* { [squadronId|'__unassigned']: bool } collapse state for pilot list groups */
 var _currentUserSub     = null;  /* JWT sub of the logged-in admin */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
@@ -209,6 +210,15 @@ function renderGradingQueue() {
 }
 
 /* ── Pilot list ─────────────────────────────────────────── */
+/* Which collapsible group (by squadron) a pilot belongs to — pilots whose
+   resolved squadron no longer exists (e.g. a deleted squadron) fall back to
+   the unassigned group, same as squadronDisplayName's fallback. */
+function pilotGroupKey(sub) {
+  var sqId = pilotSquadron(sub);
+  var known = sqId && _squadrons.some(function (s) { return s.id === sqId; });
+  return known ? sqId : '__unassigned';
+}
+
 function renderPilotList() {
   var el   = document.getElementById('pilotList');
   var subs = Object.keys(_pilots);
@@ -218,21 +228,68 @@ function renderPilotList() {
     return;
   }
 
-  el.innerHTML = '';
+  /* Group pilots by resolved squadron, in the admin-defined squadron order,
+     with unassigned pilots collected into a trailing group. */
+  var groups     = _squadrons.map(function (sq) {
+    return { key: sq.id, name: (sq.designator + ' ' + sq.name).toUpperCase(), subs: [] };
+  });
+  var groupByKey = {};
+  groups.forEach(function (g) { groupByKey[g.key] = g; });
+  var unassigned = { key: '__unassigned', name: 'UNASSIGNED', subs: [] };
+
   subs.forEach(function (sub) {
-    var pilot  = _pilots[sub];
-    var score  = Math.round(pilotOverallScore(sub) * 100);
-    var sqId   = pilotSquadron(sub);
-    var sqName = squadronDisplayName(sqId);
-    var row    = document.createElement('div');
-    row.className = 'pilot-row' + (sub === _activeSub ? ' active' : '');
-    row.setAttribute('data-sub', sub);
-    row.innerHTML =
-      '<span class="pilot-row-callsign">' + esc(pilot.callsign || pilot.name || sub) + '</span>' +
-      (sqName ? '<span class="pilot-row-squadron">' + esc(sqName) + '</span>' : '<span class="pilot-row-squadron pilot-row-squadron--none">—</span>') +
-      '<span class="pilot-row-score">' + score + '%</span>';
-    (function (s) { row.addEventListener('click', function () { selectPilot(s); }); })(sub);
-    el.appendChild(row);
+    var key   = pilotGroupKey(sub);
+    var group = groupByKey[key] || unassigned;
+    group.subs.push(sub);
+  });
+
+  groups = groups.filter(function (g) { return g.subs.length; });
+  if (unassigned.subs.length) groups.push(unassigned);
+
+  groups.forEach(function (g) {
+    g.subs.sort(function (a, b) {
+      var ca = (_pilots[a].callsign || _pilots[a].name || a).toLowerCase();
+      var cb = (_pilots[b].callsign || _pilots[b].name || b).toLowerCase();
+      return ca < cb ? -1 : (ca > cb ? 1 : 0);
+    });
+  });
+
+  el.innerHTML = '';
+  groups.forEach(function (g) {
+    if (!Object.prototype.hasOwnProperty.call(_sqGroupCollapsed, g.key)) {
+      _sqGroupCollapsed[g.key] = false;
+    }
+    var collapsed = !!_sqGroupCollapsed[g.key];
+
+    var groupHdr = document.createElement('div');
+    groupHdr.className = 'skill-list-cat-header';
+    groupHdr.style.cursor = 'pointer';
+    groupHdr.innerHTML =
+      '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
+      '<span class="slc-name">' + esc(g.name) + '</span>' +
+      '<span class="slc-count">' + g.subs.length + '</span>';
+    (function (key) {
+      groupHdr.addEventListener('click', function () {
+        _sqGroupCollapsed[key] = !_sqGroupCollapsed[key];
+        renderPilotList();
+      });
+    })(g.key);
+    el.appendChild(groupHdr);
+
+    if (collapsed) return;
+
+    g.subs.forEach(function (sub) {
+      var pilot = _pilots[sub];
+      var score = Math.round(pilotOverallScore(sub) * 100);
+      var row   = document.createElement('div');
+      row.className = 'pilot-row' + (sub === _activeSub ? ' active' : '');
+      row.setAttribute('data-sub', sub);
+      row.innerHTML =
+        '<span class="pilot-row-callsign">' + esc(pilot.callsign || pilot.name || sub) + '</span>' +
+        '<span class="pilot-row-score">' + score + '%</span>';
+      (function (s) { row.addEventListener('click', function () { selectPilot(s); }); })(sub);
+      el.appendChild(row);
+    });
   });
 }
 
@@ -262,9 +319,17 @@ function categoriesForPilot(sub) {
 function selectPilot(sub) {
   _activeSub = sub;
 
-  document.querySelectorAll('.pilot-row').forEach(function (r) {
-    r.classList.toggle('active', r.getAttribute('data-sub') === sub);
-  });
+  /* Make sure the pilot's squadron group is expanded so its row is visible,
+     e.g. when jumping here from a grading queue "VIEW" click. */
+  var groupKey = pilotGroupKey(sub);
+  if (_sqGroupCollapsed[groupKey]) {
+    _sqGroupCollapsed[groupKey] = false;
+    renderPilotList();
+  } else {
+    document.querySelectorAll('.pilot-row').forEach(function (r) {
+      r.classList.toggle('active', r.getAttribute('data-sub') === sub);
+    });
+  }
 
   var pilot   = _pilots[sub] || { sub: sub, name: sub, callsign: sub };
   var grades  = _allGrades[sub] || {};
