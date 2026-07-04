@@ -33,6 +33,7 @@ var _pilots             = {};    /* { [sub]: { sub, name, callsign, registered_a
 var _requests           = [];
 var _squadrons          = [];    /* squadron list from /api/squadrons */
 var _pilotSquadrons     = {};    /* { [sub]: squadronId | null } — server-resolved (auto+override) */
+var _members            = [];    /* full Discord roster from /api/members — the squadron-management source of truth */
 var _activeSub          = null;
 var _editorCollapsed    = {};    /* { [catId]: bool } collapse state for tree editor */
 var _detailCollapsed    = {};    /* { [catId]: bool } collapse state for pilot detail */
@@ -85,6 +86,7 @@ function loadAll(tok) {
     fetch('/api/grading-requests', { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/squadrons').then(function (r) { return r.json(); }).catch(function () { return []; }),
     fetch('/api/skill-pilots-squadrons', { headers: headers }).then(function (r) { return r.json(); }).catch(function () { return {}; }),
+    fetch('/api/members', { headers: headers }).then(function (r) { return r.json(); }).catch(function () { return []; }),
   ]).then(function (results) {
     _tree              = results[0];
     _allGrades         = results[1] || {};
@@ -92,6 +94,7 @@ function loadAll(tok) {
     _requests          = Array.isArray(results[3]) ? results[3] : [];
     _squadrons         = Array.isArray(results[4]) ? results[4] : [];
     _pilotSquadrons    = (results[5] && typeof results[5] === 'object') ? results[5] : {};
+    _members           = Array.isArray(results[6]) ? results[6] : [];
 
     renderGradingQueue();
     renderPilotList();
@@ -210,46 +213,86 @@ function renderGradingQueue() {
 }
 
 /* ── Pilot list ─────────────────────────────────────────── */
-/* Which collapsible group (by squadron) a pilot belongs to — pilots whose
-   resolved squadron no longer exists (e.g. a deleted squadron) fall back to
-   the unassigned group, same as squadronDisplayName's fallback. */
-function pilotGroupKey(sub) {
-  var sqId = pilotSquadron(sub);
+/* Which collapsible group (by squadron) a row belongs to — a squadron that
+   no longer exists (e.g. deleted) falls back to the unassigned group, same
+   as squadronDisplayName's fallback. */
+function rowGroupKey(sqId) {
   var known = sqId && _squadrons.some(function (s) { return s.id === sqId; });
   return known ? sqId : '__unassigned';
+}
+function pilotGroupKey(sub) { return rowGroupKey(pilotSquadron(sub)); }
+
+/* The MEMBERS list is sourced from /api/members (the squadron-management
+   source of truth — every known Discord member) merged with /api/skill-pilots
+   (registered training accounts, which carry the skill grades). A Discord
+   member only gets a `sub` — and therefore a gradable record — once they've
+   logged in and visited the training page at least once; until then they
+   show up as an ungraded placeholder so admins don't lose track of them. */
+function buildPilotRows() {
+  var rows = [];
+  var subToRow = {};
+
+  Object.keys(_pilots).forEach(function (sub) {
+    var pilot = _pilots[sub];
+    var row = {
+      key: sub, sub: sub, callsign: pilot.callsign || pilot.name || sub,
+      groupKey: pilotGroupKey(sub), registered: true,
+    };
+    rows.push(row);
+    subToRow[sub] = row;
+  });
+
+  _members.forEach(function (m) {
+    if (m.active === false) return; /* left the Discord server — not a training concern */
+    if (m.linkedPilot) {
+      var existing = subToRow[m.linkedPilot.sub];
+      if (existing) return; /* already covered via _pilots above */
+      /* Registered on the site but somehow missing from /api/skill-pilots — surface anyway. */
+      rows.push({
+        key: m.linkedPilot.sub, sub: m.linkedPilot.sub,
+        callsign: m.linkedPilot.callsign || m.callsign, groupKey: rowGroupKey(m.squadron), registered: true,
+      });
+      return;
+    }
+    rows.push({
+      key: 'm:' + m.id, sub: null, memberId: m.id,
+      callsign: m.callsign || m.username || m.id, groupKey: rowGroupKey(m.squadron), registered: false,
+    });
+  });
+
+  return rows;
 }
 
 function renderPilotList() {
   var el   = document.getElementById('pilotList');
-  var subs = Object.keys(_pilots);
+  var rows = buildPilotRows();
 
-  if (!subs.length) {
-    el.innerHTML = '<div class="skills-empty" style="padding:12px 16px;font-size:9px">No pilots registered yet.</div>';
+  if (!rows.length) {
+    el.innerHTML = '<div class="skills-empty" style="padding:12px 16px;font-size:9px">No members found.</div>';
     return;
   }
 
-  /* Group pilots by resolved squadron, in the admin-defined squadron order,
-     with unassigned pilots collected into a trailing group. */
+  /* Group rows by squadron, in the admin-defined squadron order, with
+     unassigned rows collected into a trailing group. */
   var groups     = _squadrons.map(function (sq) {
-    return { key: sq.id, name: (sq.designator + ' ' + sq.name).toUpperCase(), subs: [] };
+    return { key: sq.id, name: (sq.designator + ' ' + sq.name).toUpperCase(), rows: [] };
   });
   var groupByKey = {};
   groups.forEach(function (g) { groupByKey[g.key] = g; });
-  var unassigned = { key: '__unassigned', name: 'UNASSIGNED', subs: [] };
+  var unassigned = { key: '__unassigned', name: 'UNASSIGNED', rows: [] };
 
-  subs.forEach(function (sub) {
-    var key   = pilotGroupKey(sub);
-    var group = groupByKey[key] || unassigned;
-    group.subs.push(sub);
+  rows.forEach(function (row) {
+    var group = groupByKey[row.groupKey] || unassigned;
+    group.rows.push(row);
   });
 
-  groups = groups.filter(function (g) { return g.subs.length; });
-  if (unassigned.subs.length) groups.push(unassigned);
+  groups = groups.filter(function (g) { return g.rows.length; });
+  if (unassigned.rows.length) groups.push(unassigned);
 
   groups.forEach(function (g) {
-    g.subs.sort(function (a, b) {
-      var ca = (_pilots[a].callsign || _pilots[a].name || a).toLowerCase();
-      var cb = (_pilots[b].callsign || _pilots[b].name || b).toLowerCase();
+    g.rows.sort(function (a, b) {
+      var ca = a.callsign.toLowerCase();
+      var cb = b.callsign.toLowerCase();
       return ca < cb ? -1 : (ca > cb ? 1 : 0);
     });
   });
@@ -267,7 +310,7 @@ function renderPilotList() {
     groupHdr.innerHTML =
       '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
       '<span class="slc-name">' + esc(g.name) + '</span>' +
-      '<span class="slc-count">' + g.subs.length + '</span>';
+      '<span class="slc-count">' + g.rows.length + '</span>';
     (function (key) {
       groupHdr.addEventListener('click', function () {
         _sqGroupCollapsed[key] = !_sqGroupCollapsed[key];
@@ -278,16 +321,19 @@ function renderPilotList() {
 
     if (collapsed) return;
 
-    g.subs.forEach(function (sub) {
-      var pilot = _pilots[sub];
-      var score = Math.round(pilotOverallScore(sub) * 100);
-      var row   = document.createElement('div');
-      row.className = 'pilot-row' + (sub === _activeSub ? ' active' : '');
-      row.setAttribute('data-sub', sub);
-      row.innerHTML =
-        '<span class="pilot-row-callsign">' + esc(pilot.callsign || pilot.name || sub) + '</span>' +
-        '<span class="pilot-row-score">' + score + '%</span>';
-      (function (s) { row.addEventListener('click', function () { selectPilot(s); }); })(sub);
+    g.rows.forEach(function (r) {
+      var row = document.createElement('div');
+      row.className = 'pilot-row' + (r.key === _activeSub ? ' active' : '') + (r.registered ? '' : ' pilot-row--unregistered');
+      row.setAttribute('data-sub', r.key);
+      var scoreHtml = r.registered
+        ? '<span class="pilot-row-score">' + Math.round(pilotOverallScore(r.sub) * 100) + '%</span>'
+        : '<span class="pilot-row-score pilot-row-squadron--none" title="Hasn\'t logged into the training page yet">—</span>';
+      row.innerHTML = '<span class="pilot-row-callsign">' + esc(r.callsign) + '</span>' + scoreHtml;
+      if (r.registered) {
+        (function (s) { row.addEventListener('click', function () { selectPilot(s); }); })(r.sub);
+      } else {
+        (function (id) { row.addEventListener('click', function () { selectGhostMember(id); }); })(r.memberId);
+      }
       el.appendChild(row);
     });
   });
@@ -427,6 +473,44 @@ function selectPilot(sub) {
 
     el.appendChild(catSection);
   });
+}
+
+/* Re-renders whichever detail view (real pilot or unregistered ghost member)
+   is currently open, dispatching on which kind of key _activeSub holds. */
+function refreshActiveDetail() {
+  if (!_activeSub) return;
+  if (_pilots[_activeSub]) selectPilot(_activeSub);
+  else if (_activeSub.indexOf('m:') === 0) selectGhostMember(_activeSub.slice(2));
+}
+
+/* A Discord member with no website/training account yet — nothing to grade
+   until they log in and visit the training page at least once (skill grades
+   are keyed by their Casdoor sub, which we don't have until then). */
+function selectGhostMember(memberId) {
+  var key = 'm:' + memberId;
+  _activeSub = key;
+
+  var member  = _members.find(function (m) { return m.id === memberId; }) || {};
+  var groupKey = rowGroupKey(member.squadron);
+  if (_sqGroupCollapsed[groupKey]) {
+    _sqGroupCollapsed[groupKey] = false;
+    renderPilotList();
+  } else {
+    document.querySelectorAll('.pilot-row').forEach(function (r) {
+      r.classList.toggle('active', r.getAttribute('data-sub') === key);
+    });
+  }
+
+  var sqName = squadronDisplayName(member.squadron);
+  var el = document.getElementById('pilotDetail');
+  el.innerHTML =
+    '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid var(--border)">' +
+      '<span style="font-family:Orbitron,monospace;font-weight:900;font-size:16px;letter-spacing:3px">' + esc(member.callsign || memberId) + '</span>' +
+      '<span style="font-size:10px;color:var(--text-3)">' + esc(member.globalName || '') + '</span>' +
+      '<span class="' + (sqName ? 'pilot-detail-squadron' : 'pilot-detail-squadron pilot-detail-squadron--none') + '">' + esc(sqName || 'NO SQUADRON') + '</span>' +
+    '</div>' +
+    '<p class="skills-empty">This member hasn\'t logged into the Training page yet — there are no skill grades to show. ' +
+    'Once they log in and visit /skills.html at least once, they\'ll appear here as a gradable pilot record.</p>';
 }
 
 function buildAdminModuleEl(mod, grades, sub) {
@@ -1186,7 +1270,7 @@ function saveSkillTree() {
     _treeEditor = JSON.parse(JSON.stringify(_tree));
     renderTreeEditor();
     if (msg) { msg.textContent = 'Saved.'; msg.className = 'tree-editor-msg ok'; }
-    if (_activeSub) selectPilot(_activeSub);
+    refreshActiveDetail();
     renderPilotList();
     showToast('Skill tree saved');
   }).catch(function (err) {

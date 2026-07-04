@@ -406,11 +406,17 @@
 .pilot-row:hover   { background: var(--bg2); }
 .pilot-row.active  { background: var(--bg2); border-left: 2px solid var(--green); }
 :root.movie .pilot-row.active { border-left-color: var(--accent); }
+.pilot-row--unregistered { opacity: .55; }
 .pilot-row-callsign {
   font-family: 'Orbitron', monospace;
   font-size: 9px;
   letter-spacing: 1.5px;
   color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pilot-row-squadron {
   font-size: 7.5px;
