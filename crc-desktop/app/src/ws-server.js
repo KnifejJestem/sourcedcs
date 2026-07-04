@@ -99,6 +99,10 @@ class WsServer {
 
   broadcastStatus() { this._broadcast(this._statusMsg()); }
 
+  broadcastRadarLocks(locks) {
+    this._broadcast({ version: VERSION, type: 'radar-locks', locks });
+  }
+
   broadcastWeather() {
     if (this._weather) this._broadcast(this._weatherMsg());
   }

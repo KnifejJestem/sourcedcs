@@ -51,6 +51,9 @@ const zeroSpeedSinceMs = new Map(); // trackId → timestamp when 0-speed-airbor
 // User-assigned labels for ground vehicles (persists across view switches)
 const groundLabels = new Map(); // trackId → string
 
+// Datalink radar locks received from server: unitId → { targetLat, targetLon, targetId }
+const radarLocks = new Map();
+
 // Static reference data loaded at startup
 let aircraftTypes = {};
 let airportsDb    = {};
@@ -466,6 +469,7 @@ function resetSweepState() {
 
 function applySnapshot(trackList) {
   latestFromServer.clear();
+  radarLocks.clear();
   invalidateRadarsCache();
   resetSweepState();
   for (const t of trackList) latestFromServer.set(t.id, t);
@@ -591,6 +595,19 @@ function connect() {
           (msg.gone    || []).map(id => String(id)),
         );
         break;
+      case 'radar-locks': {
+        radarLocks.clear();
+        for (const lock of (msg.locks || [])) {
+          if (lock.coalition !== userCoalition) continue;
+          radarLocks.set(lock.unitId, {
+            targetLat: lock.targetLat,
+            targetLon: lock.targetLon,
+            targetId:  lock.targetId || null,
+          });
+        }
+        updateMap();
+        break;
+      }
     }
   };
 

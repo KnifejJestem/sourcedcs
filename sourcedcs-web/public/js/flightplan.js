@@ -426,8 +426,10 @@ function fpShowDetailOverlay(plan) {
   overlay.className = 'fp-detail-overlay';
   overlay.id = 'fpDetailOverlay';
 
+  var user       = getUser();
+  var isOwner    = user && plan.submittedBy && user.sub === plan.submittedBy.sub;
   var canBaseOps = isAdminRole(currentToken) || fpUserIsController;
-  var canDelete  = isAdminRole(currentToken) || fpUserIsController;
+  var canDelete  = isAdminRole(currentToken) || fpUserIsController || isOwner;
   overlay.innerHTML =
     '<div class="fp-detail-box">' +
       '<div class="fp-detail-header">' +

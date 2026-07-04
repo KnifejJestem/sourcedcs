@@ -206,6 +206,10 @@ grpcClient.on('status', (state) => {
   wsServer.broadcastStatus();
 });
 
+grpcClient.on('radar-locks', (locks) => {
+  wsServer.broadcastRadarLocks(locks);
+});
+
 grpcClient.on('weather', (data) => {
   wsServer.setWeather(data);
   wsServer.broadcastWeather();

@@ -1610,12 +1610,13 @@ api.patch('/flight-plans/:id/baseops', writeOpsLimiter, requireAuth, (req, res) 
 });
 
 api.delete('/flight-plans/:id', writeOpsLimiter, requireAuth, (req, res) => {
-  if (!fpIsAdminUser(req) && !fpIsControllerUser(req)) {
-    return res.status(403).json({ error: 'Controller squadron or admin access required' });
-  }
   const id  = Number(req.params.id);
   const idx = flightPlans.findIndex(fp => fp.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Flight plan not found' });
+  const isOwner = flightPlans[idx].submittedBy && flightPlans[idx].submittedBy.sub === req.user.sub;
+  if (!fpIsAdminUser(req) && !fpIsControllerUser(req) && !isOwner) {
+    return res.status(403).json({ error: 'You can only delete your own flight plans' });
+  }
   flightPlans.splice(idx, 1);
   saveJSON(FLIGHT_PLANS_FILE, flightPlans);
   console.debug('[flight-plans] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));

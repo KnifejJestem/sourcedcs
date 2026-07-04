@@ -556,6 +556,34 @@ function buildRadarDebug(radars) {
   return { type: 'FeatureCollection', features };
 }
 
+// Datalink lock lines: dashed line from each friendly player unit to its radar lock.
+// Only drawn when settings.datalink is enabled.
+function buildDatalinkLines() {
+  const features = [];
+  if (!settings.datalink || radarLocks.size === 0) return { type: 'FeatureCollection', features };
+
+  const color = settings.colFriendly || '#4488cc';
+
+  for (const [unitId, lock] of radarLocks) {
+    const track = latestFromServer.get(unitId);
+    if (!track || !track.player) continue;
+
+    features.push({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [track.lon, track.lat],
+          [lock.targetLon, lock.targetLat],
+        ],
+      },
+      properties: { color },
+    });
+  }
+
+  return { type: 'FeatureCollection', features };
+}
+
 let _mapRafId = null;
 
 function updateMap() {
@@ -578,6 +606,7 @@ function _doUpdateMap() {
   map.getSource('units').setData(buildDots());
   map.getSource('bullseye').setData(buildBullseye());
   map.getSource('approach-vec').setData(buildApproachVector());
+  map.getSource('datalink-locks').setData(buildDatalinkLines());
   if (!settings.radarDebug) {
     map.getSource('radar-debug').setData({ type: 'FeatureCollection', features: [] });
   }

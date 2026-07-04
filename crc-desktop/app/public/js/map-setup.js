@@ -142,6 +142,19 @@ function initMap() {
       paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.45, 'line-width': 1, 'line-dasharray': [5, 4] },
     });
 
+    // ── Datalink radar lock lines ────────────────────────────────────────────
+    // Dashed line from each friendly player unit to its active radar lock target.
+    map.addSource('datalink-locks', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'datalink-lock-lines', type: 'line', source: 'datalink-locks',
+      paint: {
+        'line-color':     ['get', 'color'],
+        'line-opacity':   0.8,
+        'line-width':     1.5,
+        'line-dasharray': [4, 3],
+      },
+    });
+
     // ── Approach vector ───────────────────────────────────────────────────
     map.addSource('approach-vec', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
