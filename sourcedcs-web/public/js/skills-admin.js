@@ -36,6 +36,7 @@ var _pilotSquadrons     = {};    /* { [sub]: squadronId | null } — server-reso
 var _members            = [];    /* full Discord roster from /api/members — the squadron-management source of truth */
 var _activeSub          = null;
 var _editorCollapsed    = {};    /* { [catId]: bool } collapse state for tree editor */
+var _treeGroupCollapsed = {};    /* { [squadronId|'__general'|'__orphaned']: bool } collapse state for tree editor squadron groups */
 var _detailCollapsed    = {};    /* { [catId]: bool } collapse state for pilot detail */
 var _sqGroupCollapsed   = {};    /* { [squadronId|'__unassigned']: bool } collapse state for pilot list groups */
 var _currentUserSub     = null;  /* JWT sub of the logged-in admin */
@@ -805,12 +806,35 @@ function renderTreeEditor() {
   }
   el.appendChild(weightBar);
 
-  /* Category cards */
+  /* Category cards — grouped by squadron so the overview stays manageable as
+     more squadron-specific categories get added. Categories with no squadron
+     restriction land in a shared GENERAL group; categories assigned to more
+     than one squadron appear in each of those squadrons' groups (same
+     underlying category, shown more than once — editing it in either place
+     edits the one real category). */
   var catList = document.createElement('div');
   catList.className = 'tree-cat-list';
-  cats.forEach(function (cat, ci) {
-    catList.appendChild(buildCatCard(cat, ci, cats.length, allMods));
+
+  var shown = new Set();
+
+  var generalCats = cats.filter(function (c) { return !(c.squadrons && c.squadrons.length); });
+  generalCats.forEach(function (c) { shown.add(c); });
+  appendTreeCatGroup(catList, '__general', 'GENERAL — ALL SQUADRONS', generalCats, cats, allMods, false);
+
+  _squadrons.forEach(function (sq) {
+    var sqCats = cats.filter(function (c) { return c.squadrons && c.squadrons.indexOf(sq.id) !== -1; });
+    if (!sqCats.length) return;
+    sqCats.forEach(function (c) { shown.add(c); });
+    appendTreeCatGroup(catList, sq.id, (sq.designator + ' ' + sq.name).toUpperCase(), sqCats, cats, allMods, true);
   });
+
+  /* Safety net: a category restricted to squadron IDs that no longer exist
+     (e.g. a deleted squadron) would otherwise silently vanish from view. */
+  var orphanedCats = cats.filter(function (c) { return !shown.has(c); });
+  if (orphanedCats.length) {
+    appendTreeCatGroup(catList, '__orphaned', 'UNKNOWN SQUADRON (stale reference)', orphanedCats, cats, allMods, false);
+  }
+
   el.appendChild(catList);
 
   /* Add category button */
@@ -843,6 +867,40 @@ function renderTreeEditor() {
   actions.appendChild(resetBtn);
   actions.appendChild(msg);
   el.appendChild(actions);
+}
+
+/* Renders one collapsible group (by squadron, or the shared GENERAL/orphaned
+   buckets) inside the tree editor's category list. `allCats` is the true,
+   flat _treeEditor.categories array — used to resolve each category's real
+   index so reorder/delete controls keep working even though the same
+   category object may be rendered in more than one group. */
+function appendTreeCatGroup(container, groupKey, label, groupCats, allCats, allMods, defaultCollapsed) {
+  if (!Object.prototype.hasOwnProperty.call(_treeGroupCollapsed, groupKey)) {
+    _treeGroupCollapsed[groupKey] = defaultCollapsed;
+  }
+  var collapsed = !!_treeGroupCollapsed[groupKey];
+
+  var groupHdr = document.createElement('div');
+  groupHdr.className = 'skill-list-cat-header';
+  groupHdr.style.cursor = 'pointer';
+  groupHdr.innerHTML =
+    '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
+    '<span class="slc-name">' + esc(label) + '</span>' +
+    '<span class="slc-count">' + groupCats.length + '</span>';
+  groupHdr.addEventListener('click', function () {
+    _treeGroupCollapsed[groupKey] = !_treeGroupCollapsed[groupKey];
+    renderTreeEditor();
+  });
+  container.appendChild(groupHdr);
+
+  if (collapsed) return;
+
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:10px';
+  groupCats.forEach(function (cat) {
+    wrap.appendChild(buildCatCard(cat, allCats.indexOf(cat), allCats.length, allMods));
+  });
+  container.appendChild(wrap);
 }
 
 function updateWeightBar() {
