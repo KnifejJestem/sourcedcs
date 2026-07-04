@@ -25,7 +25,8 @@ const PILOT_REGISTRY_FILE   = path.join(DATA_DIR, 'pilot-registry.json');
 const FLIGHT_PLANS_FILE          = path.join(DATA_DIR, 'flight-plans.json');
 const FLIGHT_PLANS_CFG_FILE      = path.join(DATA_DIR, 'flight-plans-config.json');
 const FPL1801_FILE               = path.join(DATA_DIR, 'fpl1801.json');
-const PILOT_SQ_OVERRIDES_FILE    = path.join(DATA_DIR, 'pilot-squadron-overrides.json');
+const PILOT_SQ_OVERRIDES_FILE    = path.join(DATA_DIR, 'pilot-squadron-overrides.json'); /* legacy — read once for migration */
+const MEMBERS_FILE               = path.join(DATA_DIR, 'members.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
 if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
@@ -87,7 +88,6 @@ let skillTree       = loadJSON(SKILL_TREE_FILE,     { categories: [] });
 let skillGrades     = loadJSON(SKILL_GRADES_FILE,   {});
 let gradingRequests     = loadJSON(GRADING_REQS_FILE,        []);
 let pilotRegistry       = loadJSON(PILOT_REGISTRY_FILE,     {});
-let pilotSqOverrides    = loadJSON(PILOT_SQ_OVERRIDES_FILE, {});
 let nextGradingReqId = gradingRequests.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
 
 let flightPlans    = loadJSON(FLIGHT_PLANS_FILE,     []);
@@ -106,10 +106,42 @@ const DISCORD_GUILD_ID   = process.env.DISCORD_GUILD_ID   || '';
 const APPLY_CHANNEL_ID   = process.env.APPLY_CHANNEL_ID   || '';
 const GRADING_CHANNEL_ID = process.env.GRADING_CHANNEL_ID || '';
 
-/* Roster in-memory cache (populated from Discord) */
-let rosterCache   = null;
-let rosterCacheAt = 0;
+/* Unified member store — merges live Discord roster data with persisted
+   squadron overrides and active/inactive status. Keyed by Discord user ID.
+   This is the single source of truth for squadron membership, consumed by
+   the squadron admin page, the public roster/wing pages, and the skills
+   page (see /api/members, /api/roster, /api/my-squadron). */
+let members        = loadJSON(MEMBERS_FILE, {});
+let membersCacheAt = 0;
 const ROSTER_CACHE_TTL = 5 * 60 * 1000; /* 5 minutes */
+
+/* One-shot migration: fold the legacy sub-keyed squadron overrides (from the
+   old skills-admin per-pilot override UI) into the new Discord-id-keyed
+   members store. Only runs if members.json hasn't been populated yet, so it
+   never re-runs once the new store exists. */
+if (Object.keys(members).length === 0) {
+  const legacyOverrides = loadJSON(PILOT_SQ_OVERRIDES_FILE, {});
+  if (legacyOverrides && Object.keys(legacyOverrides).length) {
+    (async () => {
+      try {
+        await refreshMembers();
+        membersCacheAt = Date.now();
+        let migrated = 0;
+        for (const [sub, sqId] of Object.entries(legacyOverrides)) {
+          const pilot = pilotRegistry[sub];
+          const entry = pilot ? findRosterEntry(pilot) : null;
+          if (entry && !entry.squadronOverride) { entry.squadronOverride = String(sqId); migrated++; }
+        }
+        if (migrated) {
+          saveJSON(MEMBERS_FILE, members);
+          console.log('[members] Migrated ' + migrated + ' legacy squadron override(s) from pilot-squadron-overrides.json');
+        }
+      } catch (err) {
+        console.error('[members] Startup migration failed:', err.message);
+      }
+    })();
+  }
+}
 
 /* ─── Discord REST helpers ──────────────────────────────── */
 function discordRequest(apiPath) {
@@ -242,26 +274,51 @@ function parseCallsign(nick) {
   return nick.trim();
 }
 
-async function buildRosterFromDiscord() {
+/* A member's effective squadron: an admin-set override always wins over the
+   auto-assignment derived from their Discord roles. */
+function resolvedSquadron(m) {
+  return (m && (m.squadronOverride || m.autoSquadron)) || '';
+}
+
+/* Re-fetches the members store from Discord if the cache has expired. */
+async function ensureMembersFresh() {
+  const now = Date.now();
+  if (!membersCacheAt || (now - membersCacheAt) > ROSTER_CACHE_TTL) {
+    try {
+      await refreshMembers();
+      membersCacheAt = now;
+    } catch (err) {
+      console.error('[members] Refresh failed:', err.message);
+    }
+  }
+}
+
+/* Fetches the live Discord guild roster and merges it into the persisted
+   `members` store: existing squadron overrides and active pilots' history
+   survive, new members are added, and members no longer in the guild are
+   flagged inactive (never deleted) so their squadron assignment and any
+   linked skill records are preserved. */
+async function refreshMembers() {
   if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID) {
-    console.warn('[roster] DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set — roster will be empty');
-    return [];
+    console.warn('[members] DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set — cannot refresh from Discord');
+    return;
   }
 
-  console.debug('[roster] Starting roster build from Discord (guild=' + DISCORD_GUILD_ID + ')');
+  console.debug('[members] Starting member refresh from Discord (guild=' + DISCORD_GUILD_ID + ')');
 
   /* Resolve role IDs → names */
   const guildRoles = await discordRequest('/guilds/' + DISCORD_GUILD_ID + '/roles');
   const roleIdToName = {};
   for (const r of guildRoles) roleIdToName[r.id] = r.name;
-  console.debug('[roster] Guild has ' + guildRoles.length + ' roles; configured mapping covers ' + Object.keys(discordRoles).length + ' role name(s)');
+  console.debug('[members] Guild has ' + guildRoles.length + ' roles; configured mapping covers ' + Object.keys(discordRoles).length + ' role name(s)');
 
-  const members = await fetchAllGuildMembers(DISCORD_GUILD_ID);
+  const discordMembers = await fetchAllGuildMembers(DISCORD_GUILD_ID);
 
+  const seenIds = new Set();
   let matchedCount = 0;
   let skippedCount = 0;
-  const roster = [];
-  for (const member of members) {
+
+  for (const member of discordMembers) {
     if (!member.user || member.user.bot) continue;
 
     /* Scan all of the member's Discord roles.
@@ -279,24 +336,37 @@ async function buildRosterFromDiscord() {
       if (!roleLabel && mapping.role)     roleLabel = mapping.role;
       if (squadron && roleLabel) break; /* both resolved — no need to continue */
     }
-    if (!anyMatch) { skippedCount++; continue; }
-    matchedCount++;
+    if (anyMatch) matchedCount++; else skippedCount++;
 
+    const id       = member.user.id;
     const nick     = member.nick || member.user.global_name || member.user.username || '';
     const callsign = parseCallsign(nick);
 
-    roster.push({
-      id:         member.user.id,
+    seenIds.add(id);
+    const existing = members[id] || {};
+    members[id] = {
+      ...existing,                                                /* preserves squadronOverride, if any set */
+      id,
       callsign,
-      username:   (member.user.username   || '').toLowerCase(),  /* discord @username — always lowercase */
-      globalName: (member.user.global_name || ''),               /* discord display name */
-      role:       roleLabel,
-      squadron,
-    });
+      nick,
+      username:     (member.user.username    || '').toLowerCase(), /* discord @username — always lowercase */
+      globalName:   (member.user.global_name || ''),               /* discord display name */
+      role:         roleLabel,
+      autoSquadron: squadron,
+      matched:      anyMatch,
+      active:       true,
+      lastSeen:     new Date().toISOString(),
+    };
   }
 
-  console.debug('[roster] Build complete — matched: ' + matchedCount + ', skipped (no role): ' + skippedCount + ', roster size: ' + roster.length);
-  return roster;
+  /* Anyone previously known but absent from this fetch has left the guild —
+     flag inactive rather than deleting, so squadron history is preserved. */
+  for (const id of Object.keys(members)) {
+    if (!seenIds.has(id)) members[id].active = false;
+  }
+
+  saveJSON(MEMBERS_FILE, members);
+  console.debug('[members] Refresh complete — matched: ' + matchedCount + ', unmatched: ' + skippedCount + ', total known: ' + Object.keys(members).length);
 }
 
 /* Send a new application as a Discord embed to the configured channel */
@@ -829,33 +899,27 @@ api.get('/applications', requireAuth, requireAdmin, (_req, res) => {
   res.json(applications);
 });
 
-/* ── Roster (live from Discord) ── */
+/* ── Roster (live from Discord, merged with persisted squadron overrides
+   and active/inactive status — see /api/members for the full admin view) ── */
 api.get('/roster', async (_req, res) => {
-  const now = Date.now();
-  if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
-    console.debug('[roster] Cache miss — fetching from Discord');
-    try {
-      rosterCache   = await buildRosterFromDiscord();
-      rosterCacheAt = now;
-      console.debug('[roster] Cache updated, ' + rosterCache.length + ' entries');
-    } catch (err) {
-      console.error('[roster] Discord fetch failed:', err.message);
-      console.error('[roster] Stack:', err.stack);
-      if (!rosterCache) rosterCache = [];
-    }
-  } else {
-    console.debug('[roster] Serving from cache (' + rosterCache.length + ' entries, age ' + Math.round((now - rosterCacheAt) / 1000) + 's)');
-  }
-  res.json(rosterCache.map(function(e) {
-    return { id: e.id, callsign: e.callsign, role: e.role, squadron: e.squadron };
+  await ensureMembersFresh();
+  /* Only show members who are still in the guild and either auto-matched a
+     Discord role mapping or were manually assigned a squadron. */
+  const visible = Object.values(members).filter(m => m.active !== false && (m.matched || !!m.squadronOverride));
+  res.json(visible.map(function(m) {
+    return { id: m.id, callsign: m.callsign, role: m.role, squadron: resolvedSquadron(m) || '' };
   }));
 });
 
-/* Admin: force-refresh the roster cache */
-api.post('/roster/refresh', writeOpsLimiter, requireAuth, requireAdmin, (_req, res) => {
-  rosterCache   = null;
-  rosterCacheAt = 0;
-  res.json({ ok: true, message: 'Roster cache cleared — next GET will re-fetch from Discord.' });
+/* Admin: force-refresh the roster from Discord */
+api.post('/roster/refresh', writeOpsLimiter, requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    await refreshMembers();
+    membersCacheAt = Date.now();
+    res.json({ ok: true, message: 'Roster refreshed from Discord.' });
+  } catch (err) {
+    res.status(502).json({ error: 'Discord refresh failed: ' + err.message });
+  }
 });
 
 /* ── Discord roles mapping (admin read/write) ── */
@@ -894,9 +958,8 @@ api.put('/discord-roles', writeOpsLimiter, requireAuth, requireAdmin, (req, res)
   }
   discordRoles = sanitized;
   saveJSON(DISCORD_ROLES_FILE, discordRoles);
-  /* Bust the roster cache so the new mapping takes effect immediately */
-  rosterCache   = null;
-  rosterCacheAt = 0;
+  /* Bust the member cache so the new mapping takes effect immediately */
+  membersCacheAt = 0;
   res.json(discordRoles);
 });
 
@@ -1030,13 +1093,13 @@ api.delete('/squadrons/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, r
    The pilot arg has { callsign, name } both coming from the Casdoor JWT name,
    which is usually the Discord username or global_name — NOT the server nickname. */
 function findRosterEntry(pilot) {
-  if (!rosterCache) return null;
   const candidates = [
     (pilot.callsign || '').toLowerCase(),
     (pilot.name     || '').toLowerCase(),
   ].filter(Boolean);
 
-  for (const entry of rosterCache) {
+  for (const entry of Object.values(members)) {
+    if (entry.active === false) continue;
     const rosterCallsign   = (entry.callsign   || '').toLowerCase();
     const rosterUsername   = (entry.username   || '').toLowerCase();  /* already stored lowercase */
     const rosterGlobalName = (entry.globalName || '').toLowerCase();
@@ -1049,26 +1112,38 @@ function findRosterEntry(pilot) {
   return null;
 }
 
+/* Reverse lookup: given a Discord member, find the matching registered
+   website pilot (if any) by the same name/callsign heuristics. Used by the
+   squadron admin page to flag Discord/website identity mismatches. */
+function findLinkedPilot(member) {
+  const candidates = [
+    (member.callsign   || '').toLowerCase(),
+    (member.username   || '').toLowerCase(),
+    (member.globalName || '').toLowerCase(),
+  ].filter(Boolean);
+
+  for (const [sub, pilot] of Object.entries(pilotRegistry)) {
+    const pilotCandidates = [
+      (pilot.callsign || '').toLowerCase(),
+      (pilot.name     || '').toLowerCase(),
+    ].filter(Boolean);
+    if (pilotCandidates.some(c => candidates.includes(c))) {
+      return { sub, name: pilot.name, callsign: pilot.callsign };
+    }
+  }
+  return null;
+}
+
 /* ── My squadron (resolves the logged-in pilot's squadron from the roster) ── */
 api.get('/my-squadron', requireAuth, async (req, res) => {
   const sub   = req.user.sub;
   const pilot = pilotRegistry[sub];
   if (!pilot) return res.json({ squadron: null });
 
-  /* Ensure roster is loaded (re-use the shared cache) */
-  const now = Date.now();
-  if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
-    try {
-      rosterCache   = await buildRosterFromDiscord();
-      rosterCacheAt = now;
-    } catch (err) {
-      console.error('[my-squadron] roster fetch failed:', err.message);
-      return res.json({ squadron: null });
-    }
-  }
+  await ensureMembersFresh();
 
   const entry = findRosterEntry(pilot);
-  res.json({ squadron: entry ? (entry.squadron || null) : null });
+  res.json({ squadron: entry ? (resolvedSquadron(entry) || null) : null });
 });
 
 /* ── Skill Tree (public read, admin write) ── */
@@ -1180,51 +1255,90 @@ api.delete('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, req
   res.json({ ok: true });
 });
 
+const MAX_PILOT_NAME_LEN     = 64;
+const MAX_PILOT_CALLSIGN_LEN = 32;
+
 /* ── Pilot Registry (admin read / delete) ── */
 api.get('/skill-pilots', requireAuth, requireSkillAdmin, (_req, res) => {
   res.json(pilotRegistry);
 });
 
 /* Returns { [sub]: squadronId | null } — resolves each registered pilot's squadron
-   from the roster cache using multi-field matching (same logic as /my-squadron). */
+   via the unified members store (auto-assignment + admin override), matched
+   by callsign/name (same logic as /my-squadron). */
 api.get('/skill-pilots-squadrons', requireAuth, requireSkillAdmin, async (_req, res) => {
-  const now = Date.now();
-  if (!rosterCache || (now - rosterCacheAt) > ROSTER_CACHE_TTL) {
-    try {
-      rosterCache   = await buildRosterFromDiscord();
-      rosterCacheAt = now;
-    } catch (err) {
-      console.error('[skill-pilots-squadrons] roster fetch failed:', err.message);
-      return res.json({});
-    }
-  }
+  await ensureMembersFresh();
   const result = {};
   for (const [sub, pilot] of Object.entries(pilotRegistry)) {
-    if (Object.prototype.hasOwnProperty.call(pilotSqOverrides, sub)) {
-      result[sub] = pilotSqOverrides[sub];
-    } else {
-      const entry = findRosterEntry(pilot);
-      result[sub] = entry ? (entry.squadron || null) : null;
-    }
+    const entry = findRosterEntry(pilot);
+    result[sub] = entry ? (resolvedSquadron(entry) || null) : null;
   }
   res.json(result);
 });
 
-api.get('/skill-pilots-squadron-overrides', requireAuth, requireSkillAdmin, (_req, res) => {
-  res.json(pilotSqOverrides);
+/* ── Members (unified Discord roster + squadron assignment) ──
+   Single source of truth for squadron membership: consumed by the squadron
+   admin page, the public roster/wing pages, and the skills page. */
+api.get('/members', requireAuth, requireSkillAdmin, async (_req, res) => {
+  await ensureMembersFresh();
+  const list = Object.values(members).map(m => {
+    const linkedPilot  = findLinkedPilot(m);
+    const nameMismatch = !!(linkedPilot && linkedPilot.callsign && m.callsign &&
+      linkedPilot.callsign.toLowerCase() !== m.callsign.toLowerCase());
+    return {
+      id:               m.id,
+      username:         m.username,
+      globalName:       m.globalName,
+      callsign:         m.callsign,
+      role:             m.role || null,
+      autoSquadron:     m.autoSquadron || null,
+      squadronOverride: m.squadronOverride || null,
+      squadron:         resolvedSquadron(m) || null,
+      active:           m.active !== false,
+      lastSeen:         m.lastSeen || null,
+      linkedPilot,
+      nameMismatch,
+    };
+  }).sort((a, b) => a.callsign.localeCompare(b.callsign));
+  res.json(list);
 });
 
-api.put('/skill-pilots/:sub/squadron', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+/* Admin: force-refresh the members store from Discord */
+api.post('/members/refresh', writeOpsLimiter, requireAuth, requireSkillAdmin, async (_req, res) => {
+  try {
+    await refreshMembers();
+    membersCacheAt = Date.now();
+    res.json({ ok: true, count: Object.keys(members).length });
+  } catch (err) {
+    res.status(502).json({ error: 'Discord refresh failed: ' + err.message });
+  }
+});
+
+/* Set or clear (squadron_id null/empty) a member's squadron override */
+api.put('/members/:id/squadron', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const id = req.params.id;
+  if (!members[id]) return res.status(404).json({ error: 'Member not found' });
+  const sqId = req.body.squadron_id;
+  if (sqId === null || sqId === undefined || sqId === '') {
+    delete members[id].squadronOverride;
+  } else {
+    members[id].squadronOverride = String(sqId);
+  }
+  saveJSON(MEMBERS_FILE, members);
+  res.json({ id, squadron_id: members[id].squadronOverride || null, squadron: resolvedSquadron(members[id]) || null });
+});
+
+/* Fix a registered pilot's display name/callsign to match their Discord
+   identity (surfaced as a mismatch on the squadron admin page). Does not
+   touch skill grades or the pilot's sub — only the display fields. */
+api.put('/skill-pilots/:sub/name', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
   const sub = req.params.sub;
   if (!pilotRegistry[sub]) return res.status(404).json({ error: 'Pilot not found' });
-  const sqId = req.body.squadron_id !== undefined ? req.body.squadron_id : null;
-  if (sqId === null || sqId === '') {
-    delete pilotSqOverrides[sub];
-  } else {
-    pilotSqOverrides[sub] = String(sqId);
-  }
-  saveJSON(PILOT_SQ_OVERRIDES_FILE, pilotSqOverrides);
-  res.json({ sub, squadron_id: pilotSqOverrides[sub] || null });
+  const { name, callsign } = req.body;
+  if (name !== undefined)     pilotRegistry[sub].name     = sanitizeStr(name, MAX_PILOT_NAME_LEN);
+  if (callsign !== undefined) pilotRegistry[sub].callsign = sanitizeStr(callsign, MAX_PILOT_CALLSIGN_LEN);
+  saveJSON(PILOT_REGISTRY_FILE, pilotRegistry);
+  res.json(pilotRegistry[sub]);
 });
 
 api.delete('/skill-pilots/:sub', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
@@ -1256,8 +1370,6 @@ api.get('/grading-requests', requireAuth, (req, res) => {
   }
 });
 
-const MAX_PILOT_NAME_LEN     = 64;
-const MAX_PILOT_CALLSIGN_LEN = 32;
 const MAX_MODULE_TITLE_LEN   = 128;
 api.post('/grading-requests', writeOpsLimiter, requireAuth, async (req, res) => {
   const sub = req.user.sub;
@@ -1397,15 +1509,15 @@ function fpAvailableSquadrons() {
   return [...seen].sort();
 }
 
-/* Best-effort: match a JWT user to their squadron via the roster cache */
+/* Best-effort: match a JWT user to their squadron via the members store */
 function fpUserSquadron(userName) {
-  if (!rosterCache || !userName) return null;
+  if (!userName) return null;
   const lower = String(userName).toLowerCase().trim();
-  const member = rosterCache.find(m =>
-    m.callsign.toLowerCase() === lower ||
-    m.username.toLowerCase() === lower
+  const member = Object.values(members).find(m =>
+    m.active !== false &&
+    ((m.callsign || '').toLowerCase() === lower || (m.username || '').toLowerCase() === lower)
   );
-  return member ? member.squadron : null;
+  return member ? (resolvedSquadron(member) || null) : null;
 }
 
 function fpIsControllerUser(req) {

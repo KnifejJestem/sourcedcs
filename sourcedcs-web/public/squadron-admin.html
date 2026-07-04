@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Squadron Admin — SOURCE DCS</title>
+  <meta name="description" content="Admin panel for assigning squadrons and managing roster identity.">
+  <link rel="icon" href="sourcelogobg.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/skills.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <a class="header-logo-link" href="/">
+    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    <div class="header-title">SOURCEDCS</div>
+  </a>
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
+    <a class="nav-link" href="/#about">ABOUT</a>
+    <a class="nav-link" href="/#subsquadrons">WINGS</a>
+    <a class="nav-link" href="/#join">JOIN</a>
+  </nav>
+  <div class="header-spacer"></div>
+  <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
+    <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
+    <div class="hdr-toggle-group">
+      <span class="hdr-toggle-label">DISPLAY</span>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="skills-hero">
+  <div class="skills-hero-inner">
+    <div class="section-label">STAFF ACCESS</div>
+    <h1 class="skills-title">SQUADRON ADMIN</h1>
+    <p class="skills-sub">Assign squadrons to Discord members &middot; Flag departed pilots &middot; Reconcile roster identity</p>
+  </div>
+</section>
+
+<div id="accessDenied" class="skills-body" style="display:none">
+  <p class="skills-empty">Admin access required.</p>
+</div>
+
+<div id="adminPanel" class="skills-body" style="display:none">
+
+  <div class="admin-bar">
+    <div>
+      <span class="admin-bar-label" id="memberSummary">Loading&hellip;</span>
+    </div>
+    <div class="admin-bar-actions">
+      <input type="text" id="memberSearch" placeholder="Search callsign / name&hellip;"
+             style="background:var(--bg3);border:1px solid var(--border-strong);color:var(--text);font-family:var(--font-mono);font-size:10px;padding:6px 10px;border-radius:2px;min-width:180px">
+      <select id="squadronFilter" class="grade-select" style="width:auto">
+        <option value="">ALL SQUADRONS</option>
+        <option value="__unassigned">UNASSIGNED</option>
+        <option value="__mismatch">NAME MISMATCH</option>
+        <option value="__inactive">INACTIVE (LEFT DISCORD)</option>
+      </select>
+      <button class="btn-sm btn-sm-blue" id="refreshBtn">REFRESH FROM DISCORD</button>
+    </div>
+  </div>
+
+  <div class="roster-scroll">
+    <table class="roster-table" id="membersTable">
+      <thead>
+        <tr>
+          <th>CALLSIGN</th>
+          <th>DISCORD IDENTITY</th>
+          <th>SQUADRON</th>
+          <th>WEBSITE ACCOUNT</th>
+          <th>STATUS</th>
+        </tr>
+      </thead>
+      <tbody id="membersBody">
+        <tr><td colspan="5" style="text-align:center;color:var(--text-3)">Loading&hellip;</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="skills-toast" id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/squadron-admin.js"></script>
+</body>
+</html>

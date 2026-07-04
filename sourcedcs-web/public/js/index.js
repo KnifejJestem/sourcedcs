@@ -51,6 +51,10 @@ function logoutCasdoor() {
     var adminCard = document.getElementById('toolSkillsAdminLink');
     if (adminCard) adminCard.style.display = '';
   }
+  if (isSkillAdminRole(token)) {
+    var squadronAdminCard = document.getElementById('toolSquadronAdminLink');
+    if (squadronAdminCard) squadronAdminCard.style.display = '';
+  }
 })();
 
 /* ── Hamburger menu ── */
