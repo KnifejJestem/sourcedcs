@@ -53,6 +53,45 @@
 
 <div id="adminPanel" class="skills-body" style="display:none">
 
+  <div id="sqSection" style="display:none;margin-bottom:28px">
+    <div class="admin-bar">
+      <div>
+        <span class="admin-bar-label">SQUADRONS (WINGS)</span>
+      </div>
+      <div class="admin-bar-actions">
+        <button class="btn-sm btn-sm-blue" id="sqAddBtn">&#x2295; ADD SQUADRON</button>
+      </div>
+    </div>
+    <div class="roster-scroll">
+      <table class="roster-table" id="squadronsTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>DESIGNATOR</th>
+            <th>NAME</th>
+            <th>AIRFRAME</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="squadronsBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-3)">Loading&hellip;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="drSection" style="display:none;margin-bottom:28px">
+    <div class="admin-bar">
+      <div>
+        <span class="admin-bar-label">DISCORD ROLE MAPPING</span>
+      </div>
+      <div class="admin-bar-actions">
+        <button class="btn-sm btn-sm-blue" id="drEditBtn">&#x270E; EDIT MAPPING</button>
+      </div>
+    </div>
+    <p class="skills-sub" style="text-align:left;padding:0 2px">Controls auto-squadron and auto-role assignment: maps Discord role names to squadron IDs and/or role labels.</p>
+  </div>
+
   <div class="admin-bar">
     <div>
       <span class="admin-bar-label" id="memberSummary">Loading&hellip;</span>
@@ -77,16 +116,91 @@
           <th>CALLSIGN</th>
           <th>DISCORD IDENTITY</th>
           <th>SQUADRON</th>
+          <th>ROLE</th>
           <th>WEBSITE ACCOUNT</th>
           <th>STATUS</th>
         </tr>
       </thead>
       <tbody id="membersBody">
-        <tr><td colspan="5" style="text-align:center;color:var(--text-3)">Loading&hellip;</td></tr>
+        <tr><td colspan="6" style="text-align:center;color:var(--text-3)">Loading&hellip;</td></tr>
       </tbody>
     </table>
   </div>
 
+</div>
+
+<!-- SQUADRON (WING) MODAL -->
+<div class="modal-overlay" id="sqModalOverlay" role="dialog" aria-modal="true" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="sqModalTitle">&#x2295; ADD SQUADRON</div>
+      <button class="modal-close" onclick="closeSqModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="sqForm" onsubmit="submitSquadron(event)" novalidate>
+        <input type="hidden" id="sqEditId" value="">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" for="sqId">ID (slug) <span class="form-required">*</span></label><input class="form-input" id="sqId" maxlength="16" placeholder="e.g. vf3" required></div>
+          <div class="form-group"><label class="form-label" for="sqDesignator">DESIGNATOR <span class="form-required">*</span></label><input class="form-input" id="sqDesignator" maxlength="16" placeholder="e.g. VF-3" required></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" for="sqName">NAME <span class="form-required">*</span></label><input class="form-input" id="sqName" maxlength="32" placeholder="e.g. HAWKS" required></div>
+          <div class="form-group"><label class="form-label" for="sqAirframe">AIRFRAME</label><input class="form-input" id="sqAirframe" maxlength="64" placeholder="e.g. F-15E STRIKE EAGLE"></div>
+        </div>
+        <div class="form-group"><label class="form-label" for="sqTags">ROLE TAGS <span class="form-hint">(comma-separated)</span></label><input class="form-input" id="sqTags" maxlength="128" placeholder="e.g. STRIKE, CAS, SEAD"></div>
+        <div class="form-group"><label class="form-label" for="sqShortDesc">SHORT DESCRIPTION</label><textarea class="form-input" id="sqShortDesc" rows="3" maxlength="500" style="resize:vertical"></textarea></div>
+        <div class="form-group"><label class="form-label" for="sqFullDesc">FULL DESCRIPTION <span class="form-hint">(for detail page)</span></label><textarea class="form-input" id="sqFullDesc" rows="4" maxlength="2000" style="resize:vertical"></textarea></div>
+        <div class="form-group"><label class="form-label" for="sqImage">LOGO URL <span class="form-hint">(optional, image link)</span></label><input class="form-input" id="sqImage" maxlength="500" placeholder="https://example.com/logo.png"></div>
+        <div class="form-error" id="sqFormError" style="display:none"></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeSqModal()">CANCEL</button>
+          <button type="submit" class="btn btn-primary" id="sqSubmitBtn"><span class="btn-icon">&#x2295;</span> SAVE SQUADRON</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- DISCORD ROLES MODAL -->
+<div class="modal-overlay" id="drModalOverlay" role="dialog" aria-modal="true" aria-labelledby="drModalTitle" style="display:none">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <div class="modal-title" id="drModalTitle">&#x270E; DISCORD ROLE MAPPING</div>
+      <button class="modal-close" onclick="closeDiscordRolesModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-intro">Map Discord role names to squadron IDs and/or role labels. A member's squadron can come from one Discord role and their role label from another &mdash; or both from a single role. At least one field is required per entry.</p>
+      <div id="drList" style="margin-bottom:16px"></div>
+      <div class="admin-bar" style="margin-bottom:12px">
+        <span class="admin-bar-label">ADD NEW MAPPING</span>
+      </div>
+      <form id="drAddForm" onsubmit="addDiscordRoleEntry(event)" novalidate>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="drRoleName">DISCORD ROLE NAME <span class="form-required">*</span></label>
+            <input class="form-input" id="drRoleName" maxlength="100" placeholder="e.g. VF-3 HAWKS" required autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="drSquadron">SQUADRON ID <span class="form-hint">(optional)</span></label>
+            <input class="form-input" id="drSquadron" maxlength="16" placeholder="e.g. vf3" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="drRoleLabel">ROLE LABEL <span class="form-hint">(optional)</span></label>
+            <input class="form-input" id="drRoleLabel" maxlength="100" placeholder="e.g. Pilot" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-error" id="drAddError" style="display:none"></div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary"><span class="btn-icon">&#x2295;</span> ADD ENTRY</button>
+        </div>
+      </form>
+      <div class="form-error" id="drSaveError" style="display:none;margin-top:8px"></div>
+      <div class="form-actions" style="margin-top:12px;justify-content:flex-end">
+        <button type="button" class="btn btn-ghost" onclick="closeDiscordRolesModal()">CANCEL</button>
+        <button type="button" class="btn btn-primary" id="drSaveBtn" onclick="saveDiscordRoles()"><span class="btn-icon">&#x2713;</span> SAVE MAPPING</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="skills-toast" id="toast"></div>

@@ -280,6 +280,18 @@ function resolvedSquadron(m) {
   return (m && (m.squadronOverride || m.autoSquadron)) || '';
 }
 
+/* Fixed set of role labels selectable as a manual override on the squadron
+   admin page. The auto-derived role (from Discord role mapping) remains
+   free text, same as before — this list only constrains manual overrides. */
+const ROLE_LABELS = ['Member', 'Pilot', 'Element Lead', 'Flight Lead', 'Squadron Lead', 'Admin'];
+
+/* A member's effective role label: an admin-set override always wins over the
+   auto-assignment derived from their Discord roles. `m.role` is read as a
+   fallback for entries persisted before the autoRole/roleOverride split. */
+function resolvedRole(m) {
+  return (m && (m.roleOverride || m.autoRole || m.role)) || '';
+}
+
 /* Re-fetches the members store from Discord if the cache has expired. */
 async function ensureMembersFresh() {
   const now = Date.now();
@@ -351,7 +363,7 @@ async function refreshMembers() {
       nick,
       username:     (member.user.username    || '').toLowerCase(), /* discord @username — always lowercase */
       globalName:   (member.user.global_name || ''),               /* discord display name */
-      role:         roleLabel,
+      autoRole:     roleLabel,
       autoSquadron: squadron,
       matched:      anyMatch,
       active:       true,
@@ -907,7 +919,7 @@ api.get('/roster', async (_req, res) => {
      Discord role mapping or were manually assigned a squadron. */
   const visible = Object.values(members).filter(m => m.active !== false && (m.matched || !!m.squadronOverride));
   res.json(visible.map(function(m) {
-    return { id: m.id, callsign: m.callsign, role: m.role, squadron: resolvedSquadron(m) || '' };
+    return { id: m.id, callsign: m.callsign, role: resolvedRole(m), squadron: resolvedSquadron(m) || '' };
   }));
 });
 
@@ -1290,7 +1302,9 @@ api.get('/members', requireAuth, requireSkillAdmin, async (_req, res) => {
       username:         m.username,
       globalName:       m.globalName,
       callsign:         m.callsign,
-      role:             m.role || null,
+      role:             resolvedRole(m) || null,
+      autoRole:         m.autoRole || m.role || null,
+      roleOverride:     m.roleOverride || null,
       autoSquadron:     m.autoSquadron || null,
       squadronOverride: m.squadronOverride || null,
       squadron:         resolvedSquadron(m) || null,
@@ -1326,6 +1340,28 @@ api.put('/members/:id/squadron', writeOpsLimiter, requireAuth, requireSkillAdmin
   }
   saveJSON(MEMBERS_FILE, members);
   res.json({ id, squadron_id: members[id].squadronOverride || null, squadron: resolvedSquadron(members[id]) || null });
+});
+
+/* Fixed list of role labels selectable as a manual override (see ROLE_LABELS) */
+api.get('/role-labels', requireAuth, requireSkillAdmin, (_req, res) => {
+  res.json(ROLE_LABELS);
+});
+
+/* Set or clear (role null/empty) a member's role override */
+api.put('/members/:id/role', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const id = req.params.id;
+  if (!members[id]) return res.status(404).json({ error: 'Member not found' });
+  const roleLabel = req.body.role;
+  if (roleLabel === null || roleLabel === undefined || roleLabel === '') {
+    delete members[id].roleOverride;
+  } else {
+    if (!ROLE_LABELS.includes(roleLabel)) {
+      return res.status(400).json({ error: 'Invalid role label. Must be one of: ' + ROLE_LABELS.join(', ') });
+    }
+    members[id].roleOverride = roleLabel;
+  }
+  saveJSON(MEMBERS_FILE, members);
+  res.json({ id, role_override: members[id].roleOverride || null, role: resolvedRole(members[id]) || null });
 });
 
 /* Fix a registered pilot's display name/callsign to match their Discord

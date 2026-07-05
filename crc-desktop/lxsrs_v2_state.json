@@ -17,12 +17,12 @@
       "modulation": "AM"
     },
     {
-      "freq_mhz": 340.775,
+      "freq_mhz": 251.0,
       "modulation": "AM"
     },
     {
-      "freq_mhz": 0.0,
-      "modulation": "DISABLED"
+      "freq_mhz": 340.775,
+      "modulation": "AM"
     },
     {
       "freq_mhz": 0.0,
@@ -47,18 +47,18 @@
   ],
   "radio_volumes": [
     2.5,
-    0.6,
-    2.6,
+    3.8,
+    0.0,
     2.5,
     2.6,
-    5.0,
-    0.0,
+    2.2,
+    1.2,
     2.6,
     1.0,
     1.0,
     1.0
   ],
-  "tx_slot": 4,
+  "tx_slot": 5,
   "sound_set": "RADIO_TRANS_APACHE",
   "noise_enabled": true,
   "unit_id": 2444
