@@ -1,0 +1,22 @@
+{
+    "name": "CasdoorSync",
+    "version": "1.0.0",
+    "descriptionmsg": "Mirrors Casdoor users/roles into MediaWiki",
+    "type": "other",
+    "AutoloadNamespaces": {
+        "MediaWiki\\Extension\\CasdoorSync\\": "includes/"
+    },
+    "Hooks": {
+        "UserLoggedIn": "MediaWiki\\Extension\\CasdoorSync\\Hooks::onUserLoggedIn"
+    },
+    "JobClasses": {
+        "casdoorSync": "MediaWiki\\Extension\\CasdoorSync\\CasdoorSyncJob"
+    },
+    "config": {
+        "CasdoorSyncClientId": { "value": "" },
+        "CasdoorSyncClientSecret": { "value": "" },
+        "CasdoorSyncBaseUrl": { "value": "" },
+        "CasdoorSyncOrg": { "value": "source" }
+    },
+    "manifest_version": 2
+}

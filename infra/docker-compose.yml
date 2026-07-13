@@ -156,6 +156,7 @@ services:
     volumes:
       - mediawiki-images:/var/www/html/images
       - ./mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro
+      - ./mediawiki/extensions/CasdoorSync:/var/www/html/extensions/CasdoorSync
     depends_on:
       mariadb:
         condition: service_healthy
