@@ -65,8 +65,8 @@ function checkStale() {
 const $cursorBra = document.getElementById('cursor-bra');
 
 function updateBullseyeCursor(e) {
-  if (!missionData || !missionData.bullseye) return;
-  const be = missionData.bullseye.blue || missionData.bullseye.red;
+  const bulls = getBullseye();
+  const be = bulls.blue || bulls.red;
   if (!be) { $cursorBra.classList.remove('visible'); return; }
 
   const rect   = map.getCanvas().getBoundingClientRect();
@@ -195,11 +195,117 @@ function initSettings() {
   });
   els.radarDebug.addEventListener('change',   () => persist('radarDebug',   els.radarDebug.checked));
 
+  // ── Bullseye override ────────────────────────────────────────────────
+  initBullseyeSettings();
+
   // ── Colours tab ───────────────────────────────────────────────────────
   initColorSettings();
 
   // ── Tools tab ─────────────────────────────────────────────────────────
   initToolsTab();
+}
+
+// ── Bullseye pick-on-map mode ────────────────────────────────────────────
+// bullseyePickTarget (declared in app.js) holds 'blue' | 'red' | null while
+// waiting for the next map click to set that side's override position.
+
+const $pickBanner = document.getElementById('pick-banner');
+
+function startBullseyePick(side) {
+  bullseyePickTarget = side;
+  document.querySelectorAll('[id^="set-be-"][id$="-pick"]').forEach(b => b.classList.remove('active-pick'));
+  const $btn = document.getElementById(`set-be-${side}-pick`);
+  if ($btn) { $btn.textContent = 'CLICK MAP…'; $btn.classList.add('active-pick'); }
+  if ($pickBanner) {
+    $pickBanner.textContent = `CLICK MAP TO SET ${side.toUpperCase()} BULLSEYE — ESC TO CANCEL`;
+    $pickBanner.classList.add('visible');
+  }
+  // Close the panel so the map underneath is clickable.
+  document.getElementById('settings-panel').classList.remove('open');
+}
+
+function cancelBullseyePick() {
+  bullseyePickTarget = null;
+  document.querySelectorAll('[id^="set-be-"][id$="-pick"]').forEach(b => {
+    b.textContent = 'PICK ON MAP';
+    b.classList.remove('active-pick');
+  });
+  if ($pickBanner) $pickBanner.classList.remove('visible');
+}
+
+// Called from map-setup.js when a map click lands while pick mode is active.
+function applyBullseyePick(side, lat, lon) {
+  settings.bullseyeOverride[side].enabled = true;
+  settings.bullseyeOverride[side].lat = lat;
+  settings.bullseyeOverride[side].lon = lon;
+  const $en  = document.getElementById(`set-be-${side}-enabled`);
+  const $lat = document.getElementById(`set-be-${side}-lat`);
+  const $lon = document.getElementById(`set-be-${side}-lon`);
+  if ($en)  $en.checked = true;
+  if ($lat) $lat.value  = lat.toFixed(4);
+  if ($lon) $lon.value  = lon.toFixed(4);
+  saveSettings();
+  if (mapReady) map.getSource('bullseye').setData(buildBullseye());
+  cancelBullseyePick();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && bullseyePickTarget) cancelBullseyePick();
+});
+
+// Manual per-coalition bullseye position override, editable from the
+// settings panel. Falls back to the live mission bullseye when disabled.
+function initBullseyeSettings() {
+  for (const side of ['blue', 'red']) {
+    const $en   = document.getElementById(`set-be-${side}-enabled`);
+    const $lat  = document.getElementById(`set-be-${side}-lat`);
+    const $lon  = document.getElementById(`set-be-${side}-lon`);
+    const $use  = document.getElementById(`set-be-${side}-use-mission`);
+    const $pick = document.getElementById(`set-be-${side}-pick`);
+    if (!$en || !$lat || !$lon) continue;
+
+    const ov = settings.bullseyeOverride[side];
+    $en.checked = !!ov.enabled;
+    $lat.value  = ov.lat  ?? '';
+    $lon.value  = ov.lon  ?? '';
+
+    const refreshBullseye = () => {
+      saveSettings();
+      if (mapReady) map.getSource('bullseye').setData(buildBullseye());
+    };
+
+    $en.addEventListener('change', () => {
+      settings.bullseyeOverride[side].enabled = $en.checked;
+      refreshBullseye();
+    });
+    $lat.addEventListener('input', () => {
+      settings.bullseyeOverride[side].lat = $lat.value === '' ? null : parseFloat($lat.value);
+      refreshBullseye();
+    });
+    $lon.addEventListener('input', () => {
+      settings.bullseyeOverride[side].lon = $lon.value === '' ? null : parseFloat($lon.value);
+      refreshBullseye();
+    });
+
+    if ($use) {
+      $use.addEventListener('click', () => {
+        const base = missionData && missionData.bullseye && missionData.bullseye[side];
+        if (!base) return;
+        $lat.value = base.lat;
+        $lon.value = base.lon;
+        settings.bullseyeOverride[side].lat = base.lat;
+        settings.bullseyeOverride[side].lon = base.lon;
+        refreshBullseye();
+      });
+    }
+
+    if ($pick) {
+      $pick.addEventListener('click', () => {
+        if (bullseyePickTarget === side) { cancelBullseyePick(); return; }
+        startBullseyePick(side);
+      });
+    }
+  }
 }
 
 function initColorSettings() {

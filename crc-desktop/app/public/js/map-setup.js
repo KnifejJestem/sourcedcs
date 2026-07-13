@@ -315,6 +315,7 @@ function initMap() {
     // Click on a label — open track panel unless the mouse was dragged.
     // e.preventDefault() stops the map-level click from closing the panel.
     map.on('click', 'unit-labels', (e) => {
+      if (bullseyePickTarget) return;
       e.preventDefault();
       if (_labelDragged) { _labelDragged = false; return; }
       const id = String(e.features[0].properties.id);
@@ -323,6 +324,7 @@ function initMap() {
 
     // ── Left-click on airport label → weather panel ──────────────────────
     map.on('click', 'airport-labels', (e) => {
+      if (bullseyePickTarget) return;
       e.preventDefault();
       const feat = e.features && e.features[0];
       if (!feat) return;
@@ -338,6 +340,7 @@ function initMap() {
     // Aircraft (cat 1/2) + ships (cat 4) → track info panel
     // Ground vehicles (cat 3) → ground label popup
     map.on('click', 'unit-squares', (e) => {
+      if (bullseyePickTarget) return;
       const feat = e.features && e.features[0];
       if (!feat) return;
       e.preventDefault();
@@ -351,7 +354,12 @@ function initMap() {
     });
 
     // Click on empty map → close track panel + weather panel
+    // (or, in bullseye pick mode, set the target coalition's override position)
     map.on('click', (e) => {
+      if (bullseyePickTarget) {
+        applyBullseyePick(bullseyePickTarget, e.lngLat.lat, e.lngLat.lng);
+        return;
+      }
       if (!e.defaultPrevented) {
         closeTrackPanel();
         closeAptWeatherPanel();

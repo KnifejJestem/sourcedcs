@@ -753,6 +753,7 @@
       letter-spacing: 0.06em;
     }
     .setting-btn:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+    .setting-btn.active-pick { border-color: var(--ui-active); color: var(--ui-active); }
 
     /* Colour tab */
     .col-group { margin-bottom: 18px; }
@@ -809,6 +810,22 @@
       display: none;
     }
     #stale-banner.visible { display: block; }
+
+    /* ── Bullseye pick banner ── */
+    #pick-banner {
+      position: fixed;
+      top: 32px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10,40,60,0.9);
+      border: 1px solid #1a5a6a;
+      color: #4ab8d8;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      padding: 4px 14px;
+      z-index: 25;
+      display: none;
+    }
+    #pick-banner.visible { display: block; }
 
     /* ── Disconnect overlay ── */
     #disc-overlay {
@@ -1421,6 +1438,7 @@
 
 <!-- Stale data warning -->
 <div id="stale-banner">DATA STALE — NO UPDATE IN 10s</div>
+<div id="pick-banner">CLICK MAP TO SET BULLSEYE — ESC TO CANCEL</div>
 
 <!-- Disconnect overlay -->
 <div id="disc-overlay">
@@ -1663,6 +1681,58 @@
       </div>
       <div class="setting-row">
         <input type="range" id="set-fade-grace" min="0" max="30000" step="500" value="10000" />
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Bullseye</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Override Blue Bullseye</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-be-blue-enabled" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>Lat</span>
+        <input type="number" id="set-be-blue-lat" step="0.0001" style="width:90px" placeholder="lat" />
+      </div>
+      <div class="setting-row">
+        <span>Lon</span>
+        <input type="number" id="set-be-blue-lon" step="0.0001" style="width:90px" placeholder="lon" />
+      </div>
+      <div class="setting-row" style="margin-top:4px">
+        <span></span>
+        <span style="display:flex; gap:6px;">
+          <button class="setting-btn" id="set-be-blue-use-mission">USE MISSION</button>
+          <button class="setting-btn" id="set-be-blue-pick">PICK ON MAP</button>
+        </span>
+      </div>
+
+      <div class="hr" style="margin:8px 0"></div>
+
+      <div class="setting-row">
+        <span>Override Red Bullseye</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-be-red-enabled" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>Lat</span>
+        <input type="number" id="set-be-red-lat" step="0.0001" style="width:90px" placeholder="lat" />
+      </div>
+      <div class="setting-row">
+        <span>Lon</span>
+        <input type="number" id="set-be-red-lon" step="0.0001" style="width:90px" placeholder="lon" />
+      </div>
+      <div class="setting-row" style="margin-top:4px">
+        <span></span>
+        <span style="display:flex; gap:6px;">
+          <button class="setting-btn" id="set-be-red-use-mission">USE MISSION</button>
+          <button class="setting-btn" id="set-be-red-pick">PICK ON MAP</button>
+        </span>
       </div>
     </div>
 

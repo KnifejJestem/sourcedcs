@@ -68,6 +68,7 @@ let mapReady         = false;
 let map;
 let _drag            = null;
 let _measure         = null;
+let bullseyePickTarget = null; // 'blue' | 'red' | null — awaiting a map click to set bullseye override
 let _pulseBright     = true;
 let selectedRef      = null; // string track id (reference)
 let selectedApt      = null;
@@ -125,6 +126,10 @@ const DEFAULTS = {
   gameTimeOffset:  0,     // hours — theater UTC offset subtracted to display Zulu
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO
   aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO
+  bullseyeOverride: {     // manual bullseye position override, per coalition
+    blue: { enabled: false, lat: null, lon: null },
+    red:  { enabled: false, lat: null, lon: null },
+  },
   // ── Colours ───────────────────────────────────────────────────────────────
   colFriendly:    '#4488cc',
   colBogey:       '#ccaa00',
@@ -149,6 +154,19 @@ function loadSettings() {
 
 function saveSettings() {
   localStorage.setItem('crc-desktop-settings', JSON.stringify(settings));
+}
+
+// Effective bullseye positions, combining live mission data with any
+// user-configured overrides from the settings panel (per coalition).
+function getBullseye() {
+  const base = (missionData && missionData.bullseye) || {};
+  const ov   = settings.bullseyeOverride || {};
+  const pick = (side) => {
+    const o = ov[side];
+    if (o && o.enabled && o.lat != null && o.lon != null) return { lat: o.lat, lon: o.lon };
+    return base[side] || null;
+  };
+  return { blue: pick('blue'), red: pick('red') };
 }
 
 // DCS altimeter model (reverse-engineered from flight test data).

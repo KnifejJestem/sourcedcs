@@ -486,8 +486,8 @@ function buildAirports() {
 
 function buildBullseye() {
   const features = [];
-  if (!missionData || !missionData.bullseye) return { type: 'FeatureCollection', features };
-  const be = missionData.bullseye;
+  const be = getBullseye();
+  if (!be.blue && !be.red) return { type: 'FeatureCollection', features };
   if (be.blue && be.blue.lat && be.blue.lon) {
     features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [be.blue.lon, be.blue.lat] }, properties: { coalition: 'blue' } });
   }
