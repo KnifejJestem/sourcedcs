@@ -196,6 +196,7 @@ vendor/
 infra/.env.example
 sourcedcs-web/data/gallery.json
 sourcedcs-web/data/uploads/
+infra/mediawiki/LocalSettings.php
 
 # debug data
 /tools/data/
