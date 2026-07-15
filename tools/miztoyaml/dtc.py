@@ -95,13 +95,218 @@ def parse_dtc_nav_pts(content: bytes) -> list[dict]:
     return result
 
 
+def _line_point(pt: dict) -> dict:
+    """Shared point shape for GEO_LINES / R-flagged reference-line entries."""
+    return {
+        'x':     float(pt['x']),
+        'y':     float(pt['y']),
+        'alt_m': float(pt['alt']) if pt.get('alt') is not None else None,
+        'note':  pt.get('note', ''),
+    }
+
+
+def _parse_f16_routes(nav_pts: list) -> list[dict]:
+    """
+    Group F-16 MPD.NAV_PTS by R1-R3 flags into named routes.
+
+    Each route's flown order is ascending 'number' within the group (F-16
+    DTCs carry no separate ordering data for routes). Points with no Rn flag
+    set are returned as a route=None group ('standalone' — not part of any
+    named route, e.g. individual target-cue steerpoints).
+
+    Route points use 'routeAltitude' (planned leg altitude) in preference to
+    the static 'alt' (point/terrain elevation) when present, and carry
+    'speed_kts' from the point's 'speed' field.
+    """
+    groups: dict[int | None, list[dict]] = {}
+    for pt in nav_pts:
+        if not isinstance(pt, dict) or pt.get('x') is None or pt.get('y') is None:
+            continue
+        rn = next((n for n in (1, 2, 3) if pt.get(f'R{n}')), None)
+        alt = pt.get('routeAltitude') if rn is not None and pt.get('routeAltitude') is not None \
+            else pt.get('alt')
+        entry = {
+            'number':    int(pt['number']) if pt.get('number') is not None else None,
+            'x':         float(pt['x']),
+            'y':         float(pt['y']),
+            'alt_m':     float(alt) if alt is not None else None,
+            'note':      pt.get('note', ''),
+            'speed_kts': float(pt['speed']) if rn is not None and pt.get('speed') is not None else None,
+        }
+        groups.setdefault(rn, []).append(entry)
+
+    result = []
+    for rn in sorted(n for n in groups if n is not None):
+        pts = sorted(groups[rn], key=lambda p: p['number'] or 0)
+        result.append({'route': rn, 'points': pts})
+    if None in groups:
+        pts = sorted(groups[None], key=lambda p: p['number'] or 0)
+        result.append({'route': None, 'points': pts})
+    return result
+
+
+def _parse_f18_routes(wypt: dict) -> list[dict]:
+    """
+    Build F-18 routes from WYPT.NAV_ROUTE, resolved against WYPT.NAV_PTS.
+
+    Unlike F-16, the flown order is NOT ascending wypt_num — it is the
+    insertion order of each NAV_ROUTE entry's STPT keys (DCS preserves this
+    as JSON object order). Wypt_num references that don't resolve to a
+    NAV_PTS entry are skipped (seen in the wild: stale/leftover route data
+    referencing points that no longer exist in a customised DTC).
+
+    Route points take 'alt'/'speed' from the NAV_ROUTE entry itself (planned
+    leg altitude/speed), falling back to the NAV_PTS point's own 'alt'.
+    Points never referenced by any route are returned as a route=None group.
+    """
+    nav_pts_raw = wypt.get('NAV_PTS')
+    if not isinstance(nav_pts_raw, list):
+        return []
+    nav_by_num: dict[int, dict] = {}
+    for p in nav_pts_raw:
+        if isinstance(p, dict) and p.get('wypt_num') is not None \
+                and p.get('x') is not None and p.get('y') is not None:
+            nav_by_num[int(p['wypt_num'])] = p
+
+    route_entries_raw = wypt.get('NAV_ROUTE')
+    groups: list[tuple[int, list[dict]]] = []
+    used: set[int] = set()
+    if isinstance(route_entries_raw, list):
+        for route_dict in route_entries_raw:
+            if not isinstance(route_dict, dict) or not route_dict:
+                continue
+            items = [v for v in route_dict.values() if isinstance(v, dict)]
+            if not items or items[0].get('route_num') is None:
+                continue
+            pts = []
+            for item in items:
+                wn = item.get('wypt_num')
+                if wn is None:
+                    continue
+                wn = int(wn)
+                src = nav_by_num.get(wn)
+                if src is None:
+                    continue
+                alt = item.get('alt') if item.get('alt') is not None else src.get('alt')
+                pts.append((wn, {
+                    'number':    wn,
+                    'x':         float(src['x']),
+                    'y':         float(src['y']),
+                    'alt_m':     float(alt) if alt is not None else None,
+                    'note':      src.get('note', ''),
+                    'speed_kts': float(item['speed']) if item.get('speed') is not None else None,
+                }))
+            # A route with fewer than 2 resolved points draws no line — fold
+            # it into the standalone bucket instead of keeping a pointless tag
+            # (this happens with stale/incomplete NAV_ROUTE data in the wild).
+            if len(pts) >= 2:
+                used.update(wn for wn, _ in pts)
+                groups.append((int(items[0]['route_num']), [p for _, p in pts]))
+
+    standalone = [
+        {
+            'number':    wn,
+            'x':         float(p['x']),
+            'y':         float(p['y']),
+            'alt_m':     float(p['alt']) if p.get('alt') is not None else None,
+            'note':      p.get('note', ''),
+            'speed_kts': None,
+        }
+        for wn, p in sorted(nav_by_num.items()) if wn not in used
+    ]
+
+    result = [{'route': rn, 'points': pts} for rn, pts in sorted(groups, key=lambda g: g[0])]
+    if standalone:
+        result.append({'route': None, 'points': standalone})
+    return result
+
+
+def parse_dtc_routes(content: bytes) -> list[dict]:
+    """
+    Parse the navigation route(s) defined by a DCS DTC JSON file.
+
+    A single DTC can define multiple named routes (F-16: NAV_PTS grouped by
+    R1-R3; F-18: separate NAV_ROUTE entries by route_num) — each is flown as
+    its own connected leg. Points not part of any named route are returned
+    under a 'route': None group ('standalone').
+
+    Returns a list of {'route': int|None, 'points': [pointdict, ...]},
+    ordered by ascending route number with the standalone group (if any)
+    last. Each pointdict has: number, x, y, alt_m, note, speed_kts (all
+    optional except x/y/number).
+
+    Returns an empty list when no route data is present (backwards compatible).
+    """
+    try:
+        data = json.loads(content.decode('utf-8', errors='replace'))['data']
+    except (json.JSONDecodeError, KeyError):
+        return []
+    mpd = data.get('MPD')
+    if isinstance(mpd, dict) and isinstance(mpd.get('NAV_PTS'), list):
+        return _parse_f16_routes(mpd['NAV_PTS'])
+    wypt = data.get('WYPT')
+    if isinstance(wypt, dict):
+        return _parse_f18_routes(wypt)
+    return []
+
+
+def parse_dtc_lines(content: bytes) -> list[dict]:
+    """
+    Parse reference/planning polylines (e.g. FLOT, coordination lines) from a
+    DCS DTC JSON file. These are NOT navigation routes — no speed/TOS data,
+    purely geographic reference lines drawn on the HSD/TSD.
+
+    F-16 uses a dedicated MPD.GEO_LINES point array (separate from NAV_PTS,
+    grouped by L1-L4). F-18 has no such dedicated array — it reuses the real
+    WYPT.NAV_PTS steerpoints, grouped by R1-R3 (a different meaning of R1-R3
+    than F-16, which uses those flags on NAV_PTS for routes instead).
+
+    Returns a list of {'line': int, 'points': [{x, y, alt_m, note}, ...]},
+    one entry per non-empty line group (groups with fewer than 2 points are
+    dropped — a single point can't form a line). Returns an empty list when
+    no line data is present (backwards compatible).
+    """
+    try:
+        data = json.loads(content.decode('utf-8', errors='replace'))['data']
+    except (json.JSONDecodeError, KeyError):
+        return []
+
+    mpd = data.get('MPD')
+    if isinstance(mpd, dict) and isinstance(mpd.get('GEO_LINES'), list):
+        raw_pts, flag_prefix, flag_range, order_key = mpd['GEO_LINES'], 'L', (1, 2, 3, 4), 'number'
+    else:
+        wypt = data.get('WYPT')
+        if isinstance(wypt, dict) and isinstance(wypt.get('NAV_PTS'), list):
+            raw_pts, flag_prefix, flag_range, order_key = wypt['NAV_PTS'], 'R', (1, 2, 3), 'wypt_num'
+        else:
+            return []
+
+    groups: dict[int, list[dict]] = {}
+    for pt in raw_pts:
+        if not isinstance(pt, dict) or pt.get('x') is None or pt.get('y') is None:
+            continue
+        ln = next((n for n in flag_range if pt.get(f'{flag_prefix}{n}')), None)
+        if ln is None:
+            continue
+        groups.setdefault(ln, []).append(pt)
+
+    result = []
+    for ln in sorted(groups):
+        ordered = sorted(groups[ln], key=lambda p: p.get(order_key) or 0)
+        points = [_line_point(p) for p in ordered]
+        if len(points) >= 2:
+            result.append({'line': ln, 'points': points})
+    return result
+
+
 def load_dtc_files(z: zipfile.ZipFile) -> dict[str, dict]:
     """
     Load all DTC files from the miz archive.
 
     Returns {dtc_name: dtc_data} where dtc_data contains:
       - COMM1, COMM2, … keys: {channel_num: freq_mhz}  (passed to build_comms_from_dtc)
-      - 'nav_pts' key (optional): list of nav point dicts from parse_dtc_nav_pts
+      - 'routes' key (optional): list of route groups from parse_dtc_routes
+      - 'lines' key (optional): list of line groups from parse_dtc_lines
 
     DTC name is the stem of the file (e.g. 'Broomstick_F16').
     """
@@ -111,9 +316,12 @@ def load_dtc_files(z: zipfile.ZipFile) -> dict[str, dict]:
             stem = Path(fname).stem
             content = z.read(fname)
             entry: dict = dict(parse_dtc_file(content))
-            nav_pts = parse_dtc_nav_pts(content)
-            if nav_pts:
-                entry['nav_pts'] = nav_pts
+            routes = parse_dtc_routes(content)
+            if routes:
+                entry['routes'] = routes
+            lines = parse_dtc_lines(content)
+            if lines:
+                entry['lines'] = lines
             dtcs[stem] = entry
     return dtcs
 

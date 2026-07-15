@@ -33,6 +33,21 @@ function svgText(text, attrs) {
   return t;
 }
 
+// ── Route-segment connectivity ─────────────────────────────
+// Decide whether a connecting line should be drawn between two consecutive
+// route points, based on their optional 'routeGroup' tag (set from the
+// steer_point 'route' field — see docs/atobrief/yaml-format.md § Multiple routes).
+//   undefined (deploy/recovery bookends, or a package with no 'route' field
+//              anywhere) acts as a wildcard — always connects.
+//   0          marks a standalone point — never connects to a neighbour.
+//   1, 2, 3…   named routes — only connects to a neighbour with the same number.
+function canConnectRoute(a, b) {
+  const ra = a.routeGroup, rb = b.routeGroup;
+  if (ra === 0 || rb === 0) return false;
+  if (ra != null && rb != null && ra !== rb) return false;
+  return true;
+}
+
 async function renderMAP(ato) {
   const container = document.getElementById('map-container');
   container.innerHTML = '';
@@ -118,7 +133,7 @@ function _buildTileCtx(points, routes, airspaces) {
       const d = (a.radiusNm || 20) / 60;
       expand({ lon: a.lon - d, lat: a.lat - d });
       expand({ lon: a.lon + d, lat: a.lat + d });
-    } else if (a.shape === 'polygon' && a.boundary) {
+    } else if ((a.shape === 'polygon' || a.shape === 'line') && a.boundary) {
       a.boundary.forEach(expand);
     } else if (a.shape === 'anchor' && a.anchorPt) {
       const r = ((a.legLengthNm || 20) * 1.5) / 60;

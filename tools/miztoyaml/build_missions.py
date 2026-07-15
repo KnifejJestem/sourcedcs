@@ -522,33 +522,100 @@ def _build_mission_targets(steer_pts: list[dict], targets: dict,
     return result or None
 
 
-def steerpoints_from_dtc_nav_pts(nav_pts: list[dict], theatre: str) -> list[dict]:
+def steerpoints_from_dtc_routes(route_groups: list[dict], theatre: str,
+                                targets: dict) -> list[dict]:
     """
-    Convert a DTC NAV_PTS list into the steer_points schema used by build_missions.
+    Convert a DTC's route groups (from dtc.parse_dtc_routes) into the
+    steer_points schema used by build_missions.
 
-    Each input entry must have 'x', 'y' (DCS world coords) and optionally
-    'alt_m' (altitude metres) and 'note' (label text).
+    Each output point is tagged with an explicit 'route' number so the map
+    only connects points within the same named route — 0 marks a standalone
+    point (not part of any named route; never connects to its neighbours).
+    A DTC with only one route behaves exactly like a single connected path,
+    same as before this was added.
 
-    Returns a list of steer_point dicts with 'coords', '_x', '_y', and
-    optionally 'altitude_ft' and 'name'.
+    aim_point_id is resolved the same way _classify_waypoints does (exact
+    DMS coordinate match against registry target aim points) so DTC-sourced
+    steerpoints get the same target-node rendering as mission-file waypoints.
     """
+    aim_by_dms: dict[str, str] = {}
+    for tgt in targets.values():
+        for ap in tgt.get("aim_points", []):
+            ap_dms = ap.get("coords", "")
+            ap_id  = ap.get("id", "")
+            if ap_dms and ap_id:
+                aim_by_dms[ap_dms] = ap_id
+
     result = []
-    for pt in nav_pts:
-        x, y = pt['x'], pt['y']
-        lat, lon = dcs_to_latlon(x, y, theatre)
-        entry: dict = {
-            'coords': dms(lat, lon),
-            '_x':     x,
-            '_y':     y,
-        }
-        note = (pt.get('note') or '').strip()
-        if note:
-            entry['name'] = note
-        alt_m = pt.get('alt_m')
-        if alt_m is not None:
-            entry['altitude_ft'] = round(alt_m / _FT_TO_M)
-        result.append(entry)
+    for group in route_groups:
+        route_num = group.get('route')
+        for pt in group.get('points', []):
+            x, y = pt['x'], pt['y']
+            lat, lon = dcs_to_latlon(x, y, theatre)
+            wp_dms = dms(lat, lon)
+            entry: dict = {'coords': wp_dms}
+
+            note = (pt.get('note') or '').strip()
+            if note:
+                entry['name'] = note
+            alt_m = pt.get('alt_m')
+            if alt_m is not None:
+                entry['altitude_ft'] = round(alt_m / _FT_TO_M)
+            speed_kts = pt.get('speed_kts')
+            if speed_kts is not None:
+                entry['speed_kts'] = round(speed_kts)
+
+            entry['route'] = route_num if route_num is not None else 0
+
+            aim_point_id = aim_by_dms.get(wp_dms)
+            if aim_point_id:
+                entry['aim_point_id'] = aim_point_id
+
+            entry['_x'] = x
+            entry['_y'] = y
+            result.append(entry)
     return result
+
+
+def build_lines_registry(flights: list[Flight], dtcs: dict[str, dict],
+                         theatre: str) -> list[dict] | None:
+    """
+    Build registry.lines from each unique DTC cartridge referenced by a flight.
+
+    Lines (GEO_LINES on F-16, R-flagged real waypoints on F-18) are reference/
+    planning polylines shared by whichever flights carry that cartridge, so
+    each cartridge's lines are only emitted once even if several flights use
+    the same DTC.
+    """
+    seen_cartridges: set[str] = set()
+    result: list[dict] = []
+    counter = 1
+    for f in flights:
+        dtc_name = f.dtc_cartridge
+        if not dtc_name or dtc_name in seen_cartridges:
+            continue
+        seen_cartridges.add(dtc_name)
+        for group in dtcs.get(dtc_name, {}).get('lines', []):
+            points = []
+            for pt in group.get('points', []):
+                lat, lon = dcs_to_latlon(pt['x'], pt['y'], theatre)
+                entry: dict = {'coords': dms(lat, lon)}
+                alt_m = pt.get('alt_m')
+                if alt_m is not None:
+                    entry['altitude_ft'] = round(alt_m / _FT_TO_M)
+                note = (pt.get('note') or '').strip()
+                if note:
+                    entry['name'] = note
+                points.append(entry)
+            if len(points) < 2:
+                continue
+            result.append({
+                'id':            f'LINE-{counter}',
+                'dtc_cartridge': dtc_name,
+                'points':        points,
+            })
+            counter += 1
+    return result or None
 
 
 def build_missions(flights: list[Flight], msn_start: int,
@@ -561,9 +628,9 @@ def build_missions(flights: list[Flight], msn_start: int,
     Produce the ato.missions list for non-tanker, non-AWACS flights,
     and the steerpoints list for merged waypoints.
 
-    When a flight has a DTC cartridge whose DTC data contains 'nav_pts',
+    When a flight has a DTC cartridge whose DTC data contains 'routes',
     those steerpoints are used instead of the mission-file waypoints.
-    If NAV_PTS is absent the behaviour is unchanged (backwards compatible).
+    If no route data is present the behaviour is unchanged (backwards compatible).
 
     Returns (missions, steerpoints).
     """
@@ -594,12 +661,12 @@ def build_missions(flights: list[Flight], msn_start: int,
         steer_pts = _classify_waypoints(f, flights, targets, carriers,
                                          airfields, ref_pts)
 
-        # Override with DTC NAV_PTS when available (backwards compatible)
+        # Override with DTC route data when available (backwards compatible)
         if dtcs and f.dtc_cartridge:
             dtc_data = dtcs.get(f.dtc_cartridge, {})
-            dtc_nav = dtc_data.get('nav_pts')
-            if dtc_nav:
-                steer_pts = steerpoints_from_dtc_nav_pts(dtc_nav, theatre)
+            dtc_routes = dtc_data.get('routes')
+            if dtc_routes:
+                steer_pts = steerpoints_from_dtc_routes(dtc_routes, theatre, targets)
 
         flight_steerpoints[callsign] = steer_pts
 

@@ -35,6 +35,7 @@ function drawRoutes(ctx, routes, points, showPopup) {
     // ── Route lines ──────────────────────────────────────
     for (let i = 0; i < r.pts.length - 1; i++) {
       const p0    = r.pts[i], p1 = r.pts[i + 1];
+      if (!canConnectRoute(p0, p1)) continue;
       const toTgt = p1.kind === 'target-node';
       g.appendChild(makeSvgEl('line', {
         x1: ctx.bx(p0.lon).toFixed(1), y1: ctx.by(p0.lat).toFixed(1),

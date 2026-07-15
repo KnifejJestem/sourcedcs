@@ -12,7 +12,7 @@ from .log import log
 from .models import Carrier, Flight
 from .build_missions import (
     AIRDROME_IDS, CVN_NAMES,
-    build_airfields_registry, build_missions,
+    build_airfields_registry, build_lines_registry, build_missions,
 )
 from .projection import dms
 
@@ -401,6 +401,7 @@ def build_doc(*, mission_name, mission_date, theatre,
             "targets":          targets or None,
             "reference_points": list(ref_pts.values()) or None,
             "steerpoints":      steerpoints,
+            "lines":            build_lines_registry(flights, dtcs or {}, theatre),
             "control_agencies": control_agencies,
             "frequencies":      frequencies,
         },

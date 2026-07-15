@@ -247,10 +247,11 @@ function collectData(ato, aco) {
     (m.steer_points || []).forEach((sp, i) => {
       // Handle registry steerpoint references
       const sspId = typeof sp === 'object' ? sp.id : null;
+      const routeGroup = typeof sp === 'object' ? sp.route : undefined;
       if (sspId && sharedSteerpointMap[sspId]) {
         const ssp = sharedSteerpointMap[sspId];
         const p = { lat: ssp.lat, lon: ssp.lon };
-        route.pts.push({ ...p, kind: 'route-node' });
+        route.pts.push({ ...p, kind: 'route-node', routeGroup });
         const sspTypeLabel = (ssp.type || '').toUpperCase();
         points.push({
           ...p, kind: 'steer-ref',
@@ -270,7 +271,7 @@ function collectData(ato, aco) {
       const altFt   = (typeof sp === 'object' && sp.altitude_ft != null) ? sp.altitude_ft : null;
       const p       = (nameRef ? resolve(nameRef) : null) || parseCoord(raw);
       if (p) {
-        route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
+        route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node', routeGroup });
         const colocatedWithAimPt   = aimPtCoordKeys.has(`${p.lat},${p.lon}`);
         const colocatedWithNamedLoc = namedLocCoordKeys.has(`${p.lat},${p.lon}`);
         if (nameRef || apId || colocatedWithAimPt || colocatedWithNamedLoc || !hasName) {
@@ -368,6 +369,21 @@ function collectData(ato, aco) {
       widthNm: t.orbit_width_nm || 5,
       direction: (t.orbit_direction || 'ccw').toLowerCase(),
       speedKts: t.speed_kts,
+    });
+  });
+
+  // ── Phase 4b: Reference / planning lines (registry.lines) ───
+  // Plain polylines — no route semantics, distinct from mission steer_points.
+  (reg.lines || []).forEach(ln => {
+    const pts = (ln.points || []).map(pt => parseCoord(pt.coords)).filter(Boolean);
+    if (pts.length < 2) return;
+    airspaces.push({
+      kind: 'airspace',
+      name: ln.name || ln.id || 'LINE',
+      type: 'LINE',
+      shape: 'line',
+      boundary: pts,
+      lat: pts[0].lat, lon: pts[0].lon,
     });
   });
 

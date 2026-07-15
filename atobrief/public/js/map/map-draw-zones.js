@@ -111,6 +111,27 @@ function drawPolygonAirspace(ctx, a, col, parent, showPopup) {
     { centralBaseline: true });
 }
 
+// ── Reference line (open polyline — FLOT, coordination line, etc.) ──
+// Unlike polygon/circle airspaces this has no fill or closed boundary.
+function drawLineAirspace(ctx, a, col, parent, showPopup) {
+  const d = a.boundary.map((pt, i) =>
+    `${i ? 'L' : 'M'}${ctx.bx(pt.lon).toFixed(1)},${ctx.by(pt.lat).toFixed(1)}`).join(' ');
+  const open = () => showPopup(a);
+
+  parent.appendChild(makeClickable(
+    makeSvgEl('path', {
+      d, fill: 'none', stroke: col,
+      'stroke-width':    AIRSPACE_STROKE_WIDTH,
+      'stroke-dasharray': AIRSPACE_DASH_ARRAY,
+      'vector-effect':   'non-scaling-stroke',
+    }),
+    open,
+  ));
+  const mid = a.boundary[Math.floor(a.boundary.length / 2)];
+  addMapLabel(ctx, parent, ctx.bx(mid.lon).toFixed(1), ctx.by(mid.lat).toFixed(1),
+    a.name || '?', col);
+}
+
 // ── Anchor / racetrack airspace ──────────────────────────
 // The DCS anchor point marks the END of the hot leg (where the aircraft arrives
 // before the first turn).  generateRacetrack() expects the START of the hot leg,
@@ -210,6 +231,7 @@ function drawAirspaces(ctx, airspaces, showPopup) {
     NFZ:    ctx.movie ? '#ff4444' : '#9b1c1c',
     TRA:    ctx.movie ? '#ffb020' : '#7c5000',
     ANCHOR: ctx.movie ? '#00e5ff' : '#006680',
+    LINE:   ctx.movie ? '#ff6ec7' : '#8a1a5c',
   };
   const defaultAirspaceCol = ctx.movie ? '#6aaa7a' : '#5a6a60';
   const airspaceG = svgEl('g');
@@ -223,6 +245,7 @@ function drawAirspaces(ctx, airspaces, showPopup) {
     if (a.shape === 'circle')                    drawCircleAirspace (ctx, a, col, typeG, showPopup);
     else if (a.shape === 'polygon' && a.boundary) drawPolygonAirspace(ctx, a, col, typeG, showPopup);
     else if (a.shape === 'anchor'  && a.anchorPt) drawAnchorAirspace (ctx, a, col, typeG, showPopup);
+    else if (a.shape === 'line'    && a.boundary) drawLineAirspace   (ctx, a, col, typeG, showPopup);
     airspaceG.appendChild(typeG);
   });
 

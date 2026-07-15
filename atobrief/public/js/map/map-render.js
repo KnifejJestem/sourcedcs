@@ -116,7 +116,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
       const degOffset = (a.radiusNm || DEFAULT_RADIUS_NM) / 60;
       expand({ lon: a.lon - degOffset, lat: a.lat - degOffset });
       expand({ lon: a.lon + degOffset, lat: a.lat + degOffset });
-    } else if (a.shape === 'polygon' && a.boundary) {
+    } else if ((a.shape === 'polygon' || a.shape === 'line') && a.boundary) {
       a.boundary.forEach(expand);
     } else if (a.shape === 'anchor' && a.anchorPt) {
       const legNm  = a.legLengthNm || DEFAULT_LEG_NM;

@@ -175,6 +175,34 @@ function _renderSteerPointsList(container, steerPts) {
     })(sp);
     row.appendChild(coordInput);
 
+    // Route tag: groups points into named routes for the map line (omit = always
+    // connect, matching pre-existing files; 0 = standalone, never connects).
+    var routeInput = el('input', 'ef-input ef-input-sm');
+    routeInput.type = 'number';
+    routeInput.placeholder = 'Rte';
+    routeInput.title = 'Route # (blank = always connect; 0 = standalone, no connecting line)';
+    routeInput.style.width = '50px';
+    routeInput.value = sp.route != null ? sp.route : '';
+    (function (point) {
+      routeInput.addEventListener('input', function () {
+        point.route = this.value !== '' ? parseInt(this.value, 10) : undefined;
+      });
+    })(sp);
+    row.appendChild(routeInput);
+
+    var speedInput = el('input', 'ef-input ef-input-sm');
+    speedInput.type = 'number';
+    speedInput.placeholder = 'Kts';
+    speedInput.title = 'Planned leg airspeed (knots)';
+    speedInput.style.width = '55px';
+    speedInput.value = sp.speed_kts != null ? sp.speed_kts : '';
+    (function (point) {
+      speedInput.addEventListener('input', function () {
+        point.speed_kts = this.value !== '' ? parseFloat(this.value) : undefined;
+      });
+    })(sp);
+    row.appendChild(speedInput);
+
     var timeInput2 = el('input', 'ef-input ef-input-sm');
     timeInput2.placeholder = 'Time (e.g. 2046Z)';
     timeInput2.style.width = '80px';

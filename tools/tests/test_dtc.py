@@ -7,7 +7,9 @@ import pytest
 from tools.miztoyaml.dtc import (
     build_comms_from_dtc,
     parse_dtc_file,
+    parse_dtc_lines,
     parse_dtc_nav_pts,
+    parse_dtc_routes,
     parse_spins_md,
 )
 
@@ -192,6 +194,158 @@ class TestParseDtcNavPts:
         assert len(result) == 1
         assert result[0]["number"] == 1
         assert result[0]["type"] == "STPT"
+
+
+class TestParseDtcRoutes:
+    def _f16_dtc(self, nav_pts: list) -> bytes:
+        return json.dumps({"data": {"MPD": {"NAV_PTS": nav_pts}}}).encode()
+
+    def _f18_dtc(self, nav_pts: list, nav_route: list) -> bytes:
+        return json.dumps({"data": {"WYPT": {"NAV_PTS": nav_pts, "NAV_ROUTE": nav_route}}}).encode()
+
+    def test_f16_single_route_ordered_by_number(self):
+        pts = [
+            {"number": 2, "x": 2.0, "y": 2.0, "alt": 100.0, "note": "B", "R1": True, "R2": False, "R3": False, "speed": 400.0},
+            {"number": 1, "x": 1.0, "y": 1.0, "alt": 50.0,  "note": "A", "R1": True, "R2": False, "R3": False, "speed": 300.0},
+        ]
+        result = parse_dtc_routes(self._f16_dtc(pts))
+        assert len(result) == 1
+        assert result[0]["route"] == 1
+        assert [p["note"] for p in result[0]["points"]] == ["A", "B"]
+        assert result[0]["points"][0]["speed_kts"] == pytest.approx(300.0)
+
+    def test_f16_multiple_routes_plus_standalone(self):
+        pts = [
+            {"number": 1, "x": 1.0, "y": 1.0, "alt": 10.0, "note": "R1PT", "R1": True,  "R2": False, "R3": False, "speed": 400.0},
+            {"number": 2, "x": 2.0, "y": 2.0, "alt": 20.0, "note": "R2PT", "R1": False, "R2": True,  "R3": False, "speed": 400.0},
+            {"number": 3, "x": 3.0, "y": 3.0, "alt": 30.0, "note": "LOOSE", "R1": False, "R2": False, "R3": False, "speed": 400.0},
+        ]
+        result = parse_dtc_routes(self._f16_dtc(pts))
+        routes = {g["route"]: [p["note"] for p in g["points"]] for g in result}
+        assert routes == {1: ["R1PT"], 2: ["R2PT"], None: ["LOOSE"]}
+        # Standalone points never carry a route speed
+        standalone = next(g for g in result if g["route"] is None)
+        assert standalone["points"][0]["speed_kts"] is None
+
+    def test_f16_route_altitude_preferred_over_static_alt(self):
+        pts = [{"number": 1, "x": 1.0, "y": 1.0, "alt": 10.0, "routeAltitude": 3048.0,
+                "note": "", "R1": True, "R2": False, "R3": False}]
+        result = parse_dtc_routes(self._f16_dtc(pts))
+        assert result[0]["points"][0]["alt_m"] == pytest.approx(3048.0)
+
+    def test_f16_standalone_uses_static_alt(self):
+        pts = [{"number": 1, "x": 1.0, "y": 1.0, "alt": 10.0, "routeAltitude": 3048.0,
+                "note": "", "R1": False, "R2": False, "R3": False}]
+        result = parse_dtc_routes(self._f16_dtc(pts))
+        assert result[0]["points"][0]["alt_m"] == pytest.approx(10.0)
+
+    def test_f18_route_order_is_not_sorted_by_wypt_num(self):
+        nav_pts = [{"wypt_num": n, "x": float(n), "y": float(n), "alt": float(n), "note": f"P{n}"}
+                   for n in (1, 6, 7, 10)]
+        # NAV_ROUTE entries preserve JSON insertion order — not ascending wypt_num
+        nav_route = [{
+            "STPT1":  {"wypt_num": 1,  "route_num": 1, "speed": 400.0, "alt": 100.0},
+            "STPT10": {"wypt_num": 10, "route_num": 1, "speed": 400.0, "alt": 100.0},
+            "STPT6":  {"wypt_num": 6,  "route_num": 1, "speed": 400.0, "alt": 100.0},
+            "STPT7":  {"wypt_num": 7,  "route_num": 1, "speed": 400.0, "alt": 100.0},
+        }]
+        result = parse_dtc_routes(self._f18_dtc(nav_pts, nav_route))
+        assert len(result) == 1
+        assert [p["number"] for p in result[0]["points"]] == [1, 10, 6, 7]
+
+    def test_f18_stale_wypt_reference_skipped(self):
+        nav_pts = [{"wypt_num": 1, "x": 1.0, "y": 1.0, "alt": 10.0, "note": ""}]
+        nav_route = [{
+            "STPT1": {"wypt_num": 1, "route_num": 1, "speed": 400.0, "alt": 100.0},
+            "STPT2": {"wypt_num": 2, "route_num": 1, "speed": 400.0, "alt": 100.0},  # no matching NAV_PTS entry
+        }]
+        result = parse_dtc_routes(self._f18_dtc(nav_pts, nav_route))
+        # Only 1 point resolves -> folds into standalone, not a 1-point "route"
+        assert len(result) == 1
+        assert result[0]["route"] is None
+        assert result[0]["points"][0]["number"] == 1
+
+    def test_f18_route_alt_speed_from_route_entry(self):
+        nav_pts = [{"wypt_num": 1, "x": 1.0, "y": 1.0, "alt": 10.0, "note": ""},
+                   {"wypt_num": 2, "x": 2.0, "y": 2.0, "alt": 20.0, "note": ""}]
+        nav_route = [{
+            "STPT1": {"wypt_num": 1, "route_num": 1, "speed": 463.0, "alt": 74.0},
+            "STPT2": {"wypt_num": 2, "route_num": 1, "speed": 470.0, "alt": 84.0},
+        }]
+        result = parse_dtc_routes(self._f18_dtc(nav_pts, nav_route))
+        pts = result[0]["points"]
+        assert pts[0]["alt_m"] == pytest.approx(74.0)
+        assert pts[0]["speed_kts"] == pytest.approx(463.0)
+
+    def test_f18_unreferenced_navpts_are_standalone(self):
+        nav_pts = [{"wypt_num": 1, "x": 1.0, "y": 1.0, "alt": 10.0, "note": "USED"},
+                   {"wypt_num": 2, "x": 2.0, "y": 2.0, "alt": 20.0, "note": "UNUSED"}]
+        nav_route = [{
+            "STPT1": {"wypt_num": 1, "route_num": 1, "speed": 400.0, "alt": 100.0},
+        }]
+        result = parse_dtc_routes(self._f18_dtc(nav_pts, nav_route))
+        # route 1's single point folds into standalone (no route with < 2 pts),
+        # merged alongside wypt 2 which was never referenced by any route.
+        assert len(result) == 1
+        assert result[0]["route"] is None
+        assert {p["note"] for p in result[0]["points"]} == {"USED", "UNUSED"}
+
+    def test_no_route_data_returns_empty(self):
+        content = json.dumps({"data": {"COMM": {}}}).encode()
+        assert parse_dtc_routes(content) == []
+
+    def test_invalid_json_returns_empty(self):
+        assert parse_dtc_routes(b"not json") == []
+
+
+class TestParseDtcLines:
+    def _f16_dtc(self, geo_lines: list) -> bytes:
+        return json.dumps({"data": {"MPD": {"GEO_LINES": geo_lines}}}).encode()
+
+    def _f18_dtc(self, nav_pts: list) -> bytes:
+        return json.dumps({"data": {"WYPT": {"NAV_PTS": nav_pts}}}).encode()
+
+    def test_f16_geo_lines_grouped_by_flag(self):
+        pts = [
+            {"number": 1, "x": 1.0, "y": 1.0, "alt": 10.0, "note": "", "L1": True,  "L2": False, "L3": False, "L4": False},
+            {"number": 2, "x": 2.0, "y": 2.0, "alt": 20.0, "note": "", "L1": True,  "L2": False, "L3": False, "L4": False},
+            {"number": 3, "x": 3.0, "y": 3.0, "alt": 30.0, "note": "", "L1": False, "L2": True,  "L3": False, "L4": False},
+        ]
+        result = parse_dtc_lines(self._f16_dtc(pts))
+        # L2 group has only 1 point -> dropped (can't form a line)
+        assert len(result) == 1
+        assert result[0]["line"] == 1
+        assert len(result[0]["points"]) == 2
+
+    def test_f16_geo_lines_ordered_by_number(self):
+        pts = [
+            {"number": 2, "x": 2.0, "y": 2.0, "L1": True, "L2": False, "L3": False, "L4": False},
+            {"number": 1, "x": 1.0, "y": 1.0, "L1": True, "L2": False, "L3": False, "L4": False},
+        ]
+        result = parse_dtc_lines(self._f16_dtc(pts))
+        assert [p["x"] for p in result[0]["points"]] == [1.0, 2.0]
+
+    def test_f16_unflagged_points_excluded(self):
+        pts = [{"number": 1, "x": 1.0, "y": 1.0, "L1": False, "L2": False, "L3": False, "L4": False}]
+        assert parse_dtc_lines(self._f16_dtc(pts)) == []
+
+    def test_f18_r_flags_on_real_waypoints(self):
+        pts = [
+            {"wypt_num": 1, "x": 1.0, "y": 1.0, "alt": 10.0, "note": "A", "R1": True,  "R2": False, "R3": False},
+            {"wypt_num": 2, "x": 2.0, "y": 2.0, "alt": 20.0, "note": "B", "R1": True,  "R2": False, "R3": False},
+            {"wypt_num": 3, "x": 3.0, "y": 3.0, "alt": 30.0, "note": "C", "R1": False, "R2": False, "R3": False},
+        ]
+        result = parse_dtc_lines(self._f18_dtc(pts))
+        assert len(result) == 1
+        assert result[0]["line"] == 1
+        assert [p["note"] for p in result[0]["points"]] == ["A", "B"]
+
+    def test_no_line_data_returns_empty(self):
+        content = json.dumps({"data": {"COMM": {}}}).encode()
+        assert parse_dtc_lines(content) == []
+
+    def test_invalid_json_returns_empty(self):
+        assert parse_dtc_lines(b"not json") == []
 
 
 # ── SPINS markdown parser ────────────────────────────────────────────────────

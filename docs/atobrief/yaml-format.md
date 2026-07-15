@@ -65,6 +65,7 @@ throughout the rest of the file.  It contains: `callsigns`,
 `bullseye` (single reference point),
 `reference_points` (named positions),
 `steerpoints` (merged IP/EP/MARSHAL/WP waypoints shared across flights),
+`lines` (reference/planning polylines, e.g. FLOT or coordination lines),
 `control_agencies` (AWACS, CRC), and `frequencies` (net/callsign metadata
 for each frequency used in the COMMS channel assignments).
 
@@ -299,6 +300,39 @@ registry:
 | `coords` | coord string | Centroid position (average lat/lon of all merged points) |
 | `altitude_ft` | number | Maximum altitude across all merged points |
 
+### `lines:` (list)
+
+Reference / planning polylines — e.g. a FLOT, a coordination line, a border —
+drawn on the map as plain dashed lines with **no** route semantics (no speed,
+no time-on-station).  These are distinct from a mission's `steer_points`,
+which describe the flown path.
+
+The `miz-to-yaml` tool populates this automatically from each unique DTC
+cartridge referenced by a flight (F-16: the DTC's `GEO_LINES` planning
+points, grouped by the DTC's L1-L4 line flags; F-18: the DTC's real
+steerpoints, grouped by its R1-R3 line flags — F-18 has no separate
+line-drawing points, so it reuses the aircraft's own waypoints instead). A
+cartridge shared by multiple flights only contributes its lines once.
+
+```yaml
+registry:
+  lines:
+    - id: LINE-1
+      dtc_cartridge: jasmine_w1_f16
+      points:
+        - coords: N34°43'46" E36°26'58"
+          altitude_ft: 1936
+        - coords: N34°12'57" E36°35'01"
+          altitude_ft: 5728
+          name: CHECKPOINT 2   # optional — set when the DTC point has a note
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique line identifier (auto-generated) |
+| `dtc_cartridge` | string | Name of the DCS DTC file this line came from — informational |
+| `points` | list | Ordered list of `{coords, altitude_ft?, name?}` — drawn as a single connected polyline |
+
 ### `control_agencies:` (map)
 
 A mapping of agency id → control agency data.  Both AWACS and CRC agencies
@@ -528,7 +562,7 @@ En-route waypoints plotted as hollow circles connected by dashed lines.
 Each steer point is either an **inline** coordinate entry or a **registry ref**
 pointing to an entry in `registry.steerpoints`.
 
-**Inline entry:** `{coords, name?, altitude_ft?, time?, orbit?}`
+**Inline entry:** `{coords, name?, altitude_ft?, speed_kts?, route?, time?, orbit?}`
 
 **Registry ref:** `{id: SSP-1, time?: '2046Z'}` — position is resolved from the
 steerpoint, coordinates are not duplicated.  A `time` field on a registry ref
@@ -561,6 +595,8 @@ steer_points:
 | `name_ref` | string | Name of an airfield (ICAO) or carrier callsign/ID to use as the waypoint position |
 | `name` | string | Waypoint label shown on map; omit for route-shaping points with no label |
 | `altitude_ft` | number | Waypoint altitude in feet (optional) |
+| `speed_kts` | number | Planned leg airspeed in knots (optional) — set by `miztoyaml.py` from DTC route data |
+| `route` | number | Named-route tag (optional, default behaves as one connected path). See **Multiple routes** below |
 | `aim_point_id` | string | Informational — set by `miztoyaml.py` when a waypoint overlaps an aim point; ignored by the viewer |
 | `orbit` | object | Optional — racetrack orbit at this waypoint (CAP station, tanker track) |
 | `orbit.alt_ft` | number | Orbit altitude in feet |
@@ -569,6 +605,44 @@ steer_points:
 | `orbit.leg_nm` | number | Hot-leg length in NM |
 | `orbit.heading_deg` | number | Hot-leg heading in degrees true |
 | `orbit.direction` | string | Orbit direction: `cw` (clockwise) or `ccw` (counterclockwise).  Default is `ccw` |
+
+#### Multiple routes
+
+A DTC cartridge can define more than one named route for a flight (e.g. a
+separate ingress and egress leg, or alternate corridors) — `miztoyaml.py`
+tags each point it pulls from a DTC with `route`, an integer matching the
+DTC's own route/line-flag numbering (F-16: `R1`-`R3`; F-18: `NAV_ROUTE`
+`route_num`).  Points that aren't part of any named route (e.g. individual
+target-cue steerpoints) are tagged `route: 0`.
+
+The map only draws a connecting line between two **consecutive** points in
+the list when they're compatible:
+
+- Omitting `route` on both points always connects them (the pre-existing
+  behaviour — every hand-written package with no `route` field renders
+  exactly as before).
+- `route: 0` never connects to its neighbours — the point still shows as a
+  marker, just with no line into or out of it.
+- Two explicit, differing route numbers (e.g. `1` and `2`) break the line —
+  each route is drawn as its own separate leg.
+- Deploy and recovery always connect to the first/last steer point in the
+  list, regardless of its `route` tag.
+
+```yaml
+steer_points:
+  - coords: N36°51'46" E35°12'03"
+    name: JAKUP
+    route: 1        # ingress leg
+  - coords: N35°30'04" E36°18'30"
+    name: SALIM
+    route: 1
+  - coords: N37°09'57" E35°41'50"
+    name: TOSIE
+    route: 2        # separate egress leg — no line drawn from SALIM to TOSIE
+  - coords: N33°21'12" E36°32'52"
+    name: TS1
+    route: 0        # standalone target-cue point — not connected to anything
+```
 
 #### `control:`
 
