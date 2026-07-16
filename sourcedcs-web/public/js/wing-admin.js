@@ -85,7 +85,7 @@ function loadAll(tok) {
     renderSquadronsTable();
     renderTable();
   }).catch(function (err) {
-    console.error('[squadron-admin] load failed:', err);
+    console.error('[wing-admin] load failed:', err);
     showToast('Failed to load member data', true);
   });
 }

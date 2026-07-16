@@ -421,7 +421,7 @@ function selectPilot(sub) {
   hdr.appendChild(delPilotBtn);
   el.appendChild(hdr);
 
-  /* Squadron assignment is now managed from the Squadron Admin page (single
+  /* Squadron assignment is now managed from the Wing Admin page (single
      source of truth shared with the public roster and skills page) — this
      is a read-only pointer over there. */
   var sqOverrideRow = document.createElement('div');
@@ -429,7 +429,7 @@ function selectPilot(sub) {
   sqOverrideRow.innerHTML =
     '<span style="font-size:9px;letter-spacing:1px;color:var(--text-3)">SQUADRON</span>' +
     '<span style="font-size:10px;flex:1">' + esc(sqName || 'unassigned') + '</span>' +
-    '<a class="btn-sm" href="squadron-admin.html">MANAGE ON SQUADRON ADMIN &rarr;</a>';
+    '<a class="btn-sm" href="wing-admin.html">MANAGE ON WING ADMIN &rarr;</a>';
   el.appendChild(sqOverrideRow);
 
   categoriesForPilot(sub).forEach(function (cat) {

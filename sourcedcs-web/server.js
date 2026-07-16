@@ -109,7 +109,7 @@ const GRADING_CHANNEL_ID = process.env.GRADING_CHANNEL_ID || '';
 /* Unified member store — merges live Discord roster data with persisted
    squadron overrides and active/inactive status. Keyed by Discord user ID.
    This is the single source of truth for squadron membership, consumed by
-   the squadron admin page, the public roster/squadron pages, and the skills
+   the wing admin page, the public roster/squadron pages, and the skills
    page (see /api/members, /api/roster, /api/my-squadron). */
 let members        = loadJSON(MEMBERS_FILE, {});
 let membersCacheAt = 0;
@@ -1126,7 +1126,7 @@ function findRosterEntry(pilot) {
 
 /* Reverse lookup: given a Discord member, find the matching registered
    website pilot (if any) by the same name/callsign heuristics. Used by the
-   squadron admin page to flag Discord/website identity mismatches. */
+   wing admin page to flag Discord/website identity mismatches. */
 function findLinkedPilot(member) {
   const candidates = [
     (member.callsign   || '').toLowerCase(),
@@ -1289,7 +1289,7 @@ api.get('/skill-pilots-squadrons', requireAuth, requireSkillAdmin, async (_req, 
 });
 
 /* ── Members (unified Discord roster + squadron assignment) ──
-   Single source of truth for squadron membership: consumed by the squadron
+   Single source of truth for squadron membership: consumed by the wing
    admin page, the public roster/squadron pages, and the skills page. */
 api.get('/members', requireAuth, requireSkillAdmin, async (_req, res) => {
   await ensureMembersFresh();
@@ -1365,7 +1365,7 @@ api.put('/members/:id/role', writeOpsLimiter, requireAuth, requireSkillAdmin, (r
 });
 
 /* Fix a registered pilot's display name/callsign to match their Discord
-   identity (surfaced as a mismatch on the squadron admin page). Does not
+   identity (surfaced as a mismatch on the wing admin page). Does not
    touch skill grades or the pilot's sub — only the display fields. */
 api.put('/skill-pilots/:sub/name', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
   const sub = req.params.sub;

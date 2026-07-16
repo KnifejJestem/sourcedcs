@@ -52,8 +52,8 @@ function logoutCasdoor() {
     if (adminCard) adminCard.style.display = '';
   }
   if (isSkillAdminRole(token)) {
-    var squadronAdminCard = document.getElementById('toolSquadronAdminLink');
-    if (squadronAdminCard) squadronAdminCard.style.display = '';
+    var wingAdminCard = document.getElementById('toolWingAdminLink');
+    if (wingAdminCard) wingAdminCard.style.display = '';
   }
 })();
 
@@ -274,7 +274,7 @@ function submitApplication(e) {
 /* isAdminRole is provided by /js/auth.js */
 var isAdmin = isAdminRole(getToken());
 
-/* ── Data-driven sub-squadrons ── */
+/* ── Data-driven squadrons ── */
 var SQUADRONS = [];
 (function() {
   var grid = document.getElementById('subsqGrid');

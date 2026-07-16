@@ -1303,7 +1303,7 @@ footer { padding: 0; }
 .member-socials-grid  { grid-template-columns: repeat(auto-fill, minmax(180px, 220px)); }
 
 /* ═══════════════════════════════════════════════════════════
-   SUB-SQUADRONS
+   SQUADRONS
 ═══════════════════════════════════════════════════════════ */
 .subsq-section { background: var(--bg2); }
 
