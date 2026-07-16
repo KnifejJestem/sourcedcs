@@ -109,7 +109,7 @@ const GRADING_CHANNEL_ID = process.env.GRADING_CHANNEL_ID || '';
 /* Unified member store — merges live Discord roster data with persisted
    squadron overrides and active/inactive status. Keyed by Discord user ID.
    This is the single source of truth for squadron membership, consumed by
-   the squadron admin page, the public roster/wing pages, and the skills
+   the squadron admin page, the public roster/squadron pages, and the skills
    page (see /api/members, /api/roster, /api/my-squadron). */
 let members        = loadJSON(MEMBERS_FILE, {});
 let membersCacheAt = 0;
@@ -399,7 +399,7 @@ async function sendApplicationToDiscord(application) {
       { name: 'Discord',        value: application.discordHandle || '—', inline: true },
       { name: 'Age Group',      value: String(application.age)   || '—', inline: true },
       { name: 'Timezone',       value: application.timezone      || '—', inline: true },
-      { name: 'Preferred Wing', value: application.subSquadron   || '—', inline: true },
+      { name: 'Preferred Squadron', value: application.subSquadron || '—', inline: true },
       { name: 'Experience',     value: application.experience    || 'N/A', inline: false },
       { name: 'Modules',        value: application.modules       || 'N/A', inline: false },
     ],
@@ -1290,7 +1290,7 @@ api.get('/skill-pilots-squadrons', requireAuth, requireSkillAdmin, async (_req, 
 
 /* ── Members (unified Discord roster + squadron assignment) ──
    Single source of truth for squadron membership: consumed by the squadron
-   admin page, the public roster/wing pages, and the skills page. */
+   admin page, the public roster/squadron pages, and the skills page. */
 api.get('/members', requireAuth, requireSkillAdmin, async (_req, res) => {
   await ensureMembersFresh();
   const list = Object.values(members).map(m => {

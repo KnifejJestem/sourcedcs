@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wing Detail — SOURCE DCS</title>
+  <title>Squadron Detail — SOURCE DCS</title>
   <link rel="icon" href="sourcelogobg.png">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -18,7 +18,7 @@
   </a>
   <nav class="header-nav" id="mainNav" aria-label="Main navigation">
     <a class="nav-link" href="/#about">ABOUT</a>
-    <a class="nav-link" href="/#subsquadrons">WINGS</a>
+    <a class="nav-link" href="/#subsquadrons">SQUADRONS</a>
     <a class="nav-link" href="/#join">JOIN</a>
   </nav>
   <div class="header-spacer"></div>
@@ -38,15 +38,15 @@
 </header>
 
 <section class="hero-section" style="padding:48px 24px 40px">
-  <div id="wingHero" style="text-align:center;width:100%">
-    <div style="color:var(--text-3);font-size:11px;letter-spacing:1px">LOADING WING...</div>
+  <div id="squadronHero" style="text-align:center;width:100%">
+    <div style="color:var(--text-3);font-size:11px;letter-spacing:1px">LOADING SQUADRON...</div>
   </div>
 </section>
 
 <section class="content-section">
   <div class="section-container">
-    <div class="section-label">ABOUT THIS WING</div>
-    <div id="wingDetail" style="max-width:720px">
+    <div class="section-label">ABOUT THIS SQUADRON</div>
+    <div id="squadronDetail" style="max-width:720px">
       <div style="color:var(--text-3);font-size:11px;letter-spacing:1px">Loading...</div>
     </div>
   </div>
@@ -54,11 +54,11 @@
 
 <section class="content-section">
   <div class="section-container">
-    <div class="section-label">WING ROSTER</div>
+    <div class="section-label">SQUADRON ROSTER</div>
     <div class="roster-scroll">
       <table class="roster-table">
         <thead><tr><th>CALLSIGN</th><th>ROLE</th></tr></thead>
-        <tbody id="wingRosterBody">
+        <tbody id="squadronRosterBody">
           <tr><td colspan="2" style="text-align:center;color:var(--text-3)">LOADING...</td></tr>
         </tbody>
       </table>
@@ -84,6 +84,6 @@
 
 <script src="/js/config.js"></script>
 <script src="/js/auth.js"></script>
-<script src="/js/wing.js"></script>
+<script src="/js/squadron.js"></script>
 </body>
 </html>

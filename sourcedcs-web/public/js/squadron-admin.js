@@ -359,7 +359,7 @@ function syncPilotName(member) {
     .catch(function (err) { showToast(err.message || 'Failed to sync name', true); });
 }
 
-/* ── Squadron (wing) CRUD ───────────────────────────────── */
+/* ── Squadron CRUD ───────────────────────────────── */
 function renderSquadronsTable() {
   var tbody = document.getElementById('squadronsBody');
   if (!tbody) return;

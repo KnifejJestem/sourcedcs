@@ -23,7 +23,7 @@ function setTheme(t) {
   var name = (user && user.name) ? user.name.toUpperCase() : 'USER';
   var btn = document.getElementById('loginBtn');
   if (btn) {
-    btn.textContent = name + ' \u23FB';
+    btn.textContent = name + ' ⏻';
     btn.title = 'Click to log out';
     btn.classList.add('login-btn--logout');
     btn.onclick = function() { try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {} location.reload(); };
@@ -54,20 +54,20 @@ function roleColor(role) {
   return ROSTER_COLORS[h % ROSTER_COLORS.length];
 }
 
-/* ── Load wing data ── */
+/* ── Load squadron data ── */
 (function() {
   var params = new URLSearchParams(window.location.search);
-  var wingId = params.get('id');
-  if (!wingId) { document.getElementById('wingHero').innerHTML = '<div style="color:var(--red)">No wing ID specified. <a href="/#subsquadrons" style="color:var(--text);text-decoration:underline">Back to wings</a></div>'; return; }
+  var squadronId = params.get('id');
+  if (!squadronId) { document.getElementById('squadronHero').innerHTML = '<div style="color:var(--red)">No squadron ID specified. <a href="/#subsquadrons" style="color:var(--text);text-decoration:underline">Back to squadrons</a></div>'; return; }
 
   Promise.all([
-    fetch('/api/squadrons/' + encodeURIComponent(wingId)).then(function(r){return r.ok ? r.json() : null;}),
+    fetch('/api/squadrons/' + encodeURIComponent(squadronId)).then(function(r){return r.ok ? r.json() : null;}),
     fetch('/api/roster').then(function(r){return r.json();})
   ]).then(function(results) {
     var sq = results[0];
     var roster = results[1];
     if (!sq) {
-      document.getElementById('wingHero').innerHTML = '<div style="color:var(--red)">Wing not found. <a href="/#subsquadrons" style="color:var(--text);text-decoration:underline">Back to wings</a></div>';
+      document.getElementById('squadronHero').innerHTML = '<div style="color:var(--red)">Squadron not found. <a href="/#subsquadrons" style="color:var(--text);text-decoration:underline">Back to squadrons</a></div>';
       return;
     }
 
@@ -75,8 +75,8 @@ function roleColor(role) {
 
     /* Hero */
     var tags = (sq.tags || []).map(function(t){return '<span class="subsq-tag">'+escH(t)+'</span>';}).join('');
-    var logoHtml = sq.image ? '<img class="wing-hero-logo" src="' + escH(sq.image) + '" alt="" onerror="this.style.display=\'none\'">' : '';
-    document.getElementById('wingHero').innerHTML =
+    var logoHtml = sq.image ? '<img class="squadron-hero-logo" src="' + escH(sq.image) + '" alt="" onerror="this.style.display=\'none\'">' : '';
+    document.getElementById('squadronHero').innerHTML =
       logoHtml +
       '<div class="subsq-designator" style="font-size:clamp(36px,8vw,72px);margin-bottom:8px">' + escH(sq.designator) + '</div>' +
       '<div class="subsq-name" style="font-size:clamp(14px,3vw,20px);margin-bottom:4px">' + escH(sq.name) + '</div>' +
@@ -85,23 +85,23 @@ function roleColor(role) {
       '<div style="margin-top:24px"><a class="btn btn-primary" href="https://sourcedcs.page/#join"><span class="btn-icon">&#x2295;</span> APPLY TO ' + escH(sq.designator) + '</a></div>';
 
     /* Detail */
-    document.getElementById('wingDetail').innerHTML =
+    document.getElementById('squadronDetail').innerHTML =
       '<p class="section-desc" style="margin-bottom:16px">' + escH(sq.fullDesc || sq.shortDesc) + '</p>' +
-      '<a class="btn btn-secondary" href="/#subsquadrons">&larr; ALL WINGS</a>';
+      '<a class="btn btn-secondary" href="/#subsquadrons">&larr; ALL SQUADRONS</a>';
 
-    /* Wing roster */
-    var wingPilots = roster.filter(function(p) { return p.squadron === sq.id; });
-    var tbody = document.getElementById('wingRosterBody');
-    if (!wingPilots.length) {
-      tbody.innerHTML = '<tr class="roster-open-row"><td colspan="2" class="roster-open-cell">NO PILOTS ASSIGNED YET \u2014 <a href="/#join">APPLY NOW \u2192</a></td></tr>';
+    /* Squadron roster */
+    var squadronPilots = roster.filter(function(p) { return p.squadron === sq.id; });
+    var tbody = document.getElementById('squadronRosterBody');
+    if (!squadronPilots.length) {
+      tbody.innerHTML = '<tr class="roster-open-row"><td colspan="2" class="roster-open-cell">NO PILOTS ASSIGNED YET — <a href="/#join">APPLY NOW →</a></td></tr>';
     } else {
-      tbody.innerHTML = wingPilots.map(function(p) {
+      tbody.innerHTML = squadronPilots.map(function(p) {
         var c = roleColor(p.role || '');
         var roleHtml = p.role ? '<span class="role-badge" style="color:' + c + ';border-color:' + c + '">' + escH(p.role) + '</span>' : '';
         return '<tr><td><span class="callsign">' + escH(p.callsign) + '</span></td><td>' + roleHtml + '</td></tr>';
-      }).join('') + '<tr class="roster-open-row"><td colspan="2" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="/#join">APPLY NOW \u2192</a></td></tr>';
+      }).join('') + '<tr class="roster-open-row"><td colspan="2" class="roster-open-cell">PILOT SLOTS OPEN — <a href="/#join">APPLY NOW →</a></td></tr>';
     }
   }).catch(function() {
-    document.getElementById('wingHero').innerHTML = '<div style="color:var(--red)">Error loading wing data.</div>';
+    document.getElementById('squadronHero').innerHTML = '<div style="color:var(--red)">Error loading squadron data.</div>';
   });
 })();

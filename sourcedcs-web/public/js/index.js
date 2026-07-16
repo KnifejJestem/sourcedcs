@@ -138,13 +138,13 @@ document.querySelectorAll('a[href^="#"]').forEach(function(link) {
 })();
 
 /* ── Apply modal ── */
-function openApplyModal(wing) {
+function openApplyModal(squadron) {
   document.getElementById('applyModalOverlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
-  if (wing) {
-    document.getElementById('applyModalOverlay').dataset.pendingWing = wing;
+  if (squadron) {
+    document.getElementById('applyModalOverlay').dataset.pendingSquadron = squadron;
   } else {
-    delete document.getElementById('applyModalOverlay').dataset.pendingWing;
+    delete document.getElementById('applyModalOverlay').dataset.pendingSquadron;
   }
   var token = getToken();
   if (!token) {
@@ -155,9 +155,9 @@ function openApplyModal(wing) {
     /* Already logged in — skip straight to the application form (step 2) */
     document.getElementById('applyStep1').style.display = 'none';
     document.getElementById('applyStep2').style.display = '';
-    if (wing) {
+    if (squadron) {
       var sel = document.getElementById('fSquadron');
-      if (sel) sel.value = wing;
+      if (sel) sel.value = squadron;
     }
     setTimeout(function() { document.getElementById('fCallsign').focus(); }, 30);
   }
@@ -166,19 +166,19 @@ function openApplyModal(wing) {
    application form opens automatically after the user has registered. */
 function applyCreateAccount() {
   var overlay = document.getElementById('applyModalOverlay');
-  var pendingWing = (overlay && overlay.dataset.pendingWing) || '';
+  var pendingSquadron = (overlay && overlay.dataset.pendingSquadron) || '';
   var qs = new URLSearchParams({ apply: '1' });
-  if (pendingWing) qs.set('wing', pendingWing);
+  if (pendingSquadron) qs.set('squadron', pendingSquadron);
   var returnUrl = window.location.origin + window.location.pathname + '?' + qs.toString();
   signupWithCasdoor(returnUrl);
 }
 function showApplyStep2() {
   document.getElementById('applyStep1').style.display = 'none';
   document.getElementById('applyStep2').style.display = '';
-  var pendingWing = document.getElementById('applyModalOverlay').dataset.pendingWing;
-  if (pendingWing) {
+  var pendingSquadron = document.getElementById('applyModalOverlay').dataset.pendingSquadron;
+  if (pendingSquadron) {
     var sel = document.getElementById('fSquadron');
-    if (sel) sel.value = pendingWing;
+    if (sel) sel.value = pendingSquadron;
   }
   setTimeout(function() { document.getElementById('fCallsign').focus(); }, 30);
 }
@@ -210,7 +210,7 @@ function submitApplication(e) {
   if (!form.discordHandle.value.trim()) missing.push('Discord username');
   if (!form.age.value)                 missing.push('age group');
   if (!form.timezone.value)            missing.push('timezone');
-  if (!form.subSquadron.value)         missing.push('preferred wing');
+  if (!form.subSquadron.value)         missing.push('preferred squadron');
   if (missing.length) {
     errEl.textContent   = 'Please fill in: ' + missing.join(', ') + '.';
     errEl.style.display = '';
@@ -281,18 +281,18 @@ var SQUADRONS = [];
   fetch('/api/squadrons').then(function(r){return r.json();}).then(function(sqs) {
     SQUADRONS = sqs;
     renderSquadrons(sqs);
-    populateWingSelects(sqs);
+    populateSquadronSelects(sqs);
     if (isAdmin) {
       document.getElementById('subsqAdminBar').style.display = '';
     }
     /* Re-render roster now that squadron names are available */
     if (ROSTER.length) renderRoster(ROSTER);
-  }).catch(function() { grid.innerHTML = '<div class="ops-preview-empty">Unable to load wings.</div>'; });
+  }).catch(function() { grid.innerHTML = '<div class="ops-preview-empty">Unable to load squadrons.</div>'; });
 })();
 
 function renderSquadrons(sqs) {
   var grid = document.getElementById('subsqGrid');
-  if (!sqs.length) { grid.innerHTML = '<div class="ops-preview-empty">No wings configured.</div>'; return; }
+  if (!sqs.length) { grid.innerHTML = '<div class="ops-preview-empty">No squadrons configured.</div>'; return; }
   grid.innerHTML = sqs.map(function(sq) {
     var tags = (sq.tags || []).map(function(t) { return '<span class="subsq-tag">' + escH(t) + '</span>'; }).join('');
     var logoHtml = sq.image ? '<img class="subsq-logo" src="' + escH(sq.image) + '" alt="" onerror="this.style.display=\'none\'">' : '';
@@ -304,14 +304,14 @@ function renderSquadrons(sqs) {
       '<div class="subsq-role-tags">' + tags + '</div>' +
       '<p class="subsq-desc">' + escH(sq.shortDesc) + '</p>' +
       '<div class="subsq-card-actions">' +
-        '<a class="btn btn-secondary subsq-apply-btn" href="wing.html?id=' + encodeURIComponent(sq.id) + '">VIEW DETAILS &rarr;</a>' +
+        '<a class="btn btn-secondary subsq-apply-btn" href="squadron.html?id=' + encodeURIComponent(sq.id) + '">VIEW DETAILS &rarr;</a>' +
         '<button class="btn btn-secondary subsq-apply-btn" onclick="openApplyModal(\'' + escH(sq.id) + '\')">APPLY &rarr;</button>' +
       '</div>' +
     '</div>';
   }).join('');
 }
 
-function populateWingSelects(sqs) {
+function populateSquadronSelects(sqs) {
   var selectors = [document.getElementById('fSquadron'), document.getElementById('rSquadron')];
   selectors.forEach(function(sel) {
     if (!sel) return;
@@ -433,14 +433,14 @@ function refreshRoster() {
 
 /* ── Auto-open apply form when ?apply=1 is in the URL ── */
 /* When the user returns from Casdoor registration with ?apply=1 in the URL,
-   or arrives from the wing detail page, open the application form. */
+   or arrives from the squadron detail page, open the application form. */
 (function() {
   var params = new URLSearchParams(window.location.search);
   if (params.get('apply') === '1') {
-    var wing = params.get('wing') || '';
+    var squadron = params.get('squadron') || '';
     /* Clean the URL so a page refresh doesn't reopen the modal */
     history.replaceState(null, '', window.location.pathname + window.location.hash);
-    openApplyModal(wing || undefined);
+    openApplyModal(squadron || undefined);
   }
 })();
 
