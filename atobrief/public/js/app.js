@@ -413,7 +413,14 @@ function loadPackage_obj(data) {
   // ── Propagate registry.bullseye and steerpoints onto ato ──
   // Gives map-data.js and view code easy access via the ato object.
   if (pkg.registry && pkg.ato) {
+    // The registry editor's only bullseye affordance saves it as a
+    // reference_points entry with type 'bullseye', not registry.bullseye
+    // directly — fall back to that so it still gets drawn.
+    const refBullseye = Array.isArray(pkg.registry.reference_points)
+      ? pkg.registry.reference_points.find(p => p.type === 'bullseye')
+      : null;
     if (pkg.registry.bullseye)    pkg.ato._bullseye    = pkg.registry.bullseye;
+    else if (refBullseye)         pkg.ato._bullseye    = refBullseye;
     if (pkg.registry.steerpoints) pkg.ato._steerpoints = pkg.registry.steerpoints;
   }
 
