@@ -631,6 +631,19 @@ function decodeJWT(token) {
   } catch { return null; }
 }
 
+/* Records a Casdoor identity in the pilot registry the first time it's seen,
+   so wing admins can manually link a roster member to it even before that
+   pilot has touched any pilot-specific feature (skill grades, etc). No-ops
+   for identities already on file. */
+function registerPilot(user) {
+  const sub = user && user.sub;
+  if (!sub || pilotRegistry[sub]) return;
+  const rawName  = user.name || user.preferred_username || sub || '';
+  const callsign = parseCallsign(rawName) || rawName;
+  pilotRegistry[sub] = { sub, name: rawName, callsign, registered_at: new Date().toISOString() };
+  saveJSON(PILOT_REGISTRY_FILE, pilotRegistry);
+}
+
 function requireAuth(req, res, next) {
   const auth  = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
@@ -638,6 +651,7 @@ function requireAuth(req, res, next) {
   const payload = decodeJWT(token);
   if (!payload) return res.status(401).json({ error: 'Invalid token' });
   req.user = payload;
+  registerPilot(payload);
   next();
 }
 
@@ -722,6 +736,7 @@ api.post('/auth/token', authLimiter, async (req, res) => {
       console.warn('[auth] Casdoor response missing access_token:', JSON.stringify(tokenData).slice(0, 200));
       return res.status(502).json({ error: 'No access token returned by auth server' });
     }
+    registerPilot(decodeJWT(accessToken));
     res.json({ access_token: accessToken });
   } catch (err) {
     console.error('[auth] Token exchange failed:', err.message);
@@ -1098,13 +1113,22 @@ api.delete('/squadrons/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, r
   res.json({ ok: true });
 });
 
-/* Finds a roster entry that matches a pilot by any of:
+/* Finds a roster entry for a pilot. An admin-set `casdoorSub` link (see
+   PUT /members/:id/casdoor-link) always wins — it exists precisely for
+   accounts the name/callsign heuristic below can never match (e.g. a
+   Casdoor account not registered under the member's Discord identity).
+   Otherwise falls back to matching by any of:
    - their parsed callsign (from server nickname)
    - their Discord @username
    - their Discord global display name
    The pilot arg has { callsign, name } both coming from the Casdoor JWT name,
    which is usually the Discord username or global_name — NOT the server nickname. */
 function findRosterEntry(pilot) {
+  if (pilot.sub) {
+    const linked = Object.values(members).find(m => m.casdoorSub === pilot.sub);
+    if (linked) return linked;
+  }
+
   const candidates = [
     (pilot.callsign || '').toLowerCase(),
     (pilot.name     || '').toLowerCase(),
@@ -1125,9 +1149,19 @@ function findRosterEntry(pilot) {
 }
 
 /* Reverse lookup: given a Discord member, find the matching registered
-   website pilot (if any) by the same name/callsign heuristics. Used by the
-   wing admin page to flag Discord/website identity mismatches. */
+   website pilot (if any). An admin-set `casdoorSub` link is authoritative
+   (`manual: true`) — the pilot may not have used any pilot-specific feature
+   yet, in which case it's flagged `pending` until they show up in the
+   registry. Otherwise falls back to the same name/callsign heuristics used
+   by findRosterEntry, which the wing admin page uses to flag mismatches. */
 function findLinkedPilot(member) {
+  if (member.casdoorSub) {
+    const pilot = pilotRegistry[member.casdoorSub];
+    return pilot
+      ? { sub: member.casdoorSub, name: pilot.name, callsign: pilot.callsign, manual: true }
+      : { sub: member.casdoorSub, name: null, callsign: null, manual: true, pending: true };
+  }
+
   const candidates = [
     (member.callsign   || '').toLowerCase(),
     (member.username   || '').toLowerCase(),
@@ -1194,14 +1228,6 @@ api.get('/skill-grades', requireAuth, (req, res) => {
   const sub   = req.user.sub;
   const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
   const isAdm = roles.some(r => SKILL_ADMIN_ROLES.includes(typeof r === 'string' ? r : (r?.name || '')));
-
-  /* Auto-register pilot on first access */
-  if (sub && !pilotRegistry[sub]) {
-    const rawName = req.user.name || req.user.preferred_username || req.user.sub || '';
-    const callsign = parseCallsign(rawName) || rawName;
-    pilotRegistry[sub] = { sub, name: rawName, callsign, registered_at: new Date().toISOString() };
-    saveJSON(PILOT_REGISTRY_FILE, pilotRegistry);
-  }
 
   if (isAdm) {
     res.json(skillGrades);
@@ -1295,7 +1321,7 @@ api.get('/members', requireAuth, requireSkillAdmin, async (_req, res) => {
   await ensureMembersFresh();
   const list = Object.values(members).map(m => {
     const linkedPilot  = findLinkedPilot(m);
-    const nameMismatch = !!(linkedPilot && linkedPilot.callsign && m.callsign &&
+    const nameMismatch = !!(linkedPilot && !linkedPilot.manual && linkedPilot.callsign && m.callsign &&
       linkedPilot.callsign.toLowerCase() !== m.callsign.toLowerCase());
     return {
       id:               m.id,
@@ -1362,6 +1388,36 @@ api.put('/members/:id/role', writeOpsLimiter, requireAuth, requireSkillAdmin, (r
   }
   saveJSON(MEMBERS_FILE, members);
   res.json({ id, role_override: members[id].roleOverride || null, role: resolvedRole(members[id]) || null });
+});
+
+/* Manually link (or clear) a Discord roster member to a specific Casdoor
+   account by `sub`. Exists for accounts the automatic callsign/username/
+   global-name matching can never resolve — e.g. a Casdoor account whose
+   display name shares nothing with the member's Discord identity. The
+   target sub must already be a known Casdoor login (present in the pilot
+   registry — populated at login, see registerPilot()), so an admin can only
+   link to a real, already-seen account, not an arbitrary string. */
+api.put('/members/:id/casdoor-link', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const id = req.params.id;
+  if (!members[id]) return res.status(404).json({ error: 'Member not found' });
+  const sub = typeof req.body.sub === 'string' ? req.body.sub.trim() : '';
+
+  if (!sub) {
+    delete members[id].casdoorSub;
+  } else {
+    if (!pilotRegistry[sub]) {
+      return res.status(400).json({ error: 'Unknown Casdoor account — ask them to log in to the site at least once first' });
+    }
+    const conflict = Object.values(members).find(m => m.id !== id && m.casdoorSub === sub);
+    if (conflict) {
+      return res.status(409).json({ error: 'That Casdoor account is already linked to ' + (conflict.callsign || conflict.id) });
+    }
+    members[id].casdoorSub = sub;
+  }
+
+  saveJSON(MEMBERS_FILE, members);
+  const linkedPilot = findLinkedPilot(members[id]);
+  res.json({ id, casdoor_sub: members[id].casdoorSub || null, linkedPilot });
 });
 
 /* Fix a registered pilot's display name/callsign to match their Discord

@@ -5,16 +5,16 @@
       "modulation": "INTERCOM"
     },
     {
-      "freq_mhz": 305.0,
-      "modulation": "AM"
+      "freq_mhz": 0.0,
+      "modulation": "DISABLED"
     },
     {
-      "freq_mhz": 251.0,
-      "modulation": "AM"
+      "freq_mhz": 0.0,
+      "modulation": "DISABLED"
     },
     {
-      "freq_mhz": 243.0,
-      "modulation": "AM"
+      "freq_mhz": 0.0,
+      "modulation": "DISABLED"
     },
     {
       "freq_mhz": 360.2,
@@ -25,12 +25,12 @@
       "modulation": "AM"
     },
     {
-      "freq_mhz": 270.0,
+      "freq_mhz": 261.5,
       "modulation": "AM"
     },
     {
-      "freq_mhz": 127.0,
-      "modulation": "AM"
+      "freq_mhz": 0.0,
+      "modulation": "DISABLED"
     },
     {
       "freq_mhz": 0.0,
@@ -48,17 +48,17 @@
   "radio_volumes": [
     5.0,
     5.0,
-    2.4,
+    0.2,
     2.5,
     2.9,
-    4.6,
     2.6,
-    2.1,
-    1.0,
+    1.7,
+    5.0,
+    0.0,
     1.0,
     1.0
   ],
-  "tx_slot": 1,
+  "tx_slot": 6,
   "sound_set": "RADIO_TRANS_APACHE",
   "noise_enabled": true,
   "unit_id": 100000001

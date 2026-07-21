@@ -21,6 +21,7 @@ function logout() {
 var _members    = [];
 var _squadrons  = [];
 var _roleLabels = [];
+var _pilots     = [];
 var _search     = '';
 var _filter     = '';
 
@@ -77,10 +78,14 @@ function loadAll(tok) {
     fetch('/api/members',   { headers: headers }).then(function (r) { return r.json(); }),
     fetch('/api/squadrons').then(function (r) { return r.json(); }).catch(function () { return []; }),
     fetch('/api/role-labels', { headers: headers }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
+    fetch('/api/skill-pilots', { headers: headers }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; }),
   ]).then(function (results) {
     _members    = Array.isArray(results[0]) ? results[0] : [];
     _squadrons  = Array.isArray(results[1]) ? results[1] : [];
     _roleLabels = Array.isArray(results[2]) ? results[2] : [];
+    _pilots     = Object.values(results[3] || {}).sort(function (a, b) {
+      return (a.callsign || a.name || '').localeCompare(b.callsign || b.name || '');
+    });
     populateSquadronFilter();
     renderSquadronsTable();
     renderTable();
@@ -266,9 +271,23 @@ function renderTable() {
     tdRole.appendChild(roleNote);
     tr.appendChild(tdRole);
 
-    /* Website account / name mismatch */
+    /* Website account / name mismatch / manual Casdoor link */
     var tdWeb = document.createElement('td');
-    if (m.linkedPilot) {
+    if (m.linkedPilot && m.linkedPilot.manual) {
+      var manualHtml = m.linkedPilot.pending
+        ? '<div style="color:var(--text-3);font-size:9px">linked &middot; awaiting first login</div>'
+        : '<div>' + esc(m.linkedPilot.callsign || m.linkedPilot.name) + '</div>' +
+          '<div style="font-size:9px;color:var(--blue,#4af)">manually linked</div>';
+      tdWeb.innerHTML = manualHtml;
+      var unlinkBtn = document.createElement('button');
+      unlinkBtn.className = 'btn-sm';
+      unlinkBtn.style.marginTop = '4px';
+      unlinkBtn.textContent = 'UNLINK';
+      (function (member) {
+        unlinkBtn.addEventListener('click', function () { unlinkPilotAccount(member); });
+      })(m);
+      tdWeb.appendChild(unlinkBtn);
+    } else if (m.linkedPilot) {
       var webHtml = '<div>' + esc(m.linkedPilot.callsign || m.linkedPilot.name) + '</div>';
       if (m.nameMismatch) {
         webHtml += '<div style="font-size:9px;color:var(--amber)">website: "' + esc(m.linkedPilot.callsign) +
@@ -287,6 +306,7 @@ function renderTable() {
       }
     } else {
       tdWeb.innerHTML = '<span style="color:var(--text-3);font-size:9px">not registered on website</span>';
+      tdWeb.appendChild(buildLinkPicker(m));
     }
     tr.appendChild(tdWeb);
 
@@ -357,6 +377,77 @@ function syncPilotName(member) {
       showToast('Website name synced to Discord');
     })
     .catch(function (err) { showToast(err.message || 'Failed to sync name', true); });
+}
+
+/* Builds a small "pick a Casdoor account + link" control for members whose
+   website account couldn't be auto-matched (e.g. their Casdoor login name
+   shares nothing with their Discord identity). Only accounts that have
+   logged in at least once (present in the pilot registry) are selectable. */
+function buildLinkPicker(member) {
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:4px';
+
+  var sel = document.createElement('select');
+  sel.className = 'grade-select';
+  var placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = _pilots.length ? 'link Casdoor account…' : 'no logins yet';
+  sel.appendChild(placeholder);
+  _pilots.forEach(function (p) {
+    var opt = document.createElement('option');
+    opt.value = p.sub;
+    opt.textContent = p.callsign || p.name || p.sub;
+    sel.appendChild(opt);
+  });
+
+  var btn = document.createElement('button');
+  btn.className = 'btn-sm btn-sm-blue';
+  btn.textContent = 'LINK';
+  btn.addEventListener('click', function () {
+    if (!sel.value) return;
+    linkPilotAccount(member.id, sel.value);
+  });
+
+  wrap.appendChild(sel);
+  wrap.appendChild(btn);
+  return wrap;
+}
+
+function linkPilotAccount(id, sub) {
+  var tok = getToken();
+  fetch('/api/members/' + encodeURIComponent(id) + '/casdoor-link', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+    body: JSON.stringify({ sub: sub }),
+  }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+    .then(function (res) {
+      if (!res.ok) throw new Error(res.body.error || 'Failed to link account');
+      var m = _members.find(function (x) { return x.id === id; });
+      if (m) {
+        m.linkedPilot  = res.body.linkedPilot;
+        m.nameMismatch = false;
+      }
+      renderTable();
+      showToast('Website account linked');
+    })
+    .catch(function (err) { showToast(err.message || 'Failed to link account', true); });
+}
+
+function unlinkPilotAccount(member) {
+  var tok = getToken();
+  fetch('/api/members/' + encodeURIComponent(member.id) + '/casdoor-link', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+    body: JSON.stringify({ sub: null }),
+  }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+    .then(function (res) {
+      if (!res.ok) throw new Error(res.body.error || 'Failed to unlink account');
+      var m = _members.find(function (x) { return x.id === member.id; });
+      if (m) m.linkedPilot = null;
+      renderTable();
+      showToast('Website account unlinked');
+    })
+    .catch(function (err) { showToast(err.message || 'Failed to unlink account', true); });
 }
 
 /* ── Squadron CRUD ───────────────────────────────── */
