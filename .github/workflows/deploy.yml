@@ -24,6 +24,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.PORT || 22 }}
           script: |
+            set -e
             cd ${{ secrets.PATH }}
             cd infra
             export TAG=${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'dev' && 'dev' || 'latest' }}

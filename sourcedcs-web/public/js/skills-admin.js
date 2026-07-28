@@ -169,7 +169,7 @@ function renderGradingQueue() {
     infoDiv.innerHTML =
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<span class="request-status ' + statusClass + '">' + esc(req.status.toUpperCase()) + '</span>' +
-        '<span class="req-queue-callsign">' + esc(req.pilot_callsign || req.pilot_name || req.pilot_id) + '</span>' +
+        '<span class="req-queue-callsign">' + esc(resolvedCallsign(req.pilot_id, req.pilot_callsign || req.pilot_name)) + '</span>' +
       '</div>' +
       moduleHtml +
       claimedByHtml +
@@ -234,9 +234,8 @@ function buildPilotRows() {
   var subToRow = {};
 
   Object.keys(_pilots).forEach(function (sub) {
-    var pilot = _pilots[sub];
     var row = {
-      key: sub, sub: sub, callsign: pilot.callsign || pilot.name || sub,
+      key: sub, sub: sub, callsign: resolvedCallsign(sub),
       groupKey: pilotGroupKey(sub), registered: true,
     };
     rows.push(row);
@@ -340,6 +339,24 @@ function renderPilotList() {
   });
 }
 
+/* ── Identity resolution ────────────────────────────────────── */
+/* Wing Admin (members.json / casdoorSub link) is the sole source of truth
+   for a pilot's display name — the raw pilot registry only reflects
+   whatever name Casdoor reported the moment they first logged in, which is
+   frequently stale or unrelated to their real callsign until an admin links
+   the two records. Anywhere a pilot's callsign is shown, resolve through
+   the linked member first and only fall back to the raw registry entry. */
+function memberForSub(sub) {
+  return _members.find(function (m) { return m.linkedPilot && m.linkedPilot.sub === sub; }) || null;
+}
+function resolvedCallsign(sub, fallback) {
+  var m = memberForSub(sub);
+  if (m && m.callsign) return m.callsign;
+  var p = _pilots[sub];
+  if (p && (p.callsign || p.name)) return p.callsign || p.name;
+  return fallback || sub;
+}
+
 /* ── Squadron helpers ───────────────────────────────────────── */
 function pilotSquadron(sub) {
   return _pilotSquadrons[sub] || null;
@@ -379,6 +396,7 @@ function selectPilot(sub) {
   }
 
   var pilot   = _pilots[sub] || { sub: sub, name: sub, callsign: sub };
+  var callsign = resolvedCallsign(sub);
   var grades  = _allGrades[sub] || {};
   var score   = Math.round(pilotOverallScore(sub) * 100);
   var sqId    = pilotSquadron(sub);
@@ -392,7 +410,7 @@ function selectPilot(sub) {
 
   var callsignSpan = document.createElement('span');
   callsignSpan.style.cssText = 'font-family:Orbitron,monospace;font-weight:900;font-size:16px;letter-spacing:3px';
-  callsignSpan.textContent = pilot.callsign || pilot.name || sub;
+  callsignSpan.textContent = callsign;
 
   var nameSpan = document.createElement('span');
   nameSpan.style.cssText = 'font-size:10px;color:var(--text-3)';
@@ -410,9 +428,9 @@ function selectPilot(sub) {
   delPilotBtn.className   = 'btn-sm btn-sm-danger';
   delPilotBtn.textContent = 'DELETE PILOT';
   delPilotBtn.title       = 'Permanently remove this pilot and all their grades';
-  (function (s, callsign) {
-    delPilotBtn.addEventListener('click', function () { deletePilot(s, callsign); });
-  })(sub, pilot.callsign || pilot.name || sub);
+  (function (s, cs) {
+    delPilotBtn.addEventListener('click', function () { deletePilot(s, cs); });
+  })(sub, callsign);
 
   hdr.appendChild(callsignSpan);
   hdr.appendChild(nameSpan);
