@@ -6,6 +6,7 @@ const multer    = require('multer');
 const path      = require('path');
 const fs        = require('fs');
 const https     = require('https');
+const voiceGateway = require('./discord-gateway');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -113,6 +114,23 @@ const DISCORD_BOT_TOKEN  = process.env.DISCORD_BOT_TOKEN  || '';
 const DISCORD_GUILD_ID   = process.env.DISCORD_GUILD_ID   || '';
 const APPLY_CHANNEL_ID   = process.env.APPLY_CHANNEL_ID   || '';
 const GRADING_CHANNEL_ID = process.env.GRADING_CHANNEL_ID || '';
+
+/* Live voice-call activity tracking (Wing Admin heatmap/graph) — connects to
+   the Discord Gateway when bot credentials are configured; otherwise the
+   store still loads (serving whatever history already exists) but no live
+   connection is opened. See discord-gateway.js. */
+voiceGateway.init({ dataDir: DATA_DIR, token: DISCORD_BOT_TOKEN, guildId: DISCORD_GUILD_ID });
+
+/* Flush any in-progress voice calls before the process exits — without this,
+   every routine deploy (SIGTERM) would silently drop up to one checkpoint
+   interval of in-progress call time, not just crashes. */
+function gracefulShutdown() {
+  try { voiceGateway.flushAndSave(); }
+  catch (err) { console.error('[shutdown] voice-activity flush failed:', err.message); }
+  process.exit(0);
+}
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
 /* Unified member store — merges live Discord roster data with persisted
    squadron overrides and active/inactive status. Keyed by Discord user ID.
@@ -1350,6 +1368,7 @@ api.get('/members', requireAuth, requireSkillAdmin, async (_req, res) => {
     const linkedPilot  = findLinkedPilot(m);
     const nameMismatch = !!(linkedPilot && !linkedPilot.manual && linkedPilot.callsign && m.callsign &&
       linkedPilot.callsign.toLowerCase() !== m.callsign.toLowerCase());
+    const voice = voiceGateway.getMemberVoiceState(m.id);
     return {
       id:               m.id,
       username:         m.username,
@@ -1363,11 +1382,29 @@ api.get('/members', requireAuth, requireSkillAdmin, async (_req, res) => {
       squadron:         resolvedSquadron(m) || null,
       active:           m.active !== false,
       lastSeen:         m.lastSeen || null,
+      inCall:           voice.inCall,
+      lastCallEnd:      voice.lastCallEnd,
       linkedPilot,
       nameMismatch,
     };
   }).sort((a, b) => a.callsign.localeCompare(b.callsign));
   res.json(list);
+});
+
+/* Per-member voice-activity heatmap source: { "YYYY-MM-DD": minutes } for
+   whatever history is retained (rolling ~1 year). */
+api.get('/voice-activity/member/:id', requireAuth, requireSkillAdmin, (req, res) => {
+  const id = req.params.id;
+  if (!members[id]) return res.status(404).json({ error: 'Member not found' });
+  res.json({ days: voiceGateway.getMemberDays(id) });
+});
+
+/* Squadron-wide activity graph: daily/weekly totals or an hour-of-day
+   aggregate, over a trailing window of `range` days. */
+api.get('/voice-activity/overview', requireAuth, requireSkillAdmin, (req, res) => {
+  const mode = ['daily', 'weekly', 'hourly'].includes(req.query.mode) ? req.query.mode : 'daily';
+  const range = [30, 90, 365].includes(Number(req.query.range)) ? Number(req.query.range) : 90;
+  res.json(voiceGateway.getOverview(mode, range));
 });
 
 /* Admin: force-refresh the members store from Discord */
