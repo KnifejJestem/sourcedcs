@@ -29,6 +29,12 @@ var currentToken   = getToken();
 var bkResources    = { ranges: [], controllers: [], notifyChannelId: '' };
 var bkBookings     = [];
 var bkAdminOpen    = false;
+var bkShowPast     = false;
+var bkTickTimer    = null;
+var bkRefetchTimer = null;
+
+var BK_SOON_THRESHOLD_MS = 60 * 60 * 1000; /* "starting soon" window: 1 hour */
+var BK_STATE_RANK = { live: 0, soon: 1, upcoming: 2, past: 3 };
 
 /* ════════════════════════════════════════════════════════════
    INIT
@@ -54,8 +60,18 @@ var bkAdminOpen    = false;
     }
     bkPrefillDates();
     bkLoadAll();
+    bkTickTimer    = setInterval(bkTick, 30 * 1000);
+    bkRefetchTimer = setInterval(bkLoadAll, 60 * 1000);
   }
 })();
+
+/* Re-renders time-sensitive parts of the page from already-fetched state
+   (no network call) so relative labels, status colors and the clock stay
+   current between refetches */
+function bkTick() {
+  bkRenderStatusBar();
+  bkRenderBoard();
+}
 
 /* Prefill both date fields with today's date (UTC/Zulu), since same-day
    bookings are the overwhelming majority of entries */
@@ -102,9 +118,15 @@ function bkLoadAll() {
     bkResources = results[0] || { ranges: [], controllers: [], notifyChannelId: '' };
     bkBookings  = Array.isArray(results[1]) ? results[1] : [];
     bkPopulateResourceSelect();
+    bkRenderStatusBar();
     bkRenderBoard();
     if (bkAdminOpen) bkRenderAdminPanel();
   }).catch(function() {});
+}
+
+function bkOnShowPastToggle() {
+  bkShowPast = document.getElementById('bkShowPastToggle').checked;
+  bkRenderBoard();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -395,6 +417,102 @@ function bkSubmitBooking() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   STATUS BAR — live clock + at-a-glance counts across all bookings
+════════════════════════════════════════════════════════════ */
+function bkRenderStatusBar() {
+  var el = document.getElementById('bkStatusBar');
+  if (!el) return;
+
+  var now = new Date();
+  var today = now.toISOString().slice(0, 10);
+  var activeNow = 0, todayCount = 0, upcomingCount = 0;
+  bkBookings.forEach(function(b) {
+    var state = bkBookingState(b);
+    if (state === 'live') activeNow++;
+    if (state !== 'past' && b.startTime.slice(0, 10) === today) todayCount++;
+    if (state === 'soon' || state === 'upcoming') upcomingCount++;
+  });
+
+  var clock = now.toISOString().slice(11, 16).replace(':', '') + 'Z';
+  el.innerHTML =
+    '<span class="bk-statusbar-clock">CURRENT: ' + clock + '</span>' +
+    '<span class="bk-statusbar-sep">&middot;</span>' +
+    '<span class="bk-statusbar-stat' + (activeNow > 0 ? ' bk-statusbar-stat--live' : '') + '">' + activeNow + ' ACTIVE NOW</span>' +
+    '<span class="bk-statusbar-sep">&middot;</span>' +
+    '<span class="bk-statusbar-stat">' + todayCount + ' TODAY</span>' +
+    '<span class="bk-statusbar-sep">&middot;</span>' +
+    '<span class="bk-statusbar-stat">' + upcomingCount + ' UPCOMING</span>';
+}
+
+/* ════════════════════════════════════════════════════════════
+   TEMPORAL HELPERS
+════════════════════════════════════════════════════════════ */
+function bkBookingState(b) {
+  var now   = new Date();
+  var start = new Date(b.startTime);
+  var end   = new Date(b.endTime);
+  if (now >= start && now < end) return 'live';
+  if (now < start) return (start - now) <= BK_SOON_THRESHOLD_MS ? 'soon' : 'upcoming';
+  return 'past';
+}
+
+function bkCompareBookings(a, b) {
+  var pa = BK_STATE_RANK[bkBookingState(a)];
+  var pb = BK_STATE_RANK[bkBookingState(b)];
+  if (pa !== pb) return pa - pb;
+  if (pa === BK_STATE_RANK.past) return new Date(b.endTime) - new Date(a.endTime); /* most recently ended first */
+  return new Date(a.startTime) - new Date(b.startTime);
+}
+
+function bkDurationStr(ms) {
+  var totalMin = Math.max(0, Math.round(ms / 60000));
+  var days  = Math.floor(totalMin / 1440);
+  var hours = Math.floor((totalMin % 1440) / 60);
+  var mins  = totalMin % 60;
+  if (days  > 0) return days + 'd ' + hours + 'h';
+  if (hours > 0) return mins > 0 ? (hours + 'h ' + mins + 'm') : (hours + 'h');
+  return mins + 'm';
+}
+
+function bkRelativeLabel(b, state) {
+  var now   = new Date();
+  var start = new Date(b.startTime);
+  var end   = new Date(b.endTime);
+  if (state === 'live') return 'NOW &middot; ends in ' + bkDurationStr(end - now);
+  if (state === 'past') return 'ended ' + bkDurationStr(now - end) + ' ago';
+  return 'in ' + bkDurationStr(start - now);
+}
+
+var BK_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+/* dateStr is a "YYYY-MM-DD" (UTC) date; returns TODAY/TOMORROW/YESTERDAY or
+   a short "MON DD" label, relative to the current UTC date */
+function bkDayLabel(dateStr) {
+  var today     = new Date().toISOString().slice(0, 10);
+  var todayDate = new Date(today   + 'T00:00:00Z');
+  var thisDate  = new Date(dateStr + 'T00:00:00Z');
+  var diffDays  = Math.round((thisDate - todayDate) / 86400000);
+  if (diffDays === 0)  return 'TODAY';
+  if (diffDays === 1)  return 'TOMORROW';
+  if (diffDays === -1) return 'YESTERDAY';
+  var d = thisDate.getUTCDate();
+  return BK_MONTHS[thisDate.getUTCMonth()] + ' ' + (d < 10 ? '0' + d : d);
+}
+
+/* Day-collapsed Zulu window display: "TODAY · 1900–2030Z" for the common
+   same-day case, falling back to two full day-labeled times otherwise */
+function bkFmtWindow(startIso, endIso) {
+  var startDate = startIso.slice(0, 10);
+  var endDate   = endIso.slice(0, 10);
+  var startHHMM = startIso.slice(11, 16).replace(':', '');
+  var endHHMM   = endIso.slice(11, 16).replace(':', '');
+  if (startDate === endDate) {
+    return bkDayLabel(startDate) + ' &middot; ' + startHHMM + '&ndash;' + endHHMM + 'Z';
+  }
+  return bkDayLabel(startDate) + ' ' + startHHMM + 'Z &rarr; ' + bkDayLabel(endDate) + ' ' + endHHMM + 'Z';
+}
+
+/* ════════════════════════════════════════════════════════════
    BOARD
 ════════════════════════════════════════════════════════════ */
 function bkRenderBoard() {
@@ -409,21 +527,46 @@ function bkRenderResourceList(elId, resources, type) {
     el.innerHTML = '<div class="bk-empty">None configured yet.</div>';
     return;
   }
-  var user = getUser();
+  var user    = getUser();
   var isAdmin = isBookingAdminRole(currentToken);
-  el.innerHTML = resources.map(function(resource) {
-    var bookings = bkBookings.filter(function(b) { return b.resourceType === type && b.resourceId === resource.id; })
-      .slice().sort(function(a, b) { return new Date(a.startTime) - new Date(b.startTime); });
+  var today   = new Date().toISOString().slice(0, 10);
 
-    var badges = '<span class="bk-badge">' + esc(resource.frequency) + '</span>';
+  el.innerHTML = resources.map(function(resource) {
+    var allBookings = bkBookings.filter(function(b) { return b.resourceType === type && b.resourceId === resource.id; });
+
+    var liveCount  = 0;
+    var todayCount = 0;
+    var liveOccupant = null;
+    allBookings.forEach(function(b) {
+      var state = bkBookingState(b);
+      if (state === 'live') { liveCount++; liveOccupant = b; }
+      if (state !== 'past' && b.startTime.slice(0, 10) === today) todayCount++;
+    });
+
+    var chip = type === 'controller'
+      ? (liveCount > 0
+          ? '<span class="bk-resource-chip bk-resource-chip--occupied">OCCUPIED &middot; ' + esc(liveOccupant.bookedBy.name || '—') + '</span>'
+          : '<span class="bk-resource-chip bk-resource-chip--free">FREE NOW</span>')
+      : (liveCount > 0
+          ? '<span class="bk-resource-chip bk-resource-chip--occupied">' + liveCount + ' ACTIVE NOW</span>'
+          : '<span class="bk-resource-chip bk-resource-chip--free">FREE NOW</span>');
+    chip += '<span class="bk-badge">' + todayCount + ' today</span>';
+
+    var badges = chip + '<span class="bk-badge">' + esc(resource.frequency) + '</span>';
     if (type === 'range') badges += '<span class="bk-badge">' + resource.minAltitude + '&ndash;' + resource.maxAltitude + 'ft</span>';
 
-    var rows = bookings.map(function(b) {
-      var isOwner  = user && b.bookedBy && user.sub === b.bookedBy.sub;
+    var visible = allBookings.filter(function(b) { return bkShowPast || bkBookingState(b) !== 'past'; })
+      .slice().sort(bkCompareBookings);
+
+    var rows = visible.map(function(b) {
+      var state     = bkBookingState(b);
+      var isOwner   = user && b.bookedBy && user.sub === b.bookedBy.sub;
       var canCancel = isOwner || isAdmin;
-      return '<div class="bk-booking-row">' +
+      return '<div class="bk-booking-row bk-booking-row--' + state + '">' +
         '<div>' +
-          '<div class="bk-booking-window">' + bkFmtZ(b.startTime) + ' &rarr; ' + bkFmtZ(b.endTime) + '</div>' +
+          '<div class="bk-booking-window">' + bkFmtWindow(b.startTime, b.endTime) +
+            ' <span class="bk-status-badge bk-status-badge--' + state + '">' + bkRelativeLabel(b, state) + '</span>' +
+          '</div>' +
           '<div class="bk-booking-meta">' + esc(b.bookedBy.name || '—') + (type === 'range' ? ' &middot; <span class="bk-booking-alt">' + b.altitude + 'ft</span>' : '') + '</div>' +
         '</div>' +
         (canCancel ? '<button class="bk-link-btn bk-link-btn--danger" onclick="bkCancelBooking(' + b.id + ')">CANCEL</button>' : '') +

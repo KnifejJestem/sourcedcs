@@ -37,6 +37,46 @@
 .bk-container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
 .bk-container--flush-top { padding-top: 0; }
 
+/* ── Status bar: live clock + at-a-glance counts ────────── */
+.bk-statusbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  padding: 10px 16px;
+  margin-bottom: 24px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.bk-statusbar-clock {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+:root.movie .bk-statusbar-clock { color: var(--accent); }
+.bk-statusbar-sep { color: var(--text-3); }
+.bk-statusbar-stat { color: var(--text-2); text-transform: uppercase; }
+.bk-statusbar-stat--live { color: var(--green); font-weight: 700; }
+:root.movie .bk-statusbar-stat--live { color: var(--accent); }
+
+/* ── Board controls (show-past toggle) ──────────────────── */
+.bk-board-controls { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.bk-check-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-2);
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
 .bk-section-divider {
   display: flex;
   justify-content: space-between;
@@ -143,20 +183,56 @@
 }
 .bk-resource-body { padding: 10px 14px; }
 
+/* Per-resource FREE NOW / OCCUPIED / N ACTIVE NOW chip */
+.bk-resource-chip {
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border: 1px solid;
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.bk-resource-chip--free     { color: var(--green); border-color: var(--green); }
+.bk-resource-chip--occupied { color: var(--amber); border-color: var(--amber); }
+:root.movie .bk-resource-chip--free { color: var(--accent); border-color: var(--accent); }
+
 .bk-booking-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
   font-size: 11px;
+  transition: opacity .15s;
 }
 .bk-booking-row:last-child { border-bottom: none; }
-.bk-booking-window { color: var(--text); font-family: var(--font-mono); }
+.bk-booking-row--live { border-left-color: var(--green); background: rgba(26,92,46,.08); }
+:root.movie .bk-booking-row--live { border-left-color: var(--accent); background: rgba(57,255,122,.06); }
+.bk-booking-row--soon { border-left-color: var(--amber); }
+.bk-booking-row--past { opacity: .55; }
+
+.bk-booking-window { color: var(--text); font-family: var(--font-mono); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .bk-booking-meta { color: var(--text-3); font-size: 9px; letter-spacing: .5px; margin-top: 2px; }
 .bk-booking-alt { color: var(--amber); }
 .bk-booking-empty { font-size: 10px; color: var(--text-3); letter-spacing: 1px; padding: 4px 0; }
+
+/* Relative-time status badge, shown next to the absolute Zulu window */
+.bk-status-badge {
+  font-size: 8px;
+  letter-spacing: .5px;
+  padding: 2px 7px;
+  border: 1px solid;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.bk-status-badge--live     { color: var(--green); border-color: var(--green); font-weight: 700; }
+:root.movie .bk-status-badge--live { color: var(--accent); border-color: var(--accent); }
+.bk-status-badge--soon     { color: var(--amber); border-color: var(--amber); }
+.bk-status-badge--upcoming { color: var(--text-3); border-color: var(--border-strong); }
+.bk-status-badge--past     { color: var(--text-3); border-color: var(--border); }
 
 /* ── Booking form ───────────────────────────────────────── */
 .bk-form-panel {

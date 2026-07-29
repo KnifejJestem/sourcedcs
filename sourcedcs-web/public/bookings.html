@@ -56,6 +56,11 @@
 <!-- Main content -->
 <div id="bkMain" style="display:none">
 
+  <!-- ── Status bar: live clock + at-a-glance counts ────────── -->
+  <div class="bk-container bk-container--flush-top">
+    <div class="bk-statusbar" id="bkStatusBar"></div>
+  </div>
+
   <!-- ── Admin: manage ranges & controller positions ─────── -->
   <div class="bk-container bk-container--flush-top">
     <div class="bk-admin-toggle-row">
@@ -66,6 +71,9 @@
 
   <!-- ── Board (primary view) ───────────────────────────────── -->
   <div class="bk-container bk-container--flush-top">
+    <div class="bk-board-controls">
+      <label class="bk-check-label"><input type="checkbox" id="bkShowPastToggle" onchange="bkOnShowPastToggle()"> SHOW PAST BOOKINGS</label>
+    </div>
     <div class="bk-section-divider"><span>RANGES</span></div>
     <div id="bkRangesBoard"></div>
   </div>
