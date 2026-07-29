@@ -1,0 +1,178 @@
+/* ═══════════════════════════════════════════════════════════
+   BOOKINGS PAGE STYLES
+   Imports all tokens from css/style.css (loaded first)
+═══════════════════════════════════════════════════════════ */
+
+/* ── Hero ───────────────────────────────────────────────── */
+.bk-hero {
+  border-bottom: 1px solid var(--border);
+  padding: 56px 24px 48px;
+  background: var(--bg2);
+}
+.bk-hero-inner { max-width: 960px; margin: 0 auto; }
+.bk-title {
+  font-family: 'Orbitron', monospace;
+  font-weight: 900;
+  font-size: clamp(18px, 3.5vw, 32px);
+  letter-spacing: 4px;
+  color: var(--text);
+  margin: 12px 0 10px;
+}
+:root.movie .bk-title { color: var(--accent); text-shadow: 0 0 20px rgba(57,255,122,.3); }
+.bk-sub { font-size: 10px; letter-spacing: 1.5px; color: var(--text-3); }
+
+/* ── Login prompt ───────────────────────────────────────── */
+.bk-login-prompt {
+  max-width: 960px;
+  margin: 48px auto;
+  padding: 0 24px;
+  text-align: center;
+  color: var(--text-2);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.bk-login-prompt p { margin-bottom: 20px; }
+
+/* ── Container ──────────────────────────────────────────── */
+.bk-container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+.bk-container--flush-top { padding-top: 0; }
+
+.bk-section-divider {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+/* ── Admin toggle + panel ───────────────────────────────── */
+.bk-admin-toggle-row { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+.bk-admin-panel {
+  border: 1px solid var(--blue);
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+.bk-admin-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--blue);
+  text-transform: uppercase;
+  padding: 8px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.bk-admin-body { padding: 16px 14px; }
+.bk-admin-sub-label {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin: 18px 0 8px;
+}
+.bk-admin-sub-label:first-child { margin-top: 0; }
+
+.bk-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.bk-list-item-meta { color: var(--text-2); }
+.bk-list-item-meta b { color: var(--text); }
+.bk-list-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.bk-link-btn {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 9px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color .15s;
+}
+.bk-link-btn:hover { color: var(--text); }
+.bk-link-btn--danger:hover { color: var(--red); }
+.bk-empty { font-size: 10px; color: var(--text-3); letter-spacing: 1px; padding: 8px 0; }
+
+/* ── Resource cards (board) ─────────────────────────────── */
+.bk-resource-card {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+.bk-resource-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.bk-resource-name {
+  font-family: 'Orbitron', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+:root.movie .bk-resource-name { color: var(--accent); }
+.bk-resource-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+.bk-badge {
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.bk-resource-body { padding: 10px 14px; }
+
+.bk-booking-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.bk-booking-row:last-child { border-bottom: none; }
+.bk-booking-window { color: var(--text); font-family: var(--font-mono); }
+.bk-booking-meta { color: var(--text-3); font-size: 9px; letter-spacing: .5px; margin-top: 2px; }
+.bk-booking-alt { color: var(--amber); }
+.bk-booking-empty { font-size: 10px; color: var(--text-3); letter-spacing: 1px; padding: 4px 0; }
+
+/* ── Booking form ───────────────────────────────────────── */
+.bk-form-panel {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.bk-form-label {
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding: 8px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.bk-form-body { padding: 16px 14px; }
+.bk-hint { font-size: 8px; color: var(--text-3); margin-top: 4px; }

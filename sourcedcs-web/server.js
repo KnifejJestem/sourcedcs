@@ -27,6 +27,8 @@ const FLIGHT_PLANS_CFG_FILE      = path.join(DATA_DIR, 'flight-plans-config.json
 const FPL1801_FILE               = path.join(DATA_DIR, 'fpl1801.json');
 const PILOT_SQ_OVERRIDES_FILE    = path.join(DATA_DIR, 'pilot-squadron-overrides.json'); /* legacy — read once for migration */
 const MEMBERS_FILE               = path.join(DATA_DIR, 'members.json');
+const BOOKING_RESOURCES_FILE     = path.join(DATA_DIR, 'booking-resources.json');
+const BOOKINGS_FILE              = path.join(DATA_DIR, 'bookings.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
 
 if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
@@ -82,6 +84,12 @@ let applications = loadJSON(APPS_FILE, []);
 let nextEventId = events.reduce((m, e) => Math.max(m, e.id || 0), 0) + 1;
 
 let squadrons = loadJSON(SQUADRONS_FILE, []);
+
+/* Bookings: ranges & controller positions (admin-managed) and the bookings
+   made against them (member-managed) */
+let bookingResources = loadJSON(BOOKING_RESOURCES_FILE, { ranges: [], controllers: [], notifyChannelId: '' });
+let bookings         = loadJSON(BOOKINGS_FILE, []);
+let nextBookingId    = bookings.reduce((m, b) => Math.max(m, b.id || 0), 0) + 1;
 
 /* Skill tracker */
 let skillTree       = loadJSON(SKILL_TREE_FILE,     { categories: [] });
@@ -548,6 +556,14 @@ const applyLimiter = rateLimit({
   message:         { error: 'Too many applications — please wait before trying again.' }
 });
 
+const bookingLimiter = rateLimit({
+  windowMs:        60 * 1000,
+  max:             20,
+  standardHeaders: 'draft-7',
+  legacyHeaders:   false,
+  message:         { error: 'Too many booking requests — please wait before trying again.' }
+});
+
 const authLimiter = rateLimit({
   windowMs:        60 * 1000,
   max:             20,
@@ -562,6 +578,7 @@ app.use(express.json({ limit: '50kb' }));
 /* ─── App config (config.json) ──────────────────────────── */
 const appConfig       = loadJSON(path.join(__dirname, 'config.json'), {});
 const SKILL_ADMIN_ROLES = Array.isArray(appConfig.skillAdminRoles) ? appConfig.skillAdminRoles : ['admin'];
+const BOOKING_ADMIN_ROLES = ['admin', 'squadronlead'];
 
 /* ─── Casdoor config (read from env) ────────────────────── */
 const CASDOOR_CLIENT_ID     = process.env.CASDOOR_CLIENT_ID;
@@ -668,6 +685,16 @@ function requireSkillAdmin(req, res, next) {
   const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
   const ok = roles.some(r => SKILL_ADMIN_ROLES.includes(typeof r === 'string' ? r : (r?.name || '')));
   if (!ok) return res.status(403).json({ error: 'Skill admin access required' });
+  next();
+}
+
+function isBookingAdminUser(req) {
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  return roles.some(r => BOOKING_ADMIN_ROLES.includes(typeof r === 'string' ? r : (r?.name || '')));
+}
+
+function requireBookingAdmin(req, res, next) {
+  if (!isBookingAdminUser(req)) return res.status(403).json({ error: 'Booking admin access required' });
   next();
 }
 
@@ -1955,6 +1982,312 @@ api.delete('/fpl1801/:id', writeOpsLimiter, requireAuth, (req, res) => {
   saveJSON(FPL1801_FILE, fpl1801Plans);
   console.debug('[fpl1801] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));
   res.json({ ok: true });
+});
+
+/* ─── Bookings (ranges & controller positions) ──────────── */
+
+function timeWindowsOverlap(aStart, aEnd, bStart, bEnd) {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+/* Controller positions: exclusive per overlapping time window (any other
+   booking on the same position with an overlapping window is a conflict) */
+function findControllerConflict(resourceId, start, end, excludeBookingId) {
+  return bookings.find(b =>
+    b.resourceType === 'controller' &&
+    b.resourceId === resourceId &&
+    b.id !== excludeBookingId &&
+    timeWindowsOverlap(start, end, new Date(b.startTime), new Date(b.endTime))
+  );
+}
+
+/* Ranges: multiple overlapping-window bookings are allowed as long as their
+   deconfliction altitudes are at least 999ft apart */
+const RANGE_ALTITUDE_SEPARATION_FT = 999;
+function findRangeConflict(resourceId, start, end, altitude, excludeBookingId) {
+  return bookings.find(b =>
+    b.resourceType === 'range' &&
+    b.resourceId === resourceId &&
+    b.id !== excludeBookingId &&
+    timeWindowsOverlap(start, end, new Date(b.startTime), new Date(b.endTime)) &&
+    Math.abs(altitude - b.altitude) < RANGE_ALTITUDE_SEPARATION_FT
+  );
+}
+
+/* Resolves the display name to attribute a booking to: roster callsign if
+   the pilot is linked, else the registered pilot's callsign, else the raw
+   Casdoor name */
+function bookingDisplayName(req) {
+  const pilot = pilotRegistry[req.user.sub];
+  const entry = pilot ? findRosterEntry(pilot) : null;
+  return (entry && entry.callsign) || (pilot && pilot.callsign) || req.user.name || req.user.sub;
+}
+
+function findBookingResource(resourceType, resourceId) {
+  const list = resourceType === 'range' ? bookingResources.ranges : bookingResources.controllers;
+  return list.find(r => r.id === resourceId);
+}
+
+/* Send a new booking as a Discord embed to the configured notify channel */
+async function sendBookingToDiscord(booking, resource) {
+  if (!DISCORD_BOT_TOKEN) {
+    console.warn('[bookings] DISCORD_BOT_TOKEN not set — cannot post booking to Discord');
+    return;
+  }
+  const chId = bookingResources.notifyChannelId;
+  if (!chId) return;
+
+  const fields = [
+    { name: booking.resourceType === 'range' ? 'Range' : 'Controller Position', value: resource ? resource.name : booking.resourceId, inline: true },
+    { name: 'Frequency', value: resource ? resource.frequency : '—', inline: true },
+    { name: 'Window (Z)', value: booking.startTime + ' → ' + booking.endTime, inline: false },
+  ];
+  if (booking.resourceType === 'range') {
+    fields.push({ name: 'Deconfliction Altitude', value: booking.altitude + ' ft', inline: true });
+  }
+  fields.push({ name: 'Booked By', value: booking.bookedBy.name || '—', inline: true });
+
+  const embed = {
+    title:     '🗓️ New Booking',
+    color:     0x2b6cb0,
+    fields,
+    timestamp: booking.createdAt,
+    footer:    { text: 'Booking ID: ' + booking.id },
+  };
+  await discordPost('/channels/' + chId + '/messages', { embeds: [embed] });
+  console.debug('[bookings] Booking ' + booking.id + ' posted to Discord channel ' + chId);
+}
+
+/* Post a short plain-text notice when a booking is cancelled */
+async function sendBookingCancelledToDiscord(booking, resource) {
+  if (!DISCORD_BOT_TOKEN) return;
+  const chId = bookingResources.notifyChannelId;
+  if (!chId) return;
+  const label = resource ? resource.name : booking.resourceId;
+  await discordPost('/channels/' + chId + '/messages', {
+    content: '🗑️ Booking cancelled — ' + label + ' (' + booking.startTime + ' → ' + booking.endTime + ') by ' + (booking.bookedBy.name || 'unknown'),
+  });
+  console.debug('[bookings] Booking ' + booking.id + ' cancellation posted to Discord channel ' + chId);
+}
+
+/* GET /api/booking-resources — members-only read; notifyChannelId only
+   included for booking admins (mirrors /flight-plans/config) */
+api.get('/booking-resources', requireAuth, (req, res) => {
+  const out = { ranges: bookingResources.ranges, controllers: bookingResources.controllers };
+  if (isBookingAdminUser(req)) out.notifyChannelId = bookingResources.notifyChannelId || '';
+  res.json(out);
+});
+
+api.put('/booking-resources/config', writeOpsLimiter, requireAuth, requireBookingAdmin, (req, res) => {
+  const ch = sanitizeStr((req.body || {}).notifyChannelId, 32).replace(/\D/g, '');
+  bookingResources.notifyChannelId = ch;
+  saveJSON(BOOKING_RESOURCES_FILE, bookingResources);
+  res.json({ notifyChannelId: bookingResources.notifyChannelId });
+});
+
+/* ── Ranges CRUD ── */
+api.post('/booking-resources/ranges', writeOpsLimiter, requireAuth, requireBookingAdmin, (req, res) => {
+  const { id, name, frequency, minAltitude, maxAltitude } = req.body || {};
+  if (!id || !name || !frequency) return res.status(400).json({ error: 'id, name and frequency are required' });
+  const min = Number(minAltitude), max = Number(maxAltitude);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) {
+    return res.status(400).json({ error: 'minAltitude must be a number less than maxAltitude' });
+  }
+  const cleanId = sanitizeStr(id, 32);
+  if (bookingResources.ranges.find(r => r.id === cleanId)) return res.status(409).json({ error: 'Range ID already exists' });
+  const range = { id: cleanId, name: sanitizeStr(name, 64), frequency: sanitizeStr(frequency, 16), minAltitude: min, maxAltitude: max };
+  bookingResources.ranges.push(range);
+  saveJSON(BOOKING_RESOURCES_FILE, bookingResources);
+  res.status(201).json(range);
+});
+
+api.put('/booking-resources/ranges/:id', writeOpsLimiter, requireAuth, requireBookingAdmin, (req, res) => {
+  const idx = bookingResources.ranges.findIndex(r => r.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Range not found' });
+  const { name, frequency, minAltitude, maxAltitude } = req.body || {};
+  const range = bookingResources.ranges[idx];
+  if (name !== undefined)      range.name      = sanitizeStr(name, 64);
+  if (frequency !== undefined) range.frequency = sanitizeStr(frequency, 16);
+  if (minAltitude !== undefined || maxAltitude !== undefined) {
+    const min = minAltitude !== undefined ? Number(minAltitude) : range.minAltitude;
+    const max = maxAltitude !== undefined ? Number(maxAltitude) : range.maxAltitude;
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) {
+      return res.status(400).json({ error: 'minAltitude must be a number less than maxAltitude' });
+    }
+    range.minAltitude = min;
+    range.maxAltitude = max;
+  }
+  saveJSON(BOOKING_RESOURCES_FILE, bookingResources);
+  res.json(range);
+});
+
+api.delete('/booking-resources/ranges/:id', writeOpsLimiter, requireAuth, requireBookingAdmin, (req, res) => {
+  const idx = bookingResources.ranges.findIndex(r => r.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Range not found' });
+  const id = req.params.id;
+  bookingResources.ranges.splice(idx, 1);
+  bookings = bookings.filter(b => !(b.resourceType === 'range' && b.resourceId === id));
+  saveJSON(BOOKING_RESOURCES_FILE, bookingResources);
+  saveJSON(BOOKINGS_FILE, bookings);
+  console.debug('[bookings] Range ' + id + ' deleted (cascaded any bookings) by ' + (req.user.name || req.user.sub));
+  res.json({ ok: true });
+});
+
+/* ── Controller positions CRUD ── */
+api.post('/booking-resources/controllers', writeOpsLimiter, requireAuth, requireBookingAdmin, (req, res) => {
+  const { id, name, frequency } = req.body || {};
+  if (!id || !name || !frequency) return res.status(400).json({ error: 'id, name and frequency are required' });
+  const cleanId = sanitizeStr(id, 32);
+  if (bookingResources.controllers.find(c => c.id === cleanId)) return res.status(409).json({ error: 'Controller position ID already exists' });
+  const ctrl = { id: cleanId, name: sanitizeStr(name, 64), frequency: sanitizeStr(frequency, 16) };
+  bookingResources.controllers.push(ctrl);
+  saveJSON(BOOKING_RESOURCES_FILE, bookingResources);
+  res.status(201).json(ctrl);
+});
+
+api.put('/booking-resources/controllers/:id', writeOpsLimiter, requireAuth, requireBookingAdmin, (req, res) => {
+  const idx = bookingResources.controllers.findIndex(c => c.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Controller position not found' });
+  const { name, frequency } = req.body || {};
+  const ctrl = bookingResources.controllers[idx];
+  if (name !== undefined)      ctrl.name      = sanitizeStr(name, 64);
+  if (frequency !== undefined) ctrl.frequency = sanitizeStr(frequency, 16);
+  saveJSON(BOOKING_RESOURCES_FILE, bookingResources);
+  res.json(ctrl);
+});
+
+api.delete('/booking-resources/controllers/:id', writeOpsLimiter, requireAuth, requireBookingAdmin, (req, res) => {
+  const idx = bookingResources.controllers.findIndex(c => c.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Controller position not found' });
+  const id = req.params.id;
+  bookingResources.controllers.splice(idx, 1);
+  bookings = bookings.filter(b => !(b.resourceType === 'controller' && b.resourceId === id));
+  saveJSON(BOOKING_RESOURCES_FILE, bookingResources);
+  saveJSON(BOOKINGS_FILE, bookings);
+  console.debug('[bookings] Controller position ' + id + ' deleted (cascaded any bookings) by ' + (req.user.name || req.user.sub));
+  res.json({ ok: true });
+});
+
+/* ── Bookings CRUD ── */
+api.get('/bookings', requireAuth, (_req, res) => {
+  res.json(bookings);
+});
+
+api.post('/bookings', bookingLimiter, requireAuth, (req, res) => {
+  const b = req.body || {};
+  const resourceType = (b.resourceType === 'range' || b.resourceType === 'controller') ? b.resourceType : null;
+  if (!resourceType) return res.status(400).json({ error: 'resourceType must be "range" or "controller"' });
+  const resourceId = sanitizeStr(b.resourceId, 32);
+  const resource = findBookingResource(resourceType, resourceId);
+  if (!resource) return res.status(404).json({ error: 'Resource not found' });
+
+  const start = new Date(b.startTime);
+  const end   = new Date(b.endTime);
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
+    return res.status(400).json({ error: 'startTime/endTime must be valid, with endTime after startTime' });
+  }
+
+  let altitude;
+  if (resourceType === 'range') {
+    altitude = Number(b.altitude);
+    if (!Number.isFinite(altitude) || altitude < resource.minAltitude || altitude > resource.maxAltitude) {
+      return res.status(400).json({ error: 'altitude must be between ' + resource.minAltitude + ' and ' + resource.maxAltitude });
+    }
+    const conflict = findRangeConflict(resourceId, start, end, altitude, null);
+    if (conflict) {
+      return res.status(409).json({ error: 'Range already booked at ' + conflict.altitude + 'ft in an overlapping time window — choose an altitude at least ' + RANGE_ALTITUDE_SEPARATION_FT + 'ft away' });
+    }
+  } else {
+    const conflict = findControllerConflict(resourceId, start, end, null);
+    if (conflict) {
+      return res.status(409).json({ error: 'Controller position already booked for an overlapping time window' });
+    }
+  }
+
+  const booking = {
+    id:          nextBookingId++,
+    resourceType,
+    resourceId,
+    bookedBy:    { sub: req.user.sub, name: bookingDisplayName(req) },
+    startTime:   start.toISOString(),
+    endTime:     end.toISOString(),
+    createdAt:   new Date().toISOString(),
+  };
+  if (resourceType === 'range') booking.altitude = altitude;
+
+  bookings.push(booking);
+  saveJSON(BOOKINGS_FILE, bookings);
+  console.debug('[bookings] Booking ' + booking.id + ' created by ' + booking.bookedBy.name);
+  res.status(201).json(booking);
+
+  sendBookingToDiscord(booking, resource).catch(err =>
+    console.error('[bookings] Discord notify failed:', err.message)
+  );
+});
+
+api.put('/bookings/:id', writeOpsLimiter, requireAuth, (req, res) => {
+  const id  = Number(req.params.id);
+  const idx = bookings.findIndex(bk => bk.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Booking not found' });
+  const booking = bookings[idx];
+  const isOwner = booking.bookedBy && booking.bookedBy.sub === req.user.sub;
+  if (!isOwner && !isBookingAdminUser(req)) {
+    return res.status(403).json({ error: 'You can only edit your own bookings' });
+  }
+
+  const b = req.body || {};
+  const start = b.startTime !== undefined ? new Date(b.startTime) : new Date(booking.startTime);
+  const end   = b.endTime   !== undefined ? new Date(b.endTime)   : new Date(booking.endTime);
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
+    return res.status(400).json({ error: 'startTime/endTime must be valid, with endTime after startTime' });
+  }
+
+  const resource = findBookingResource(booking.resourceType, booking.resourceId);
+  if (!resource) return res.status(404).json({ error: 'Resource no longer exists' });
+
+  let altitude = booking.altitude;
+  if (booking.resourceType === 'range') {
+    if (b.altitude !== undefined) altitude = Number(b.altitude);
+    if (!Number.isFinite(altitude) || altitude < resource.minAltitude || altitude > resource.maxAltitude) {
+      return res.status(400).json({ error: 'altitude must be between ' + resource.minAltitude + ' and ' + resource.maxAltitude });
+    }
+    const conflict = findRangeConflict(booking.resourceId, start, end, altitude, booking.id);
+    if (conflict) {
+      return res.status(409).json({ error: 'Range already booked at ' + conflict.altitude + 'ft in an overlapping time window — choose an altitude at least ' + RANGE_ALTITUDE_SEPARATION_FT + 'ft away' });
+    }
+  } else {
+    const conflict = findControllerConflict(booking.resourceId, start, end, booking.id);
+    if (conflict) {
+      return res.status(409).json({ error: 'Controller position already booked for an overlapping time window' });
+    }
+  }
+
+  booking.startTime = start.toISOString();
+  booking.endTime   = end.toISOString();
+  if (booking.resourceType === 'range') booking.altitude = altitude;
+
+  saveJSON(BOOKINGS_FILE, bookings);
+  res.json(booking);
+});
+
+api.delete('/bookings/:id', writeOpsLimiter, requireAuth, (req, res) => {
+  const id  = Number(req.params.id);
+  const idx = bookings.findIndex(bk => bk.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Booking not found' });
+  const booking = bookings[idx];
+  const isOwner = booking.bookedBy && booking.bookedBy.sub === req.user.sub;
+  if (!isOwner && !isBookingAdminUser(req)) {
+    return res.status(403).json({ error: 'You can only cancel your own bookings' });
+  }
+  const resource = findBookingResource(booking.resourceType, booking.resourceId);
+  bookings.splice(idx, 1);
+  saveJSON(BOOKINGS_FILE, bookings);
+  console.debug('[bookings] Booking ' + id + ' cancelled by ' + (req.user.name || req.user.sub));
+  res.json({ ok: true });
+
+  sendBookingCancelledToDiscord(booking, resource).catch(err =>
+    console.error('[bookings] Discord cancel notify failed:', err.message)
+  );
 });
 
 app.use('/api', api);

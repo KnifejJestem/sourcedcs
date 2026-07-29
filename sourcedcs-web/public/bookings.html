@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookings — Ranges &amp; Controller Positions — SOURCE DCS</title>
+  <meta name="description" content="Book range time and controller positions for SOURCE DCS operations.">
+  <link rel="icon" href="sourcelogobg.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/bookings.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <a class="header-logo-link" href="/">
+    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    <div class="header-title">SOURCEDCS</div>
+  </a>
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
+    <a class="nav-link" href="/#about">ABOUT</a>
+    <a class="nav-link" href="/#subsquadrons">SQUADRONS</a>
+    <a class="nav-link" href="/#join">JOIN</a>
+  </nav>
+  <div class="header-spacer"></div>
+  <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
+    <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
+    <div class="hdr-toggle-group">
+      <span class="hdr-toggle-label">DISPLAY</span>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="bk-hero">
+  <div class="bk-hero-inner">
+    <div class="section-label">FLIGHT OPERATIONS</div>
+    <h1 class="bk-title">RANGE &amp; CONTROLLER BOOKINGS</h1>
+    <p class="bk-sub">All times Zulu (UTC) &middot; Log in to view &amp; book &middot; No controller position or overlapping range altitude can be double-booked</p>
+  </div>
+</section>
+
+<!-- Not logged in -->
+<div id="bkLoginPrompt" class="bk-login-prompt" style="display:none">
+  <p>Log in to view and make bookings.</p>
+  <button class="btn btn-primary" onclick="loginWithCasdoor()">LOG IN</button>
+</div>
+
+<!-- Main content -->
+<div id="bkMain" style="display:none">
+
+  <!-- ── Admin: manage ranges & controller positions ─────── -->
+  <div class="bk-container bk-container--flush-top">
+    <div class="bk-admin-toggle-row">
+      <button class="btn btn-ghost" id="bkAdminToggleBtn" style="display:none" onclick="bkToggleAdminPanel()">MANAGE RANGES &amp; CONTROLLER POSITIONS</button>
+    </div>
+    <div id="bkAdminPanel" class="bk-admin-panel" style="display:none"></div>
+  </div>
+
+  <!-- ── New booking form ──────────────────────────────────── -->
+  <div class="bk-container bk-container--flush-top">
+    <div class="bk-form-panel">
+      <div class="bk-form-label">NEW BOOKING</div>
+      <div class="bk-form-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="bkFormType">TYPE <span class="form-required">*</span></label>
+            <select class="form-select" id="bkFormType" onchange="bkOnFormTypeChange()">
+              <option value="range">Range</option>
+              <option value="controller">Controller Position</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bkFormResource">RESOURCE <span class="form-required">*</span></label>
+            <select class="form-select" id="bkFormResource" onchange="bkOnFormResourceChange()"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="bkFormStart">START (Z) <span class="form-required">*</span></label>
+            <input class="form-input" id="bkFormStart" type="datetime-local">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bkFormEnd">END (Z) <span class="form-required">*</span></label>
+            <input class="form-input" id="bkFormEnd" type="datetime-local">
+          </div>
+        </div>
+        <div class="form-row" id="bkFormAltitudeRow">
+          <div class="form-group">
+            <label class="form-label" for="bkFormAltitude">DECONFLICTION ALTITUDE (FT) <span class="form-required">*</span></label>
+            <input class="form-input" id="bkFormAltitude" type="number" step="1">
+            <div class="bk-hint" id="bkFormAltitudeHint">Must be at least 999ft from any other overlapping booking on this range.</div>
+          </div>
+        </div>
+        <div class="form-error"   id="bkFormError"   style="display:none"></div>
+        <div class="form-success" id="bkFormSuccess" style="display:none"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="bkFormSubmitBtn" onclick="bkSubmitBooking()">BOOK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Board ───────────────────────────────────────────── -->
+  <div class="bk-container bk-container--flush-top">
+    <div class="bk-section-divider"><span>RANGES</span></div>
+    <div id="bkRangesBoard"></div>
+  </div>
+  <div class="bk-container bk-container--flush-top">
+    <div class="bk-section-divider"><span>CONTROLLER POSITIONS</span></div>
+    <div id="bkControllersBoard"></div>
+  </div>
+
+</div><!-- /bkMain -->
+
+<!-- ── Range modal ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="bkRangeModalOverlay" role="dialog" aria-modal="true" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="bkRangeModalTitle">ADD RANGE</div>
+      <button class="modal-close" onclick="bkCloseRangeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-error" id="bkRangeModalError" style="display:none"></div>
+      <input type="hidden" id="bkRangeEditId">
+      <div class="form-group">
+        <label class="form-label" for="bkRangeId">RANGE ID <span class="form-required">*</span></label>
+        <input class="form-input" id="bkRangeId" type="text" maxlength="32" placeholder="range-1" autocomplete="off">
+        <div class="form-hint">Short slug, cannot be changed after creation.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="bkRangeName">NAME <span class="form-required">*</span></label>
+        <input class="form-input" id="bkRangeName" type="text" maxlength="64" placeholder="Range Alpha" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="bkRangeFreq">FREQUENCY <span class="form-required">*</span></label>
+          <input class="form-input" id="bkRangeFreq" type="text" maxlength="16" placeholder="251.000" autocomplete="off">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="bkRangeMin">MIN ALTITUDE (FT) <span class="form-required">*</span></label>
+          <input class="form-input" id="bkRangeMin" type="number" step="1" placeholder="5000">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bkRangeMax">MAX ALTITUDE (FT) <span class="form-required">*</span></label>
+          <input class="form-input" id="bkRangeMax" type="number" step="1" placeholder="25000">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="bkCloseRangeModal()">CANCEL</button>
+        <button class="btn btn-primary" onclick="bkSubmitRange()">SAVE</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Controller position modal ───────────────────────────── -->
+<div class="modal-overlay" id="bkCtrlModalOverlay" role="dialog" aria-modal="true" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="bkCtrlModalTitle">ADD CONTROLLER POSITION</div>
+      <button class="modal-close" onclick="bkCloseCtrlModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-error" id="bkCtrlModalError" style="display:none"></div>
+      <input type="hidden" id="bkCtrlEditId">
+      <div class="form-group">
+        <label class="form-label" for="bkCtrlId">POSITION ID <span class="form-required">*</span></label>
+        <input class="form-input" id="bkCtrlId" type="text" maxlength="32" placeholder="gci-blue" autocomplete="off">
+        <div class="form-hint">Short slug, cannot be changed after creation.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="bkCtrlName">NAME <span class="form-required">*</span></label>
+        <input class="form-input" id="bkCtrlName" type="text" maxlength="64" placeholder="Blue GCI" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="bkCtrlFreq">FREQUENCY <span class="form-required">*</span></label>
+        <input class="form-input" id="bkCtrlFreq" type="text" maxlength="16" placeholder="265.500" autocomplete="off">
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="bkCloseCtrlModal()">CANCEL</button>
+        <button class="btn btn-primary" onclick="bkSubmitController()">SAVE</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand-area"><img class="footer-logo" src="sourcelogobg.png" alt="SOURCE"><span class="footer-brand">SOURCEDCS</span></div>
+    <div class="footer-links-row">
+      <a class="footer-link" href="/">Home</a><span class="footer-sep">&middot;</span>
+      <a class="footer-link" id="footerDiscordLink" href="#" target="_blank" rel="noopener">Discord</a><span class="footer-sep">&middot;</span>
+      <a class="footer-link" id="footerWikiLink" href="#" target="_blank" rel="noopener">Wiki</a><span class="footer-sep">&middot;</span>
+      <a class="footer-link" id="footerGithubLink" href="#" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <div class="footer-copy"><span class="footer-text">&copy; 2025 SOURCEDCS</span><span class="footer-sep">&middot;</span><span class="footer-text">MIT License</span></div>
+  </div>
+</footer>
+
+<script src="/js/config.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/bookings.js"></script>
+
+</body>
+</html>
