@@ -12,10 +12,11 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 
-COPY server.js     ./
-COPY package.json  ./
-COPY config.json   ./
-COPY public/       ./public/
+COPY server.js          ./
+COPY discord-gateway.js ./
+COPY package.json       ./
+COPY config.json        ./
+COPY public/            ./public/
 
 RUN mkdir -p /app/data && chown -R node:node /app/data
 
