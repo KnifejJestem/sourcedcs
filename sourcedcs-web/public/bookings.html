@@ -64,7 +64,17 @@
     <div id="bkAdminPanel" class="bk-admin-panel" style="display:none"></div>
   </div>
 
-  <!-- ── New booking form ──────────────────────────────────── -->
+  <!-- ── Board (primary view) ───────────────────────────────── -->
+  <div class="bk-container bk-container--flush-top">
+    <div class="bk-section-divider"><span>RANGES</span></div>
+    <div id="bkRangesBoard"></div>
+  </div>
+  <div class="bk-container bk-container--flush-top">
+    <div class="bk-section-divider"><span>CONTROLLER POSITIONS</span></div>
+    <div id="bkControllersBoard"></div>
+  </div>
+
+  <!-- ── New booking form (secondary) ────────────────────────── -->
   <div class="bk-container bk-container--flush-top">
     <div class="bk-form-panel">
       <div class="bk-form-label">NEW BOOKING</div>
@@ -84,12 +94,22 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="bkFormStart">START (Z) <span class="form-required">*</span></label>
-            <input class="form-input" id="bkFormStart" type="datetime-local">
+            <label class="form-label" for="bkFormStartDate">START DATE <span class="form-required">*</span></label>
+            <input class="form-input" id="bkFormStartDate" type="date">
           </div>
           <div class="form-group">
-            <label class="form-label" for="bkFormEnd">END (Z) <span class="form-required">*</span></label>
-            <input class="form-input" id="bkFormEnd" type="datetime-local">
+            <label class="form-label" for="bkFormStartTime">START TIME (Z) <span class="form-required">*</span></label>
+            <input class="form-input" id="bkFormStartTime" type="text" inputmode="numeric" maxlength="4" placeholder="1900" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="bkFormEndDate">END DATE <span class="form-required">*</span></label>
+            <input class="form-input" id="bkFormEndDate" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bkFormEndTime">END TIME (Z) <span class="form-required">*</span></label>
+            <input class="form-input" id="bkFormEndTime" type="text" inputmode="numeric" maxlength="4" placeholder="2030" autocomplete="off">
           </div>
         </div>
         <div class="form-row" id="bkFormAltitudeRow">
@@ -106,16 +126,6 @@
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- ── Board ───────────────────────────────────────────── -->
-  <div class="bk-container bk-container--flush-top">
-    <div class="bk-section-divider"><span>RANGES</span></div>
-    <div id="bkRangesBoard"></div>
-  </div>
-  <div class="bk-container bk-container--flush-top">
-    <div class="bk-section-divider"><span>CONTROLLER POSITIONS</span></div>
-    <div id="bkControllersBoard"></div>
   </div>
 
 </div><!-- /bkMain -->

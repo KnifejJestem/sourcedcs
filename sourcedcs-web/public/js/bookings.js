@@ -52,9 +52,18 @@ var bkAdminOpen    = false;
     if (isBookingAdminRole(currentToken)) {
       document.getElementById('bkAdminToggleBtn').style.display = '';
     }
+    bkPrefillDates();
     bkLoadAll();
   }
 })();
+
+/* Prefill both date fields with today's date (UTC/Zulu), since same-day
+   bookings are the overwhelming majority of entries */
+function bkPrefillDates() {
+  var today = new Date().toISOString().slice(0, 10);
+  document.getElementById('bkFormStartDate').value = today;
+  document.getElementById('bkFormEndDate').value   = today;
+}
 
 /* ── Hamburger ── */
 (function() {
@@ -319,6 +328,18 @@ function bkOnFormResourceChange() {
     : 'Must be at least 999ft from any other overlapping booking on this range.';
 }
 
+/* Composes an ISO 8601 UTC timestamp from a date input value (YYYY-MM-DD)
+   and a 4-digit Zulu time (ZZZZ, e.g. "1900"). Returns null if the time
+   isn't a valid 4-digit HHMM. */
+function bkComposeISO(dateVal, timeVal) {
+  if (!dateVal) return null;
+  var t = String(timeVal || '').trim();
+  if (!/^\d{4}$/.test(t)) return null;
+  var hh = t.slice(0, 2), mm = t.slice(2, 4);
+  if (Number(hh) > 23 || Number(mm) > 59) return null;
+  return dateVal + 'T' + hh + ':' + mm + ':00Z';
+}
+
 function bkSubmitBooking() {
   var errEl = document.getElementById('bkFormError');
   var okEl  = document.getElementById('bkFormSuccess');
@@ -328,17 +349,22 @@ function bkSubmitBooking() {
 
   var type       = document.getElementById('bkFormType').value;
   var resourceId = document.getElementById('bkFormResource').value;
-  var startVal   = document.getElementById('bkFormStart').value;
-  var endVal     = document.getElementById('bkFormEnd').value;
 
   if (!resourceId) { errEl.textContent = 'Select a resource.'; errEl.style.display = ''; return; }
-  if (!startVal || !endVal) { errEl.textContent = 'Start and end time are required.'; errEl.style.display = ''; return; }
+
+  var startISO = bkComposeISO(document.getElementById('bkFormStartDate').value, document.getElementById('bkFormStartTime').value);
+  var endISO   = bkComposeISO(document.getElementById('bkFormEndDate').value,   document.getElementById('bkFormEndTime').value);
+  if (!startISO || !endISO) {
+    errEl.textContent = 'Enter a date and a 4-digit Zulu time (ZZZZ, e.g. 1900) for both start and end.';
+    errEl.style.display = '';
+    return;
+  }
 
   var data = {
     resourceType: type,
     resourceId:   resourceId,
-    startTime:    startVal + ':00Z',
-    endTime:      endVal + ':00Z',
+    startTime:    startISO,
+    endTime:      endISO,
   };
   if (type === 'range') {
     var altEl = document.getElementById('bkFormAltitude');
