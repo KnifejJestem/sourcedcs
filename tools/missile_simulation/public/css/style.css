@@ -1,0 +1,195 @@
+:root {
+  --slate-900:#0d1520; --slate-800:#131e2b; --slate-700:#1b2836; --slate-600:#26364a;
+  --steel:#7b93a8; --steel-dim:#4d6377; --ink:#e9eff4;
+  --cyan:#4fc9f0; --cyan-dim:#2a7d99; --amber:#f5ad4a; --violet:#b58cf0;
+  --red:#ff5f56; --green:#6fd18a;
+  --font-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --font-body:"Barlow",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--slate-900); color:var(--ink); font-family:var(--font-body); -webkit-font-smoothing:antialiased; }
+
+.masthead { border-bottom:1px solid var(--slate-600); padding:9px 14px 8px; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+.masthead h1 { font-family:var(--font-display); font-weight:700; font-size:22px; letter-spacing:.10em; text-transform:uppercase; margin:0; }
+.loaded-name { font-family:var(--font-mono); font-size:11.5px; letter-spacing:.06em; color:var(--cyan); border:1px solid var(--cyan-dim); padding:3px 9px; }
+.eyebrow { font-family:var(--font-mono); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--steel-dim); }
+
+.shell { display:block; }
+.scope-wrap { position:relative; padding:10px 6px 4px 10px; min-width:0; }
+canvas { width:100%; height:auto; display:block; touch-action:none; }
+#scope { cursor:grab; }
+#scope.dragging { cursor:grabbing; }
+#topScope { margin-top:10px; border-top:1px solid var(--slate-600); padding-top:8px; }
+.scale-note { font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; color:var(--steel-dim); padding:4px 0 0 4px; }
+
+.swatch { width:9px; height:9px; border-radius:50%; flex:none; }
+.s-cyan { background:var(--cyan); } .s-red { background:var(--red); }
+
+.field { margin-bottom:7px; }
+.field label { display:flex; justify-content:space-between; align-items:baseline; font-size:12.5px; color:var(--steel); margin-bottom:5px; }
+.field .val { font-family:var(--font-mono); font-size:12.5px; font-weight:500; color:var(--ink); }
+
+select { width:100%; background:var(--slate-700); color:var(--ink); border:1px solid var(--slate-600); font-family:var(--font-mono); font-size:11.5px; padding:8px; }
+select:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+
+.seg { display:flex; border:1px solid var(--slate-600); height:22px; }
+.seg button { flex:1; background:transparent; border:none; color:var(--steel); font-family:var(--font-mono); font-size:9.5px; letter-spacing:.04em; padding:0 4px; cursor:pointer; }
+.seg button[aria-pressed=true] { background:var(--slate-600); color:var(--ink); }
+.seg button:focus-visible { outline:2px solid var(--cyan); outline-offset:-2px; }
+
+.hint { font-size:11.5px; line-height:1.4; color:var(--steel-dim); margin:5px 0 0; }
+.btn { font-family:var(--font-display); font-size:14px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; padding:9px; border:1px solid var(--cyan-dim); background:rgba(79,201,240,.10); color:var(--cyan); cursor:pointer; width:100%; }
+.btn:hover { background:rgba(79,201,240,.18); }
+.btn:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+.btn.secondary { border-color:var(--slate-600); background:transparent; color:var(--steel); letter-spacing:.10em; font-size:12.5px; padding:8px; }
+.btn.secondary:hover { background:var(--slate-700); color:var(--ink); }
+.btn[disabled] { opacity:.5; cursor:default; }
+
+.filerow { display:grid; gap:6px; margin-bottom:0; }
+input[type=file] { display:none; }
+textarea { width:100%; min-height:72px; background:var(--slate-900); color:var(--ink); border:1px solid var(--slate-600); font-family:var(--font-mono); font-size:10.5px; padding:6px; resize:vertical; }
+textarea:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+
+details.report { margin-top:8px; border-top:1px solid var(--slate-600); padding-top:6px; }
+details.report summary { font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--steel); cursor:pointer; }
+details.report summary:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+.kv { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-family:var(--font-mono); font-size:10.5px; margin-top:6px; }
+.kv dt { color:var(--steel-dim); } .kv dd { margin:0; color:var(--ink); }
+.msg { font-family:var(--font-mono); font-size:10.5px; line-height:1.4; margin:6px 0 0; padding-left:9px; border-left:2px solid var(--amber); color:var(--amber); }
+.msg.note { border-left-color:var(--slate-600); color:var(--steel-dim); }
+.msg.err { border-left-color:var(--red); color:var(--red); }
+
+.weapon-load { padding:8px 14px; border-top:1px solid var(--slate-600); background:var(--slate-800); }
+.weapon-load .filerow { grid-template-columns:1fr 1fr; margin-bottom:0; }
+.weapon-load #pasteBox { margin-top:6px; }
+
+.setup-strip { display:flex; align-items:flex-end; gap:14px; padding:8px 14px; border-top:1px solid var(--slate-600); flex-wrap:wrap; }
+.start-sep { margin-bottom:0; flex:0 0 auto; }
+.start-sep input.numfield { width:100px; padding:6px; font-size:13px; }
+
+.acft-grid { display:grid; grid-template-columns:1fr 1fr; }
+.acft-grid .acft-panel[data-acft="target"] { border-left:1px solid var(--slate-600); }
+
+.acft-panel { border-top:1px solid var(--slate-600); padding:8px 10px 10px; }
+.acft-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.acft-head h2 { font-family:var(--font-display); font-size:19px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; margin:0; }
+.acft-panel[data-acft=shooter] .acft-head h2 { color:var(--cyan); }
+.acft-panel[data-acft=target] .acft-head h2 { color:var(--red); }
+
+/* Every numeric field is a small square box -- one visual system for
+   phase-table cells, the leading setup row, and trigger-row fields alike,
+   rather than a "roomy" style and a "dense" style that both need upkeep. */
+.sq-field { flex:0 0 auto; margin-bottom:0; }
+.sq-field label { display:flex; flex-direction:column; align-items:flex-start; gap:2px; font-size:8.5px; color:var(--steel); white-space:nowrap; margin-bottom:2px; }
+.sq-field input.numfield {
+  width:56px; aspect-ratio:1/1; background:var(--slate-900); color:var(--ink); border:1px solid var(--slate-600);
+  font-family:var(--font-mono); font-size:10px; padding:2px; text-align:center; -moz-appearance:textfield;
+}
+.sq-field input.numfield:focus-visible { outline:2px solid var(--cyan); outline-offset:1px; }
+.sq-field input.numfield::-webkit-inner-spin-button,
+.sq-field input.numfield::-webkit-outer-spin-button { display:none; }
+
+.table-scroll { overflow-x:visible; }
+.phase-table { table-layout:fixed; width:auto; border-collapse:collapse; font-family:var(--font-mono); }
+.phase-table th, .phase-table td { border:1px solid var(--slate-600); padding:2px; text-align:left; vertical-align:top; }
+.phase-table thead th { background:var(--slate-700); color:var(--steel); font-size:10px; letter-spacing:.09em; text-transform:uppercase; font-weight:600; white-space:nowrap; padding:4px 2px; text-align:center; }
+.phase-table thead th:first-child, .phase-table tbody th { width:62px; }
+.phase-table thead th:nth-child(6) { width:34px; }
+.phase-table thead th:not(:first-child):not(:nth-child(6)) { width:44px; }
+.phase-table tbody th { background:var(--slate-800); color:var(--ink); font-family:var(--font-display); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:600; white-space:nowrap; padding:3px 4px; }
+.phase-table .enable { display:flex; align-items:center; gap:7px; margin-top:6px; }
+.phase-table .enable label { font-size:8.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--steel); font-family:var(--font-mono); font-weight:400; display:flex; align-items:center; gap:3px; cursor:pointer; }
+
+/* The "kind" cell explains what the value next to it is (Angle / Rate /
+   Range) -- the one column whose meaning changes per row, now spelled out
+   instead of a fixed "Ang" header that was wrong for Out and Start. */
+.phase-table td.kind { font-size:7.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--steel-dim); text-align:center; vertical-align:middle; padding:2px 1px; }
+
+.pcell { min-width:0; }
+.pcell input.numfield {
+  width:100%; aspect-ratio:1/1; background:var(--slate-900); color:var(--ink); border:1px solid var(--slate-600);
+  font-family:var(--font-mono); font-size:10px; padding:1px; text-align:center; -moz-appearance:textfield;
+}
+.pcell input.numfield:focus-visible { outline:2px solid var(--cyan); outline-offset:1px; }
+.pcell input.numfield::-webkit-inner-spin-button,
+.pcell input.numfield::-webkit-outer-spin-button { display:none; }
+.pcell input:disabled { opacity:.35; }
+
+/* Per-field angle-column hints (e.g. "0°=pure pursuit...") stay out of
+   the dense table entirely. */
+.phase-table td > .hint { display:none; }
+.trigger-row td { background:rgba(38,54,74,0.35); padding:5px 8px; width:auto; }
+.trigger-row[hidden] { display:none; }
+.trigger-row .seg { max-width:220px; }
+
+.toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:18px; padding:8px 14px; border-top:1px solid var(--slate-600); background:var(--slate-800); }
+.toolbar-group { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.toolbar-label { font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--steel-dim); flex:none; }
+.toolbar .seg { width:auto; }
+.toolbar .seg button { padding:7px 12px; }
+.toolbar select { width:auto; min-width:120px; }
+.toolbar .btn { width:auto; white-space:nowrap; }
+.toolbar #presetMsgs { flex-basis:100%; }
+.toolbar #presetMsgs .msg { margin:2px 0 0; }
+
+/* Number fields, styled to match the dark/mono aesthetic rather than the
+   browser's default. This is the only input type in the app -- no slider
+   mode to keep visually in sync with it. */
+input.numfield {
+  background:var(--slate-900); color:var(--ink); border:1px solid var(--slate-600);
+  font-family:var(--font-mono); font-size:11.5px; padding:6px 7px; -moz-appearance:textfield;
+}
+input.numfield:focus-visible { outline:2px solid var(--cyan); outline-offset:1px; }
+input.numfield::-webkit-inner-spin-button,
+input.numfield::-webkit-outer-spin-button { opacity:.5; }
+
+/* Dashboard: scope docked left and sticky -- the left side is the scope
+   and nothing else now, every input field lives on the right -- taking the
+   majority of the width; the right column holds the two aircraft tables
+   side by side plus everything else, with a floor wide enough for both
+   tables at once (they grew a "kind" column and a weapon row), so the
+   scopes still stay the dominant thing on screen while you edit values
+   instead of scrolling away from them. Below 1180px this falls back to
+   stacked single-column, same as narrow viewports generally. */
+@media (min-width:1180px) {
+  .dash { display:grid; grid-template-columns:1fr minmax(680px,45%); align-items:start; }
+  .dash .shell { position:sticky; top:0; max-height:100vh; overflow-y:auto; }
+  .dash .dash-controls { min-width:0; border-left:1px solid var(--slate-600); }
+}
+
+.readout { border-top:1px solid var(--slate-600); }
+.verdict { display:flex; align-items:center; gap:10px; padding:6px 14px; border-bottom:1px solid var(--slate-600); flex-wrap:wrap; }
+.tag { font-family:var(--font-display); font-size:15px; font-weight:700; letter-spacing:.15em; text-transform:uppercase; padding:3px 9px; }
+.tag.hit { background:rgba(111,209,138,.14); color:var(--green); border:1px solid rgba(111,209,138,.4); }
+.tag.miss { background:rgba(255,95,86,.12); color:var(--red); border:1px solid rgba(255,95,86,.4); }
+.why { font-family:var(--font-mono); font-size:11.5px; color:var(--steel); }
+
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(116px,1fr)); gap:1px; background:var(--slate-600); }
+.stat { background:var(--slate-900); padding:5px 10px 6px; }
+.stat dt { font-family:var(--font-mono); font-size:9.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--steel-dim); margin:0 0 3px; }
+.stat dd { font-family:var(--font-mono); font-size:17px; font-weight:500; margin:0; }
+.stat dd .u { font-size:10.5px; color:var(--steel); margin-left:2px; }
+
+.legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; padding:5px 14px 7px; font-family:var(--font-mono); font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:var(--steel-dim); border-top:1px solid var(--slate-600); }
+.legend span, .legend-toggle { display:flex; align-items:center; gap:6px; }
+.legend-note { flex-basis:100%; }
+.key { width:18px; height:0; border-top-width:2px; border-top-style:solid; }
+
+.legend-toggle { background:transparent; border:1px solid transparent; margin:-3px -6px; padding:3px 6px; font:inherit; letter-spacing:inherit; text-transform:inherit; color:var(--steel-dim); cursor:pointer; }
+.legend-toggle:hover { border-color:var(--slate-600); color:var(--ink); }
+.legend-toggle:focus-visible { outline:2px solid var(--cyan); outline-offset:1px; }
+.legend-toggle[aria-pressed="false"] { color:var(--slate-600); opacity:.6; }
+.legend-toggle[aria-pressed="false"] .key { opacity:.4; }
+
+.caveat { padding:0 14px 10px; max-width:80ch; font-size:12px; line-height:1.5; color:var(--steel-dim); }
+.caveat strong { color:var(--steel); font-weight:600; }
+.caveat code { font-family:var(--font-mono); font-size:11px; color:var(--steel); }
+.caveat p { margin:0 0 4px; }
+
+@media (max-width:880px) {
+  .scope-wrap { padding:10px; }
+  .acft-panel { padding:10px; }
+  .acft-grid { grid-template-columns:1fr; }
+  .acft-grid .acft-panel[data-acft="target"] { border-left:none; }
+}

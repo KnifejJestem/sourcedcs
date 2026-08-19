@@ -19,6 +19,8 @@
           ps.pyyaml
           ps.pytest
           ps.numpy
+          ps.pandas
+          ps.matplotlib
           ps.sounddevice
           ps.pynput
           ps.opuslib

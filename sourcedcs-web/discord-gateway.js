@@ -7,8 +7,12 @@
    it into per-member daily totals plus a guild-wide per-hour aggregate,
    persisted to data/voice-activity.json.
 
-   All dates/hours here are UTC — a fixed, DST-free reference frame for the
-   "hour of day" aggregate, not the squadron's local time. */
+   Day bucketing uses a fixed 05:00 UTC boundary (the squadron-wide "day",
+   per ACTIVITY_SCORE.md — no DST, so this offset never shifts) rather than
+   UTC midnight, so a late-night session doesn't get split across two days.
+   The hour-of-day aggregate stays on literal UTC hours (0-23) — that's an
+   orthogonal guild-wide "when do people play" histogram, not tied to the
+   day boundary. */
 
 const fs   = require('fs');
 const path = require('path');
@@ -34,7 +38,13 @@ function saveJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
 }
 
-function utcDateKey(ms)     { return new Date(ms).toISOString().slice(0, 10); }
+/* The squadron-wide "day" boundary — 05:00 UTC, fixed (no DST). Every
+   segment `creditMinutes` walks is already split on UTC-hour boundaries,
+   and 05:00 UTC always lands exactly on one of those, so shifting only the
+   date-key function (not the hour-splitting loop) is sufficient to make
+   every session land in the right day bucket. */
+const DAY_BOUNDARY_OFFSET_MS = 5 * 3600000;
+function localDateKey(ms)   { return new Date(ms - DAY_BOUNDARY_OFFSET_MS).toISOString().slice(0, 10); }
 function utcHourOfDay(ms)   { return new Date(ms).getUTCHours(); }
 function utcHourBoundary(ms) { return Math.floor(ms / 3600000) * 3600000; }
 
@@ -76,7 +86,7 @@ function creditMinutes(userId, startMs, endMs) {
   while (cursor < endMs) {
     const hourEnd = utcHourBoundary(cursor) + 3600000;
     const segmentEnd = Math.min(endMs, hourEnd);
-    addMinutes(userId, utcDateKey(cursor), utcHourOfDay(cursor), (segmentEnd - cursor) / 60000);
+    addMinutes(userId, localDateKey(cursor), utcHourOfDay(cursor), (segmentEnd - cursor) / 60000);
     cursor = segmentEnd;
   }
 }
@@ -122,7 +132,7 @@ function checkpointTick() {
 }
 
 function pruneVoiceActivityHistory() {
-  const cutoff = utcDateKey(Date.now() - RETENTION_DAYS * 86400000);
+  const cutoff = localDateKey(Date.now() - RETENTION_DAYS * 86400000);
   let changed = false;
   for (const rec of Object.values(store.members)) {
     for (const dateKey of Object.keys(rec.days)) {
@@ -357,7 +367,7 @@ function getMemberDays(userId) {
 function lastNDateKeys(n) {
   const keys = [];
   const now = Date.now();
-  for (let i = n - 1; i >= 0; i--) keys.push(utcDateKey(now - i * 86400000));
+  for (let i = n - 1; i >= 0; i--) keys.push(localDateKey(now - i * 86400000));
   return keys;
 }
 
@@ -423,4 +433,4 @@ function init({ dataDir, token, guildId }) {
   }
 }
 
-module.exports = { init, flushAndSave, getMemberVoiceState, getMemberDays, getOverview };
+module.exports = { init, flushAndSave, getMemberVoiceState, getMemberDays, getOverview, localDateKey };

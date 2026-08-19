@@ -1,0 +1,36 @@
+{
+  "alt0": 25100,
+  "spd0": 618,
+  "intercept": {
+    "accel": 0,
+    "desiredSpeed": 614,
+    "climbAngle": 6,
+    "desiredAlt": 35000,
+    "offsetAngle": 0
+  },
+  "crank": {
+    "enabled": true,
+    "accel": 0,
+    "desiredSpeed": 620,
+    "climbAngle": 30,
+    "desiredAlt": 30000,
+    "crankAngle": 60
+  },
+  "out": {
+    "enabled": true,
+    "triggerType": "activation",
+    "triggerRange": 20,
+    "accel": 10,
+    "desiredSpeed": 550,
+    "climbAngle": 35,
+    "desiredAlt": 22000,
+    "turnRate": 8
+  },
+  "cold": {
+    "accel": 0,
+    "desiredSpeed": 500,
+    "climbAngle": 0,
+    "desiredAlt": 20000,
+    "offsetAngle": 0
+  }
+}

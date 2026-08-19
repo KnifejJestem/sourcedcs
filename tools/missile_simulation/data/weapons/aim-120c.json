@@ -1,0 +1,30 @@
+{
+  "name": "AIM-120C (built in)",
+  "className": "wAmmunitionSelfHoming",
+  "mass": 161.48,
+  "sRef": 0.0248,
+  "cx0": [0.468, 0.468, 0.468, 0.468, 0.479, 0.751, 0.88, 0.8572, 0.8132,
+          0.7645, 0.7205, 0.6808, 0.6447, 0.6119, 0.582, 0.5545, 0.5292,
+          0.5057, 0.4838, 0.4633, 0.4439, 0.4256, 0.4083, 0.3921, 0.377, 0.364],
+  "machStep": 0.2,
+  "machMax": 4.0,
+  "vMin": 140,
+  "lifeTime": 90,
+  "burnTime": 6.6,
+  "fuel": 51.26,
+  "stages": [
+    { "isp": 0, "fuel": 0, "workTime": 0.1 },
+    { "isp": 234, "fuel": 51.26, "workTime": 6.5 }
+  ],
+  "loftSin": 0.49996660034157,
+  "loftOffRange": 15000,
+  "gLoad": 30,
+  "tc": 0.06,
+  "knav": 4,
+  "killRadius": 15,
+  "seekerFar": 30000,
+  "seekerActive": 16000,
+  "seekerDelay": 1.5,
+  "rangeMaxField": 61000,
+  "_comment": "boost stage: impulse=0, fuel_mass=0 in the DCS table -- inert, contributes nothing. march stage: impulse=234 (Isp, seconds), fuel_mass=51.26 kg, work_time=6.5 s. loftSin mirrors the DCS ap.loft_sin field; the loader converts it to radians with Math.asin()."
+}

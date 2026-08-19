@@ -128,7 +128,10 @@
         <option value="">ALL SQUADRONS</option>
         <option value="__unassigned">UNASSIGNED</option>
         <option value="__mismatch">NAME MISMATCH</option>
-        <option value="__inactive">INACTIVE (LEFT DISCORD)</option>
+        <option value="__left_discord">LEFT DISCORD</option>
+        <option value="__stale">STALE</option>
+        <option value="__inactive_score">INACTIVE (LOW ACTIVITY)</option>
+        <option value="__on_vacation">ON VACATION</option>
       </select>
       <button class="btn-sm btn-sm-blue" id="refreshBtn">REFRESH FROM DISCORD</button>
     </div>
@@ -144,11 +147,13 @@
           <th>ROLE</th>
           <th>WEBSITE ACCOUNT</th>
           <th>STATUS</th>
+          <th>ACTIVITY SCORE</th>
+          <th>VACATION</th>
           <th>VOICE ACTIVITY</th>
         </tr>
       </thead>
       <tbody id="membersBody">
-        <tr><td colspan="7" style="text-align:center;color:var(--text-3)">Loading&hellip;</td></tr>
+        <tr><td colspan="9" style="text-align:center;color:var(--text-3)">Loading&hellip;</td></tr>
       </tbody>
     </table>
   </div>
@@ -229,6 +234,33 @@
   </div>
 </div>
 
+<!-- VACATION MODAL -->
+<div class="modal-overlay" id="vacModalOverlay" role="dialog" aria-modal="true" aria-labelledby="vacModalTitle" style="display:none">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <div class="modal-title" id="vacModalTitle">VACATION — <span id="vacModalName"></span></div>
+      <button class="modal-close" onclick="closeVacationModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-intro">Days inside any range below are excluded from this member's activity score, and today's status shows ON VACATION while a range covers it.</p>
+      <div id="vacList" style="margin-bottom:16px"></div>
+      <div class="admin-bar" style="margin-bottom:12px">
+        <span class="admin-bar-label">ADD VACATION</span>
+      </div>
+      <form id="vacAddForm" onsubmit="addVacationEntry(event)" novalidate>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" for="vacFrom">FROM</label><input class="form-input" type="date" id="vacFrom" required></div>
+          <div class="form-group"><label class="form-label" for="vacUntil">UNTIL</label><input class="form-input" type="date" id="vacUntil" required></div>
+        </div>
+        <div class="form-error" id="vacAddError" style="display:none"></div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary"><span class="btn-icon">&#x2295;</span> ADD VACATION</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <!-- HEATMAP MODAL -->
 <div class="modal-overlay" id="hmModalOverlay" role="dialog" aria-modal="true" aria-labelledby="hmModalTitle" style="display:none">
   <div class="modal" style="max-width:820px">
@@ -238,6 +270,7 @@
     </div>
     <div class="modal-body">
       <p class="modal-intro" id="hmModalSub">Minutes spent in Discord voice channels, last 365 days.</p>
+      <p class="modal-intro" id="hmModalScore" style="margin-top:-8px"></p>
       <div style="position:relative;overflow-x:auto">
         <svg id="hmSvg" style="display:block"></svg>
         <div id="hmTooltip" class="hm-tooltip" style="display:none"></div>
@@ -249,6 +282,16 @@
 <div class="skills-toast" id="toast"></div>
 
 <style>
+  .score-badge { font-size: 9px; letter-spacing: 1px; font-weight: 600; }
+  .score-active   { color: var(--green); }
+  .score-inactive { color: var(--amber); }
+  .score-stale    { color: var(--red); }
+  .status-badge { font-size: 9px; letter-spacing: 1px; }
+  .status-active       { color: var(--green); }
+  .status-inactive     { color: var(--amber); }
+  .status-stale        { color: var(--red); }
+  .status-on-vacation  { color: var(--blue); }
+  .status-left-discord { color: var(--text-3); }
   .hm-level-0 { fill: var(--bg3); }
   .hm-level-1 { fill: color-mix(in oklab, var(--bg3) 65%, var(--green) 35%); }
   .hm-level-2 { fill: color-mix(in oklab, var(--bg3) 40%, var(--green) 60%); }

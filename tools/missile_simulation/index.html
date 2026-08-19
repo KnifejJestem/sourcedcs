@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Missile Flyout Scope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="public/css/style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <h1>Missile Flyout Scope</h1>
+  <span class="loaded-name" id="loadedName">AIM-120C (built in)</span>
+  <span class="eyebrow">3D engagement &middot; side + top-down views</span>
+</header>
+
+<div class="dash">
+<div class="shell">
+  <div class="scope-wrap">
+    <canvas id="scope" width="1100" height="620" role="img"
+      aria-label="Side view: range vs. altitude. Drag the friendly and hostile markers to reposition them."></canvas>
+    <p class="scale-note" id="scaleNote"></p>
+    <canvas id="topScope" width="1100" height="440" role="img"
+      aria-label="Top-down view: range vs. cross-range."></canvas>
+    <p class="scale-note" id="topScaleNote"></p>
+  </div>
+</div>
+
+<div class="dash-controls">
+<div class="toolbar">
+  <div class="toolbar-group">
+    <span class="toolbar-label">Preset</span>
+    <select id="presetAcftSel" aria-label="Which aircraft a preset applies to">
+      <option value="s">Friendly</option>
+      <option value="t">Hostile</option>
+    </select>
+    <button class="btn secondary" type="button" id="presetSaveBtn">Save as preset&hellip;</button>
+    <select id="presetLoadSel" aria-label="Load a saved preset">
+      <option value="">Load preset&hellip;</option>
+    </select>
+    <button class="btn secondary" type="button" id="presetApplyBtn">Apply</button>
+    <button class="btn secondary" type="button" id="presetDeleteBtn">Delete</button>
+  </div>
+  <div id="presetMsgs"></div>
+</div>
+
+<div class="weapon-load">
+  <div class="filerow">
+    <label class="btn secondary" for="luaFile" style="text-align:center; display:block;">Load .lua file</label>
+    <input type="file" id="luaFile" accept=".lua,.txt,text/plain">
+    <button class="btn secondary" type="button" id="pasteToggle" aria-expanded="false">Or paste table text</button>
+  </div>
+  <div id="pasteBox" hidden>
+    <textarea id="luaText" placeholder="Paste a DCS weapon table here, then press Parse."></textarea>
+    <button class="btn secondary" type="button" id="parsePaste" style="margin-top:8px;">Parse</button>
+  </div>
+  <div id="parseMsgs"></div>
+  <details class="report">
+    <summary>Values in use</summary>
+    <dl class="kv" id="reportKv"></dl>
+    <div id="reportMsgs"></div>
+  </details>
+</div>
+
+<div class="setup-strip">
+  <div class="field start-sep">
+    <label for="t_start_rng">Start separation (nm)</label>
+    <input type="number" class="numfield" id="t_start_rng" min="1" max="70" step="0.1">
+  </div>
+</div>
+
+<div id="acftPanels" class="acft-grid"></div>
+
+<div class="readout">
+  <div id="readoutA">
+    <p class="eyebrow" id="missileALabel" style="padding:10px 20px 0;">Friendly's missile</p>
+    <div class="verdict">
+      <span class="tag miss" id="tag">&mdash;</span>
+      <span class="why" id="why">Set up the shot, then fire.</span>
+    </div>
+    <dl class="stats">
+      <div class="stat"><dt>Time of flight</dt><dd id="oTof">&mdash;</dd></div>
+      <div class="stat"><dt>Closure</dt><dd id="oClosure">&mdash;</dd></div>
+      <div class="stat"><dt>Intercept range</dt><dd id="oIcpt">&mdash;</dd></div>
+      <div class="stat"><dt>Seeker active</dt><dd id="oActive">&mdash;</dd></div>
+      <div class="stat"><dt>Friendly&ndash;hostile @ active</dt><dd id="oShooterTgt">&mdash;</dd></div>
+      <div class="stat"><dt>Support to active</dt><dd id="oSupport">&mdash;</dd></div>
+      <div class="stat"><dt>Miss distance</dt><dd id="oMiss">&mdash;</dd></div>
+      <div class="stat"><dt>Apogee</dt><dd id="oApogee">&mdash;</dd></div>
+      <div class="stat"><dt>Terminal speed</dt><dd id="oTerm">&mdash;</dd></div>
+    </dl>
+  </div>
+
+  <div id="readoutB" hidden>
+    <p class="eyebrow" style="padding:14px 20px 0;">Hostile's return shot</p>
+    <div class="verdict">
+      <span class="tag miss" id="tagB">&mdash;</span>
+      <span class="why" id="whyB">&mdash;</span>
+    </div>
+    <dl class="stats">
+      <div class="stat"><dt>Time of flight</dt><dd id="oTofB">&mdash;</dd></div>
+      <div class="stat"><dt>Closure</dt><dd id="oClosureB">&mdash;</dd></div>
+      <div class="stat"><dt>Intercept range</dt><dd id="oIcptB">&mdash;</dd></div>
+      <div class="stat"><dt>Seeker active</dt><dd id="oActiveB">&mdash;</dd></div>
+      <div class="stat"><dt>Friendly&ndash;hostile @ active</dt><dd id="oShooterTgtB">&mdash;</dd></div>
+      <div class="stat"><dt>Support to active</dt><dd id="oSupportB">&mdash;</dd></div>
+      <div class="stat"><dt>Miss distance</dt><dd id="oMissB">&mdash;</dd></div>
+      <div class="stat"><dt>Apogee</dt><dd id="oApogeeB">&mdash;</dd></div>
+      <div class="stat"><dt>Terminal speed</dt><dd id="oTermB">&mdash;</dd></div>
+    </dl>
+  </div>
+
+  <div class="legend" id="legend">
+    <button type="button" class="legend-toggle" data-declutter="missileA" aria-pressed="true">
+      <i class="key" style="border-color:#4fc9f0"></i>Missile A</button>
+    <button type="button" class="legend-toggle" data-declutter="missileB" aria-pressed="true">
+      <i class="key" style="border-color:#f5ad4a"></i>Missile B (return)</button>
+    <button type="button" class="legend-toggle" data-declutter="seekerEvents" aria-pressed="true">
+      <i class="key" style="border-color:#b58cf0;border-top-style:dashed"></i>Seeker range</button>
+    <button type="button" class="legend-toggle" data-declutter="firerTgtLine" aria-pressed="true">
+      <i class="key" style="border-color:#6fd18a;border-top-style:dashed"></i>Friendly&ndash;hostile @ active</button>
+    <button type="button" class="legend-toggle" data-declutter="trackFriendly" aria-pressed="true">
+      <i class="key" style="border-color:#4fc9f0;border-top-style:dotted"></i>Friendly track</button>
+    <button type="button" class="legend-toggle" data-declutter="trackHostile" aria-pressed="true">
+      <i class="key" style="border-color:#7b93a8;border-top-style:dotted"></i>Hostile track</button>
+    <button type="button" class="legend-toggle" data-declutter="maneuverFriendly" aria-pressed="true">
+      <i class="key" style="border-color:#f5ad4a;border-top-style:dotted"></i>Friendly maneuver marks</button>
+    <button type="button" class="legend-toggle" data-declutter="maneuverHostile" aria-pressed="true">
+      <i class="key" style="border-color:#7b93a8;border-top-style:dotted"></i>Hostile maneuver marks</button>
+    <span class="legend-note">&#9210; 5 s tick &middot; both missiles share the same phase colors (solid = powered/loft, dashed = coast, amber = terminal PN) &middot; click a toggle above to declutter the scope</span>
+  </div>
+  <div class="caveat">
+    <p><strong>Where the numbers come from.</strong> Mass, reference area and the Cx0(Mach) drag curve are read
+    from the weapon table, along with the loft angle, loft-off range, nav gain, g limit and fuze radius. The Cx0
+    Mach step is taken from <code>fm.table_scale</code> when present.</p>
+    <p><strong>Motor thrust comes from specific impulse.</strong> The table's <code>impulse</code> field is
+    Isp in seconds, not total impulse in newton-seconds &mdash; thrust = Isp &times; g&#8320; &times; (fuel mass
+    &divide; burn time). For the AIM-120C that's ~18.1&nbsp;kN, close to an independent cross-check of solving
+    for the thrust needed to reach the table's own <code>Mach_max</code> by burnout (~23.6&nbsp;kN, 23% apart).
+    If a loaded weapon has no usable Isp/fuel data, it falls back to that Mach_max calibration and says so.</p>
+    <p><strong>Every aircraft flies a sequence of phases, not a reaction.</strong> Intercept is the mandatory
+    baseline from launch; Crank (no trigger of its own) and Out (its own trigger) are independent toggles layered
+    on top &mdash; check both and the aircraft cranks from launch, then breaks into Out once its trigger fires, from
+    whatever heading/altitude/speed the crank left it at; Cold takes over the instant Out's heading-hold first
+    settles onto "pointing away." Every phase converges its own speed (via acceleration) and altitude (via climb
+    angle) toward its own targets and holds once reached &mdash; re-based from wherever the aircraft actually is the
+    moment that phase takes over, so switching phases is never a discontinuity. All of it is pre-planned from the
+    sliders, computed once up front: no aircraft reacts to the missile(s) in flight beyond its configured phases
+    (no defensive break at seeker activation that isn't already an Out/Cold you set up, no notching).</p>
+    <p><strong>Intercept, Crank, and Cold all hold a commanded angle off the other aircraft's bearing</strong> using
+    the same 3g-capped, bang-bang controller (Out uses its own turn-rate input instead of 3g) &mdash; Intercept and
+    Crank reference the angle from <em>pointing at</em> the other aircraft (0&deg; = pure pursuit / hot), Cold
+    references it from <em>pointing away</em> (0&deg; = cold, &plusmn;90&deg; = beam, 180&deg; = hot). Start has no
+    heading input at all: each aircraft's initial heading is derived to already match whichever phase governs at
+    launch (Intercept, or Crank if enabled), so a default (0&deg;) head-on setup starts with zero heading error,
+    same as flying straight always meant.</p>
+    <p><strong>Out always points directly away from the other aircraft, continuously</strong> &mdash; not a fixed
+    180&deg; arc computed once at the trigger instant. It's the same heading-hold mechanism as the others, just
+    commanded at 180&deg; and re-aimed every step at wherever the other aircraft actually is, so it keeps tracking
+    "away" even if that aircraft is itself maneuvering. The lateral drift this produces is real motion now, visible
+    in the top-down view (rendered to scale, unlike the side view) rather than a dropped axis.</p>
+    <p><strong>Out-turn's default trigger is "my own missile went active"</strong> &mdash; this aircraft's own
+    missile no longer needs radar support to guide, so it breaks off. The hostile's version needs Return fire
+    enabled (otherwise there's no missile of its own to activate, so it never triggers), and the friendly's version
+    needs Friendly fires enabled for the same reason. A plain friendly&ndash;hostile range trigger is still available
+    as an alternative. Resolving an activation trigger takes an extra simulation pass or two (a missile's guidance
+    only ever depends on the aircraft it's chasing, never the firer's own maneuvering, so this resolves in a fixed
+    sequence rather than needing to iterate) &mdash; one edge case isn't chased further: the friendly's own activation
+    time is resolved against the hostile's pre-break path, so if the hostile's return-fire-triggered break somehow
+    started before the friendly's missile went active, that wouldn't be reflected. Realistically the hostile's own
+    missile can't even activate that early, since it hasn't launched yet at that point.</p>
+    <p><strong>Which field is "seeker activation" is not documented.</strong> Two candidates are marked separately:
+    <code>D_max</code> (16&nbsp;km here), which behaves like the active-homing handoff, and
+    <code>sensor.sens_far_dist</code> (30&nbsp;km), the outer detection limit. Both are gated by
+    <code>sensor.delay</code>. Treat the labels as the fields they came from, not as confirmed game behaviour.</p>
+    <p><strong>Known limits.</strong> Induced drag is not modelled, so the missile pays nothing for lift during the
+    loft hold and terminal turn and high-altitude ranges come out optimistic. Rmax is usually limited by
+    <code>Life_Time</code> rather than by energy. Guidance is full 3D proportional navigation, decoupled into
+    independent elevation and azimuth channels sharing one g-limit budget &mdash; useful for envelope planning, not
+    a replica of ED's 6-DOF model. The side (range/altitude) view is a projection that ignores cross-range, so it
+    understates true separation once either aircraft cranks or out-turns; the top-down view carries no altitude
+    information. If return fire is enabled, the hostile's shot is guided the same way, independently, against the
+    friendly's own flight path. If Friendly fires is turned off, the friendly aircraft still flies its configured
+    phases -- it just never launches anything.</p>
+  </div>
+</div>
+</div>
+</div>
+
+<script type="module" src="public/js/main.js"></script>
+</body>
+</html>

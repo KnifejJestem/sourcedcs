@@ -7,6 +7,7 @@ const path      = require('path');
 const fs        = require('fs');
 const https     = require('https');
 const voiceGateway = require('./discord-gateway');
+const activityDailyJob = require('./activity-daily-job');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -140,6 +141,16 @@ process.on('SIGINT', gracefulShutdown);
 let members        = loadJSON(MEMBERS_FILE, {});
 let membersCacheAt = 0;
 const ROSTER_CACHE_TTL = 5 * 60 * 1000; /* 5 minutes */
+
+/* Per-member activity score (see ACTIVITY_SCORE.md) — recomputed once per
+   squadron-wide day from voice-activity.json, cached in memory for the API
+   routes below. */
+activityDailyJob.init({
+  dataDir: DATA_DIR,
+  memberIds: () => Object.keys(members),
+  getMemberDays: (id) => voiceGateway.getMemberDays(id),
+  localDateKey: voiceGateway.localDateKey,
+});
 
 /* One-shot migration: fold the legacy sub-keyed squadron overrides (from the
    old skills-admin per-pilot override UI) into the new Discord-id-keyed
@@ -316,6 +327,38 @@ const ROLE_LABELS = ['Member', 'Pilot', 'Element Lead', 'Flight Lead', 'Squadron
    fallback for entries persisted before the autoRole/roleOverride split. */
 function resolvedRole(m) {
   return (m && (m.roleOverride || m.autoRole || m.role)) || '';
+}
+
+/* True if `nowMs` falls inside any of the member's vacation ranges
+   (inclusive). Vacation days are excluded from the activity score itself —
+   this is purely a status-display check, unrelated to scoring. */
+function isCurrentlyOnVacation(vacations, nowMs) {
+  if (!Array.isArray(vacations)) return false;
+  return vacations.some((v) => {
+    const from = Date.parse(v.from);
+    const until = Date.parse(v.until);
+    return !isNaN(from) && !isNaN(until) && nowMs >= from && nowMs <= until;
+  });
+}
+
+/* Single merged status field: LEFT_DISCORD (guild membership) and
+   ON_VACATION (admin-marked) both override the activity-score-derived
+   label (ACTIVE/INACTIVE/STALE, see activity-score.js). A member with no
+   score record yet (e.g. right after a fresh deploy, before the first
+   daily-job tick) falls back to ACTIVE rather than showing a blank status. */
+function computeMemberStatus(m, scoreRec) {
+  if (m.active === false) return 'LEFT_DISCORD';
+  if (isCurrentlyOnVacation(m.vacations, Date.now())) return 'ON_VACATION';
+  if (scoreRec && scoreRec.current) return scoreRec.current.label.toUpperCase();
+  return 'ACTIVE';
+}
+
+function validateVacationRange(from, until) {
+  const f = Date.parse(from);
+  const u = Date.parse(until);
+  if (isNaN(f) || isNaN(u)) return { ok: false, error: 'Invalid date' };
+  if (u <= f) return { ok: false, error: '"Until" must be after "from"' };
+  return { ok: true };
 }
 
 /* Re-fetches the members store from Discord if the cache has expired. */
@@ -1369,6 +1412,7 @@ api.get('/members', requireAuth, requireSkillAdmin, async (_req, res) => {
     const nameMismatch = !!(linkedPilot && !linkedPilot.manual && linkedPilot.callsign && m.callsign &&
       linkedPilot.callsign.toLowerCase() !== m.callsign.toLowerCase());
     const voice = voiceGateway.getMemberVoiceState(m.id);
+    const scoreRec = activityDailyJob.getMemberScore(m.id);
     return {
       id:               m.id,
       username:         m.username,
@@ -1381,9 +1425,15 @@ api.get('/members', requireAuth, requireSkillAdmin, async (_req, res) => {
       squadronOverride: m.squadronOverride || null,
       squadron:         resolvedSquadron(m) || null,
       active:           m.active !== false,
+      status:           computeMemberStatus(m, scoreRec),
+      vacations:        Array.isArray(m.vacations) ? m.vacations : [],
       lastSeen:         m.lastSeen || null,
       inCall:           voice.inCall,
       lastCallEnd:      voice.lastCallEnd,
+      activityScore:       scoreRec ? scoreRec.current.score : null,
+      activityLabel:       scoreRec ? scoreRec.current.label : null,
+      activityDelta7d:     scoreRec ? scoreRec.delta7d : null,
+      activityProvisional: scoreRec ? scoreRec.current.provisional : null,
       linkedPilot,
       nameMismatch,
     };
@@ -1397,6 +1447,14 @@ api.get('/voice-activity/member/:id', requireAuth, requireSkillAdmin, (req, res)
   const id = req.params.id;
   if (!members[id]) return res.status(404).json({ error: 'Member not found' });
   res.json({ days: voiceGateway.getMemberDays(id) });
+});
+
+/* Per-member activity score: current score/label/7-day trend, and whether
+   it's still provisional (<21 days of history). See ACTIVITY_SCORE.md. */
+api.get('/activity-score/:id', requireAuth, requireSkillAdmin, (req, res) => {
+  const id = req.params.id;
+  if (!members[id]) return res.status(404).json({ error: 'Member not found' });
+  res.json(activityDailyJob.getMemberScore(id) || { current: null, delta7d: null, updatedAt: null });
 });
 
 /* Squadron-wide activity graph: daily/weekly totals or an hour-of-day
@@ -1482,6 +1540,54 @@ api.put('/members/:id/casdoor-link', writeOpsLimiter, requireAuth, requireSkillA
   saveJSON(MEMBERS_FILE, members);
   const linkedPilot = findLinkedPilot(members[id]);
   res.json({ id, casdoor_sub: members[id].casdoorSub || null, linkedPilot });
+});
+
+/* Vacation marking — a history of { id, from, until } ranges per member
+   (not a single slot), admin-only. Days inside any range are excluded from
+   the activity score entirely (see activity-score.js's recomputeMember)
+   and, while today falls inside one, the member's merged status shows
+   ON_VACATION regardless of their score (see computeMemberStatus). */
+api.post('/members/:id/vacation', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const id = req.params.id;
+  if (!members[id]) return res.status(404).json({ error: 'Member not found' });
+  const from = typeof req.body.from === 'string' && req.body.from ? req.body.from : new Date().toISOString();
+  const until = typeof req.body.until === 'string' && req.body.until ? req.body.until : new Date(Date.now() + 7 * 86400000).toISOString();
+  const check = validateVacationRange(from, until);
+  if (!check.ok) return res.status(400).json({ error: check.error });
+
+  if (!Array.isArray(members[id].vacations)) members[id].vacations = [];
+  const entry = { id: 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), from, until };
+  members[id].vacations.push(entry);
+  saveJSON(MEMBERS_FILE, members);
+  res.json({ id: entry.id, vacations: members[id].vacations });
+});
+
+api.put('/members/:id/vacation/:vacationId', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const id = req.params.id;
+  if (!members[id]) return res.status(404).json({ error: 'Member not found' });
+  const list = Array.isArray(members[id].vacations) ? members[id].vacations : [];
+  const entry = list.find((v) => v.id === req.params.vacationId);
+  if (!entry) return res.status(404).json({ error: 'Vacation entry not found' });
+
+  const from = typeof req.body.from === 'string' && req.body.from ? req.body.from : entry.from;
+  const until = typeof req.body.until === 'string' && req.body.until ? req.body.until : entry.until;
+  const check = validateVacationRange(from, until);
+  if (!check.ok) return res.status(400).json({ error: check.error });
+
+  entry.from = from;
+  entry.until = until;
+  saveJSON(MEMBERS_FILE, members);
+  res.json({ id: entry.id, vacations: members[id].vacations });
+});
+
+api.delete('/members/:id/vacation/:vacationId', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const id = req.params.id;
+  if (!members[id]) return res.status(404).json({ error: 'Member not found' });
+  const before = (members[id].vacations || []).length;
+  members[id].vacations = (members[id].vacations || []).filter((v) => v.id !== req.params.vacationId);
+  if (members[id].vacations.length === before) return res.status(404).json({ error: 'Vacation entry not found' });
+  saveJSON(MEMBERS_FILE, members);
+  res.json({ id: req.params.vacationId, vacations: members[id].vacations });
 });
 
 /* Fix a registered pilot's display name/callsign to match their Discord

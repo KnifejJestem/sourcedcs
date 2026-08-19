@@ -140,10 +140,13 @@ function filteredMembers() {
         (m.linkedPilot ? m.linkedPilot.name + ' ' + m.linkedPilot.callsign : '')).toLowerCase();
       if (hay.indexOf(_search) === -1) return false;
     }
-    if (_filter === '__unassigned') return !m.squadron;
-    if (_filter === '__mismatch')   return !!m.nameMismatch;
-    if (_filter === '__inactive')   return !m.active;
-    if (_filter)                    return m.squadron === _filter;
+    if (_filter === '__unassigned')    return !m.squadron;
+    if (_filter === '__mismatch')      return !!m.nameMismatch;
+    if (_filter === '__left_discord')  return m.status === 'LEFT_DISCORD';
+    if (_filter === '__stale')         return m.status === 'STALE';
+    if (_filter === '__inactive_score') return m.status === 'INACTIVE';
+    if (_filter === '__on_vacation')   return m.status === 'ON_VACATION';
+    if (_filter)                       return m.squadron === _filter;
     return true;
   });
 }
@@ -163,19 +166,21 @@ function populateSquadronFilter() {
 
 /* ── Rendering ──────────────────────────────────────────── */
 function renderTable() {
-  var active   = _members.filter(function (m) { return m.active; });
-  var inactive = _members.length - active.length;
-  var unassigned = active.filter(function (m) { return !m.squadron; }).length;
+  var statusCounts = { ACTIVE: 0, INACTIVE: 0, STALE: 0, ON_VACATION: 0, LEFT_DISCORD: 0 };
+  _members.forEach(function (m) { statusCounts[m.status] = (statusCounts[m.status] || 0) + 1; });
+  var unassigned = _members.filter(function (m) { return m.active && !m.squadron; }).length;
   var mismatches = _members.filter(function (m) { return m.nameMismatch; }).length;
   document.getElementById('memberSummary').textContent =
-    active.length + ' active · ' + inactive + ' inactive · ' +
+    statusCounts.ACTIVE + ' active · ' + statusCounts.INACTIVE + ' inactive · ' +
+    statusCounts.STALE + ' stale · ' + statusCounts.ON_VACATION + ' on vacation · ' +
+    statusCounts.LEFT_DISCORD + ' left discord · ' +
     unassigned + ' unassigned · ' + mismatches + ' name mismatch' + (mismatches === 1 ? '' : 'es');
 
   var list = filteredMembers();
   var tbody = document.getElementById('membersBody');
 
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3)">No members match.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-3)">No members match.</td></tr>';
     return;
   }
 
@@ -314,12 +319,32 @@ function renderTable() {
     }
     tr.appendChild(tdWeb);
 
-    /* Status */
+    /* Status: single merged field — LEFT_DISCORD (guild membership) and
+       ON_VACATION (admin-marked) override the activity-score-derived
+       label (ACTIVE/INACTIVE/STALE), computed server-side in
+       computeMemberStatus(). */
     var tdStatus = document.createElement('td');
-    tdStatus.innerHTML = m.active
-      ? '<span style="color:var(--green);font-size:9px;letter-spacing:1px">ACTIVE</span>'
-      : '<span style="color:var(--red);font-size:9px;letter-spacing:1px">LEFT DISCORD</span>';
+    tdStatus.innerHTML = buildStatusBadgeHtml(m.status);
     tr.appendChild(tdStatus);
+
+    /* Activity score: percentage + 7-day trend, provisional flag for
+       members under 21 days of history. The label itself is shown in
+       STATUS above, so it isn't repeated here. */
+    var tdScore = document.createElement('td');
+    tdScore.innerHTML = buildScoreCellHtml(m);
+    tr.appendChild(tdScore);
+
+    /* Vacation: opens the vacation CRUD modal for this member */
+    var tdVac = document.createElement('td');
+    var vacCount = (m.vacations || []).length;
+    var vacBtn = document.createElement('button');
+    vacBtn.className = 'btn-sm';
+    vacBtn.textContent = vacCount ? 'VACATION (' + vacCount + ')' : 'VACATION';
+    (function (member) {
+      vacBtn.addEventListener('click', function () { openVacationModal(member); });
+    })(m);
+    tdVac.appendChild(vacBtn);
+    tr.appendChild(tdVac);
 
     /* Voice activity: last-online status + per-member heatmap */
     var tdVoice = document.createElement('td');
@@ -741,6 +766,43 @@ function formatRelativeTime(iso) {
   return Math.floor(day / 365) + 'y ago';
 }
 
+/* ── Status / activity score display ────────────────────── */
+var STATUS_LABEL = {
+  ACTIVE:       ['ACTIVE',        'status-active'],
+  INACTIVE:     ['INACTIVE',      'status-inactive'],
+  STALE:        ['STALE',         'status-stale'],
+  ON_VACATION:  ['ON VACATION',   'status-on-vacation'],
+  LEFT_DISCORD: ['LEFT DISCORD',  'status-left-discord'],
+};
+var SCORE_LABEL_CLASS = { active: 'score-active', inactive: 'score-inactive', stale: 'score-stale' };
+
+function buildStatusBadgeHtml(status) {
+  var entry = STATUS_LABEL[status] || STATUS_LABEL.ACTIVE;
+  return '<span class="status-badge ' + entry[1] + '">' + entry[0] + '</span>';
+}
+
+function buildScoreCellHtml(m) {
+  if (m.activityScore == null) {
+    return '<span style="color:var(--text-3);font-size:9px">&mdash;</span>';
+  }
+  var pct = Math.round(m.activityScore * 100);
+  var labelClass = SCORE_LABEL_CLASS[m.activityLabel] || 'score-inactive';
+  var html = '<span class="score-badge ' + labelClass + '">' + pct + '%</span>';
+  html += trendHtml(m.activityDelta7d);
+  if (m.activityProvisional) {
+    html += '<div style="font-size:8px;color:var(--text-3);margin-top:2px">provisional &middot; &lt;21d history</div>';
+  }
+  return html;
+}
+
+function trendHtml(delta7d) {
+  if (delta7d == null) return '';
+  var deltaPct = Math.round(delta7d * 100);
+  var up = deltaPct >= 0;
+  return ' <span style="font-size:9px;color:' + (up ? 'var(--green)' : 'var(--red)') + '">' +
+    (up ? '&#9650;' : '&#9660;') + (up ? '+' : '') + deltaPct + '</span>';
+}
+
 function levelForMinutes(minutes) {
   if (!minutes || minutes <= 0) return 0;
   if (minutes <= 30)  return 1;
@@ -764,6 +826,9 @@ function hideTooltip(tooltipEl) { tooltipEl.style.display = 'none'; }
 function openHeatmapModal(member) {
   document.getElementById('hmModalTitle').textContent = 'VOICE ACTIVITY — ' + (member.callsign || member.username || member.id).toUpperCase();
   document.getElementById('hmModalSub').textContent = 'Minutes spent in Discord voice channels, last 365 days.';
+  document.getElementById('hmModalScore').innerHTML = member.activityScore == null
+    ? '<span style="color:var(--text-3)">Status: &mdash; &middot; Activity score: &mdash;</span>'
+    : 'Status: ' + buildStatusBadgeHtml(member.status) + ' &middot; Activity score: ' + buildScoreCellHtml(member);
   document.getElementById('hmSvg').innerHTML = '';
   document.getElementById('hmModalOverlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -779,6 +844,119 @@ function closeHeatmapModal() {
   document.body.style.overflow = '';
 }
 document.getElementById('hmModalOverlay').addEventListener('click', function (e) { if (e.target === this) closeHeatmapModal(); });
+
+/* ── Vacation modal ──────────────────────────────────────── */
+var _vacMember = null;
+
+function openVacationModal(member) {
+  _vacMember = member;
+  document.getElementById('vacModalName').textContent = (member.callsign || member.username || member.id).toUpperCase();
+  document.getElementById('vacAddError').style.display = 'none';
+  var now = new Date();
+  var plus7 = new Date(Date.now() + 7 * 86400000);
+  document.getElementById('vacFrom').value = now.toISOString().slice(0, 10);
+  document.getElementById('vacUntil').value = plus7.toISOString().slice(0, 10);
+  renderVacList();
+  document.getElementById('vacModalOverlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeVacationModal() {
+  document.getElementById('vacModalOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+  _vacMember = null;
+}
+document.getElementById('vacModalOverlay').addEventListener('click', function (e) { if (e.target === this) closeVacationModal(); });
+
+function renderVacList() {
+  var container = document.getElementById('vacList');
+  var list = (_vacMember && _vacMember.vacations) || [];
+  if (!list.length) {
+    container.innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:8px 0">No vacation entries.</div>';
+    return;
+  }
+  container.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+    '<thead><tr>' +
+    '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-2)">FROM</th>' +
+    '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-2)">UNTIL</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid var(--border)"></th>' +
+    '</tr></thead><tbody>' +
+    list.map(function (v) {
+      return '<tr>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid var(--border)"><input type="date" class="form-input" data-vac-id="' + esc(v.id) + '" data-field="from" value="' + esc(v.from.slice(0, 10)) + '"></td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid var(--border)"><input type="date" class="form-input" data-vac-id="' + esc(v.id) + '" data-field="until" value="' + esc(v.until.slice(0, 10)) + '"></td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap">' +
+          '<button class="btn-sm" data-vac-save="' + esc(v.id) + '">SAVE</button> ' +
+          '<button class="btn-sm btn-sm-danger" data-vac-del="' + esc(v.id) + '">&#x2715;</button>' +
+        '</td></tr>';
+    }).join('') + '</tbody></table>';
+  Array.prototype.forEach.call(container.querySelectorAll('[data-vac-save]'), function (btn) {
+    btn.addEventListener('click', function () { saveVacationEntry(btn.dataset.vacSave); });
+  });
+  Array.prototype.forEach.call(container.querySelectorAll('[data-vac-del]'), function (btn) {
+    btn.addEventListener('click', function () { deleteVacationEntry(btn.dataset.vacDel); });
+  });
+}
+
+function addVacationEntry(e) {
+  e.preventDefault();
+  var fromVal = document.getElementById('vacFrom').value;
+  var untilVal = document.getElementById('vacUntil').value;
+  var errEl = document.getElementById('vacAddError');
+  if (!fromVal || !untilVal || new Date(untilVal) <= new Date(fromVal)) {
+    errEl.textContent = '"Until" must be after "from".';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
+  fetch('/api/members/' + encodeURIComponent(_vacMember.id) + '/vacation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+    body: JSON.stringify({ from: new Date(fromVal).toISOString(), until: new Date(untilVal).toISOString() }),
+  }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+    .then(function (res) {
+      if (!res.ok) { errEl.textContent = res.body.error || 'Failed to add vacation'; errEl.style.display = ''; return; }
+      showToast('Vacation added');
+      closeVacationModal();
+      loadAll(getToken()); /* status/score depend on vacation state — reload rather than patch in place */
+    })
+    .catch(function () { errEl.textContent = 'Network error — please try again.'; errEl.style.display = ''; });
+}
+
+function saveVacationEntry(vacId) {
+  var fromEl = document.querySelector('[data-vac-id="' + vacId + '"][data-field="from"]');
+  var untilEl = document.querySelector('[data-vac-id="' + vacId + '"][data-field="until"]');
+  if (!fromEl.value || !untilEl.value || new Date(untilEl.value) <= new Date(fromEl.value)) {
+    showToast('"Until" must be after "from"', true);
+    return;
+  }
+  fetch('/api/members/' + encodeURIComponent(_vacMember.id) + '/vacation/' + encodeURIComponent(vacId), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+    body: JSON.stringify({ from: new Date(fromEl.value).toISOString(), until: new Date(untilEl.value).toISOString() }),
+  }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+    .then(function (res) {
+      if (!res.ok) { showToast(res.body.error || 'Failed to update vacation', true); return; }
+      showToast('Vacation updated');
+      closeVacationModal();
+      loadAll(getToken());
+    })
+    .catch(function () { showToast('Network error — please try again.', true); });
+}
+
+function deleteVacationEntry(vacId) {
+  if (!confirm('Remove this vacation entry?')) return;
+  fetch('/api/members/' + encodeURIComponent(_vacMember.id) + '/vacation/' + encodeURIComponent(vacId), {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + getToken() },
+  }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+    .then(function (res) {
+      if (!res.ok) { showToast(res.body.error || 'Failed to remove vacation', true); return; }
+      showToast('Vacation removed');
+      closeVacationModal();
+      loadAll(getToken());
+    })
+    .catch(function () { showToast('Network error — please try again.', true); });
+}
 
 /* GitHub-contributions-style grid: rows = day-of-week, columns = weeks,
    rolling 365 days ending today. Buckets are minutes-in-voice per day. */
