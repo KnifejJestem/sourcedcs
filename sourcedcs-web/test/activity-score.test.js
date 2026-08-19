@@ -135,6 +135,30 @@ test('real member 21-day histories', () => {
   }
 });
 
+/* ── Vacation freezing (not part of the original §1-§7 spec — vacations
+   are excused absences: no model update runs at all on a vacation day, so
+   S_raw and the display score carry over unchanged, and a member resuming
+   right after vacation is not penalized as if that many gap days had
+   accrued). ─────────────────────────────────────────────────────────── */
+test('vacation days freeze the score — no update, no gap-day decay', () => {
+  const daysMap = {};
+  for (let i = 0; i < 10; i++) daysMap[dateKeyAt(i)] = 120;      /* build up a score */
+  /* days 10-16: on vacation, genuinely zero voice minutes */
+  for (let i = 17; i < 20; i++) daysMap[dateKeyAt(i)] = 120;     /* resume after */
+
+  const vacationDayRanges = [{ fromDay: dateKeyAt(10), untilDay: dateKeyAt(16) }];
+  const withVacation = recomputeMember(daysMap, dateKeyAt(19), dateKeyAt(0), vacationDayRanges);
+  const withoutVacation = recomputeMember(daysMap, dateKeyAt(19), dateKeyAt(0), []);
+
+  const scoreBeforeVacation = withVacation.rows[9].score;
+  const scoreAfterVacation = withVacation.rows[16].score;
+  approxEqual(scoreAfterVacation, scoreBeforeVacation, 1e-12, 'score must be exactly frozen across the vacation window');
+
+  const scoreAfterVacationNoFreeze = withoutVacation.rows[16].score;
+  assert.ok(scoreAfterVacationNoFreeze < scoreBeforeVacation - 1e-6, 'sanity: without the freeze, zero-minute days do decay the score');
+  assert.ok(withVacation.current.score > withoutVacation.current.score, 'freezing must leave the member better off than paying full gap decay for the same window');
+});
+
 /* ── §7 invariant suite — the acceptance criteria ─────────────────────── */
 
 test('A — score(2h on 2 of 3 days) == 0.75 +/- 0.02', () => {

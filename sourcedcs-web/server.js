@@ -149,8 +149,23 @@ activityDailyJob.init({
   dataDir: DATA_DIR,
   memberIds: () => Object.keys(members),
   getMemberDays: (id) => voiceGateway.getMemberDays(id),
+  getMemberVacations: (id) => members[id] && members[id].vacations,
   localDateKey: voiceGateway.localDateKey,
 });
+
+/* Re-runs the activity-score rebuild for a single member right away —
+   used after a vacation edit so the score/status reflect it immediately
+   instead of waiting for the next once-per-day tick. */
+function rebuildMemberScore(id) {
+  activityDailyJob.rebuildOne({
+    dataDir: DATA_DIR,
+    id,
+    getMemberDays: (mid) => voiceGateway.getMemberDays(mid),
+    getMemberVacations: (mid) => members[mid] && members[mid].vacations,
+    localDateKey: voiceGateway.localDateKey,
+    todayKey: voiceGateway.localDateKey(Date.now()),
+  });
+}
 
 /* One-shot migration: fold the legacy sub-keyed squadron overrides (from the
    old skills-admin per-pilot override UI) into the new Discord-id-keyed
@@ -1559,6 +1574,7 @@ api.post('/members/:id/vacation', writeOpsLimiter, requireAuth, requireSkillAdmi
   const entry = { id: 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), from, until };
   members[id].vacations.push(entry);
   saveJSON(MEMBERS_FILE, members);
+  rebuildMemberScore(id);
   res.json({ id: entry.id, vacations: members[id].vacations });
 });
 
@@ -1577,6 +1593,7 @@ api.put('/members/:id/vacation/:vacationId', writeOpsLimiter, requireAuth, requi
   entry.from = from;
   entry.until = until;
   saveJSON(MEMBERS_FILE, members);
+  rebuildMemberScore(id);
   res.json({ id: entry.id, vacations: members[id].vacations });
 });
 
@@ -1587,6 +1604,7 @@ api.delete('/members/:id/vacation/:vacationId', writeOpsLimiter, requireAuth, re
   members[id].vacations = (members[id].vacations || []).filter((v) => v.id !== req.params.vacationId);
   if (members[id].vacations.length === before) return res.status(404).json({ error: 'Vacation entry not found' });
   saveJSON(MEMBERS_FILE, members);
+  rebuildMemberScore(id);
   res.json({ id: req.params.vacationId, vacations: members[id].vacations });
 });
 

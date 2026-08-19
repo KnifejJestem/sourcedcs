@@ -25,16 +25,35 @@ function saveJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
 }
 
+/* Converts a member's raw vacation entries ({ from, until } ISO datetimes,
+   as stored in members.json) into the { fromDay, untilDay } 'YYYY-MM-DD'
+   day-ranges activity-score.js's recomputeMember expects, using the same
+   day-boundary function (`localDateKey`) the voice_day store itself uses —
+   so a vacation day and a voice_day bucket always mean the same "day". */
+function toVacationDayRanges(vacations, localDateKey) {
+  if (!Array.isArray(vacations)) return [];
+  return vacations
+    .map((v) => {
+      const fromMs = Date.parse(v.from);
+      const untilMs = Date.parse(v.until);
+      if (isNaN(fromMs) || isNaN(untilMs)) return null;
+      return { fromDay: localDateKey(fromMs), untilDay: localDateKey(untilMs) };
+    })
+    .filter(Boolean);
+}
+
 /* Rebuilds and persists the full store for `memberIds`. `getMemberDays(id)`
-   must return that member's { 'YYYY-MM-DD': minutes } voice_day map. No
-   `startDateKey` is available per member in this deployment (see the
+   must return that member's { 'YYYY-MM-DD': minutes } voice_day map, and
+   `getMemberVacations(id)` their raw vacation entries (or undefined/[]).
+   No `startDateKey` is available per member in this deployment (see the
    caveat on activity-score.js's recomputeMember), so this falls back to
    each member's earliest recorded voice day. */
-function rebuildAll({ dataDir, memberIds, getMemberDays, todayKey }) {
+function rebuildAll({ dataDir, memberIds, getMemberDays, getMemberVacations, localDateKey, todayKey }) {
   const store = {};
   for (const id of memberIds) {
     const days = getMemberDays(id) || {};
-    const { rows, current, delta7d } = activityScore.recomputeMember(days, todayKey, null);
+    const vacationDayRanges = toVacationDayRanges(getMemberVacations ? getMemberVacations(id) : null, localDateKey);
+    const { rows, current, delta7d } = activityScore.recomputeMember(days, todayKey, null, vacationDayRanges);
     store[id] = { rows, current, delta7d, updatedAt: new Date().toISOString() };
     cache[id] = store[id];
   }
@@ -43,6 +62,19 @@ function rebuildAll({ dataDir, memberIds, getMemberDays, todayKey }) {
   }
   if (dataDir) saveJSON(path.join(dataDir, 'activity-scores.json'), store);
   return store;
+}
+
+/* Rebuilds and re-persists just one member — used right after a vacation
+   edit (server.js) so the score/status reflect it immediately rather than
+   waiting for the next once-per-day tick. */
+function rebuildOne({ dataDir, id, getMemberDays, getMemberVacations, localDateKey, todayKey }) {
+  const days = getMemberDays(id) || {};
+  const vacationDayRanges = toVacationDayRanges(getMemberVacations ? getMemberVacations(id) : null, localDateKey);
+  const { rows, current, delta7d } = activityScore.recomputeMember(days, todayKey, null, vacationDayRanges);
+  const rec = { rows, current, delta7d, updatedAt: new Date().toISOString() };
+  cache[id] = rec;
+  if (dataDir) saveJSON(path.join(dataDir, 'activity-scores.json'), cache);
+  return rec;
 }
 
 /* Public accessor for server.js's API routes — mirrors discord-gateway.js's
@@ -62,7 +94,7 @@ function getMemberScore(id) {
    already uses for its checkpoint/prune ticks. Runs once immediately at
    startup too, so scores are available right after a deploy rather than
    only after the first boundary crossing. */
-function init({ dataDir, memberIds, getMemberDays, localDateKey, checkIntervalMs }) {
+function init({ dataDir, memberIds, getMemberDays, getMemberVacations, localDateKey, checkIntervalMs }) {
   ACTIVITY_SCORES_FILE = path.join(dataDir, 'activity-scores.json');
   const loaded = loadJSON(ACTIVITY_SCORES_FILE, null);
   if (loaded && typeof loaded === 'object') Object.assign(cache, loaded);
@@ -73,7 +105,7 @@ function init({ dataDir, memberIds, getMemberDays, localDateKey, checkIntervalMs
     if (todayKey === lastRunDay) return;
     lastRunDay = todayKey;
     try {
-      rebuildAll({ dataDir, memberIds: memberIds(), getMemberDays, todayKey });
+      rebuildAll({ dataDir, memberIds: memberIds(), getMemberDays, getMemberVacations, localDateKey, todayKey });
     } catch (err) {
       console.error('[activity-score] daily rebuild failed:', (err && err.stack) || err);
     }
@@ -82,4 +114,4 @@ function init({ dataDir, memberIds, getMemberDays, localDateKey, checkIntervalMs
   setInterval(tick, checkIntervalMs || 15 * 60 * 1000);
 }
 
-module.exports = { init, rebuildAll, getMemberScore };
+module.exports = { init, rebuildAll, rebuildOne, getMemberScore };

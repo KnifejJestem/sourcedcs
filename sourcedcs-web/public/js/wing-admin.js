@@ -836,7 +836,7 @@ function openHeatmapModal(member) {
   fetch('/api/voice-activity/member/' + encodeURIComponent(member.id), {
     headers: { 'Authorization': 'Bearer ' + getToken() },
   }).then(function (r) { return r.json(); })
-    .then(function (body) { buildHeatmapSvg(body.days || {}); })
+    .then(function (body) { buildHeatmapSvg(body.days || {}, member.vacations || []); })
     .catch(function () { showToast('Failed to load activity heatmap', true); });
 }
 function closeHeatmapModal() {
@@ -958,9 +958,27 @@ function deleteVacationEntry(vacId) {
     .catch(function () { showToast('Network error — please try again.', true); });
 }
 
+/* True if the whole-day window [dateObj, dateObj+24h) overlaps any of the
+   member's vacation ranges — same whole-day-granularity overlap check the
+   backend uses (activity-score.js's isVacationDay), just done client-side
+   against raw ISO from/until since that's all the member object carries. */
+function isVacationDayKey(dateObj, vacations) {
+  if (!Array.isArray(vacations) || !vacations.length) return false;
+  var dayStart = dateObj.getTime();
+  var dayEnd = dayStart + 86400000;
+  return vacations.some(function (v) {
+    var vFrom = new Date(v.from).getTime();
+    var vUntil = new Date(v.until).getTime();
+    return dayStart < vUntil && dayEnd > vFrom;
+  });
+}
+
 /* GitHub-contributions-style grid: rows = day-of-week, columns = weeks,
-   rolling 365 days ending today. Buckets are minutes-in-voice per day. */
-function buildHeatmapSvg(daysMap) {
+   rolling 365 days ending today. Buckets are minutes-in-voice per day.
+   Vacation days render in a distinct color regardless of minutes logged —
+   the score is frozen on those days (see activity-score.js), so the
+   heatmap should visually say "excused", not "quiet". */
+function buildHeatmapSvg(daysMap, vacations) {
   var CELL = 11, GAP = 3, LEFT_PAD = 26, TOP_PAD = 16;
 
   var today = new Date();
@@ -993,9 +1011,11 @@ function buildHeatmapSvg(daysMap) {
     var dow  = i % 7;
     var x = LEFT_PAD + week * (CELL + GAP);
     var y = TOP_PAD + dow * (CELL + GAP);
-    var level = levelForMinutes(d.minutes);
+    var onVacation = isVacationDayKey(d.date, vacations);
+    var cls = onVacation ? 'hm-vacation' : 'hm-level-' + levelForMinutes(d.minutes);
     markup += '<rect x="' + x + '" y="' + y + '" width="' + CELL + '" height="' + CELL +
-      '" rx="2" class="hm-level-' + level + '" data-date="' + d.key + '" data-minutes="' + d.minutes + '"></rect>';
+      '" rx="2" class="' + cls + '" data-date="' + d.key + '" data-minutes="' + d.minutes +
+      '" data-vacation="' + (onVacation ? '1' : '0') + '"></rect>';
     if (dow === 0 && d.date.getUTCMonth() !== lastMonth) {
       lastMonth = d.date.getUTCMonth();
       markup += '<text x="' + x + '" y="' + (TOP_PAD - 5) + '" class="hm-month-label">' + MONTH_NAMES[lastMonth] + '</text>';
@@ -1007,7 +1027,10 @@ function buildHeatmapSvg(daysMap) {
   Array.prototype.forEach.call(svg.querySelectorAll('rect'), function (rect) {
     rect.addEventListener('mousemove', function (e) {
       var minutes = Number(rect.dataset.minutes) || 0;
-      showTooltip(tooltip, e, '<b>' + rect.dataset.date + '</b><br>' + minutes + ' min in voice');
+      var body = rect.dataset.vacation === '1'
+        ? 'On vacation &middot; excused from score'
+        : minutes + ' min in voice';
+      showTooltip(tooltip, e, '<b>' + rect.dataset.date + '</b><br>' + body);
     });
     rect.addEventListener('mouseleave', function () { hideTooltip(tooltip); });
   });

@@ -153,22 +153,50 @@ function nextDateKey(dateKey) {
   return d.toISOString().slice(0, 10);
 }
 
+/* True if the day `dateKey` ('YYYY-MM-DD') falls inside any of
+   `vacationDayRanges`, an array of { fromDay, untilDay } — both also
+   'YYYY-MM-DD', already resolved by the caller into whatever day-boundary
+   scheme produced dateKey (see discord-gateway.js's localDateKey). Plain
+   string comparison is safe since 'YYYY-MM-DD' keys sort lexicographically
+   in calendar order. */
+function isVacationDay(dateKey, vacationDayRanges) {
+  if (!Array.isArray(vacationDayRanges) || vacationDayRanges.length === 0) return false;
+  return vacationDayRanges.some((r) => dateKey >= r.fromDay && dateKey <= r.untilDay);
+}
+
 /* Walks a (dense or sparse) { 'YYYY-MM-DD': minutes } map in chronological
    order from startDateKey through endDateKey inclusive, replaying the
    day-by-day model from a fresh initial S_raw. Missing keys are treated as
    zero-minute gap days (densification — §4: "the single most likely bug in
    the whole system" is skipping this). This always recomputes from
    scratch rather than resuming a stored S_raw ("recompute, don't
-   accumulate" — a missed run can never corrupt a member's score). */
-function computeHistory(daysMap, startDateKey, endDateKey, params = PARAMS) {
+   accumulate" — a missed run can never corrupt a member's score).
+
+   Vacation days (per vacationDayRanges) are frozen, not scored zero: no
+   model update runs at all, so S_raw and the gap counter carry over
+   unchanged — vacations must not affect the score in either direction,
+   including not silently costing gap-day decay. */
+function computeHistory(daysMap, startDateKey, endDateKey, vacationDayRanges = [], params = PARAMS) {
   const rows = [];
   let sRaw = initialSRaw(params);
   let gap = 0;
   let dayIndex = 0;
   for (let key = startDateKey; key <= endDateKey; key = nextDateKey(key)) {
+    dayIndex++;
+    if (isVacationDay(key, vacationDayRanges)) {
+      const score = toDisplayScore(sRaw, params);
+      rows.push({
+        day: key,
+        sRaw,
+        score,
+        label: labelForScore(score, params),
+        provisional: dayIndex < params.provisionalDays,
+        vacation: true,
+      });
+      continue;
+    }
     const minutes = daysMap[key] || 0;
     ({ sRaw, gap } = stepDay(sRaw, minutes, gap, params));
-    dayIndex++;
     const score = toDisplayScore(sRaw, params);
     rows.push({
       day: key,
@@ -205,9 +233,13 @@ function sevenDayDelta(rows) {
    since the source store only ever records days with nonzero minutes. See
    ACTIVITY_SCORE.md.
 
+   `vacationDayRanges` — an array of { fromDay, untilDay } 'YYYY-MM-DD'
+   pairs — marks days to freeze rather than score (see computeHistory).
+   Pass [] (the default) if the member has no vacation entries.
+
    A member with no recorded days at all and no explicit startDateKey gets
    the fresh-member default rather than an empty walk. */
-function recomputeMember(daysMap, todayKey, startDateKey, params = PARAMS) {
+function recomputeMember(daysMap, todayKey, startDateKey, vacationDayRanges = [], params = PARAMS) {
   const keys = Object.keys(daysMap).sort();
   const inferredStart = keys.length ? keys[0] : null;
   const start = startDateKey || inferredStart;
@@ -221,7 +253,7 @@ function recomputeMember(daysMap, todayKey, startDateKey, params = PARAMS) {
     };
   }
   const clampedStart = start < todayKey ? start : todayKey;
-  const rows = computeHistory(daysMap, clampedStart, todayKey, params);
+  const rows = computeHistory(daysMap, clampedStart, todayKey, vacationDayRanges, params);
   return { rows, current: rows[rows.length - 1], delta7d: sevenDayDelta(rows) };
 }
 
@@ -235,6 +267,7 @@ module.exports = {
   displayPercent,
   initialSRaw,
   simulateToConvergence,
+  isVacationDay,
   computeHistory,
   sevenDayDelta,
   recomputeMember,

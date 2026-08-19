@@ -28,6 +28,21 @@ function loadJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
 }
 
+/* Same conversion activity-daily-job.js does: raw { from, until } ISO
+   entries -> { fromDay, untilDay } 'YYYY-MM-DD' ranges, using the same
+   day-boundary function the voice_day store itself uses. */
+function toVacationDayRanges(vacations) {
+  if (!Array.isArray(vacations)) return [];
+  return vacations
+    .map((v) => {
+      const fromMs = Date.parse(v.from);
+      const untilMs = Date.parse(v.until);
+      if (isNaN(fromMs) || isNaN(untilMs)) return null;
+      return { fromDay: localDateKey(fromMs), untilDay: localDateKey(untilMs) };
+    })
+    .filter(Boolean);
+}
+
 function main() {
   const members = loadJSON(MEMBERS_FILE, {});
   const voice = loadJSON(VOICE_FILE, { members: {} });
@@ -42,7 +57,8 @@ function main() {
   const store = {};
   for (const id of memberIds) {
     const days = (voice.members[id] && voice.members[id].days) || {};
-    const { rows, current, delta7d } = activityScore.recomputeMember(days, todayKey, null);
+    const vacationDayRanges = toVacationDayRanges(members[id].vacations);
+    const { rows, current, delta7d } = activityScore.recomputeMember(days, todayKey, null, vacationDayRanges);
     store[id] = { rows, current, delta7d, updatedAt: new Date().toISOString() };
   }
 
