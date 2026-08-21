@@ -344,29 +344,18 @@
 .skill-mod-grade-meta { font-size: 7px; letter-spacing: .5px; color: var(--text-3); text-align: right; }
 .skill-mod-grade-notes { font-size: 9px; color: var(--text-2); font-style: italic; }
 
-/* ── Admin: pilot grading — outline (left) + detail panel (right) ───
-   Same interaction pattern as the tree structure editor (reuses
-   .outline-row/.outline-toggle/.tree-breadcrumb) so only the SELECTED
-   module's grade controls render at a time, instead of every module in
-   the whole tree at once. */
-.grade-editor-layout {
-  display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 0;
+/* ── Admin: pilot grading — single collapsible outline where every LEAF
+   module shows its grade select/comment/save controls inline, right under
+   its row (no separate "select a node, then edit it elsewhere" step —
+   expand down to a module and it's directly editable). Organizer rows
+   reuse the tree structure editor's outline look (.outline-row/
+   .outline-toggle) for visual consistency; collapsing them is what keeps
+   the whole tree from rendering open (and every leaf's controls with it)
+   at once. */
+.grade-outline-pane--full {
   border: 1px solid var(--border-strong);
-  min-height: 260px;
-  margin-top: 8px;
-}
-.grade-outline-pane {
-  border-right: 1px solid var(--border);
   padding: 10px;
-  overflow-y: auto;
-  max-height: 560px;
-}
-.grade-detail-pane {
-  padding: 16px;
-  overflow-y: auto;
-  max-height: 560px;
+  margin-top: 8px;
 }
 .grade-outline-row.state-locked { opacity: .5; }
 .grade-outline-icon {
@@ -389,28 +378,29 @@
 .grade-chip-empty { color: var(--text-3); font-weight: 400; }
 .grade-chip-frac  { font-size: 8px; color: var(--text-3); letter-spacing: .5px; flex-shrink: 0; }
 
-.grade-detail-hdr {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+.grade-outline-node.grade-outline-flash { animation: grade-outline-flash-anim 1.5s ease-out; }
+@keyframes grade-outline-flash-anim {
+  0%   { background: var(--bg2); }
+  100% { background: transparent; }
 }
-.grade-detail-title {
-  font-family: 'Orbitron', monospace;
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 1.5px;
-}
-.grade-items-wrap {
+
+.grade-outline-body { display: flex; flex-direction: column; }
+
+.grade-leaf-block {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
+  gap: 8px;
+  padding-top: 4px;
+  padding-bottom: 10px;
 }
+.grade-leaf-desc { font-size: 9px; line-height: 1.5; color: var(--text-2); max-width: 560px; }
+.grade-leaf-reqs { font-size: 8px; color: var(--text-3); }
+
 .grade-item-card {
   border: 1px solid var(--border);
   padding: 8px 10px;
   background: var(--bg2);
+  max-width: 480px;
 }
 
 /* ── Request status section ─────────────────────────────── */
@@ -861,7 +851,5 @@
   .score-divider { display: none; }
   .tree-editor-layout { grid-template-columns: 1fr; }
   .tree-outline-pane { border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
-  .grade-editor-layout { grid-template-columns: 1fr; }
-  .grade-outline-pane { border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
   .grade-sheet { padding: 14px 14px; }
 }
