@@ -645,86 +645,89 @@ function buildGradeLeafBlock(node, depth, grades) {
   return block;
 }
 
+/* One line per grading item: a compact grade select that saves itself on
+   change (no separate SAVE button to click), a note-toggle icon that only
+   reveals a comment field when there's actually something to say (dot
+   marks one that already has a comment), and a small × to clear. No
+   bordered "card" — the functionality (grade + comment) doesn't need a box
+   around every single item to exist. */
 function buildGradeItemControls(item, grades, sub, showLabel) {
   var gradeRec = grades[item.id] || null;
 
   var wrap = document.createElement('div');
-  wrap.className = 'grade-item-card';
+  wrap.className = 'grade-item-row';
+
+  var line = document.createElement('div');
+  line.className = 'grade-item-line';
 
   if (showLabel) {
-    var lbl = document.createElement('div');
-    lbl.style.cssText = 'font-size:9px;letter-spacing:1px;color:var(--text-3);margin-bottom:5px';
+    var lbl = document.createElement('span');
+    lbl.className   = 'grade-item-label';
     lbl.textContent = item.label || item.id;
-    wrap.appendChild(lbl);
+    line.appendChild(lbl);
   }
-
-  if (gradeRec) {
-    var gradedAt = gradeRec.graded_at ? new Date(gradeRec.graded_at).toLocaleDateString() : '';
-    var infoDiv = document.createElement('div');
-    infoDiv.className = 'skill-mod-grade';
-    infoDiv.innerHTML =
-      '<span class="skill-mod-grade-val grade-' + gradeRec.grade + '">' + esc(gradeRec.grade) + '</span>' +
-      ' <span style="font-size:9px;color:var(--text-2)">' + esc(skillsCore.GRADE_NAMES[gradeRec.grade] || '') + '</span>' +
-      '<div class="skill-mod-grade-meta">' +
-        (gradeRec.graded_by ? esc(gradeRec.graded_by) + '<br>' : '') + esc(gradedAt) +
-      '</div>';
-    wrap.appendChild(infoDiv);
-    if (gradeRec.notes) {
-      var notesDiv = document.createElement('div');
-      notesDiv.className = 'skill-mod-grade-notes';
-      notesDiv.textContent = gradeRec.notes;
-      wrap.appendChild(notesDiv);
-    }
-  }
-
-  var row1 = document.createElement('div');
-  row1.style.cssText = 'display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:6px';
 
   var sel = document.createElement('select');
-  sel.className = 'grade-select';
-  var opts = '<option value="">— GRADE —</option>';
+  sel.className = 'grade-select grade-item-select';
+  var opts = '<option value="">—</option>';
   ['U', 'F', 'G', 'E'].forEach(function (g) {
     var selected = (gradeRec && gradeRec.grade === g) ? ' selected' : '';
-    opts += '<option value="' + g + '"' + selected + '>' + g + ' · ' + skillsCore.GRADE_NAMES[g] + '</option>';
+    opts += '<option value="' + g + '"' + selected + '>' + g + '</option>';
   });
   sel.innerHTML = opts;
+  sel.title = gradeRec
+    ? ((skillsCore.GRADE_NAMES[gradeRec.grade] || '') +
+       (gradeRec.graded_by ? ' — graded by ' + gradeRec.graded_by : '') +
+       (gradeRec.graded_at ? ' on ' + new Date(gradeRec.graded_at).toLocaleDateString() : ''))
+    : 'Not graded';
+  line.appendChild(sel);
 
-  var saveBtn = document.createElement('button');
-  saveBtn.className   = 'btn-save-grade';
-  saveBtn.textContent = 'SAVE';
-  (function (s, iid, selEl) {
-    saveBtn.addEventListener('click', function () {
-      if (!selEl.value) { showToast('Select a grade first', true); return; }
-      var notesEl = selEl.parentElement.parentElement.querySelector('.grade-notes-input');
-      saveGrade(s, iid, selEl.value, notesEl ? notesEl.value : '');
-    });
-  })(sub, item.id, sel);
+  var noteRow = document.createElement('div');
+  noteRow.className = 'grade-note-row';
+  noteRow.style.display = 'none';
+  var noteInput = document.createElement('input');
+  noteInput.type        = 'text';
+  noteInput.className   = 'grade-notes-input';
+  noteInput.placeholder = 'Comment (optional)';
+  noteInput.value       = gradeRec ? (gradeRec.notes || '') : '';
+  noteRow.appendChild(noteInput);
+
+  var noteBtn = document.createElement('button');
+  noteBtn.type = 'button';
+  noteBtn.className = 'grade-note-toggle' + (gradeRec && gradeRec.notes ? ' has-note' : '');
+  noteBtn.textContent = '💬';
+  noteBtn.title = (gradeRec && gradeRec.notes) ? gradeRec.notes : 'Add comment';
+  noteBtn.addEventListener('click', function () {
+    var open = noteRow.style.display !== 'none';
+    noteRow.style.display = open ? 'none' : '';
+    if (!open) noteInput.focus();
+  });
+  line.appendChild(noteBtn);
 
   var clearBtn = document.createElement('button');
-  clearBtn.className   = 'btn-clear-grade';
-  clearBtn.textContent = 'CLEAR';
-  clearBtn.style.display = gradeRec ? '' : 'none';
+  clearBtn.type = 'button';
+  clearBtn.className = 'grade-item-clear';
+  clearBtn.textContent = '×';
+  clearBtn.title = 'Clear grade';
+  clearBtn.style.visibility = gradeRec ? 'visible' : 'hidden';
   (function (s, iid) {
     clearBtn.addEventListener('click', function () { clearGrade(s, iid); });
   })(sub, item.id);
+  line.appendChild(clearBtn);
 
-  row1.appendChild(sel);
-  row1.appendChild(saveBtn);
-  row1.appendChild(clearBtn);
+  (function (s, iid, selEl, noteEl) {
+    selEl.addEventListener('change', function () {
+      if (!selEl.value) return;
+      saveGrade(s, iid, selEl.value, noteEl.value);
+    });
+    noteEl.addEventListener('change', function () {
+      if (!selEl.value) { showToast('Select a grade before adding a comment', true); return; }
+      saveGrade(s, iid, selEl.value, noteEl.value);
+    });
+  })(sub, item.id, sel, noteInput);
 
-  var row2 = document.createElement('div');
-  row2.style.marginTop = '5px';
-  var notesInput = document.createElement('input');
-  notesInput.className   = 'grade-notes-input';
-  notesInput.type        = 'text';
-  notesInput.placeholder = 'Comment / grade justification (optional)';
-  notesInput.value       = gradeRec ? (gradeRec.notes || '') : '';
-  notesInput.style.width = '100%';
-  notesInput.style.boxSizing = 'border-box';
-  row2.appendChild(notesInput);
-
-  wrap.appendChild(row1);
-  wrap.appendChild(row2);
+  wrap.appendChild(line);
+  wrap.appendChild(noteRow);
   return wrap;
 }
 

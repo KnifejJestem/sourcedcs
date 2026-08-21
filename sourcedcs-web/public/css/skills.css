@@ -314,36 +314,6 @@
   color: var(--amber);
 }
 
-/* ── Admin: grading detail badge + grade-record display ───── */
-.skill-mod-badge {
-  font-size: 7px;
-  letter-spacing: 1.5px;
-  padding: 2px 6px;
-  border: 1px solid;
-  text-transform: uppercase;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.badge-locked       { color: var(--text-3); border-color: var(--border); }
-.badge-not-started  { color: var(--text-3); border-color: var(--border-strong); }
-.badge-in-progress  { color: var(--amber);  border-color: var(--amber); }
-.badge-completed    { color: var(--green);  border-color: var(--green); }
-:root.movie .badge-completed { color: var(--accent); border-color: var(--accent); }
-
-.skill-mod-desc  { font-size: 9px; line-height: 1.5; color: var(--text-2); }
-.skill-mod-grade {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 4px;
-  border-top: 1px solid var(--border);
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.skill-mod-grade-val  { font-family: 'Orbitron', monospace; font-weight: 700; font-size: 12px; letter-spacing: 2px; }
-.skill-mod-grade-meta { font-size: 7px; letter-spacing: .5px; color: var(--text-3); text-align: right; }
-.skill-mod-grade-notes { font-size: 9px; color: var(--text-2); font-style: italic; }
-
 /* ── Admin: pilot grading — single collapsible outline where every LEAF
    module shows its grade select/comment/save controls inline, right under
    its row (no separate "select a node, then edit it elsewhere" step —
@@ -389,19 +359,60 @@
 .grade-leaf-block {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 4px;
-  padding-bottom: 10px;
+  gap: 3px;
+  padding-top: 2px;
+  padding-bottom: 8px;
 }
-.grade-leaf-desc { font-size: 9px; line-height: 1.5; color: var(--text-2); max-width: 560px; }
-.grade-leaf-reqs { font-size: 8px; color: var(--text-3); }
+.grade-leaf-desc { font-size: 9px; line-height: 1.5; color: var(--text-2); max-width: 560px; margin-bottom: 3px; }
+.grade-leaf-reqs { font-size: 8px; color: var(--text-3); margin-bottom: 3px; }
 
-.grade-item-card {
-  border: 1px solid var(--border);
-  padding: 8px 10px;
-  background: var(--bg2);
-  max-width: 480px;
+/* One grading item = one line: no bordered card, no separate SAVE button —
+   the select saves itself on change, and the comment field stays hidden
+   behind a small icon until there's something to say. */
+.grade-item-row { }
+.grade-item-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
 }
+.grade-item-label {
+  font-size: 9px;
+  color: var(--text-3);
+  min-width: 64px;
+  flex-shrink: 0;
+}
+.grade-item-select {
+  width: 42px;
+  padding: 2px 3px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.grade-note-toggle {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
+  opacity: .35;
+  padding: 0 2px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.grade-note-toggle:hover,
+.grade-note-toggle.has-note { opacity: 1; }
+.grade-item-clear {
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 3px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.grade-item-clear:hover { color: var(--red); }
+.grade-note-row { margin: 2px 0 4px; max-width: 420px; }
+.grade-note-row .grade-notes-input { width: 100%; box-sizing: border-box; }
 
 /* ── Request status section ─────────────────────────────── */
 .skills-requests-section {
