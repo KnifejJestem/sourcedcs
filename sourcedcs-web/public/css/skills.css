@@ -324,7 +324,8 @@
    at once. */
 .grade-outline-pane--full {
   border: 1px solid var(--border-strong);
-  padding: 10px;
+  background: var(--bg2);
+  padding: 10px 14px;
   margin-top: 8px;
 }
 .grade-outline-row.state-locked { opacity: .5; }
@@ -363,12 +364,15 @@
   padding-top: 2px;
   padding-bottom: 8px;
 }
-.grade-leaf-desc { font-size: 9px; line-height: 1.5; color: var(--text-2); max-width: 560px; margin-bottom: 3px; }
 .grade-leaf-reqs { font-size: 8px; color: var(--text-3); margin-bottom: 3px; }
 
 /* One grading item = one line: no bordered card, no separate SAVE button —
    the select saves itself on change, and the comment field stays hidden
-   behind a small icon until there's something to say. */
+   behind a small icon until there's something to say. A dotted leader
+   (same device as the pilot's own record sheet) pushes the select/comment/
+   clear cluster onto the same right-hand edge on every row, at every
+   depth — that's the "grading sheet" alignment, a stacked column of
+   dropdowns instead of controls trailing wherever each label ends. */
 .grade-item-row { }
 .grade-item-line {
   display: flex;
@@ -379,8 +383,14 @@
 .grade-item-label {
   font-size: 9px;
   color: var(--text-3);
-  min-width: 64px;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+.grade-item-leader {
+  flex: 1;
+  border-bottom: 1px dotted var(--border-strong);
+  margin: 0 2px 3px;
+  min-width: 10px;
 }
 .grade-item-select {
   width: 42px;

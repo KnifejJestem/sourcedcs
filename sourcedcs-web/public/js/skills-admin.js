@@ -608,21 +608,14 @@ function buildGradeHeaderRow(node, depth, grades, hasToggle, expanded) {
 }
 
 /* The always-visible, no-extra-click grading area for one leaf module:
-   description/requirements for context, then one buildGradeItemControls
-   card per grading item (select + SAVE + CLEAR + comment), same fields as
-   before — just reachable directly instead of behind a detail-panel
-   selection. */
+   requirements for context (descriptions are for the pilot's own record,
+   not needed on the grading sheet), then one grade line per grading item —
+   select + comment + clear, reachable directly instead of behind a
+   detail-panel selection. */
 function buildGradeLeafBlock(node, depth, grades) {
   var block = document.createElement('div');
   block.className = 'grade-leaf-block';
   block.style.paddingLeft = (10 + depth * 16 + 16) + 'px';
-
-  if (node.description) {
-    var desc = document.createElement('div');
-    desc.className = 'grade-leaf-desc';
-    desc.textContent = node.description;
-    block.appendChild(desc);
-  }
 
   if (node.requirements && node.requirements.length) {
     var reqDiv = document.createElement('div');
@@ -666,6 +659,15 @@ function buildGradeItemControls(item, grades, sub, showLabel) {
     lbl.textContent = item.label || item.id;
     line.appendChild(lbl);
   }
+
+  /* Dotted leader — always present, even on a single-item row with no
+     label — so the select/comment/clear cluster lands on the same right
+     edge on every row, at every depth, regardless of label length or
+     indentation. That's what makes this read as a grading sheet's aligned
+     grade column instead of controls trailing wherever the text ends. */
+  var leader = document.createElement('span');
+  leader.className = 'grade-item-leader';
+  line.appendChild(leader);
 
   var sel = document.createElement('select');
   sel.className = 'grade-select grade-item-select';
