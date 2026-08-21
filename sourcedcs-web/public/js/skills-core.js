@@ -316,19 +316,28 @@ function gradingItemId(moduleId, label, index) {
   return id;
 }
 
-/* ── Export (Node: server.js + tests) ───────────────────── */
+/* ── Export ──────────────────────────────────────────────
+   Build a real `skillsCore` object — as a plain <script> in the browser
+   this becomes an actual `window.skillsCore` global (what skills.js /
+   skills-admin.js call into); in Node it doubles as module.exports so
+   server.js and the test suite can require() it. Declaring the individual
+   pieces as top-level function/var above and only wrapping them here (not
+   assigning to `module.exports` directly) is what makes both work from the
+   same file. */
+var skillsCore = {
+  GRADE_VALUES: GRADE_VALUES, GRADE_NAMES: GRADE_NAMES, VALID_GRADES: VALID_GRADES,
+  gradeValue: gradeValue, gradeFromValue: gradeFromValue,
+  buildIndex: buildIndex, breadcrumb: breadcrumb,
+  effectiveSquadrons: effectiveSquadrons, ancestorSquadronRestriction: ancestorSquadronRestriction,
+  moduleVisibleToSquadron: moduleVisibleToSquadron,
+  effectiveModuleGrade: effectiveModuleGrade, moduleState: moduleState,
+  countModules: countModules, countCompletedModules: countCompletedModules,
+  countVisibleModules: countVisibleModules, countVisibleCompletedModules: countVisibleCompletedModules,
+  visibleRootModules: visibleRootModules, overallScore: overallScore,
+  detectRequirementCycle: detectRequirementCycle, validateTree: validateTree,
+  slugify: slugify, gradingItemId: gradingItemId,
+};
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    GRADE_VALUES: GRADE_VALUES, GRADE_NAMES: GRADE_NAMES, VALID_GRADES: VALID_GRADES,
-    gradeValue: gradeValue, gradeFromValue: gradeFromValue,
-    buildIndex: buildIndex, breadcrumb: breadcrumb,
-    effectiveSquadrons: effectiveSquadrons, ancestorSquadronRestriction: ancestorSquadronRestriction,
-    moduleVisibleToSquadron: moduleVisibleToSquadron,
-    effectiveModuleGrade: effectiveModuleGrade, moduleState: moduleState,
-    countModules: countModules, countCompletedModules: countCompletedModules,
-    countVisibleModules: countVisibleModules, countVisibleCompletedModules: countVisibleCompletedModules,
-    visibleRootModules: visibleRootModules, overallScore: overallScore,
-    detectRequirementCycle: detectRequirementCycle, validateTree: validateTree,
-    slugify: slugify, gradingItemId: gradingItemId,
-  };
+  module.exports = skillsCore;
 }
