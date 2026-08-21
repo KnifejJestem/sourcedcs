@@ -18,6 +18,7 @@ const EVENTS_FILE           = path.join(DATA_DIR, 'events.json');
 const APPS_FILE             = path.join(DATA_DIR, 'applications.json');
 const SQUADRONS_FILE        = path.join(DATA_DIR, 'squadrons.json');
 const DISCORD_ROLES_FILE    = path.join(DATA_DIR, 'discord-roles.json');
+const ROLE_SORT_ORDER_FILE  = path.join(DATA_DIR, 'role-sort-order.json');
 const GALLERY_FILE          = path.join(DATA_DIR, 'gallery.json');
 const HERO_FILE             = path.join(DATA_DIR, 'hero-image.json');
 const SKILL_TREE_FILE       = path.join(DATA_DIR, 'skill-tree.json');
@@ -109,6 +110,13 @@ const VALID_GRADES  = new Set(['U', 'F', 'G', 'E']);
 
 /* Load discord role → squadron mapping (role names as keys) */
 let discordRoles = loadJSON(DISCORD_ROLES_FILE, {});
+
+/* Roster role sort order — most senior first. Used by the public roster to
+   auto-sort pilots by role; editable from the wing-admin page (strict admin
+   only, same gating as squadron CRUD / Discord role mapping). */
+const DEFAULT_ROLE_SORT_ORDER = ['Project Lead', 'Squadron Lead', 'Flight Lead', 'Element Lead', 'RIO', 'Pilot'];
+const rawRoleSortOrder = loadJSON(ROLE_SORT_ORDER_FILE, null);
+let roleSortOrder = Array.isArray(rawRoleSortOrder) ? rawRoleSortOrder : DEFAULT_ROLE_SORT_ORDER;
 
 /* ─── Discord bot config ────────────────────────────────── */
 const DISCORD_BOT_TOKEN  = process.env.DISCORD_BOT_TOKEN  || '';
@@ -1091,6 +1099,25 @@ api.put('/discord-roles', writeOpsLimiter, requireAuth, requireAdmin, (req, res)
   /* Bust the member cache so the new mapping takes effect immediately */
   membersCacheAt = 0;
   res.json(discordRoles);
+});
+
+/* ── Roster role sort order (public read, admin write) ──
+   Ordered list of role labels, most senior first. The public roster page
+   sorts pilots by matching each member's role string (case-insensitive)
+   against this list; unmatched roles sort after everything listed here. */
+const MAX_ROLE_SORT_ENTRIES = 32;
+
+api.get('/role-sort-order', (_req, res) => res.json(roleSortOrder));
+
+api.put('/role-sort-order', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
+  if (!Array.isArray(req.body)) return res.status(400).json({ error: 'Expected an array of role labels' });
+  if (req.body.length > MAX_ROLE_SORT_ENTRIES) return res.status(400).json({ error: 'Too many role entries' });
+  const sanitized = req.body.map(r => sanitizeStr(r, MAX_ROLE_LABEL_LEN)).filter(r => r.length > 0);
+  roleSortOrder = sanitized;
+  try { saveJSON(ROLE_SORT_ORDER_FILE, roleSortOrder); } catch (err) {
+    return res.status(500).json({ error: 'Failed to save role sort order: ' + err.message });
+  }
+  res.json(roleSortOrder);
 });
 
 /* ── Gallery (public read, admin write + image upload) ── */

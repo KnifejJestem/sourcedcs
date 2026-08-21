@@ -361,6 +361,22 @@ function roleColor(role) {
   return ROSTER_COLORS[h % ROSTER_COLORS.length];
 }
 
+/* Roster is auto-sorted by role seniority, most senior first; roles not in
+   this list sort last. Order is configured on the wing-admin page (see
+   /api/role-sort-order) rather than hardcoded here. */
+var ROSTER_ROLE_SORT_ORDER = [];
+(function() {
+  fetch('/api/role-sort-order').then(function(r){return r.json();}).then(function(order) {
+    ROSTER_ROLE_SORT_ORDER = Array.isArray(order) ? order.map(function(r){return r.trim().toLowerCase();}) : [];
+    /* Re-render roster now that the sort order is available */
+    if (ROSTER.length) renderRoster(ROSTER);
+  }).catch(function() {});
+})();
+function roleSortIndex(role) {
+  var idx = ROSTER_ROLE_SORT_ORDER.indexOf((role || '').trim().toLowerCase());
+  return idx === -1 ? ROSTER_ROLE_SORT_ORDER.length : idx;
+}
+
 var activeRosterTab = 'ALL';
 
 function setRosterTab(tabId) {
@@ -393,8 +409,12 @@ function renderRoster(list) {
     tabsEl.innerHTML = tabsHtml;
   }
 
-  /* Filter by active tab */
+  /* Filter by active tab, then sort by role seniority */
   var filtered = activeRosterTab === 'ALL' ? list : list.filter(function(p) { return p.squadron === activeRosterTab; });
+  filtered = filtered.slice().sort(function(a, b) {
+    var d = roleSortIndex(a.role) - roleSortIndex(b.role);
+    return d !== 0 ? d : (a.callsign || '').localeCompare(b.callsign || '');
+  });
 
   var tbody = document.getElementById('rosterBody');
   if (!filtered.length) {
