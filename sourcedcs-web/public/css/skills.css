@@ -613,6 +613,10 @@
   gap: 8px;
   margin-bottom: 10px;
 }
+.tree-outline-filter-hint {
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
 .tree-outline-btn-row {
   display: flex;
   gap: 6px;

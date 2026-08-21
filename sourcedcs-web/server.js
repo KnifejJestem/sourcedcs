@@ -694,7 +694,13 @@ const authLimiter = rateLimit({
 });
 
 /* ─── Body parsing ──────────────────────────────────────── */
-app.use(express.json({ limit: '50kb' }));
+/* 2mb (not the previous 50kb) so a large, deeply-nested skill tree — many
+   modules, each with descriptions and grading items — can round-trip
+   through PUT /api/skill-tree without hitting "request entity too large".
+   Every individual text field is still separately length-capped via
+   sanitizeStr() server-side, so this only widens how much *structure* one
+   request can carry, not how much abuse any single field can contain. */
+app.use(express.json({ limit: '2mb' }));
 
 /* ─── App config (config.json) ──────────────────────────── */
 const appConfig       = loadJSON(path.join(__dirname, 'config.json'), {});

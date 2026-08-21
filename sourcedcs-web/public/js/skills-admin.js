@@ -760,6 +760,13 @@ function outlineNodeVisible(node) {
   return skillsCore.moduleVisibleToSquadron(_treeEditorIndex, node.id, _outlineSquadronFilter);
 }
 
+/* Suffix appended to every IMPORT JSON button's label so the squadron
+   scoping driven by the outline's filter (see forceSquadronScope) is never
+   silently active — it always says on the button what it's about to do. */
+function importScopeSuffix() {
+  return _outlineSquadronFilter ? (' → ' + squadronShortName(_outlineSquadronFilter)) : '';
+}
+
 function renderTreeOutline() {
   var el = document.getElementById('treeOutline');
   if (!el) return;
@@ -797,6 +804,13 @@ function renderTreeOutline() {
   filterRow.appendChild(filterSel);
   el.appendChild(filterRow);
 
+  var filterHint = document.createElement('div');
+  filterHint.className = 'tree-inherited-note tree-outline-filter-hint';
+  filterHint.textContent = _outlineSquadronFilter
+    ? ('IMPORT JSON below is scoped to ' + squadronShortName(_outlineSquadronFilter) + ' while this filter is active — uploaded modules are forced into it.')
+    : 'This also scopes IMPORT JSON and new root modules — pick a squadron here first to import for it.';
+  el.appendChild(filterHint);
+
   var list = document.createElement('div');
   list.className = 'tree-outline-list';
   (_treeEditor.tree || []).forEach(function (node) {
@@ -813,11 +827,14 @@ function renderTreeOutline() {
   addBtn.addEventListener('click', addRootModule);
   var importRootBtn = document.createElement('button');
   importRootBtn.className   = 'btn-sm';
-  importRootBtn.textContent = '+ IMPORT JSON AS ROOT';
+  importRootBtn.textContent = '+ IMPORT JSON AS ROOT' + importScopeSuffix();
   importRootBtn.addEventListener('click', function () { triggerImport('root'); });
   btnRow.appendChild(addBtn);
   btnRow.appendChild(importRootBtn);
   el.appendChild(btnRow);
+
+  var wholeImportBtn = document.getElementById('treeImportBtn');
+  if (wholeImportBtn) wholeImportBtn.textContent = 'IMPORT JSON' + importScopeSuffix();
 }
 
 function buildOutlineRow(node, depth) {
@@ -989,6 +1006,16 @@ function buildIdRow(obj, placeholder, onIdChanged) {
 
 /* Squadron visibility selector — options are constrained to the nearest
    restricting ancestor's set (a child can only narrow, never broaden). */
+function squadronNoteText(node, ancestorRestriction) {
+  if (!_squadrons.length) return '(no squadrons configured)';
+  if (!node.squadrons || !node.squadrons.length) {
+    return ancestorRestriction
+      ? '(inherited from parent: ' + ancestorRestriction.map(squadronShortName).join(', ') + ')'
+      : '(none checked = ALL squadrons)';
+  }
+  return '';
+}
+
 function buildSquadronRow(node) {
   var row = document.createElement('div');
   row.className = 'tree-id-row';
@@ -1004,16 +1031,17 @@ function buildSquadronRow(node) {
     ? _squadrons.filter(function (sq) { return ancestorRestriction.indexOf(sq.id) !== -1; })
     : _squadrons;
 
+  /* Kept in the DOM permanently (id'd, text toggled in place rather than
+     the element being added/removed) — checking a box used to trigger a
+     full renderTreeDetail(), which tore this row down and rebuilt it with
+     the note gone, shifting the checkboxes up right as you tried to click
+     the next one ("the list collapses"). Updating text in place avoids any
+     layout shift while multi-selecting. */
   var note = document.createElement('span');
   note.className = 'tree-inherited-note';
-  if (!_squadrons.length) {
-    note.textContent = '(no squadrons configured)';
-  } else if (!node.squadrons || !node.squadrons.length) {
-    note.textContent = ancestorRestriction
-      ? '(inherited from parent: ' + ancestorRestriction.map(squadronShortName).join(', ') + ')'
-      : '(none checked = ALL squadrons)';
-  }
-  if (note.textContent) row.appendChild(note);
+  note.id = 'treeSquadronNote';
+  note.textContent = squadronNoteText(node, ancestorRestriction);
+  row.appendChild(note);
 
   if (allowedSquadrons.length) {
     var checksWrap = document.createElement('div');
@@ -1037,8 +1065,10 @@ function buildSquadronRow(node) {
             node.squadrons = node.squadrons.filter(function (id) { return id !== sqId; });
           }
           if (!node.squadrons.length) delete node.squadrons;
-          renderTreeOutline();
-          renderTreeDetail();
+
+          var noteEl = document.getElementById('treeSquadronNote');
+          if (noteEl) noteEl.textContent = squadronNoteText(node, ancestorRestriction);
+          renderTreeOutline(); /* cheap — just labels/badges, no focus to lose */
         });
       })(sq.id, cb);
 
@@ -1308,7 +1338,7 @@ function buildNodeControlsRow(node) {
 
   var importBtn = document.createElement('button');
   importBtn.className   = 'btn-sm';
-  importBtn.textContent = 'IMPORT JSON HERE';
+  importBtn.textContent = 'IMPORT JSON HERE' + importScopeSuffix();
   (function (n) { importBtn.addEventListener('click', function () { triggerImport({ nodeId: n.id }); }); })(node);
 
   var exportBtn = document.createElement('button');
