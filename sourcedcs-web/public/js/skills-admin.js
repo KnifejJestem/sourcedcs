@@ -28,6 +28,8 @@ var _treeEditor          = null;  /* working copy mutated by the GUI editor */
 var _treeEditorIndex     = null;  /* skillsCore.buildIndex(_treeEditor), rebuilt after structural mutations */
 var _outlineExpanded     = {};    /* { [moduleId]: bool } outline expand state */
 var _outlineSelectedId   = null;
+var _outlineSquadronFilter = null; /* squadron id, or null = ALL SQUADRONS — session-only, filters the outline + scopes import */
+var _pendingImportTarget   = null; /* 'whole' | 'root' | { nodeId } — set right before triggering the shared hidden file input */
 var _allGrades          = {};     /* { [sub]: { [gradingItemId]: gradeRec } } */
 var _pilots             = {};     /* { [sub]: { sub, name, callsign, registered_at } } */
 var _requests            = [];
@@ -76,6 +78,13 @@ function jwtSub(token) {
   var resetBtn = document.getElementById('treeResetBtn');
   if (saveBtn)  saveBtn.addEventListener('click', saveSkillTree);
   if (resetBtn) resetBtn.addEventListener('click', initTreeEditor);
+
+  var importBtn  = document.getElementById('treeImportBtn');
+  var exportBtn  = document.getElementById('treeExportBtn');
+  var importFile = document.getElementById('treeImportFile');
+  if (importBtn)  importBtn.addEventListener('click', function () { triggerImport('whole'); });
+  if (exportBtn)  exportBtn.addEventListener('click', function () { exportJSON(_treeEditor, 'skill-tree.json'); });
+  if (importFile) importFile.addEventListener('change', handleImportFileChange);
 
   loadAll(tok);
 })();
@@ -742,24 +751,73 @@ function rebuildTreeEditorIndex() {
 }
 
 /* ── Outline (left pane) ─────────────────────────────────── */
+/* skillsCore.moduleVisibleToSquadron treats a falsy squadronId as "pilot has
+   no squadron" and hides restricted nodes — the opposite of what "ALL
+   SQUADRONS" needs here, so this is only ever called when a filter is
+   actually active; with no filter every node is shown unconditionally. */
+function outlineNodeVisible(node) {
+  if (!_outlineSquadronFilter) return true;
+  return skillsCore.moduleVisibleToSquadron(_treeEditorIndex, node.id, _outlineSquadronFilter);
+}
+
 function renderTreeOutline() {
   var el = document.getElementById('treeOutline');
   if (!el) return;
   el.innerHTML = '';
 
+  var filterRow = document.createElement('div');
+  filterRow.className = 'tree-outline-filter-row';
+  var filterLbl = document.createElement('span');
+  filterLbl.className   = 'tree-field-label';
+  filterLbl.textContent = 'SQUADRON';
+  var filterSel = document.createElement('select');
+  filterSel.className = 'grade-select';
+  filterSel.style.flex = '1';
+  var allOpt = document.createElement('option');
+  allOpt.value = '';
+  allOpt.textContent = 'ALL SQUADRONS';
+  if (!_outlineSquadronFilter) allOpt.selected = true;
+  filterSel.appendChild(allOpt);
+  _squadrons.forEach(function (sq) {
+    var opt = document.createElement('option');
+    opt.value = sq.id;
+    opt.textContent = sq.designator + ' ' + sq.name;
+    if (_outlineSquadronFilter === sq.id) opt.selected = true;
+    filterSel.appendChild(opt);
+  });
+  filterSel.addEventListener('change', function () {
+    _outlineSquadronFilter = this.value || null;
+    if (_outlineSelectedId && !outlineNodeVisible(_treeEditorIndex.modules[_outlineSelectedId] || {})) {
+      _outlineSelectedId = null;
+    }
+    renderTreeOutline();
+    renderTreeDetail();
+  });
+  filterRow.appendChild(filterLbl);
+  filterRow.appendChild(filterSel);
+  el.appendChild(filterRow);
+
   var list = document.createElement('div');
   list.className = 'tree-outline-list';
   (_treeEditor.tree || []).forEach(function (node) {
+    if (!outlineNodeVisible(node)) return;
     list.appendChild(buildOutlineRow(node, 0));
   });
   el.appendChild(list);
 
+  var btnRow = document.createElement('div');
+  btnRow.className = 'tree-outline-btn-row';
   var addBtn = document.createElement('button');
   addBtn.className   = 'btn-sm btn-sm-blue';
   addBtn.textContent = '+ ADD ROOT MODULE';
-  addBtn.style.marginTop = '12px';
   addBtn.addEventListener('click', addRootModule);
-  el.appendChild(addBtn);
+  var importRootBtn = document.createElement('button');
+  importRootBtn.className   = 'btn-sm';
+  importRootBtn.textContent = '+ IMPORT JSON AS ROOT';
+  importRootBtn.addEventListener('click', function () { triggerImport('root'); });
+  btnRow.appendChild(addBtn);
+  btnRow.appendChild(importRootBtn);
+  el.appendChild(btnRow);
 }
 
 function buildOutlineRow(node, depth) {
@@ -812,7 +870,10 @@ function buildOutlineRow(node, depth) {
   wrap.appendChild(row);
 
   if (hasChildren && expanded) {
-    node.subModules.forEach(function (child) { wrap.appendChild(buildOutlineRow(child, depth + 1)); });
+    node.subModules.forEach(function (child) {
+      if (!outlineNodeVisible(child)) return;
+      wrap.appendChild(buildOutlineRow(child, depth + 1));
+    });
   }
 
   return wrap;
@@ -1245,6 +1306,16 @@ function buildNodeControlsRow(node) {
   dnBtn.className = 'btn-sm'; dnBtn.textContent = 'MOVE DOWN ↓'; dnBtn.disabled = (idx === -1 || idx >= siblings.length - 1);
   dnBtn.addEventListener('click', function () { moveSiblingDown(parentObj, idx); });
 
+  var importBtn = document.createElement('button');
+  importBtn.className   = 'btn-sm';
+  importBtn.textContent = 'IMPORT JSON HERE';
+  (function (n) { importBtn.addEventListener('click', function () { triggerImport({ nodeId: n.id }); }); })(node);
+
+  var exportBtn = document.createElement('button');
+  exportBtn.className   = 'btn-sm';
+  exportBtn.textContent = 'EXPORT SUBTREE';
+  (function (n) { exportBtn.addEventListener('click', function () { exportJSON(n, n.id + '.json'); }); })(node);
+
   var delBtn = document.createElement('button');
   delBtn.className = 'btn-sm btn-sm-danger';
   delBtn.textContent = 'DELETE MODULE';
@@ -1255,7 +1326,9 @@ function buildNodeControlsRow(node) {
     }
   });
 
-  wrap.appendChild(upBtn); wrap.appendChild(dnBtn); wrap.appendChild(delBtn);
+  wrap.appendChild(upBtn); wrap.appendChild(dnBtn);
+  wrap.appendChild(importBtn); wrap.appendChild(exportBtn);
+  wrap.appendChild(delBtn);
   return wrap;
 }
 
@@ -1364,6 +1437,156 @@ function addRequirement(node) {
 function removeRequirement(node, ri) {
   node.requirements.splice(ri, 1);
   renderTreeDetail();
+}
+
+/* ── JSON import / export ────────────────────────────────── */
+/* Forces every top-level node in `nodes` to belong to exactly `squadronId`,
+   stripping any explicit `squadrons` from all of their descendants so those
+   simply inherit the one restriction — trivially satisfies the subset-of-
+   ancestor validation rule with no per-node reconciliation. Mutates and
+   returns `nodes`. */
+function forceSquadronScope(nodes, squadronId) {
+  function stripDeep(n) {
+    delete n.squadrons;
+    (n.subModules || []).forEach(stripDeep);
+  }
+  nodes.forEach(function (n) {
+    (n.subModules || []).forEach(stripDeep);
+    n.squadrons = [squadronId];
+  });
+  return nodes;
+}
+
+function exportJSON(data, filename) {
+  var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* `target` is 'whole', 'root', or { nodeId } — stashed until the shared
+   hidden file input's change event fires. */
+function triggerImport(target) {
+  _pendingImportTarget = target;
+  var input = document.getElementById('treeImportFile');
+  if (input) { input.value = ''; input.click(); }
+}
+
+function handleImportFileChange(e) {
+  var file = e.target.files && e.target.files[0];
+  if (!file) return;
+  var target = _pendingImportTarget;
+  _pendingImportTarget = null;
+
+  var reader = new FileReader();
+  reader.onload = function () {
+    var parsed;
+    try { parsed = JSON.parse(reader.result); } catch (err) { showToast('Invalid JSON: ' + err.message, true); return; }
+
+    if (target === 'whole') {
+      importWholeTree(parsed);
+    } else if (target === 'root') {
+      importSubtreeUnder(null, parsed);
+    } else if (target && target.nodeId) {
+      var node = _treeEditorIndex.modules[target.nodeId];
+      if (!node) { showToast('Target module no longer exists', true); return; }
+      importSubtreeUnder(node, parsed);
+    }
+  };
+  reader.onerror = function () { showToast('Failed to read file', true); };
+  reader.readAsText(file);
+}
+
+/* Whole-document import. With no squadron filter active this REPLACES the
+   entire working draft (bulk-authoring the whole curriculum externally).
+   With a squadron filter active it stops being destructive: the uploaded
+   document's root modules are forced to that squadron and merged in as new
+   roots alongside whatever's already there, leaving other squadrons' — and
+   general — content untouched. */
+function importWholeTree(parsed) {
+  if (!_outlineSquadronFilter) {
+    var err = skillsCore.validateTree(parsed);
+    if (err) { showToast(err, true); return; }
+    if (_treeEditor.tree && _treeEditor.tree.length) {
+      if (!confirm('This will replace the entire current working draft (' + _treeEditor.tree.length + ' root module(s)). Continue?')) return;
+    }
+    _treeEditor = parsed;
+    rebuildTreeEditorIndex();
+    _outlineSelectedId = null;
+    renderTreeOutline();
+    renderTreeDetail();
+    var total = (_treeEditor.tree || []).reduce(function (s, n) { return s + skillsCore.countModules(n); }, 0);
+    showToast('Imported tree (' + total + ' module(s))');
+    return;
+  }
+
+  if (!parsed || !Array.isArray(parsed.tree)) {
+    showToast('Expected a { version, tree: [...] } document', true);
+    return;
+  }
+  var nodes = JSON.parse(JSON.stringify(parsed.tree));
+  forceSquadronScope(nodes, _outlineSquadronFilter);
+
+  var candidate = JSON.parse(JSON.stringify(_treeEditor));
+  candidate.tree = candidate.tree || [];
+  nodes.forEach(function (n) { candidate.tree.push(n); });
+
+  var mergeErr = skillsCore.validateTree(candidate);
+  if (mergeErr) { showToast(mergeErr, true); return; }
+
+  _treeEditor = candidate;
+  rebuildTreeEditorIndex();
+  renderTreeOutline();
+  renderTreeDetail();
+  var count = nodes.reduce(function (s, n) { return s + skillsCore.countModules(n); }, 0);
+  showToast('Imported ' + count + ' module(s) for ' + squadronShortName(_outlineSquadronFilter));
+}
+
+/* Additive import: inserts the parsed module(s) as new sub-modules of
+   `node` (or as new root modules when `node` is null). Any id collision
+   against the existing tree is a hard rejection (surfaced via
+   skillsCore.validateTree's duplicate-id check) — no silent overwrite. */
+function importSubtreeUnder(node, parsedJson) {
+  var nodes;
+  if (Array.isArray(parsedJson)) {
+    nodes = parsedJson;
+  } else if (parsedJson && typeof parsedJson === 'object' && parsedJson.id) {
+    nodes = [parsedJson];
+  } else {
+    showToast('Expected a module object or an array of modules', true);
+    return;
+  }
+  nodes = JSON.parse(JSON.stringify(nodes));
+  if (_outlineSquadronFilter) forceSquadronScope(nodes, _outlineSquadronFilter);
+
+  var candidate = JSON.parse(JSON.stringify(_treeEditor));
+  var targetArr;
+  if (node) {
+    var candNode = skillsCore.buildIndex(candidate).modules[node.id];
+    if (!candNode) { showToast('Target module no longer exists', true); return; }
+    candNode.subModules = candNode.subModules || [];
+    targetArr = candNode.subModules;
+  } else {
+    candidate.tree = candidate.tree || [];
+    targetArr = candidate.tree;
+  }
+  nodes.forEach(function (n) { targetArr.push(n); });
+
+  var err = skillsCore.validateTree(candidate);
+  if (err) { showToast(err, true); return; }
+
+  _treeEditor = candidate;
+  rebuildTreeEditorIndex();
+  if (node) _outlineExpanded[node.id] = true;
+  renderTreeOutline();
+  renderTreeDetail();
+  var count = nodes.reduce(function (s, n) { return s + skillsCore.countModules(n); }, 0);
+  showToast('Imported ' + count + ' module(s)' + (node ? ' into ' + (node.title || node.id) : ' as new root'));
 }
 
 function saveSkillTree() {

@@ -607,6 +607,18 @@
   overflow-y: auto;
   max-height: 560px;
 }
+.tree-outline-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.tree-outline-btn-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
 .tree-outline-list { display: flex; flex-direction: column; }
 .outline-row {
   padding-right: 8px;
