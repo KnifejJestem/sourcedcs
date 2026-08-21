@@ -35,8 +35,8 @@ var _grades      = {};     /* { [gradingItemId]: gradeRec } for the logged-in pi
 var _requests    = [];
 var _mySub       = null;
 var _mySquadron  = null;  /* squadron ID from roster, or null */
-var _openMods    = {};  /* { [moduleId]: bool } — expanded detail rows */
-var _openCats    = {};  /* { [moduleId]: bool } — collapsed group sections (true = collapsed) */
+var _sheetOpenRows      = {};  /* { [moduleId]: bool } — expanded inline detail strip under a leaf row */
+var _sheetSectionClosed = {};  /* { [moduleId]: bool } — collapsed sections/sub-headings (default: expanded) */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 (function () {
@@ -123,142 +123,158 @@ function renderScoreBar() {
   });
 }
 
-/* ── List view ──────────────────────────────────────────── */
+/* ── Document/report-card view ───────────────────────────── */
+/* A pilot's own record reads top-to-bottom like a transcript, not a tool UI:
+   root modules are titled sections; nested organizer modules are plain
+   sub-headings; only gradable leaves get a dotted leader to a right-aligned
+   grade letter/status. Clicking a leaf reveals an inline detail strip
+   (description, requirements, request-grading action) instead of every
+   module showing that at once — same density fix as the admin outline, in
+   a layout that looks like a document rather than a tree-editor tool. */
 function renderTree() {
   var el = document.getElementById('skillsTree');
   el.innerHTML = '';
+  var sheet = document.createElement('div');
+  sheet.className = 'grade-sheet';
   skillsCore.visibleRootModules(_treeIndex, _mySquadron).forEach(function (root) {
-    el.appendChild(buildModuleSection(root));
+    sheet.appendChild(buildSheetNode(root, 0));
   });
+  el.appendChild(sheet);
 }
 
-/* A module with sub-modules renders as a collapsible group section (with a
-   recursive completed/total progress bar, free at every layer since there's
-   no weighting); a module without sub-modules renders as a single gradable
-   row. A module can carry both (mixed) — its own grading items render as a
-   row first, then its sub-modules recurse. */
-function buildModuleSection(node) {
+/* A module with sub-modules is a section/sub-heading (collapsible, no
+   leader/grade of its own — completion is implied by its children, shown
+   as a small "done/total" note). A module without sub-modules is a
+   gradable leaf. A module can carry both (mixed) — its own grading items
+   render first, then its sub-modules recurse. */
+function buildSheetNode(node, depth) {
   var hasSub = node.subModules && node.subModules.length;
+  var wrap = document.createElement('div');
+  wrap.className = 'sheet-node';
+
   if (!hasSub) {
-    var wrap = document.createElement('div');
-    wrap.className = 'skill-list-modules';
-    appendModRow(wrap, node);
+    wrap.appendChild(buildSheetLeaf(node, depth));
     return wrap;
   }
 
-  var collapsed = !!_openCats[node.id];
+  var collapsed = !!_sheetSectionClosed[node.id];
   var total     = skillsCore.countModules(node);
   var completed = skillsCore.countCompletedModules(_treeIndex, node, _grades);
-  var score     = Math.round((total ? completed / total : 0) * 100);
-
-  var section = document.createElement('div');
-  section.className = 'skill-list-category';
 
   var hdr = document.createElement('div');
-  hdr.className = 'skill-list-cat-header';
+  hdr.className = 'sheet-section-hdr' + (depth === 0 ? ' sheet-section-hdr--root' : '');
+  hdr.style.paddingLeft = (depth * 18) + 'px';
   hdr.setAttribute('role', 'button');
   hdr.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   hdr.innerHTML =
-    '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
-    '<span class="slc-name">' + esc(node.title) + '</span>' +
-    '<span class="slc-count">' + completed + ' / ' + total + ' PASSED</span>' +
-    '<div class="slc-bar"><div class="slc-bar-fill" style="width:' + score + '%"></div></div>' +
-    '<span class="slc-pct">' + score + '%</span>';
+    '<span class="sheet-toggle">' + (collapsed ? '▸' : '▾') + '</span>' +
+    '<span class="sheet-section-title">' + esc(node.title) + '</span>' +
+    '<span class="sheet-section-note">' + completed + '/' + total + '</span>';
   (function (id) {
     hdr.addEventListener('click', function () {
-      _openCats[id] = !_openCats[id];
+      _sheetSectionClosed[id] = !_sheetSectionClosed[id];
       render();
     });
   })(node.id);
-  section.appendChild(hdr);
+  wrap.appendChild(hdr);
 
   if (!collapsed) {
-    var modList = document.createElement('div');
-    modList.className = 'skill-list-modules';
+    var body = document.createElement('div');
+    body.className = 'sheet-section-body';
     if (node.gradingItems && node.gradingItems.length) {
-      appendModRow(modList, node);
+      body.appendChild(buildSheetLeaf(node, depth + 1));
     }
-    section.appendChild(modList);
     node.subModules.forEach(function (child) {
-      section.appendChild(buildModuleSection(child));
+      body.appendChild(buildSheetNode(child, depth + 1));
     });
+    wrap.appendChild(body);
   }
 
-  return section;
+  return wrap;
 }
 
-function appendModRow(container, node) {
+/* A single-item module IS the dotted-leader row (its title carries its own
+   grade directly). A multi-item module renders its title as a plain
+   sub-line, then one dotted-leader row per item underneath (e.g. "Wing
+   Work Exercise" / "Level 1 ... G" / "Level 2 ... G" / "Level 3 ... U") —
+   only the title line is clickable to reveal the shared detail strip. */
+function buildSheetLeaf(node, depth) {
   var state = skillsCore.moduleState(_treeIndex, node.id, _grades);
   var items = node.gradingItems || [];
-  var isOpen = !!_openMods[node.id];
+  var wrap  = document.createElement('div');
+  wrap.className = 'sheet-leaf';
 
-  var row = document.createElement('div');
-  row.className = 'skill-list-mod-row state-' + state;
-
-  var icon = document.createElement('span');
-  icon.className = 'slm-icon';
-  var ICONS = { locked: '—', 'not-started': '○', 'in-progress': '◑', completed: '✓' };
-  icon.textContent = ICONS[state] || '○';
-
-  var title = document.createElement('span');
-  title.className   = 'slm-title';
-  title.textContent = node.title;
-
-  row.appendChild(icon);
-  row.appendChild(title);
-
-  if (items.length === 1) {
-    var gradeRec = _grades[items[0].id] || null;
-    if (gradeRec) {
-      var gBadge = document.createElement('span');
-      gBadge.className   = 'slm-grade-badge grade-' + gradeRec.grade;
-      gBadge.textContent = gradeRec.grade;
-      var gName = document.createElement('span');
-      gName.className   = 'slm-grade-name';
-      gName.textContent = skillsCore.GRADE_NAMES[gradeRec.grade] || '';
-      row.appendChild(gBadge);
-      row.appendChild(gName);
-    } else {
-      var noGrade = document.createElement('span');
-      noGrade.className = 'slm-grade-name';
-      noGrade.textContent = (state === 'locked') ? 'Prerequisites not met' : (state === 'not-started' ? 'Not started' : 'In progress');
-      row.appendChild(noGrade);
-    }
-  } else if (items.length > 1) {
-    var doneCount = items.filter(function (it) {
-      var rec = _grades[it.id];
-      return rec && skillsCore.gradeValue(rec.grade) >= skillsCore.gradeValue(it.min_pass_grade);
-    }).length;
-    var summary = document.createElement('span');
-    summary.className   = 'slm-grade-name';
-    summary.textContent = doneCount + ' / ' + items.length + ' items passed';
-    row.appendChild(summary);
+  if (items.length > 1) {
+    var titleRow = document.createElement('div');
+    titleRow.className = 'sheet-row sheet-row--heading sheet-row--clickable state-' + state;
+    titleRow.style.paddingLeft = (depth * 18) + 'px';
+    titleRow.innerHTML = '<span class="sheet-row-name">' + esc(node.title) + '</span>';
+    (function (id) { titleRow.addEventListener('click', function () { toggleSheetDetail(id); }); })(node.id);
+    wrap.appendChild(titleRow);
+    items.forEach(function (item) {
+      wrap.appendChild(buildSheetGradeRow(item.label || item.id, depth + 1, state, _grades[item.id], null));
+    });
+  } else {
+    wrap.appendChild(buildSheetGradeRow(node.title, depth, state, items[0] ? _grades[items[0].id] : null, node.id));
   }
 
-  var chevron = document.createElement('span');
-  chevron.className   = 'slm-chevron';
-  chevron.textContent = isOpen ? '▲' : '▼';
-  row.appendChild(chevron);
+  if (_sheetOpenRows[node.id]) {
+    wrap.appendChild(buildSheetDetailStrip(node, depth));
+  }
 
-  (function (mid) {
-    row.addEventListener('click', function () {
-      _openMods[mid] = !_openMods[mid];
-      render();
-    });
-  })(node.id);
+  return wrap;
+}
 
-  container.appendChild(row);
+function buildSheetGradeRow(label, depth, state, gradeRec, clickableModuleId) {
+  var row = document.createElement('div');
+  row.className = 'sheet-row state-' + state + (clickableModuleId ? ' sheet-row--clickable' : '');
+  row.style.paddingLeft = (depth * 18) + 'px';
 
-  if (!isOpen) return;
+  var name = document.createElement('span');
+  name.className   = 'sheet-row-name';
+  name.textContent = label;
 
-  var detail = document.createElement('div');
-  detail.className = 'skill-list-mod-detail';
+  var leader = document.createElement('span');
+  leader.className = 'sheet-leader';
+
+  var gradeSpan = document.createElement('span');
+  if (gradeRec) {
+    gradeSpan.className   = 'sheet-grade grade-' + gradeRec.grade;
+    gradeSpan.textContent = gradeRec.grade;
+  } else {
+    gradeSpan.className   = 'sheet-grade sheet-grade-empty';
+    gradeSpan.textContent = (state === 'locked') ? '—' : '·';
+  }
+
+  row.appendChild(name);
+  row.appendChild(leader);
+  row.appendChild(gradeSpan);
+
+  if (clickableModuleId) {
+    (function (id) { row.addEventListener('click', function () { toggleSheetDetail(id); }); })(clickableModuleId);
+  }
+
+  return row;
+}
+
+function toggleSheetDetail(id) {
+  _sheetOpenRows[id] = !_sheetOpenRows[id];
+  render();
+}
+
+function buildSheetDetailStrip(node, depth) {
+  var items = node.gradingItems || [];
+  var state = skillsCore.moduleState(_treeIndex, node.id, _grades);
+
+  var strip = document.createElement('div');
+  strip.className = 'sheet-detail-strip';
+  strip.style.paddingLeft = (depth * 18) + 'px';
 
   if (node.description) {
     var desc = document.createElement('p');
     desc.className   = 'slm-desc';
     desc.textContent = node.description;
-    detail.appendChild(desc);
+    strip.appendChild(desc);
   }
 
   items.forEach(function (item) {
@@ -268,13 +284,13 @@ function appendModRow(container, node) {
     var req = document.createElement('div');
     req.className   = 'slm-prereqs';
     req.textContent = labelPart + 'Pass requirement: ' + (item.min_pass_grade || 'G') + ' — ' + (skillsCore.GRADE_NAMES[item.min_pass_grade] || '');
-    detail.appendChild(req);
+    strip.appendChild(req);
 
     if (rec) {
       var g = document.createElement('div');
       g.className   = 'slm-prereqs';
       g.textContent = labelPart + 'Current grade: ' + rec.grade + (rec.notes ? ' — "' + rec.notes + '"' : '');
-      detail.appendChild(g);
+      strip.appendChild(g);
     }
   });
 
@@ -286,13 +302,10 @@ function appendModRow(container, node) {
       return (target ? target.title : r.module_id) + ' (' + (r.min_grade || 'G') + '+)';
     });
     preDiv.textContent = 'Requires: ' + preParts.join(', ');
-    detail.appendChild(preDiv);
+    strip.appendChild(preDiv);
   }
 
-  if (state === 'locked') {
-    container.appendChild(detail);
-    return;
-  }
+  if (state === 'locked') return strip;
 
   var latestGradedAt = null, latestGradedBy = null;
   items.forEach(function (it) {
@@ -305,7 +318,7 @@ function appendModRow(container, node) {
     gradedBy.className = 'slm-graded-by';
     var dStr = latestGradedAt ? ' on ' + new Date(latestGradedAt).toLocaleDateString() : '';
     gradedBy.textContent = 'Graded by ' + (latestGradedBy || '—') + dStr;
-    detail.appendChild(gradedBy);
+    strip.appendChild(gradedBy);
   }
 
   var actDiv = document.createElement('div');
@@ -341,8 +354,8 @@ function appendModRow(container, node) {
     actDiv.appendChild(reqBtn);
   }
 
-  detail.appendChild(actDiv);
-  container.appendChild(detail);
+  strip.appendChild(actDiv);
+  return strip;
 }
 
 /* ── Requests section ───────────────────────────────────── */

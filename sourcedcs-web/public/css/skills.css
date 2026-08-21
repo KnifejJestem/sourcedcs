@@ -173,57 +173,13 @@
 :root.movie .slc-bar-fill { background: var(--accent); }
 .slc-pct   { font-size: 9px; color: var(--text-2); width: 32px; text-align: right; flex-shrink: 0; }
 
-.skill-list-modules { border-top: 1px solid var(--border); }
-
-.skill-list-mod-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px 8px 28px;
-  border-bottom: 1px solid var(--border);
-  transition: background .1s;
-}
-.skill-list-mod-row:last-of-type { border-bottom: none; }
-.skill-list-mod-row:not(.state-locked) { cursor: pointer; }
-.skill-list-mod-row:not(.state-locked):hover { background: var(--bg2); }
-
-/* State colouring */
-.skill-list-mod-row.state-completed .slm-title { color: var(--text); }
-.skill-list-mod-row.state-locked    { opacity: .5; }
-
-.slm-icon  { font-size: 10px; width: 14px; flex-shrink: 0; text-align: center; }
-.slm-title { flex: 1; font-size: 10px; letter-spacing: .5px; min-width: 0; }
-
-/* State-coloured icons */
-.state-completed  .slm-icon { color: var(--green); }
-.state-in-progress .slm-icon { color: var(--amber); }
-.state-locked      .slm-icon { color: var(--text-3); }
-:root.movie .state-completed .slm-icon { color: var(--accent); }
-
-.slm-grade-badge {
-  font-family: 'Orbitron', monospace;
-  font-weight: 700;
-  font-size: 12px;
-  width: 16px;
-  text-align: center;
-  flex-shrink: 0;
-}
-.slm-grade-name { font-size: 8px; color: var(--text-3); letter-spacing: 1px; flex-shrink: 0; }
-.slm-chevron    { font-size: 7px; color: var(--text-3); flex-shrink: 0; margin-left: 2px; }
-
-/* Grade colours */
+/* Grade colours (shared by the pilot sheet and admin detail panel) */
 .grade-U { color: var(--red);   }
 .grade-F { color: var(--amber); }
 .grade-G { color: var(--green); }
 .grade-E { color: var(--blue);  }
 :root.movie .grade-G { color: var(--accent); }
 
-/* Module detail panel */
-.skill-list-mod-detail {
-  padding: 12px 14px 14px 42px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-}
 .slm-desc {
   font-size: 10px;
   line-height: 1.7;
@@ -233,6 +189,95 @@
 .slm-prereqs   { font-size: 8px; color: var(--text-3); margin-bottom: 4px; }
 .slm-graded-by { font-size: 8px; color: var(--text-3); }
 .slm-notes     { font-size: 9px; color: var(--text-2); font-style: italic; margin: 4px 0; }
+
+/* ── Pilot record: document/report-card sheet ───────────────
+   Sections read top-to-bottom like a transcript — no card boxes, no admin
+   controls. Only gradable leaves get a dotted leader to a right-aligned
+   grade letter; organizer modules are plain sub-headings. */
+.grade-sheet {
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 20px 22px;
+}
+.sheet-section-hdr {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 0 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.sheet-section-hdr--root {
+  border-bottom: 1px solid var(--border-strong);
+  margin-top: 14px;
+}
+.sheet-node:first-child > .sheet-section-hdr--root { margin-top: 0; }
+.sheet-toggle {
+  font-size: 8px;
+  color: var(--text-3);
+  width: 10px;
+  flex-shrink: 0;
+}
+.sheet-section-title {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--text);
+  text-transform: uppercase;
+}
+.sheet-section-hdr--root .sheet-section-title { font-size: 13px; }
+.sheet-section-note {
+  font-size: 8px;
+  color: var(--text-3);
+  letter-spacing: 1px;
+  margin-left: auto;
+}
+.sheet-section-body { padding-left: 4px; }
+
+.sheet-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 0;
+  font-size: 10px;
+}
+.sheet-row--clickable { cursor: pointer; }
+.sheet-row--clickable:hover .sheet-row-name { color: var(--text); }
+.sheet-row--heading .sheet-row-name {
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+.sheet-row.state-locked { opacity: .5; }
+.sheet-row-name {
+  white-space: nowrap;
+  color: var(--text-2);
+  min-width: 0;
+}
+.sheet-leader {
+  flex: 1;
+  border-bottom: 1px dotted var(--border-strong);
+  margin: 0 6px 3px;
+  min-width: 12px;
+}
+.sheet-grade {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 10px;
+  flex-shrink: 0;
+  min-width: 14px;
+  text-align: right;
+}
+.sheet-grade-empty { color: var(--text-3); font-weight: 400; }
+
+.sheet-detail-strip {
+  padding: 6px 0 10px;
+  margin-left: 4px;
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+}
 
 /* Action buttons */
 .btn-request-grading {
@@ -269,42 +314,7 @@
   color: var(--amber);
 }
 
-/* ── Admin: module cards (grade controls) ────────────────── */
-.skill-modules {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
-}
-.skill-module {
-  border: 1px solid var(--border);
-  background: var(--bg2);
-  padding: 12px 12px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  box-sizing: border-box;
-}
-.skill-module.state-locked    { opacity: .5; }
-.skill-module.state-completed { border-color: var(--green); }
-:root.movie .skill-module.state-completed { border-color: var(--accent); }
-.skill-module.state-in-progress { border-color: var(--amber); }
-
-.skill-mod-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 6px;
-}
-.skill-mod-title {
-  font-family: 'Orbitron', monospace;
-  font-weight: 700;
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  color: var(--text);
-  text-transform: uppercase;
-  min-width: 0;
-}
+/* ── Admin: grading detail badge + grade-record display ───── */
 .skill-mod-badge {
   font-size: 7px;
   letter-spacing: 1.5px;
@@ -333,6 +343,75 @@
 .skill-mod-grade-val  { font-family: 'Orbitron', monospace; font-weight: 700; font-size: 12px; letter-spacing: 2px; }
 .skill-mod-grade-meta { font-size: 7px; letter-spacing: .5px; color: var(--text-3); text-align: right; }
 .skill-mod-grade-notes { font-size: 9px; color: var(--text-2); font-style: italic; }
+
+/* ── Admin: pilot grading — outline (left) + detail panel (right) ───
+   Same interaction pattern as the tree structure editor (reuses
+   .outline-row/.outline-toggle/.tree-breadcrumb) so only the SELECTED
+   module's grade controls render at a time, instead of every module in
+   the whole tree at once. */
+.grade-editor-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 0;
+  border: 1px solid var(--border-strong);
+  min-height: 260px;
+  margin-top: 8px;
+}
+.grade-outline-pane {
+  border-right: 1px solid var(--border);
+  padding: 10px;
+  overflow-y: auto;
+  max-height: 560px;
+}
+.grade-detail-pane {
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 560px;
+}
+.grade-outline-row.state-locked { opacity: .5; }
+.grade-outline-icon {
+  font-size: 9px;
+  width: 12px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--text-3);
+}
+.grade-outline-row.state-completed  .grade-outline-icon { color: var(--green); }
+.grade-outline-row.state-in-progress .grade-outline-icon { color: var(--amber); }
+:root.movie .grade-outline-row.state-completed .grade-outline-icon { color: var(--accent); }
+
+.grade-chip {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.grade-chip-empty { color: var(--text-3); font-weight: 400; }
+.grade-chip-frac  { font-size: 8px; color: var(--text-3); letter-spacing: .5px; flex-shrink: 0; }
+
+.grade-detail-hdr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.grade-detail-title {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+}
+.grade-items-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+.grade-item-card {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  background: var(--bg2);
+}
 
 /* ── Request status section ─────────────────────────────── */
 .skills-requests-section {
@@ -779,8 +858,10 @@
 @media (max-width: 640px) {
   .admin-layout { grid-template-columns: 1fr; }
   .admin-sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: 260px; }
-  .skill-modules { grid-template-columns: 1fr; }
   .score-divider { display: none; }
   .tree-editor-layout { grid-template-columns: 1fr; }
   .tree-outline-pane { border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
+  .grade-editor-layout { grid-template-columns: 1fr; }
+  .grade-outline-pane { border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
+  .grade-sheet { padding: 14px 14px; }
 }

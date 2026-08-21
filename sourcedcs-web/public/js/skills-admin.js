@@ -37,7 +37,8 @@ var _squadrons          = [];     /* squadron list from /api/squadrons */
 var _pilotSquadrons     = {};     /* { [sub]: squadronId | null } — server-resolved (auto+override) */
 var _members            = [];     /* full Discord roster from /api/members — the squadron-management source of truth */
 var _activeSub          = null;
-var _detailCollapsed    = {};     /* { [moduleId]: bool } collapse state for pilot detail group sections */
+var _gradeSelectedId    = null;   /* selected node id in the pilot-grading outline (right panel target) */
+var _gradeOutlineExpanded = {};   /* { [moduleId]: bool } expand state for the grading outline — default: root expanded, deeper collapsed */
 var _sqGroupCollapsed   = {};     /* { [squadronId|'__unassigned']: bool } collapse state for pilot list groups */
 var _currentUserSub     = null;   /* JWT sub of the logged-in admin */
 
@@ -185,7 +186,17 @@ function renderGradingQueue() {
     var viewBtn = document.createElement('button');
     viewBtn.className = 'btn-sm';
     viewBtn.textContent = 'VIEW';
-    (function (pid) { viewBtn.addEventListener('click', function () { selectPilot(pid); }); })(req.pilot_id);
+    (function (pid, mid) {
+      viewBtn.addEventListener('click', function () {
+        selectPilot(pid);
+        if (mid && _treeIndex.modules[mid]) {
+          expandGradePathTo(mid);
+          _gradeSelectedId = mid;
+          renderGradeOutline();
+          renderGradeDetail();
+        }
+      });
+    })(req.pilot_id, req.module_id);
     actDiv.appendChild(viewBtn);
 
     var delBtn = document.createElement('button');
@@ -343,6 +354,14 @@ function visibleRootModulesForPilot(sub) {
 
 /* ── Pilot detail ───────────────────────────────────────── */
 function selectPilot(sub) {
+  if (_activeSub !== sub) {
+    /* Switching pilots — start the grading outline fresh. A same-pilot
+       re-render (e.g. right after saveGrade/clearGrade) must NOT reset
+       these, or the detail panel would collapse back to empty every time
+       an admin saves a grade. */
+    _gradeSelectedId = null;
+    _gradeOutlineExpanded = {};
+  }
   _activeSub = sub;
 
   var groupKey = pilotGroupKey(sub);
@@ -406,9 +425,20 @@ function selectPilot(sub) {
     '<a class="btn-sm" href="wing-admin.html">MANAGE ON WING ADMIN &rarr;</a>';
   el.appendChild(sqOverrideRow);
 
-  visibleRootModulesForPilot(sub).forEach(function (root) {
-    el.appendChild(buildModuleSection(root, sub, grades));
-  });
+  var layout = document.createElement('div');
+  layout.className = 'grade-editor-layout';
+  var outlinePane = document.createElement('div');
+  outlinePane.className = 'grade-outline-pane';
+  outlinePane.id = 'gradeOutline';
+  var detailPane = document.createElement('div');
+  detailPane.className = 'grade-detail-pane';
+  detailPane.id = 'gradeDetail';
+  layout.appendChild(outlinePane);
+  layout.appendChild(detailPane);
+  el.appendChild(layout);
+
+  renderGradeOutline();
+  renderGradeDetail();
 }
 
 function refreshActiveDetail() {
@@ -444,67 +474,145 @@ function selectGhostMember(memberId) {
     'Once they log in and visit /skills.html at least once, they\'ll appear here as a gradable pilot record.</p>';
 }
 
-/* One collapsible section per Module. A module with sub-modules renders a
-   group header (recursive completed/total counts, free progress bar at
-   every layer) and recurses; a module without sub-modules renders as a
-   single gradable card (buildAdminModuleEl), same as a leaf did before this
-   redesign. A module can carry both (mixed) — its own grading items render
-   first, then its sub-modules. */
-function buildModuleSection(node, sub, grades) {
-  var hasSub = node.subModules && node.subModules.length;
-  if (!hasSub) return buildAdminModuleEl(node, grades, sub);
-
-  if (!Object.prototype.hasOwnProperty.call(_detailCollapsed, node.id)) {
-    _detailCollapsed[node.id] = true;
-  }
-  var collapsed = !!_detailCollapsed[node.id];
-  var total     = skillsCore.countModules(node);
-  var completed = skillsCore.countCompletedModules(_treeIndex, node, grades);
-  var pct       = Math.round((total ? completed / total : 0) * 100);
-
-  var section = document.createElement('div');
-  section.className = 'skill-list-category';
-
-  var catHdr = document.createElement('div');
-  catHdr.className = 'skill-list-cat-header';
-  catHdr.style.cursor = 'pointer';
-  catHdr.innerHTML =
-    '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
-    '<span class="slc-name">' + esc(node.title) + '</span>' +
-    '<span class="slc-count">' + completed + ' / ' + total + ' PASSED</span>' +
-    '<div class="slc-bar"><div class="slc-bar-fill" style="width:' + pct + '%"></div></div>' +
-    '<span class="slc-pct">' + pct + '%</span>';
-  (function (id) {
-    catHdr.addEventListener('click', function () {
-      _detailCollapsed[id] = !_detailCollapsed[id];
-      selectPilot(sub);
-    });
-  })(node.id);
-  section.appendChild(catHdr);
-
-  if (!collapsed) {
-    var grid = document.createElement('div');
-    grid.className = 'skill-modules';
-    grid.style.cssText = 'padding:10px;gap:10px';
-    if (node.gradingItems && node.gradingItems.length) {
-      grid.appendChild(buildAdminModuleEl(node, grades, sub));
-    }
-    node.subModules.forEach(function (child) {
-      grid.appendChild(buildModuleSection(child, sub, grades));
-    });
-    section.appendChild(grid);
-  }
-
-  return section;
+/* ══════════════════════════════════════════════════════════
+   Pilot grading — indented outline (left) + detail panel (right).
+   Only the SELECTED module's grading controls (select/save/clear/notes)
+   render at any time, instead of every module in the whole tree at once —
+   that was the density problem with the old boxes-in-boxes card grid.
+   Mirrors the tree structure editor's outline/detail split for visual
+   consistency (.outline-row/.outline-toggle/.tree-breadcrumb), but reads
+   from the published _treeIndex (not the unsaved _treeEditor draft). */
+function gradeNodeExpanded(node, depth) {
+  if (Object.prototype.hasOwnProperty.call(_gradeOutlineExpanded, node.id)) return _gradeOutlineExpanded[node.id];
+  return depth === 0;
 }
 
-function buildAdminModuleEl(mod, grades, sub) {
-  var state = skillsCore.moduleState(_treeIndex, mod.id, grades);
-  var items = mod.gradingItems || [];
+function expandGradePathTo(id) {
+  var cur = _treeIndex.parentOf[id];
+  while (cur) {
+    _gradeOutlineExpanded[cur] = true;
+    cur = _treeIndex.parentOf[cur];
+  }
+}
 
-  var card = document.createElement('div');
-  card.className = 'skill-module state-' + state;
+/* Compact right-aligned status chip for one outline row: module-count
+   fraction for anything with sub-modules, else a grade letter (single item)
+   or an items-passed fraction (multi item). */
+function gradeOutlineChip(node, grades) {
+  var hasSub = node.subModules && node.subModules.length;
+  if (hasSub) {
+    var total     = skillsCore.countModules(node);
+    var completed = skillsCore.countCompletedModules(_treeIndex, node, grades);
+    return '<span class="grade-chip-frac">' + completed + '/' + total + '</span>';
+  }
+  var items = node.gradingItems || [];
+  if (items.length === 1) {
+    var rec = grades[items[0].id];
+    return rec
+      ? '<span class="grade-chip grade-' + rec.grade + '">' + esc(rec.grade) + '</span>'
+      : '<span class="grade-chip grade-chip-empty">—</span>';
+  }
+  if (items.length > 1) {
+    var done = items.filter(function (it) {
+      var r = grades[it.id];
+      return r && skillsCore.gradeValue(r.grade) >= skillsCore.gradeValue(it.min_pass_grade);
+    }).length;
+    return '<span class="grade-chip-frac">' + done + '/' + items.length + '</span>';
+  }
+  return '';
+}
 
+function renderGradeOutline() {
+  var el = document.getElementById('gradeOutline');
+  if (!el || !_activeSub) return;
+  el.innerHTML = '';
+
+  var grades = _allGrades[_activeSub] || {};
+  var list = document.createElement('div');
+  list.className = 'tree-outline-list';
+  visibleRootModulesForPilot(_activeSub).forEach(function (root) {
+    list.appendChild(buildGradeOutlineRow(root, 0, grades));
+  });
+  el.appendChild(list);
+}
+
+function buildGradeOutlineRow(node, depth, grades) {
+  var wrap = document.createElement('div');
+
+  var state = skillsCore.moduleState(_treeIndex, node.id, grades);
+  var row = document.createElement('div');
+  row.className = 'pilot-row outline-row grade-outline-row state-' + state + (node.id === _gradeSelectedId ? ' active' : '');
+  row.style.paddingLeft = (10 + depth * 16) + 'px';
+  row.setAttribute('data-node-id', node.id);
+
+  var hasChildren = !!(node.subModules && node.subModules.length);
+  var expanded    = gradeNodeExpanded(node, depth);
+
+  var toggle = document.createElement('span');
+  toggle.className   = 'outline-toggle';
+  toggle.textContent = hasChildren ? (expanded ? '▼' : '▶') : '·';
+  if (hasChildren) {
+    (function (id) {
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _gradeOutlineExpanded[id] = !expanded;
+        renderGradeOutline();
+      });
+    })(node.id);
+  }
+
+  var icon = document.createElement('span');
+  icon.className = 'grade-outline-icon';
+  var ICONS = { locked: '—', 'not-started': '○', 'in-progress': '◑', completed: '✓' };
+  icon.textContent = ICONS[state] || '○';
+
+  var label = document.createElement('span');
+  label.className   = 'outline-row-label';
+  label.textContent = node.title || '(untitled)';
+
+  var chip = document.createElement('span');
+  chip.innerHTML = gradeOutlineChip(node, grades);
+
+  row.appendChild(toggle);
+  row.appendChild(icon);
+  row.appendChild(label);
+  row.appendChild(chip);
+
+  (function (id) { row.addEventListener('click', function () { selectGradeNode(id); }); })(node.id);
+  wrap.appendChild(row);
+
+  if (hasChildren && expanded) {
+    node.subModules.forEach(function (child) {
+      wrap.appendChild(buildGradeOutlineRow(child, depth + 1, grades));
+    });
+  }
+
+  return wrap;
+}
+
+function selectGradeNode(id) {
+  _gradeSelectedId = id;
+  document.querySelectorAll('#gradeOutline .outline-row').forEach(function (r) {
+    r.classList.toggle('active', r.getAttribute('data-node-id') === id);
+  });
+  renderGradeDetail();
+}
+
+function renderGradeDetail() {
+  var el = document.getElementById('gradeDetail');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!_activeSub) return;
+
+  var node = _gradeSelectedId ? _treeIndex.modules[_gradeSelectedId] : null;
+  if (!node) {
+    _gradeSelectedId = null;
+    el.innerHTML = '<p class="skills-empty">Select a module on the left to view or grade it.</p>';
+    return;
+  }
+
+  var grades = _allGrades[_activeSub] || {};
+  var state  = skillsCore.moduleState(_treeIndex, node.id, grades);
   var BADGE_CLASS = {
     'locked':      'badge-locked',
     'not-started': 'badge-not-started',
@@ -512,32 +620,83 @@ function buildAdminModuleEl(mod, grades, sub) {
     'completed':   'badge-completed',
   };
 
-  card.innerHTML =
-    '<div class="skill-mod-top">' +
-      '<div class="skill-mod-title">' + esc(mod.title) + '</div>' +
-      '<div class="skill-mod-badge ' + (BADGE_CLASS[state] || 'badge-not-started') + '">' +
-        state.replace('-', ' ').toUpperCase() +
-      '</div>' +
-    '</div>' +
-    '<div class="skill-mod-desc">' + esc(mod.description || '') + '</div>';
+  var crumb = document.createElement('div');
+  crumb.className = 'tree-breadcrumb';
+  crumb.textContent = skillsCore.breadcrumb(_treeIndex, node.id).join(' › ');
+  el.appendChild(crumb);
 
-  items.forEach(function (item) {
-    card.appendChild(buildGradingItemRow(item, grades, sub, items.length > 1));
-  });
+  var hdr = document.createElement('div');
+  hdr.className = 'grade-detail-hdr';
+  hdr.innerHTML =
+    '<span class="grade-detail-title">' + esc(node.title) + '</span>' +
+    '<span class="skill-mod-badge ' + (BADGE_CLASS[state] || 'badge-not-started') + '">' +
+      state.replace('-', ' ').toUpperCase() +
+    '</span>';
+  el.appendChild(hdr);
 
-  return card;
+  if (node.description) {
+    var desc = document.createElement('div');
+    desc.className = 'skill-mod-desc';
+    desc.style.marginBottom = '10px';
+    desc.textContent = node.description;
+    el.appendChild(desc);
+  }
+
+  if (node.requirements && node.requirements.length) {
+    var reqDiv = document.createElement('div');
+    reqDiv.className = 'slm-prereqs';
+    reqDiv.style.marginBottom = '10px';
+    var parts = node.requirements.map(function (r) {
+      var target = _treeIndex.modules[r.module_id];
+      var eg     = skillsCore.effectiveModuleGrade(_treeIndex, r.module_id, grades);
+      var met    = skillsCore.gradeValue(eg) >= skillsCore.gradeValue(r.min_grade);
+      return (target ? target.title : r.module_id) + ' (' + (r.min_grade || 'G') + '+)' + (met ? ' ✓' : ' ✗');
+    });
+    reqDiv.textContent = 'Requires: ' + parts.join(', ');
+    el.appendChild(reqDiv);
+  }
+
+  var items = node.gradingItems || [];
+  if (items.length) {
+    var itemsWrap = document.createElement('div');
+    itemsWrap.className = 'grade-items-wrap';
+    items.forEach(function (item) {
+      itemsWrap.appendChild(buildGradeItemControls(item, grades, _activeSub, items.length > 1));
+    });
+    el.appendChild(itemsWrap);
+  }
+
+  if (node.subModules && node.subModules.length) {
+    var kidsWrap = document.createElement('div');
+    kidsWrap.className = 'tree-editor-subsection';
+    var kidsLbl = document.createElement('span');
+    kidsLbl.className   = 'tree-field-label';
+    kidsLbl.textContent = 'SUB-MODULES';
+    kidsWrap.appendChild(kidsLbl);
+    node.subModules.forEach(function (child) {
+      var row = document.createElement('div');
+      row.className = 'tree-prereq-row';
+      var btn = document.createElement('button');
+      btn.className = 'btn-sm';
+      btn.style.cssText = 'flex:1;text-align:left';
+      btn.innerHTML = esc(child.title || '(untitled)') + ' ' + gradeOutlineChip(child, grades);
+      (function (id) { btn.addEventListener('click', function () { selectGradeNode(id); }); })(child.id);
+      row.appendChild(btn);
+      kidsWrap.appendChild(row);
+    });
+    el.appendChild(kidsWrap);
+  }
 }
 
-function buildGradingItemRow(item, grades, sub, showLabel) {
+function buildGradeItemControls(item, grades, sub, showLabel) {
   var gradeRec = grades[item.id] || null;
 
   var wrap = document.createElement('div');
-  wrap.className = 'skill-mod-item-row';
-  wrap.style.cssText = 'padding:6px 0 2px;display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--border);margin-top:6px';
+  wrap.className = 'grade-item-card';
 
   if (showLabel) {
     var lbl = document.createElement('div');
-    lbl.style.cssText = 'font-size:9px;letter-spacing:1px;color:var(--text-3)';
+    lbl.style.cssText = 'font-size:9px;letter-spacing:1px;color:var(--text-3);margin-bottom:5px';
     lbl.textContent = item.label || item.id;
     wrap.appendChild(lbl);
   }
@@ -562,7 +721,7 @@ function buildGradingItemRow(item, grades, sub, showLabel) {
   }
 
   var row1 = document.createElement('div');
-  row1.style.cssText = 'display:flex;gap:5px;align-items:center;flex-wrap:wrap';
+  row1.style.cssText = 'display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:6px';
 
   var sel = document.createElement('select');
   sel.className = 'grade-select';
@@ -597,6 +756,7 @@ function buildGradingItemRow(item, grades, sub, showLabel) {
   row1.appendChild(clearBtn);
 
   var row2 = document.createElement('div');
+  row2.style.marginTop = '5px';
   var notesInput = document.createElement('input');
   notesInput.className   = 'grade-notes-input';
   notesInput.type        = 'text';
