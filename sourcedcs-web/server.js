@@ -8,6 +8,7 @@ const fs        = require('fs');
 const https     = require('https');
 const voiceGateway = require('./discord-gateway');
 const activityDailyJob = require('./activity-daily-job');
+const skillsCore = require('./public/js/skills-core.js');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -45,6 +46,41 @@ function saveJSON(file, data) {
 }
 function sanitizeStr(value, maxLen) {
   return String(value || '').trim().slice(0, maxLen);
+}
+
+/* Skill tree migration: the old shape was { categories: [{ id, name, weight,
+   squadrons?, modules: [{ id, title, description, min_pass_grade,
+   prerequisites }] }] }. The new shape is a single recursive Module type —
+   see public/js/skills-core.js. Each old category becomes a root Module
+   (weight dropped); each old module becomes a child Module with exactly one
+   grading item whose id equals the module's own id, so skill-grades.json
+   needs no changes at all. Runs once at boot and persists the upgrade, so
+   it's idempotent on every subsequent boot. */
+function normalizeSkillTree(raw) {
+  if (raw && raw.version === 2 && Array.isArray(raw.tree)) return raw;
+
+  const cats = (raw && Array.isArray(raw.categories)) ? raw.categories : [];
+  const tree = cats.map(cat => ({
+    id: cat.id,
+    title: cat.name || cat.id,
+    description: cat.description || '',
+    squadrons: (Array.isArray(cat.squadrons) && cat.squadrons.length) ? cat.squadrons : undefined,
+    requirements: [],
+    subModules: (cat.modules || []).map(mod => ({
+      id: mod.id,
+      title: mod.title || mod.id,
+      description: mod.description || '',
+      requirements: Array.isArray(mod.prerequisites) ? mod.prerequisites : [],
+      subModules: [],
+      gradingItems: [{
+        id: mod.id,
+        min_pass_grade: skillsCore.VALID_GRADES.includes(mod.min_pass_grade) ? mod.min_pass_grade : 'G',
+      }],
+    })),
+    gradingItems: [],
+  }));
+
+  return { version: 2, tree };
 }
 
 /* Default gallery (used when gallery.json does not yet exist in the volume) */
@@ -95,7 +131,8 @@ let bookings         = loadJSON(BOOKINGS_FILE, []);
 let nextBookingId    = bookings.reduce((m, b) => Math.max(m, b.id || 0), 0) + 1;
 
 /* Skill tracker */
-let skillTree       = loadJSON(SKILL_TREE_FILE,     { categories: [] });
+let skillTree       = normalizeSkillTree(loadJSON(SKILL_TREE_FILE, { version: 2, tree: [] }));
+saveJSON(SKILL_TREE_FILE, skillTree); /* persist the upgrade once; no-op if already current */
 let skillGrades     = loadJSON(SKILL_GRADES_FILE,   {});
 let gradingRequests     = loadJSON(GRADING_REQS_FILE,        []);
 let pilotRegistry       = loadJSON(PILOT_REGISTRY_FILE,     {});
@@ -1329,25 +1366,8 @@ api.get('/skill-tree', (_req, res) => {
 
 api.put('/skill-tree', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
   const tree = req.body;
-  if (!tree || !Array.isArray(tree.categories)) {
-    return res.status(400).json({ error: 'categories array required' });
-  }
-  for (const cat of tree.categories) {
-    if (!cat.id || !cat.name || typeof cat.weight !== 'number') {
-      return res.status(400).json({ error: 'Each category requires id, name, and numeric weight' });
-    }
-    if (!Array.isArray(cat.modules)) {
-      return res.status(400).json({ error: 'Each category requires a modules array' });
-    }
-    for (const mod of cat.modules) {
-      if (!mod.id || !mod.title) {
-        return res.status(400).json({ error: 'Each module requires id and title' });
-      }
-      if (mod.min_pass_grade && !VALID_GRADES.has(mod.min_pass_grade)) {
-        return res.status(400).json({ error: 'Invalid min_pass_grade: ' + mod.min_pass_grade });
-      }
-    }
-  }
+  const err  = skillsCore.validateTree(tree);
+  if (err) return res.status(400).json({ error: err });
   skillTree = tree;
   saveJSON(SKILL_TREE_FILE, skillTree);
   res.json(skillTree);
@@ -1371,8 +1391,8 @@ api.get('/skill-grades/:pilotId', requireAuth, requireSkillAdmin, (req, res) => 
 });
 
 const MAX_GRADE_NOTES_LEN = 500;
-api.put('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
-  const { pilotId, moduleId } = req.params;
+api.put('/skill-grades/:pilotId/:itemId', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const { pilotId, itemId } = req.params;
   const { grade, notes } = req.body;
 
   if (!grade || !VALID_GRADES.has(grade)) {
@@ -1383,7 +1403,7 @@ api.put('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requir
   const graderName = req.user.name || req.user.preferred_username || graderSub || '';
 
   if (!skillGrades[pilotId]) skillGrades[pilotId] = {};
-  skillGrades[pilotId][moduleId] = {
+  skillGrades[pilotId][itemId] = {
     grade,
     notes:     sanitizeStr(notes || '', MAX_GRADE_NOTES_LEN),
     graded_at: new Date().toISOString(),
@@ -1391,15 +1411,27 @@ api.put('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requir
   };
   saveJSON(SKILL_GRADES_FILE, skillGrades);
 
-  /* Auto-remove any open/claimed grading requests for this pilot+module */
+  /* Auto-remove any open/claimed grading request for this pilot+module, but
+     only once EVERY grading item belonging to that module now has a grade —
+     a multi-item module (e.g. 3 levels) shouldn't close the request after
+     just one item is graded. */
+  const index           = skillsCore.buildIndex(skillTree);
+  const parentModuleId  = index.itemOwner[itemId] || itemId;
+  const parentModule    = index.modules[parentModuleId];
+  const fullyGraded     = !parentModule || (parentModule.gradingItems || []).every(
+    it => skillGrades[pilotId] && skillGrades[pilotId][it.id]
+  );
+
   const removedReqs = [];
-  gradingRequests = gradingRequests.filter(r => {
-    if (r.pilot_id === pilotId && (r.module_id === moduleId || !r.module_id)) {
-      removedReqs.push(r);
-      return false;
-    }
-    return true;
-  });
+  if (fullyGraded) {
+    gradingRequests = gradingRequests.filter(r => {
+      if (r.pilot_id === pilotId && (r.module_id === parentModuleId || !r.module_id)) {
+        removedReqs.push(r);
+        return false;
+      }
+      return true;
+    });
+  }
   if (removedReqs.length) {
     saveJSON(GRADING_REQS_FILE, gradingRequests);
     removedReqs.forEach(r => {
@@ -1410,15 +1442,15 @@ api.put('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requir
     });
   }
 
-  res.json(skillGrades[pilotId][moduleId]);
+  res.json(skillGrades[pilotId][itemId]);
 });
 
-api.delete('/skill-grades/:pilotId/:moduleId', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
-  const { pilotId, moduleId } = req.params;
-  if (!skillGrades[pilotId] || !skillGrades[pilotId][moduleId]) {
+api.delete('/skill-grades/:pilotId/:itemId', writeOpsLimiter, requireAuth, requireSkillAdmin, (req, res) => {
+  const { pilotId, itemId } = req.params;
+  if (!skillGrades[pilotId] || !skillGrades[pilotId][itemId]) {
     return res.status(404).json({ error: 'Grade not found' });
   }
-  delete skillGrades[pilotId][moduleId];
+  delete skillGrades[pilotId][itemId];
   saveJSON(SKILL_GRADES_FILE, skillGrades);
   res.json({ ok: true });
 });

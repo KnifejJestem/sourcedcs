@@ -12,10 +12,6 @@ function setTheme(t) {
   try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch (e) {}
 })();
 
-/* ── Grade constants ────────────────────────────────────── */
-var GRADE_VALUES = { U: 0, F: 1, G: 2, E: 3 };
-var GRADE_NAMES  = { U: 'Unsatisfactory', F: 'Fair', G: 'Good', E: 'Excellent' };
-
 /* ── Auth helpers ───────────────────────────────────────── */
 function getUser() {
   try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch (e) { return null; }
@@ -34,12 +30,13 @@ function jwtSub(token) {
 
 /* ── State ──────────────────────────────────────────────── */
 var _tree        = null;
-var _grades      = {};
+var _treeIndex   = null;   /* skillsCore.buildIndex(_tree) */
+var _grades      = {};     /* { [gradingItemId]: gradeRec } for the logged-in pilot */
 var _requests    = [];
 var _mySub       = null;
 var _mySquadron  = null;  /* squadron ID from roster, or null */
 var _openMods    = {};  /* { [moduleId]: bool } — expanded detail rows */
-var _openCats    = {};  /* { [catId]: bool } — collapsed categories (true = collapsed) */
+var _openCats    = {};  /* { [moduleId]: bool } — collapsed group sections (true = collapsed) */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 (function () {
@@ -49,7 +46,7 @@ var _openCats    = {};  /* { [catId]: bool } — collapsed categories (true = co
 
   if (tok && user) {
     if (btn) {
-      btn.textContent = (user.name || 'USER').toUpperCase() + ' \u23FB';
+      btn.textContent = (user.name || 'USER').toUpperCase() + ' ⏻';
       btn.title = 'Click to log out';
       btn.classList.add('login-btn--logout');
       btn.onclick = logout;
@@ -82,6 +79,7 @@ function loadAll(tok) {
     fetch('/api/my-squadron', { headers: headers }).then(function (r) { return r.json(); }).catch(function () { return { squadron: null }; }),
   ]).then(function (results) {
     _tree = results[0];
+    _treeIndex = skillsCore.buildIndex(_tree);
     var gradesMap = results[1];
     _grades      = (_mySub && gradesMap[_mySub]) ? gradesMap[_mySub] : {};
     _requests    = Array.isArray(results[2]) ? results[2] : [];
@@ -91,55 +89,6 @@ function loadAll(tok) {
     console.error('[skills] load failed:', err);
     showToast('Failed to load skill data', true);
   });
-}
-
-/* ── Squadron filtering ─────────────────────────────────── */
-/* Returns only the categories visible to the current pilot.
-   A category with an empty/missing squadrons array is shown to everyone.
-   A pilot with no squadron sees only those "all" categories. */
-function visibleCategories() {
-  if (!_tree || !_tree.categories) return [];
-  return _tree.categories.filter(function (cat) {
-    var sqs = cat.squadrons;
-    if (!sqs || !sqs.length) return true;          /* visible to all */
-    if (!_mySquadron) return false;                /* no squadron → only "all" cats */
-    return sqs.indexOf(_mySquadron) !== -1;
-  });
-}
-
-/* ── Module state (matches test/skill-logic.js) ─────────── */
-function gradeValue(g) { return (g != null && GRADE_VALUES[g] != null) ? GRADE_VALUES[g] : -1; }
-
-function moduleState(mod) {
-  var prereqs = mod.prerequisites || [];
-  for (var i = 0; i < prereqs.length; i++) {
-    var p  = prereqs[i];
-    var gr = _grades[p.module_id] ? _grades[p.module_id].grade : null;
-    if (gradeValue(gr) < gradeValue(p.min_grade)) return 'locked';
-  }
-  var myGrade = _grades[mod.id] ? _grades[mod.id].grade : null;
-  if (myGrade == null) return 'not-started';
-  if (gradeValue(myGrade) >= gradeValue(mod.min_pass_grade)) return 'completed';
-  return 'in-progress';
-}
-
-/* ── Score (completion-based, matches test/skill-logic.js) ─ */
-function categoryScore(cat) {
-  var mods = cat.modules || [];
-  if (!mods.length) return 0;
-  var completed = mods.filter(function (m) { return moduleState(m) === 'completed'; }).length;
-  return completed / mods.length;
-}
-
-function overallScore() {
-  var cats = visibleCategories();
-  if (!cats.length) return 0;
-  /* Normalise by the sum of visible category weights (not always 100 when filtered) */
-  var totalWeight = cats.reduce(function (s, c) { return s + (c.weight || 0); }, 0);
-  if (!totalWeight) return 0;
-  return cats.reduce(function (s, cat) {
-    return s + (cat.weight || 0) * categoryScore(cat);
-  }, 0) / totalWeight;
 }
 
 /* ── Render ─────────────────────────────────────────────── */
@@ -154,23 +103,22 @@ function render() {
 }
 
 function renderScoreBar() {
-  var pct = Math.round(overallScore() * 100);
+  var pct = Math.round(skillsCore.overallScore(_treeIndex, _mySquadron, _grades) * 100);
   document.getElementById('overallScore').textContent = pct + '%';
 
   var catsEl = document.getElementById('scoreCats');
   catsEl.innerHTML = '';
-  visibleCategories().forEach(function (cat) {
-    var score = Math.round(categoryScore(cat) * 100);
-    var mods  = cat.modules || [];
-    var done  = mods.filter(function (m) { return moduleState(m) === 'completed'; }).length;
+  skillsCore.visibleRootModules(_treeIndex, _mySquadron).forEach(function (root) {
+    var total = skillsCore.countVisibleModules(_treeIndex, root, _mySquadron);
+    var done  = skillsCore.countVisibleCompletedModules(_treeIndex, root, _mySquadron, _grades);
+    var score = Math.round((total ? done / total : 0) * 100);
 
     var div = document.createElement('div');
     div.className = 'score-cat';
     div.innerHTML =
-      '<div class="score-cat-name">' + esc(cat.name) +
-        ' <span style="color:var(--text-3)">' + cat.weight + '%</span></div>' +
+      '<div class="score-cat-name">' + esc(root.title) + '</div>' +
       '<div class="score-cat-bar"><div class="score-cat-fill" style="width:' + score + '%"></div></div>' +
-      '<div class="score-cat-pct">' + done + '/' + mods.length + ' &nbsp; ' + score + '%</div>';
+      '<div class="score-cat-pct">' + done + '/' + total + ' &nbsp; ' + score + '%</div>';
     catsEl.appendChild(div);
   });
 }
@@ -179,224 +127,222 @@ function renderScoreBar() {
 function renderTree() {
   var el = document.getElementById('skillsTree');
   el.innerHTML = '';
-
-  var myOpenReq = _requests.find(function (r) {
-    return r.pilot_id === _mySub && (r.status === 'open' || r.status === 'claimed');
-  }) || null;
-
-  visibleCategories().forEach(function (cat) {
-    el.appendChild(buildCatSection(cat, myOpenReq));
+  skillsCore.visibleRootModules(_treeIndex, _mySquadron).forEach(function (root) {
+    el.appendChild(buildModuleSection(root));
   });
 }
 
-function buildCatSection(cat, myOpenReq) {
-  var mods      = cat.modules || [];
-  var done      = mods.filter(function (m) { return moduleState(m) === 'completed'; }).length;
-  var score     = Math.round(categoryScore(cat) * 100);
-  var collapsed = !!_openCats[cat.id];
+/* A module with sub-modules renders as a collapsible group section (with a
+   recursive completed/total progress bar, free at every layer since there's
+   no weighting); a module without sub-modules renders as a single gradable
+   row. A module can carry both (mixed) — its own grading items render as a
+   row first, then its sub-modules recurse. */
+function buildModuleSection(node) {
+  var hasSub = node.subModules && node.subModules.length;
+  if (!hasSub) {
+    var wrap = document.createElement('div');
+    wrap.className = 'skill-list-modules';
+    appendModRow(wrap, node);
+    return wrap;
+  }
 
-  /* Flat id → title map for prereq display */
-  var modTitleMap = {};
-  (_tree.categories || []).forEach(function (c) {
-    (c.modules || []).forEach(function (m) { modTitleMap[m.id] = m.title; });
-  });
+  var collapsed = !!_openCats[node.id];
+  var total     = skillsCore.countModules(node);
+  var completed = skillsCore.countCompletedModules(_treeIndex, node, _grades);
+  var score     = Math.round((total ? completed / total : 0) * 100);
 
   var section = document.createElement('div');
   section.className = 'skill-list-category';
 
-  /* Header row (click to collapse) */
   var hdr = document.createElement('div');
   hdr.className = 'skill-list-cat-header';
   hdr.setAttribute('role', 'button');
   hdr.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-
-  var toggle = document.createElement('span');
-  toggle.className   = 'slc-toggle';
-  toggle.textContent = collapsed ? '▶' : '▼';
-
-  var name = document.createElement('span');
-  name.className   = 'slc-name';
-  name.textContent = cat.name;
-
-  var count = document.createElement('span');
-  count.className   = 'slc-count';
-  count.textContent = done + ' / ' + mods.length + ' PASSED';
-
-  var barWrap = document.createElement('div');
-  barWrap.className = 'slc-bar';
-  var barFill = document.createElement('div');
-  barFill.className = 'slc-bar-fill';
-  barFill.style.width = score + '%';
-  barWrap.appendChild(barFill);
-
-  var pct = document.createElement('span');
-  pct.className   = 'slc-pct';
-  pct.textContent = score + '%';
-
-  hdr.appendChild(toggle);
-  hdr.appendChild(name);
-  hdr.appendChild(count);
-  hdr.appendChild(barWrap);
-  hdr.appendChild(pct);
-
-  (function (catId) {
+  hdr.innerHTML =
+    '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
+    '<span class="slc-name">' + esc(node.title) + '</span>' +
+    '<span class="slc-count">' + completed + ' / ' + total + ' PASSED</span>' +
+    '<div class="slc-bar"><div class="slc-bar-fill" style="width:' + score + '%"></div></div>' +
+    '<span class="slc-pct">' + score + '%</span>';
+  (function (id) {
     hdr.addEventListener('click', function () {
-      _openCats[catId] = !_openCats[catId];
+      _openCats[id] = !_openCats[id];
       render();
     });
-  })(cat.id);
-
+  })(node.id);
   section.appendChild(hdr);
 
-  /* Modules list */
   if (!collapsed) {
     var modList = document.createElement('div');
     modList.className = 'skill-list-modules';
-
-    mods.forEach(function (mod) {
-      var state    = moduleState(mod);
-      var gradeRec = _grades[mod.id] || null;
-      var isOpen   = !!_openMods[mod.id];
-
-      /* ── Main row ── */
-      var row = document.createElement('div');
-      row.className = 'skill-list-mod-row state-' + state;
-
-      /* Icon */
-      var icon = document.createElement('span');
-      icon.className = 'slm-icon';
-      var ICONS = { locked: '—', 'not-started': '○', 'in-progress': '◑', completed: '✓' };
-      icon.textContent = ICONS[state] || '○';
-
-      /* Title */
-      var title = document.createElement('span');
-      title.className   = 'slm-title';
-      title.textContent = mod.title;
-
-      row.appendChild(icon);
-      row.appendChild(title);
-
-      /* Grade badge if graded */
-      if (gradeRec) {
-        var gBadge = document.createElement('span');
-        gBadge.className   = 'slm-grade-badge grade-' + gradeRec.grade;
-        gBadge.textContent = gradeRec.grade;
-        var gName = document.createElement('span');
-        gName.className   = 'slm-grade-name';
-        gName.textContent = GRADE_NAMES[gradeRec.grade] || '';
-        row.appendChild(gBadge);
-        row.appendChild(gName);
-      } else {
-        var noGrade = document.createElement('span');
-        noGrade.className   = 'slm-grade-name';
-        if (state === 'locked') noGrade.textContent = 'Prerequisites not met';
-        else if (state === 'not-started') noGrade.textContent = 'Not started';
-        else noGrade.textContent = 'In progress';
-        row.appendChild(noGrade);
-      }
-
-      /* Expand toggle (all modules, including locked) */
-      var chevron = document.createElement('span');
-      chevron.className   = 'slm-chevron';
-      chevron.textContent = isOpen ? '▲' : '▼';
-      row.appendChild(chevron);
-
-      (function (mid) {
-        row.addEventListener('click', function () {
-          _openMods[mid] = !_openMods[mid];
-          render();
-        });
-      })(mod.id);
-
-      modList.appendChild(row);
-
-      /* ── Detail panel ── */
-      if (isOpen) {
-        var detail = document.createElement('div');
-        detail.className = 'skill-list-mod-detail';
-
-        /* Description */
-        if (mod.description) {
-          var desc = document.createElement('p');
-          desc.className   = 'slm-desc';
-          desc.textContent = mod.description;
-          detail.appendChild(desc);
-        }
-
-        /* Pass requirement */
-        var req = document.createElement('div');
-        req.className   = 'slm-prereqs';
-        req.textContent = 'Pass requirement: ' + (mod.min_pass_grade || 'G') + ' — ' + (GRADE_NAMES[mod.min_pass_grade] || '');
-        detail.appendChild(req);
-
-        /* Prerequisites */
-        if (mod.prerequisites && mod.prerequisites.length) {
-          var preDiv = document.createElement('div');
-          preDiv.className = 'slm-prereqs';
-          var preParts = (mod.prerequisites || []).map(function (p) {
-            return (modTitleMap[p.module_id] || p.module_id) + ' (' + (p.min_grade || 'G') + '+)';
-          });
-          preDiv.textContent = 'Requires: ' + preParts.join(', ');
-          detail.appendChild(preDiv);
-        }
-
-        if (state === 'locked') {
-          modList.appendChild(detail);
-          return;
-        }
-
-        /* Grade record */
-        if (gradeRec) {
-          if (gradeRec.notes) {
-            var notes = document.createElement('div');
-            notes.className   = 'slm-notes';
-            notes.textContent = 'Grader\'s comment: "' + gradeRec.notes + '"';
-            detail.appendChild(notes);
-          }
-          var gradedBy = document.createElement('div');
-          gradedBy.className = 'slm-graded-by';
-          var dStr = gradeRec.graded_at ? ' on ' + new Date(gradeRec.graded_at).toLocaleDateString() : '';
-          gradedBy.textContent = 'Graded by ' + (gradeRec.graded_by || '—') + dStr;
-          detail.appendChild(gradedBy);
-        }
-
-        /* Action */
-        var actDiv = document.createElement('div');
-        actDiv.style.marginTop = '10px';
-
-        /* Show the pending notice only on the module the request was filed for.
-           If the request has no module_id (legacy), show it everywhere. */
-        var isThisModuleReq = myOpenReq && (!myOpenReq.module_id || myOpenReq.module_id === mod.id);
-        if (isThisModuleReq) {
-          var pendingSpan = document.createElement('span');
-          pendingSpan.className   = 'grading-pending-notice';
-          pendingSpan.textContent = 'GRADING REQUEST ' + myOpenReq.status.toUpperCase();
-          var cancelBtn = document.createElement('button');
-          cancelBtn.className   = 'btn-cancel-request';
-          cancelBtn.textContent = 'CANCEL REQUEST';
-          cancelBtn.style.marginLeft = '10px';
-          (function (id) { cancelBtn.addEventListener('click', function () { cancelRequest(id); }); })(myOpenReq.id);
-          actDiv.appendChild(pendingSpan);
-          actDiv.appendChild(cancelBtn);
-        } else if (!gradeRec || gradeRec.grade !== 'E') {
-          var reqBtn = document.createElement('button');
-          reqBtn.className   = 'btn-request-grading';
-          reqBtn.textContent = 'REQUEST GRADING';
-          (function (mid, mtitle) {
-            reqBtn.addEventListener('click', function () { requestGrading(mid, mtitle); });
-          })(mod.id, mod.title);
-          actDiv.appendChild(reqBtn);
-        }
-
-        detail.appendChild(actDiv);
-        modList.appendChild(detail);
-      }
-    });
-
+    if (node.gradingItems && node.gradingItems.length) {
+      appendModRow(modList, node);
+    }
     section.appendChild(modList);
+    node.subModules.forEach(function (child) {
+      section.appendChild(buildModuleSection(child));
+    });
   }
 
   return section;
+}
+
+function appendModRow(container, node) {
+  var state = skillsCore.moduleState(_treeIndex, node.id, _grades);
+  var items = node.gradingItems || [];
+  var isOpen = !!_openMods[node.id];
+
+  var row = document.createElement('div');
+  row.className = 'skill-list-mod-row state-' + state;
+
+  var icon = document.createElement('span');
+  icon.className = 'slm-icon';
+  var ICONS = { locked: '—', 'not-started': '○', 'in-progress': '◑', completed: '✓' };
+  icon.textContent = ICONS[state] || '○';
+
+  var title = document.createElement('span');
+  title.className   = 'slm-title';
+  title.textContent = node.title;
+
+  row.appendChild(icon);
+  row.appendChild(title);
+
+  if (items.length === 1) {
+    var gradeRec = _grades[items[0].id] || null;
+    if (gradeRec) {
+      var gBadge = document.createElement('span');
+      gBadge.className   = 'slm-grade-badge grade-' + gradeRec.grade;
+      gBadge.textContent = gradeRec.grade;
+      var gName = document.createElement('span');
+      gName.className   = 'slm-grade-name';
+      gName.textContent = skillsCore.GRADE_NAMES[gradeRec.grade] || '';
+      row.appendChild(gBadge);
+      row.appendChild(gName);
+    } else {
+      var noGrade = document.createElement('span');
+      noGrade.className = 'slm-grade-name';
+      noGrade.textContent = (state === 'locked') ? 'Prerequisites not met' : (state === 'not-started' ? 'Not started' : 'In progress');
+      row.appendChild(noGrade);
+    }
+  } else if (items.length > 1) {
+    var doneCount = items.filter(function (it) {
+      var rec = _grades[it.id];
+      return rec && skillsCore.gradeValue(rec.grade) >= skillsCore.gradeValue(it.min_pass_grade);
+    }).length;
+    var summary = document.createElement('span');
+    summary.className   = 'slm-grade-name';
+    summary.textContent = doneCount + ' / ' + items.length + ' items passed';
+    row.appendChild(summary);
+  }
+
+  var chevron = document.createElement('span');
+  chevron.className   = 'slm-chevron';
+  chevron.textContent = isOpen ? '▲' : '▼';
+  row.appendChild(chevron);
+
+  (function (mid) {
+    row.addEventListener('click', function () {
+      _openMods[mid] = !_openMods[mid];
+      render();
+    });
+  })(node.id);
+
+  container.appendChild(row);
+
+  if (!isOpen) return;
+
+  var detail = document.createElement('div');
+  detail.className = 'skill-list-mod-detail';
+
+  if (node.description) {
+    var desc = document.createElement('p');
+    desc.className   = 'slm-desc';
+    desc.textContent = node.description;
+    detail.appendChild(desc);
+  }
+
+  items.forEach(function (item) {
+    var rec = _grades[item.id] || null;
+    var labelPart = (items.length > 1) ? ((item.label || item.id) + ' — ') : '';
+
+    var req = document.createElement('div');
+    req.className   = 'slm-prereqs';
+    req.textContent = labelPart + 'Pass requirement: ' + (item.min_pass_grade || 'G') + ' — ' + (skillsCore.GRADE_NAMES[item.min_pass_grade] || '');
+    detail.appendChild(req);
+
+    if (rec) {
+      var g = document.createElement('div');
+      g.className   = 'slm-prereqs';
+      g.textContent = labelPart + 'Current grade: ' + rec.grade + (rec.notes ? ' — "' + rec.notes + '"' : '');
+      detail.appendChild(g);
+    }
+  });
+
+  if (node.requirements && node.requirements.length) {
+    var preDiv = document.createElement('div');
+    preDiv.className = 'slm-prereqs';
+    var preParts = node.requirements.map(function (r) {
+      var target = _treeIndex.modules[r.module_id];
+      return (target ? target.title : r.module_id) + ' (' + (r.min_grade || 'G') + '+)';
+    });
+    preDiv.textContent = 'Requires: ' + preParts.join(', ');
+    detail.appendChild(preDiv);
+  }
+
+  if (state === 'locked') {
+    container.appendChild(detail);
+    return;
+  }
+
+  var latestGradedAt = null, latestGradedBy = null;
+  items.forEach(function (it) {
+    var rec = _grades[it.id];
+    if (rec && rec.graded_at) latestGradedAt = rec.graded_at;
+    if (rec && rec.graded_by) latestGradedBy = rec.graded_by;
+  });
+  if (latestGradedBy || latestGradedAt) {
+    var gradedBy = document.createElement('div');
+    gradedBy.className = 'slm-graded-by';
+    var dStr = latestGradedAt ? ' on ' + new Date(latestGradedAt).toLocaleDateString() : '';
+    gradedBy.textContent = 'Graded by ' + (latestGradedBy || '—') + dStr;
+    detail.appendChild(gradedBy);
+  }
+
+  var actDiv = document.createElement('div');
+  actDiv.style.marginTop = '10px';
+
+  var myOpenReq = _requests.find(function (r) {
+    return r.pilot_id === _mySub && (r.status === 'open' || r.status === 'claimed');
+  }) || null;
+  var isThisModuleReq = myOpenReq && (!myOpenReq.module_id || myOpenReq.module_id === node.id);
+  var allTop = items.length && items.every(function (it) {
+    var rec = _grades[it.id];
+    return rec && rec.grade === 'E';
+  });
+
+  if (isThisModuleReq) {
+    var pendingSpan = document.createElement('span');
+    pendingSpan.className   = 'grading-pending-notice';
+    pendingSpan.textContent = 'GRADING REQUEST ' + myOpenReq.status.toUpperCase();
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className   = 'btn-cancel-request';
+    cancelBtn.textContent = 'CANCEL REQUEST';
+    cancelBtn.style.marginLeft = '10px';
+    (function (id) { cancelBtn.addEventListener('click', function () { cancelRequest(id); }); })(myOpenReq.id);
+    actDiv.appendChild(pendingSpan);
+    actDiv.appendChild(cancelBtn);
+  } else if (items.length && !allTop) {
+    var reqBtn = document.createElement('button');
+    reqBtn.className   = 'btn-request-grading';
+    reqBtn.textContent = 'REQUEST GRADING';
+    (function (mid, mtitle) {
+      reqBtn.addEventListener('click', function () { requestGrading(mid, mtitle); });
+    })(node.id, node.title);
+    actDiv.appendChild(reqBtn);
+  }
+
+  detail.appendChild(actDiv);
+  container.appendChild(detail);
 }
 
 /* ── Requests section ───────────────────────────────────── */

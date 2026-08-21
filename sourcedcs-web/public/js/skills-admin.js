@@ -12,10 +12,6 @@ function setTheme(t) {
   try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch (e) {}
 })();
 
-/* ── Grade constants ────────────────────────────────────── */
-var GRADE_VALUES = { U: 0, F: 1, G: 2, E: 3 };
-var GRADE_NAMES  = { U: 'Unsatisfactory', F: 'Fair', G: 'Good', E: 'Excellent' };
-
 /* ── Auth helpers ───────────────────────────────────────── */
 function getUser() {
   try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch (e) { return null; }
@@ -26,20 +22,22 @@ function logout() {
 }
 
 /* ── State ──────────────────────────────────────────────── */
-var _tree               = null;
-var _treeEditor         = null;  /* working copy mutated by the GUI editor */
-var _allGrades          = {};    /* { [sub]: { [moduleId]: gradeRec } } */
-var _pilots             = {};    /* { [sub]: { sub, name, callsign, registered_at } } */
-var _requests           = [];
-var _squadrons          = [];    /* squadron list from /api/squadrons */
-var _pilotSquadrons     = {};    /* { [sub]: squadronId | null } — server-resolved (auto+override) */
-var _members            = [];    /* full Discord roster from /api/members — the squadron-management source of truth */
+var _tree               = null;   /* last-saved-from-server document { version, tree } */
+var _treeIndex          = null;   /* skillsCore.buildIndex(_tree) — used for pilot detail (published data only) */
+var _treeEditor          = null;  /* working copy mutated by the GUI editor */
+var _treeEditorIndex     = null;  /* skillsCore.buildIndex(_treeEditor), rebuilt after structural mutations */
+var _outlineExpanded     = {};    /* { [moduleId]: bool } outline expand state */
+var _outlineSelectedId   = null;
+var _allGrades          = {};     /* { [sub]: { [gradingItemId]: gradeRec } } */
+var _pilots             = {};     /* { [sub]: { sub, name, callsign, registered_at } } */
+var _requests            = [];
+var _squadrons          = [];     /* squadron list from /api/squadrons */
+var _pilotSquadrons     = {};     /* { [sub]: squadronId | null } — server-resolved (auto+override) */
+var _members            = [];     /* full Discord roster from /api/members — the squadron-management source of truth */
 var _activeSub          = null;
-var _editorCollapsed    = {};    /* { [catId]: bool } collapse state for tree editor */
-var _treeGroupCollapsed = {};    /* { [squadronId|'__general'|'__orphaned']: bool } collapse state for tree editor squadron groups */
-var _detailCollapsed    = {};    /* { [catId]: bool } collapse state for pilot detail */
-var _sqGroupCollapsed   = {};    /* { [squadronId|'__unassigned']: bool } collapse state for pilot list groups */
-var _currentUserSub     = null;  /* JWT sub of the logged-in admin */
+var _detailCollapsed    = {};     /* { [moduleId]: bool } collapse state for pilot detail group sections */
+var _sqGroupCollapsed   = {};     /* { [squadronId|'__unassigned']: bool } collapse state for pilot list groups */
+var _currentUserSub     = null;   /* JWT sub of the logged-in admin */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 function jwtSub(token) {
@@ -57,7 +55,7 @@ function jwtSub(token) {
 
   if (tok && user) {
     if (btn) {
-      btn.textContent = (user.name || 'USER').toUpperCase() + ' \u23FB';
+      btn.textContent = (user.name || 'USER').toUpperCase() + ' ⏻';
       btn.title = 'Click to log out';
       btn.classList.add('login-btn--logout');
       btn.onclick = logout;
@@ -73,6 +71,12 @@ function jwtSub(token) {
   }
 
   document.getElementById('adminPanel').style.display = '';
+
+  var saveBtn  = document.getElementById('treeSaveBtn');
+  var resetBtn = document.getElementById('treeResetBtn');
+  if (saveBtn)  saveBtn.addEventListener('click', saveSkillTree);
+  if (resetBtn) resetBtn.addEventListener('click', initTreeEditor);
+
   loadAll(tok);
 })();
 
@@ -90,6 +94,7 @@ function loadAll(tok) {
     fetch('/api/members', { headers: headers }).then(function (r) { return r.json(); }).catch(function () { return []; }),
   ]).then(function (results) {
     _tree              = results[0];
+    _treeIndex         = skillsCore.buildIndex(_tree);
     _allGrades         = results[1] || {};
     _pilots            = results[2] || {};
     _requests          = Array.isArray(results[3]) ? results[3] : [];
@@ -107,35 +112,9 @@ function loadAll(tok) {
 }
 
 /* ── Score helpers ──────────────────────────────────────── */
-function gradeValue(g) { return (g != null && GRADE_VALUES[g] != null) ? GRADE_VALUES[g] : -1; }
-
-function moduleState(mod, grades) {
-  var prereqs = mod.prerequisites || [];
-  for (var i = 0; i < prereqs.length; i++) {
-    var p  = prereqs[i];
-    var gr = grades[p.module_id] ? grades[p.module_id].grade : null;
-    if (gradeValue(gr) < gradeValue(p.min_grade)) return 'locked';
-  }
-  var myGrade = grades[mod.id] ? grades[mod.id].grade : null;
-  if (myGrade == null) return 'not-started';
-  if (gradeValue(myGrade) >= gradeValue(mod.min_pass_grade)) return 'completed';
-  return 'in-progress';
-}
-
 function pilotOverallScore(sub) {
-  var cats   = categoriesForPilot(sub);
-  if (!cats.length) return 0;
-  var grades      = _allGrades[sub] || {};
-  var totalWeight = cats.reduce(function (s, c) { return s + (c.weight || 0); }, 0);
-  if (!totalWeight) return 0;
-  return cats.reduce(function (s, cat) {
-    if (!cat.modules || !cat.modules.length) return s;
-    var completed = cat.modules.filter(function (mod) {
-      return moduleState(mod, grades) === 'completed';
-    }).length;
-    var catScore = completed / cat.modules.length;
-    return s + (cat.weight || 0) * catScore;
-  }, 0) / totalWeight;
+  if (!_treeIndex) return 0;
+  return skillsCore.overallScore(_treeIndex, pilotSquadron(sub), _allGrades[sub] || {});
 }
 
 /* ── Grading queue ──────────────────────────────────────── */
@@ -157,7 +136,6 @@ function renderGradingQueue() {
     var discordOk = req.discord_message_id ? '' :
       '<span style="font-size:7px;color:var(--text-3);display:block">no discord</span>';
 
-    /* Left: status + name + module + date stacked */
     var infoDiv = document.createElement('div');
     infoDiv.style.cssText = 'flex:1;min-width:0';
     var claimedByHtml = (req.status === 'claimed' && req.claimed_by_name)
@@ -176,7 +154,6 @@ function renderGradingQueue() {
       '<div class="req-queue-time">' + esc(time) + discordOk + '</div>';
     row.appendChild(infoDiv);
 
-    /* Right: buttons stacked vertically */
     var actDiv = document.createElement('div');
     actDiv.style.cssText = 'display:flex;flex-direction:column;gap:3px;flex-shrink:0';
 
@@ -214,21 +191,12 @@ function renderGradingQueue() {
 }
 
 /* ── Pilot list ─────────────────────────────────────────── */
-/* Which collapsible group (by squadron) a row belongs to — a squadron that
-   no longer exists (e.g. deleted) falls back to the unassigned group, same
-   as squadronDisplayName's fallback. */
 function rowGroupKey(sqId) {
   var known = sqId && _squadrons.some(function (s) { return s.id === sqId; });
   return known ? sqId : '__unassigned';
 }
 function pilotGroupKey(sub) { return rowGroupKey(pilotSquadron(sub)); }
 
-/* The MEMBERS list is sourced from /api/members (the squadron-management
-   source of truth — every known Discord member) merged with /api/skill-pilots
-   (registered training accounts, which carry the skill grades). A Discord
-   member only gets a `sub` — and therefore a gradable record — once they've
-   logged in and visited the training page at least once; until then they
-   show up as an ungraded placeholder so admins don't lose track of them. */
 function buildPilotRows() {
   var rows = [];
   var subToRow = {};
@@ -243,11 +211,10 @@ function buildPilotRows() {
   });
 
   _members.forEach(function (m) {
-    if (m.active === false) return; /* left the Discord server — not a training concern */
+    if (m.active === false) return;
     if (m.linkedPilot) {
       var existing = subToRow[m.linkedPilot.sub];
-      if (existing) return; /* already covered via _pilots above */
-      /* Registered on the site but somehow missing from /api/skill-pilots — surface anyway. */
+      if (existing) return;
       rows.push({
         key: m.linkedPilot.sub, sub: m.linkedPilot.sub,
         callsign: m.linkedPilot.callsign || m.callsign, groupKey: rowGroupKey(m.squadron), registered: true,
@@ -272,8 +239,6 @@ function renderPilotList() {
     return;
   }
 
-  /* Group rows by squadron, in the admin-defined squadron order, with
-     unassigned rows collected into a trailing group. */
   var groups     = _squadrons.map(function (sq) {
     return { key: sq.id, name: (sq.designator + ' ' + sq.name).toUpperCase(), rows: [] };
   });
@@ -340,12 +305,6 @@ function renderPilotList() {
 }
 
 /* ── Identity resolution ────────────────────────────────────── */
-/* Wing Admin (members.json / casdoorSub link) is the sole source of truth
-   for a pilot's display name — the raw pilot registry only reflects
-   whatever name Casdoor reported the moment they first logged in, which is
-   frequently stale or unrelated to their real callsign until an admin links
-   the two records. Anywhere a pilot's callsign is shown, resolve through
-   the linked member first and only fall back to the raw registry entry. */
 function memberForSub(sub) {
   return _members.find(function (m) { return m.linkedPilot && m.linkedPilot.sub === sub; }) || null;
 }
@@ -368,23 +327,15 @@ function squadronDisplayName(sqId) {
   return sq ? (sq.designator + ' ' + sq.name) : sqId;
 }
 
-function categoriesForPilot(sub) {
-  if (!_tree || !_tree.categories) return [];
-  var sq = pilotSquadron(sub);
-  return _tree.categories.filter(function (cat) {
-    var sqs = cat.squadrons;
-    if (!sqs || !sqs.length) return true;
-    if (!sq) return false;
-    return sqs.indexOf(sq) !== -1;
-  });
+function visibleRootModulesForPilot(sub) {
+  if (!_treeIndex) return [];
+  return skillsCore.visibleRootModules(_treeIndex, pilotSquadron(sub));
 }
 
 /* ── Pilot detail ───────────────────────────────────────── */
 function selectPilot(sub) {
   _activeSub = sub;
 
-  /* Make sure the pilot's squadron group is expanded so its row is visible,
-     e.g. when jumping here from a grading queue "VIEW" click. */
   var groupKey = pilotGroupKey(sub);
   if (_sqGroupCollapsed[groupKey]) {
     _sqGroupCollapsed[groupKey] = false;
@@ -395,16 +346,15 @@ function selectPilot(sub) {
     });
   }
 
-  var pilot   = _pilots[sub] || { sub: sub, name: sub, callsign: sub };
+  var pilot    = _pilots[sub] || { sub: sub, name: sub, callsign: sub };
   var callsign = resolvedCallsign(sub);
-  var grades  = _allGrades[sub] || {};
-  var score   = Math.round(pilotOverallScore(sub) * 100);
-  var sqId    = pilotSquadron(sub);
-  var sqName  = squadronDisplayName(sqId);
-  var el      = document.getElementById('pilotDetail');
+  var grades   = _allGrades[sub] || {};
+  var score    = Math.round(pilotOverallScore(sub) * 100);
+  var sqId     = pilotSquadron(sub);
+  var sqName   = squadronDisplayName(sqId);
+  var el       = document.getElementById('pilotDetail');
   el.innerHTML = '';
 
-  /* Header */
   var hdr = document.createElement('div');
   hdr.style.cssText = 'display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid var(--border)';
 
@@ -439,9 +389,6 @@ function selectPilot(sub) {
   hdr.appendChild(delPilotBtn);
   el.appendChild(hdr);
 
-  /* Squadron assignment is now managed from the Wing Admin page (single
-     source of truth shared with the public roster and skills page) — this
-     is a read-only pointer over there. */
   var sqOverrideRow = document.createElement('div');
   sqOverrideRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:8px 10px;background:var(--surface-2,rgba(255,255,255,.04));border:1px solid var(--border);border-radius:3px';
   sqOverrideRow.innerHTML =
@@ -450,61 +397,17 @@ function selectPilot(sub) {
     '<a class="btn-sm" href="wing-admin.html">MANAGE ON WING ADMIN &rarr;</a>';
   el.appendChild(sqOverrideRow);
 
-  categoriesForPilot(sub).forEach(function (cat) {
-    if (!Object.prototype.hasOwnProperty.call(_detailCollapsed, cat.id)) {
-      _detailCollapsed[cat.id] = true;
-    }
-    var catSection  = document.createElement('div');
-    catSection.className = 'skill-list-category';
-    var mods        = cat.modules || [];
-    var completed   = mods.filter(function (m) { return moduleState(m, grades) === 'completed'; }).length;
-    var score       = Math.round(completed / (mods.length || 1) * 100);
-    var collapsed   = !!_detailCollapsed[cat.id];
-
-    /* Collapsible header */
-    var catHdr = document.createElement('div');
-    catHdr.className = 'skill-list-cat-header';
-    catHdr.style.cursor = 'pointer';
-    catHdr.innerHTML =
-      '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
-      '<span class="slc-name">' + esc(cat.name) + '</span>' +
-      '<span class="slc-count">' + completed + ' / ' + mods.length + ' PASSED</span>' +
-      '<div class="slc-bar"><div class="slc-bar-fill" style="width:' + score + '%"></div></div>' +
-      '<span class="slc-pct">' + score + '%</span>';
-
-    (function (catId) {
-      catHdr.addEventListener('click', function () {
-        _detailCollapsed[catId] = !_detailCollapsed[catId];
-        selectPilot(sub);
-      });
-    })(cat.id);
-    catSection.appendChild(catHdr);
-
-    if (!collapsed) {
-      var grid = document.createElement('div');
-      grid.className = 'skill-modules';
-      grid.style.cssText = 'padding:10px;gap:10px';
-      mods.forEach(function (mod) {
-        grid.appendChild(buildAdminModuleEl(mod, grades, sub));
-      });
-      catSection.appendChild(grid);
-    }
-
-    el.appendChild(catSection);
+  visibleRootModulesForPilot(sub).forEach(function (root) {
+    el.appendChild(buildModuleSection(root, sub, grades));
   });
 }
 
-/* Re-renders whichever detail view (real pilot or unregistered ghost member)
-   is currently open, dispatching on which kind of key _activeSub holds. */
 function refreshActiveDetail() {
   if (!_activeSub) return;
   if (_pilots[_activeSub]) selectPilot(_activeSub);
   else if (_activeSub.indexOf('m:') === 0) selectGhostMember(_activeSub.slice(2));
 }
 
-/* A Discord member with no website/training account yet — nothing to grade
-   until they log in and visit the training page at least once (skill grades
-   are keyed by their Casdoor sub, which we don't have until then). */
 function selectGhostMember(memberId) {
   var key = 'm:' + memberId;
   _activeSub = key;
@@ -532,9 +435,63 @@ function selectGhostMember(memberId) {
     'Once they log in and visit /skills.html at least once, they\'ll appear here as a gradable pilot record.</p>';
 }
 
+/* One collapsible section per Module. A module with sub-modules renders a
+   group header (recursive completed/total counts, free progress bar at
+   every layer) and recurses; a module without sub-modules renders as a
+   single gradable card (buildAdminModuleEl), same as a leaf did before this
+   redesign. A module can carry both (mixed) — its own grading items render
+   first, then its sub-modules. */
+function buildModuleSection(node, sub, grades) {
+  var hasSub = node.subModules && node.subModules.length;
+  if (!hasSub) return buildAdminModuleEl(node, grades, sub);
+
+  if (!Object.prototype.hasOwnProperty.call(_detailCollapsed, node.id)) {
+    _detailCollapsed[node.id] = true;
+  }
+  var collapsed = !!_detailCollapsed[node.id];
+  var total     = skillsCore.countModules(node);
+  var completed = skillsCore.countCompletedModules(_treeIndex, node, grades);
+  var pct       = Math.round((total ? completed / total : 0) * 100);
+
+  var section = document.createElement('div');
+  section.className = 'skill-list-category';
+
+  var catHdr = document.createElement('div');
+  catHdr.className = 'skill-list-cat-header';
+  catHdr.style.cursor = 'pointer';
+  catHdr.innerHTML =
+    '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
+    '<span class="slc-name">' + esc(node.title) + '</span>' +
+    '<span class="slc-count">' + completed + ' / ' + total + ' PASSED</span>' +
+    '<div class="slc-bar"><div class="slc-bar-fill" style="width:' + pct + '%"></div></div>' +
+    '<span class="slc-pct">' + pct + '%</span>';
+  (function (id) {
+    catHdr.addEventListener('click', function () {
+      _detailCollapsed[id] = !_detailCollapsed[id];
+      selectPilot(sub);
+    });
+  })(node.id);
+  section.appendChild(catHdr);
+
+  if (!collapsed) {
+    var grid = document.createElement('div');
+    grid.className = 'skill-modules';
+    grid.style.cssText = 'padding:10px;gap:10px';
+    if (node.gradingItems && node.gradingItems.length) {
+      grid.appendChild(buildAdminModuleEl(node, grades, sub));
+    }
+    node.subModules.forEach(function (child) {
+      grid.appendChild(buildModuleSection(child, sub, grades));
+    });
+    section.appendChild(grid);
+  }
+
+  return section;
+}
+
 function buildAdminModuleEl(mod, grades, sub) {
-  var state    = moduleState(mod, grades);
-  var gradeRec = grades[mod.id] || null;
+  var state = skillsCore.moduleState(_treeIndex, mod.id, grades);
+  var items = mod.gradingItems || [];
 
   var card = document.createElement('div');
   card.className = 'skill-module state-' + state;
@@ -546,23 +503,6 @@ function buildAdminModuleEl(mod, grades, sub) {
     'completed':   'badge-completed',
   };
 
-  /* Grade display */
-  var gradeInfoHtml = '';
-  if (gradeRec) {
-    var gradedAt = gradeRec.graded_at ? new Date(gradeRec.graded_at).toLocaleDateString() : '';
-    gradeInfoHtml =
-      '<div class="skill-mod-grade">' +
-        '<span class="skill-mod-grade-val grade-' + gradeRec.grade + '">' + esc(gradeRec.grade) + '</span>' +
-        ' <span style="font-size:9px;color:var(--text-2)">' + esc(GRADE_NAMES[gradeRec.grade] || '') + '</span>' +
-        '<div class="skill-mod-grade-meta">' +
-          (gradeRec.graded_by ? esc(gradeRec.graded_by) + '<br>' : '') + esc(gradedAt) +
-        '</div>' +
-      '</div>';
-    if (gradeRec.notes) {
-      gradeInfoHtml += '<div class="skill-mod-grade-notes">' + esc(gradeRec.notes) + '</div>';
-    }
-  }
-
   card.innerHTML =
     '<div class="skill-mod-top">' +
       '<div class="skill-mod-title">' + esc(mod.title) + '</div>' +
@@ -570,14 +510,48 @@ function buildAdminModuleEl(mod, grades, sub) {
         state.replace('-', ' ').toUpperCase() +
       '</div>' +
     '</div>' +
-    '<div class="skill-mod-desc">' + esc(mod.description || '') + '</div>' +
-    gradeInfoHtml;
+    '<div class="skill-mod-desc">' + esc(mod.description || '') + '</div>';
 
-  /* Grade controls — two rows to avoid overflow */
-  var ctrlWrap = document.createElement('div');
-  ctrlWrap.style.cssText = 'padding:6px 0 2px;display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--border);margin-top:6px';
+  items.forEach(function (item) {
+    card.appendChild(buildGradingItemRow(item, grades, sub, items.length > 1));
+  });
 
-  /* Row 1: grade select + action buttons */
+  return card;
+}
+
+function buildGradingItemRow(item, grades, sub, showLabel) {
+  var gradeRec = grades[item.id] || null;
+
+  var wrap = document.createElement('div');
+  wrap.className = 'skill-mod-item-row';
+  wrap.style.cssText = 'padding:6px 0 2px;display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--border);margin-top:6px';
+
+  if (showLabel) {
+    var lbl = document.createElement('div');
+    lbl.style.cssText = 'font-size:9px;letter-spacing:1px;color:var(--text-3)';
+    lbl.textContent = item.label || item.id;
+    wrap.appendChild(lbl);
+  }
+
+  if (gradeRec) {
+    var gradedAt = gradeRec.graded_at ? new Date(gradeRec.graded_at).toLocaleDateString() : '';
+    var infoDiv = document.createElement('div');
+    infoDiv.className = 'skill-mod-grade';
+    infoDiv.innerHTML =
+      '<span class="skill-mod-grade-val grade-' + gradeRec.grade + '">' + esc(gradeRec.grade) + '</span>' +
+      ' <span style="font-size:9px;color:var(--text-2)">' + esc(skillsCore.GRADE_NAMES[gradeRec.grade] || '') + '</span>' +
+      '<div class="skill-mod-grade-meta">' +
+        (gradeRec.graded_by ? esc(gradeRec.graded_by) + '<br>' : '') + esc(gradedAt) +
+      '</div>';
+    wrap.appendChild(infoDiv);
+    if (gradeRec.notes) {
+      var notesDiv = document.createElement('div');
+      notesDiv.className = 'skill-mod-grade-notes';
+      notesDiv.textContent = gradeRec.notes;
+      wrap.appendChild(notesDiv);
+    }
+  }
+
   var row1 = document.createElement('div');
   row1.style.cssText = 'display:flex;gap:5px;align-items:center;flex-wrap:wrap';
 
@@ -586,34 +560,33 @@ function buildAdminModuleEl(mod, grades, sub) {
   var opts = '<option value="">— GRADE —</option>';
   ['U', 'F', 'G', 'E'].forEach(function (g) {
     var selected = (gradeRec && gradeRec.grade === g) ? ' selected' : '';
-    opts += '<option value="' + g + '"' + selected + '>' + g + ' · ' + GRADE_NAMES[g] + '</option>';
+    opts += '<option value="' + g + '"' + selected + '>' + g + ' · ' + skillsCore.GRADE_NAMES[g] + '</option>';
   });
   sel.innerHTML = opts;
 
   var saveBtn = document.createElement('button');
   saveBtn.className   = 'btn-save-grade';
   saveBtn.textContent = 'SAVE';
-  (function (s, mid, selEl) {
+  (function (s, iid, selEl) {
     saveBtn.addEventListener('click', function () {
       if (!selEl.value) { showToast('Select a grade first', true); return; }
       var notesEl = selEl.parentElement.parentElement.querySelector('.grade-notes-input');
-      saveGrade(s, mid, selEl.value, notesEl ? notesEl.value : '');
+      saveGrade(s, iid, selEl.value, notesEl ? notesEl.value : '');
     });
-  })(sub, mod.id, sel);
+  })(sub, item.id, sel);
 
   var clearBtn = document.createElement('button');
   clearBtn.className   = 'btn-clear-grade';
   clearBtn.textContent = 'CLEAR';
   clearBtn.style.display = gradeRec ? '' : 'none';
-  (function (s, mid) {
-    clearBtn.addEventListener('click', function () { clearGrade(s, mid); });
-  })(sub, mod.id);
+  (function (s, iid) {
+    clearBtn.addEventListener('click', function () { clearGrade(s, iid); });
+  })(sub, item.id);
 
   row1.appendChild(sel);
   row1.appendChild(saveBtn);
   row1.appendChild(clearBtn);
 
-  /* Row 2: notes input (full width) */
   var row2 = document.createElement('div');
   var notesInput = document.createElement('input');
   notesInput.className   = 'grade-notes-input';
@@ -624,10 +597,9 @@ function buildAdminModuleEl(mod, grades, sub) {
   notesInput.style.boxSizing = 'border-box';
   row2.appendChild(notesInput);
 
-  ctrlWrap.appendChild(row1);
-  ctrlWrap.appendChild(row2);
-  card.appendChild(ctrlWrap);
-  return card;
+  wrap.appendChild(row1);
+  wrap.appendChild(row2);
+  return wrap;
 }
 
 /* ── Pilot delete ───────────────────────────────────────── */
@@ -663,9 +635,9 @@ function deletePilot(sub, callsign) {
 }
 
 /* ── Grade API calls ────────────────────────────────────── */
-function saveGrade(sub, moduleId, grade, notes) {
+function saveGrade(sub, itemId, grade, notes) {
   var tok = getToken();
-  fetch('/api/skill-grades/' + encodeURIComponent(sub) + '/' + encodeURIComponent(moduleId), {
+  fetch('/api/skill-grades/' + encodeURIComponent(sub) + '/' + encodeURIComponent(itemId), {
     method:  'PUT',
     headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
     body:    JSON.stringify({ grade: grade, notes: notes }),
@@ -674,10 +646,10 @@ function saveGrade(sub, moduleId, grade, notes) {
     return r.json();
   }).then(function (gradeRec) {
     if (!_allGrades[sub]) _allGrades[sub] = {};
-    _allGrades[sub][moduleId] = gradeRec;
-    /* Remove any grading requests for this pilot+module (server already deleted them) */
+    _allGrades[sub][itemId] = gradeRec;
+    var parentModuleId = (_treeIndex.itemOwner[itemId]) || itemId;
     _requests = _requests.filter(function (r) {
-      return !(r.pilot_id === sub && (r.module_id === moduleId || !r.module_id));
+      return !(r.pilot_id === sub && (r.module_id === parentModuleId || !r.module_id));
     });
     renderPilotList();
     renderGradingQueue();
@@ -686,16 +658,16 @@ function saveGrade(sub, moduleId, grade, notes) {
   }).catch(function (err) { showToast('Error: ' + err.message, true); });
 }
 
-function clearGrade(sub, moduleId) {
+function clearGrade(sub, itemId) {
   var tok = getToken();
-  fetch('/api/skill-grades/' + encodeURIComponent(sub) + '/' + encodeURIComponent(moduleId), {
+  fetch('/api/skill-grades/' + encodeURIComponent(sub) + '/' + encodeURIComponent(itemId), {
     method:  'DELETE',
     headers: { 'Authorization': 'Bearer ' + tok },
   }).then(function (r) {
     if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || String(r.status)); });
     return r.json();
   }).then(function () {
-    if (_allGrades[sub]) delete _allGrades[sub][moduleId];
+    if (_allGrades[sub]) delete _allGrades[sub][itemId];
     renderPilotList();
     selectPilot(sub);
     showToast('Grade cleared');
@@ -753,357 +725,156 @@ function deleteRequest(id) {
   }).catch(function (err) { showToast('Error: ' + err.message, true); });
 }
 
-/* ── Skill tree editor ──────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   Skill tree editor — indented outline (left) + detail panel (right)
+══════════════════════════════════════════════════════════ */
 
 function initTreeEditor() {
-  _treeEditor = JSON.parse(JSON.stringify(_tree || { categories: [] }));
-  (_treeEditor.categories || []).forEach(function (cat) {
-    if (!Object.prototype.hasOwnProperty.call(_editorCollapsed, cat.id)) {
-      _editorCollapsed[cat.id] = true;
-    }
-  });
-  renderTreeEditor();
+  _treeEditor = JSON.parse(JSON.stringify(_tree || { version: 2, tree: [] }));
+  rebuildTreeEditorIndex();
+  if (_outlineSelectedId && !_treeEditorIndex.modules[_outlineSelectedId]) _outlineSelectedId = null;
+  renderTreeOutline();
+  renderTreeDetail();
 }
 
-/* Collect all modules flat across the tree (for prereq dropdowns) */
-function flatModules() {
-  var all = [];
-  (_treeEditor.categories || []).forEach(function (cat) {
-    (cat.modules || []).forEach(function (mod) {
-      all.push({ id: mod.id, title: mod.title, catName: cat.name });
-    });
-  });
-  return all;
+function rebuildTreeEditorIndex() {
+  _treeEditorIndex = skillsCore.buildIndex(_treeEditor);
 }
 
-function renderTreeEditor() {
-  var el = document.getElementById('treeEditor');
+/* ── Outline (left pane) ─────────────────────────────────── */
+function renderTreeOutline() {
+  var el = document.getElementById('treeOutline');
   if (!el) return;
   el.innerHTML = '';
 
-  var cats    = _treeEditor.categories || [];
-  var allMods = flatModules();
-
-  /* Weight indicator — per squadron */
-  var weightBar = document.createElement('div');
-  weightBar.className = 'tree-weight-bar';
-  var wLabel = document.createElement('span');
-  wLabel.className   = 'tree-field-label';
-  wLabel.textContent = 'WEIGHT BY SQUADRON';
-  weightBar.appendChild(wLabel);
-
-  if (!_squadrons.length) {
-    var totalWeight = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
-    var wTotal = document.createElement('span');
-    wTotal.className   = 'tree-weight-total ok';
-    wTotal.textContent = totalWeight;
-    weightBar.appendChild(wTotal);
-  } else {
-    var sqWeightsWrap = document.createElement('div');
-    sqWeightsWrap.className = 'tree-sq-weights';
-    _squadrons.forEach(function (sq) {
-      var sqTotal = cats.reduce(function (s, c) {
-        var sqList = c.squadrons || [];
-        if (!sqList.length || sqList.indexOf(sq.id) !== -1) return s + (Number(c.weight) || 0);
-        return s;
-      }, 0);
-      var chip = document.createElement('span');
-      chip.className = 'tree-sq-weight-chip';
-      var nameEl = document.createElement('span');
-      nameEl.className   = 'tree-sq-weight-name';
-      nameEl.textContent = (sq.designator || sq.name);
-      var valEl = document.createElement('span');
-      valEl.className = 'tree-weight-total ok';
-      valEl.id        = 'sq-weight-' + sq.id;
-      valEl.textContent = sqTotal;
-      chip.appendChild(nameEl);
-      chip.appendChild(valEl);
-      sqWeightsWrap.appendChild(chip);
-    });
-    weightBar.appendChild(sqWeightsWrap);
-  }
-  el.appendChild(weightBar);
-
-  /* Category cards — grouped by squadron so the overview stays manageable as
-     more squadron-specific categories get added. Categories with no squadron
-     restriction land in a shared GENERAL group; categories assigned to more
-     than one squadron appear in each of those squadrons' groups (same
-     underlying category, shown more than once — editing it in either place
-     edits the one real category). */
-  var catList = document.createElement('div');
-  catList.className = 'tree-cat-list';
-
-  var shown = new Set();
-
-  var generalCats = cats.filter(function (c) { return !(c.squadrons && c.squadrons.length); });
-  generalCats.forEach(function (c) { shown.add(c); });
-  appendTreeCatGroup(catList, '__general', 'GENERAL — ALL SQUADRONS', generalCats, cats, allMods, true);
-
-  _squadrons.forEach(function (sq) {
-    var sqCats = cats.filter(function (c) { return c.squadrons && c.squadrons.indexOf(sq.id) !== -1; });
-    if (!sqCats.length) return;
-    sqCats.forEach(function (c) { shown.add(c); });
-    appendTreeCatGroup(catList, sq.id, (sq.designator + ' ' + sq.name).toUpperCase(), sqCats, cats, allMods, true);
+  var list = document.createElement('div');
+  list.className = 'tree-outline-list';
+  (_treeEditor.tree || []).forEach(function (node) {
+    list.appendChild(buildOutlineRow(node, 0));
   });
+  el.appendChild(list);
 
-  /* Safety net: a category restricted to squadron IDs that no longer exist
-     (e.g. a deleted squadron) would otherwise silently vanish from view. */
-  var orphanedCats = cats.filter(function (c) { return !shown.has(c); });
-  if (orphanedCats.length) {
-    appendTreeCatGroup(catList, '__orphaned', 'UNKNOWN SQUADRON (stale reference)', orphanedCats, cats, allMods, true);
-  }
-
-  el.appendChild(catList);
-
-  /* Add category button */
-  var addCatBtn = document.createElement('button');
-  addCatBtn.className   = 'btn-sm btn-sm-blue';
-  addCatBtn.textContent = '+ ADD CATEGORY';
-  addCatBtn.style.marginTop = '12px';
-  addCatBtn.addEventListener('click', addCategory);
-  el.appendChild(addCatBtn);
-
-  /* Save / reset actions */
-  var actions = document.createElement('div');
-  actions.className = 'tree-editor-actions';
-
-  var saveBtn = document.createElement('button');
-  saveBtn.className   = 'btn-save-grade';
-  saveBtn.textContent = 'SAVE TREE';
-  saveBtn.addEventListener('click', saveSkillTree);
-
-  var resetBtn = document.createElement('button');
-  resetBtn.className   = 'btn-clear-grade';
-  resetBtn.textContent = 'RESET';
-  resetBtn.addEventListener('click', initTreeEditor);
-
-  var msg = document.createElement('span');
-  msg.className = 'tree-editor-msg';
-  msg.id        = 'treeEditorMsg';
-
-  actions.appendChild(saveBtn);
-  actions.appendChild(resetBtn);
-  actions.appendChild(msg);
-  el.appendChild(actions);
+  var addBtn = document.createElement('button');
+  addBtn.className   = 'btn-sm btn-sm-blue';
+  addBtn.textContent = '+ ADD ROOT MODULE';
+  addBtn.style.marginTop = '12px';
+  addBtn.addEventListener('click', addRootModule);
+  el.appendChild(addBtn);
 }
 
-/* Renders one collapsible group (by squadron, or the shared GENERAL/orphaned
-   buckets) inside the tree editor's category list. `allCats` is the true,
-   flat _treeEditor.categories array — used to resolve each category's real
-   index so reorder/delete controls keep working even though the same
-   category object may be rendered in more than one group. */
-function appendTreeCatGroup(container, groupKey, label, groupCats, allCats, allMods, defaultCollapsed) {
-  if (!Object.prototype.hasOwnProperty.call(_treeGroupCollapsed, groupKey)) {
-    _treeGroupCollapsed[groupKey] = defaultCollapsed;
-  }
-  var collapsed = !!_treeGroupCollapsed[groupKey];
-
-  var groupHdr = document.createElement('div');
-  groupHdr.className = 'skill-list-cat-header';
-  groupHdr.style.cursor = 'pointer';
-  groupHdr.innerHTML =
-    '<span class="slc-toggle">' + (collapsed ? '▶' : '▼') + '</span>' +
-    '<span class="slc-name">' + esc(label) + '</span>' +
-    '<span class="slc-count">' + groupCats.length + '</span>';
-  groupHdr.addEventListener('click', function () {
-    _treeGroupCollapsed[groupKey] = !_treeGroupCollapsed[groupKey];
-    renderTreeEditor();
-  });
-  container.appendChild(groupHdr);
-
-  if (collapsed) return;
-
+function buildOutlineRow(node, depth) {
   var wrap = document.createElement('div');
-  wrap.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:10px';
-  groupCats.forEach(function (cat) {
-    wrap.appendChild(buildCatCard(cat, allCats.indexOf(cat), allCats.length, allMods));
-  });
-  container.appendChild(wrap);
+
+  var row = document.createElement('div');
+  row.className = 'pilot-row outline-row' + (node.id === _outlineSelectedId ? ' active' : '');
+  row.style.paddingLeft = (10 + depth * 16) + 'px';
+  row.setAttribute('data-node-id', node.id);
+
+  var hasChildren = !!(node.subModules && node.subModules.length);
+  var expanded    = !!_outlineExpanded[node.id];
+
+  var toggle = document.createElement('span');
+  toggle.className   = 'outline-toggle';
+  toggle.textContent = hasChildren ? (expanded ? '▼' : '▶') : '·';
+  if (hasChildren) {
+    (function (id) {
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _outlineExpanded[id] = !_outlineExpanded[id];
+        renderTreeOutline();
+      });
+    })(node.id);
+  }
+
+  var label = document.createElement('span');
+  label.className   = 'outline-row-label';
+  label.textContent = node.title || '(untitled)';
+
+  var badge = document.createElement('span');
+  badge.className = 'outline-badge';
+  var itemCount = (node.gradingItems || []).length;
+  badge.textContent = hasChildren ? (skillsCore.countModules(node) + ' MOD') : (itemCount > 1 ? itemCount + ' ITEMS' : '');
+
+  var sqBadge = document.createElement('span');
+  if (node.squadrons && node.squadrons.length) {
+    sqBadge.className = 'outline-badge outline-badge-sq';
+    sqBadge.textContent = node.squadrons.length + ' SQ';
+    sqBadge.title = node.squadrons.join(', ');
+  }
+
+  row.appendChild(toggle);
+  row.appendChild(label);
+  if (badge.textContent) row.appendChild(badge);
+  if (sqBadge.textContent) row.appendChild(sqBadge);
+
+  (function (id) { row.addEventListener('click', function () { selectNode(id); }); })(node.id);
+
+  wrap.appendChild(row);
+
+  if (hasChildren && expanded) {
+    node.subModules.forEach(function (child) { wrap.appendChild(buildOutlineRow(child, depth + 1)); });
+  }
+
+  return wrap;
 }
 
-function updateWeightBar() {
-  var cats = _treeEditor.categories || [];
-  if (!_squadrons.length) {
-    var total = cats.reduce(function (s, c) { return s + (Number(c.weight) || 0); }, 0);
-    var el = document.querySelector('.tree-weight-total');
-    if (el) el.textContent = total;
+function selectNode(id) {
+  _outlineSelectedId = id;
+  document.querySelectorAll('#treeOutline .outline-row').forEach(function (r) {
+    r.classList.toggle('active', r.getAttribute('data-node-id') === id);
+  });
+  renderTreeDetail();
+}
+
+function patchOutlineLabel(id, title) {
+  var rows = document.querySelectorAll('#treeOutline .outline-row');
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].getAttribute('data-node-id') === id) {
+      var lbl = rows[i].querySelector('.outline-row-label');
+      if (lbl) lbl.textContent = title || '(untitled)';
+      break;
+    }
+  }
+}
+
+/* ── Detail panel (right pane) ───────────────────────────── */
+function renderTreeDetail() {
+  var el = document.getElementById('treeDetail');
+  if (!el) return;
+  el.innerHTML = '';
+
+  var node = _outlineSelectedId ? _treeEditorIndex.modules[_outlineSelectedId] : null;
+  if (!node) {
+    _outlineSelectedId = null;
+    el.innerHTML = '<p class="skills-empty">Select a module on the left, or add a root module to get started.</p>';
     return;
   }
-  _squadrons.forEach(function (sq) {
-    var total = cats.reduce(function (s, c) {
-      var sqList = c.squadrons || [];
-      if (!sqList.length || sqList.indexOf(sq.id) !== -1) return s + (Number(c.weight) || 0);
-      return s;
-    }, 0);
-    var el = document.getElementById('sq-weight-' + sq.id);
-    if (el) el.textContent = total;
-  });
-}
 
-function buildCatCard(cat, ci, totalCats, allMods) {
-  var card = document.createElement('div');
-  card.className = 'tree-cat-card';
-
-  /* ── Header: name + weight + reorder/delete ── */
-  var hdr = document.createElement('div');
-  hdr.className = 'tree-cat-header';
-
-  var nameInput = document.createElement('input');
-  nameInput.className   = 'tree-input tree-cat-name-input';
-  nameInput.placeholder = 'Category name';
-  nameInput.value       = cat.name || '';
-  nameInput.addEventListener('input', function () { cat.name = this.value; });
-
-  var wLabel = document.createElement('span');
-  wLabel.className   = 'tree-field-label';
-  wLabel.textContent = 'WEIGHT';
-
-  var weightInput = document.createElement('input');
-  weightInput.className   = 'tree-input tree-weight-input';
-  weightInput.type        = 'number';
-  weightInput.min         = '0';
-  weightInput.max         = '100';
-  weightInput.placeholder = '0';
-  weightInput.value       = cat.weight != null ? cat.weight : '';
-  weightInput.addEventListener('input', function () {
-    cat.weight = Number(this.value) || 0;
-    updateWeightBar();
-  });
-
-  var pct = document.createElement('span');
-  pct.style.cssText  = 'font-size:10px;color:var(--text-3)';
-  pct.textContent    = '%';
-
-  var ctrlDiv = document.createElement('div');
-  ctrlDiv.style.cssText = 'display:flex;gap:4px;margin-left:auto;flex-shrink:0';
-
-  var collapseBtn = document.createElement('button');
-  collapseBtn.className   = 'btn-sm';
-  collapseBtn.title       = 'Collapse / expand';
-  collapseBtn.textContent = _editorCollapsed[cat.id] ? '▶' : '▼';
-  (function (catId) {
-    collapseBtn.addEventListener('click', function () {
-      _editorCollapsed[catId] = !_editorCollapsed[catId];
-      renderTreeEditor();
-    });
-  })(cat.id);
-
-  var upBtn = document.createElement('button');
-  upBtn.className   = 'btn-sm';
-  upBtn.textContent = '↑';
-  upBtn.disabled    = ci === 0;
-  (function (i) { upBtn.addEventListener('click', function () { moveCategoryUp(i); }); })(ci);
-
-  var dnBtn = document.createElement('button');
-  dnBtn.className   = 'btn-sm';
-  dnBtn.textContent = '↓';
-  dnBtn.disabled    = ci === totalCats - 1;
-  (function (i) { dnBtn.addEventListener('click', function () { moveCategoryDown(i); }); })(ci);
-
-  var delBtn = document.createElement('button');
-  delBtn.className   = 'btn-sm btn-sm-danger';
-  delBtn.textContent = '×';
-  (function (i, name) {
-    delBtn.addEventListener('click', function () {
-      if (confirm('Remove category "' + (name || 'unnamed') + '" and all its modules?')) removeCategory(i);
-    });
-  })(ci, cat.name);
-
-  ctrlDiv.appendChild(collapseBtn); ctrlDiv.appendChild(upBtn); ctrlDiv.appendChild(dnBtn); ctrlDiv.appendChild(delBtn);
-  hdr.appendChild(nameInput); hdr.appendChild(wLabel); hdr.appendChild(weightInput);
-  hdr.appendChild(pct); hdr.appendChild(ctrlDiv);
-  card.appendChild(hdr);
-
-  /* ── Category ID row ── */
-  card.appendChild(buildIdRow(cat, 'category-id'));
-
-  /* ── Squadron visibility row ── */
-  card.appendChild(buildSquadronRow(cat));
-
-  /* ── Module list + add button (hidden when collapsed) ── */
-  if (!_editorCollapsed[cat.id]) {
-    var modList = document.createElement('div');
-    modList.className = 'tree-mod-list';
-    (cat.modules || []).forEach(function (mod, mi) {
-      modList.appendChild(buildModCard(mod, mi, (cat.modules || []).length, ci, allMods));
-    });
-    card.appendChild(modList);
-
-    var addModBtn = document.createElement('button');
-    addModBtn.className   = 'btn-sm';
-    addModBtn.textContent = '+ ADD MODULE';
-    addModBtn.style.cssText = 'margin: 4px 10px 10px';
-    (function (i) { addModBtn.addEventListener('click', function () { addModule(i); }); })(ci);
-    card.appendChild(addModBtn);
-  } else {
-    var collapsedNote = document.createElement('div');
-    collapsedNote.style.cssText = 'padding:6px 10px 8px;font-size:8px;color:var(--text-3)';
-    collapsedNote.textContent   = (cat.modules || []).length + ' module(s) — click ▶ to expand';
-    card.appendChild(collapsedNote);
-  }
-
-  return card;
-}
-
-function buildModCard(mod, mi, totalMods, ci, allMods) {
-  var card = document.createElement('div');
-  card.className = 'tree-mod-card';
-
-  /* ── Module header: title + pass grade + reorder/delete ── */
-  var hdr = document.createElement('div');
-  hdr.className = 'tree-mod-header';
+  var crumb = document.createElement('div');
+  crumb.className = 'tree-breadcrumb';
+  crumb.textContent = skillsCore.breadcrumb(_treeEditorIndex, node.id).join(' › ');
+  el.appendChild(crumb);
 
   var titleInput = document.createElement('input');
-  titleInput.className   = 'tree-input tree-mod-title-input';
+  titleInput.className   = 'tree-input tree-detail-title-input';
   titleInput.placeholder = 'Module title';
-  titleInput.value       = mod.title || '';
-  titleInput.addEventListener('input', function () { mod.title = this.value; });
-
-  var passLabel = document.createElement('span');
-  passLabel.className   = 'tree-field-label';
-  passLabel.textContent = 'PASS';
-
-  var gradeSel = document.createElement('select');
-  gradeSel.className = 'grade-select';
-  ['U', 'F', 'G', 'E'].forEach(function (g) {
-    var opt = document.createElement('option');
-    opt.value = g; opt.textContent = g;
-    if ((mod.min_pass_grade || 'G') === g) opt.selected = true;
-    gradeSel.appendChild(opt);
+  titleInput.value       = node.title || '';
+  titleInput.addEventListener('input', function () {
+    node.title = this.value;
+    patchOutlineLabel(node.id, node.title);
   });
-  gradeSel.addEventListener('change', function () { mod.min_pass_grade = this.value; });
+  el.appendChild(titleInput);
 
-  var ctrlDiv = document.createElement('div');
-  ctrlDiv.style.cssText = 'display:flex;gap:4px;margin-left:auto;flex-shrink:0';
-
-  var upBtn = document.createElement('button');
-  upBtn.className = 'btn-sm'; upBtn.textContent = '↑'; upBtn.disabled = mi === 0;
-  (function (c, m) { upBtn.addEventListener('click', function () { moveModuleUp(c, m); }); })(ci, mi);
-
-  var dnBtn = document.createElement('button');
-  dnBtn.className = 'btn-sm'; dnBtn.textContent = '↓'; dnBtn.disabled = mi === totalMods - 1;
-  (function (c, m) { dnBtn.addEventListener('click', function () { moveModuleDown(c, m); }); })(ci, mi);
-
-  var delBtn = document.createElement('button');
-  delBtn.className = 'btn-sm btn-sm-danger'; delBtn.textContent = '×';
-  (function (c, m, title) {
-    delBtn.addEventListener('click', function () {
-      if (confirm('Remove module "' + (title || 'unnamed') + '"?')) removeModule(c, m);
+  el.appendChild(buildIdRow(node, 'module-id', function (oldId, newId) {
+    if (node.gradingItems && node.gradingItems.length === 1 && node.gradingItems[0].id === oldId) {
+      node.gradingItems[0].id = newId;
+    }
+    Object.keys(_treeEditorIndex.modules).forEach(function (mid) {
+      var m = _treeEditorIndex.modules[mid];
+      (m.requirements || []).forEach(function (r) { if (r.module_id === oldId) r.module_id = newId; });
     });
-  })(ci, mi, mod.title);
+  }));
 
-  ctrlDiv.appendChild(upBtn); ctrlDiv.appendChild(dnBtn); ctrlDiv.appendChild(delBtn);
-  hdr.appendChild(titleInput); hdr.appendChild(passLabel); hdr.appendChild(gradeSel); hdr.appendChild(ctrlDiv);
-  card.appendChild(hdr);
-
-  /* ── Module body ── */
-  var body = document.createElement('div');
-  body.className = 'tree-mod-body';
-
-  /* ID */
-  body.appendChild(buildIdRow(mod, 'module-id'));
-
-  /* Description */
   var descRow = document.createElement('div');
   descRow.className = 'tree-desc-row';
   var descLabel = document.createElement('span');
@@ -1111,20 +882,23 @@ function buildModCard(mod, mi, totalMods, ci, allMods) {
   var descTA = document.createElement('textarea');
   descTA.className   = 'tree-textarea';
   descTA.placeholder = 'What must the pilot demonstrate?';
-  descTA.value       = mod.description || '';
-  descTA.addEventListener('input', function () { mod.description = this.value; });
+  descTA.value       = node.description || '';
+  descTA.addEventListener('input', function () { node.description = this.value; });
   descRow.appendChild(descLabel); descRow.appendChild(descTA);
-  body.appendChild(descRow);
+  el.appendChild(descRow);
 
-  /* Prerequisites */
-  body.appendChild(buildPrereqSection(mod, ci, mi, allMods));
-
-  card.appendChild(body);
-  return card;
+  el.appendChild(buildSquadronRow(node));
+  el.appendChild(buildSubModulesSection(node));
+  el.appendChild(buildGradingItemsSection(node));
+  el.appendChild(buildRequirementsSection(node));
+  el.appendChild(buildNodeControlsRow(node));
 }
 
-/* Shared ID row builder */
-function buildIdRow(obj, placeholder) {
+/* Shared ID row builder. `onIdChanged(oldId, newId)` fires only when the id
+   is actually committed (on blur/change, not per keystroke) and lets the
+   caller fix up anything that referenced the old id (the module's own
+   single grading item, other modules' requirements). */
+function buildIdRow(obj, placeholder, onIdChanged) {
   var row = document.createElement('div');
   row.className = 'tree-id-row';
   var lbl = document.createElement('span');
@@ -1133,51 +907,77 @@ function buildIdRow(obj, placeholder) {
   inp.className = 'tree-input tree-id-input';
   inp.placeholder = placeholder || 'id';
   inp.value = obj.id || '';
-  inp.addEventListener('input', function () { obj.id = this.value; });
+  inp.addEventListener('change', function () {
+    var newId = this.value.trim();
+    var oldId = obj.id;
+    if (!newId || newId === oldId) { this.value = oldId; return; }
+    if (_treeEditorIndex.modules[newId] || _treeEditorIndex.itemOwner[newId]) {
+      showToast('That id is already in use', true);
+      this.value = oldId;
+      return;
+    }
+    if (typeof onIdChanged === 'function') onIdChanged(oldId, newId);
+    obj.id = newId;
+    rebuildTreeEditorIndex();
+    renderTreeOutline();
+    renderTreeDetail();
+  });
   row.appendChild(lbl); row.appendChild(inp);
   return row;
 }
 
-/* Squadron visibility selector for a category card */
-function buildSquadronRow(cat) {
-  if (!cat.squadrons) cat.squadrons = [];
-
+/* Squadron visibility selector — options are constrained to the nearest
+   restricting ancestor's set (a child can only narrow, never broaden). */
+function buildSquadronRow(node) {
   var row = document.createElement('div');
   row.className = 'tree-id-row';
   row.style.cssText = 'flex-wrap:wrap;gap:6px;align-items:flex-start';
 
   var lbl = document.createElement('span');
-  lbl.className   = 'tree-field-label';
+  lbl.className = 'tree-field-label';
   lbl.textContent = 'VISIBLE TO';
+  row.appendChild(lbl);
+
+  var ancestorRestriction = skillsCore.ancestorSquadronRestriction(_treeEditorIndex, node.id);
+  var allowedSquadrons = ancestorRestriction
+    ? _squadrons.filter(function (sq) { return ancestorRestriction.indexOf(sq.id) !== -1; })
+    : _squadrons;
 
   var note = document.createElement('span');
-  note.style.cssText = 'font-size:9px;color:var(--text-3);flex-shrink:0';
-  note.textContent   = _squadrons.length ? '(none checked = ALL squadrons)' : '(no squadrons configured)';
+  note.className = 'tree-inherited-note';
+  if (!_squadrons.length) {
+    note.textContent = '(no squadrons configured)';
+  } else if (!node.squadrons || !node.squadrons.length) {
+    note.textContent = ancestorRestriction
+      ? '(inherited from parent: ' + ancestorRestriction.map(squadronShortName).join(', ') + ')'
+      : '(none checked = ALL squadrons)';
+  }
+  if (note.textContent) row.appendChild(note);
 
-  row.appendChild(lbl);
-  row.appendChild(note);
-
-  if (_squadrons.length) {
+  if (allowedSquadrons.length) {
     var checksWrap = document.createElement('div');
     checksWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;width:100%';
 
-    _squadrons.forEach(function (sq) {
+    allowedSquadrons.forEach(function (sq) {
       var label = document.createElement('label');
       label.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:9px;cursor:pointer;user-select:none';
 
       var cb  = document.createElement('input');
       cb.type = 'checkbox';
       cb.value   = sq.id;
-      cb.checked = cat.squadrons.indexOf(sq.id) !== -1;
+      cb.checked = !!(node.squadrons && node.squadrons.indexOf(sq.id) !== -1);
 
       (function (sqId, checkbox) {
         checkbox.addEventListener('change', function () {
+          if (!node.squadrons) node.squadrons = [];
           if (checkbox.checked) {
-            if (cat.squadrons.indexOf(sqId) === -1) cat.squadrons.push(sqId);
+            if (node.squadrons.indexOf(sqId) === -1) node.squadrons.push(sqId);
           } else {
-            cat.squadrons = cat.squadrons.filter(function (id) { return id !== sqId; });
+            node.squadrons = node.squadrons.filter(function (id) { return id !== sqId; });
           }
-          updateWeightBar();
+          if (!node.squadrons.length) delete node.squadrons;
+          renderTreeOutline();
+          renderTreeDetail();
         });
       })(sq.id, cb);
 
@@ -1191,144 +991,390 @@ function buildSquadronRow(cat) {
 
   return row;
 }
+function squadronShortName(sqId) {
+  var sq = _squadrons.find(function (s) { return s.id === sqId; });
+  return sq ? (sq.designator || sq.name) : sqId;
+}
 
-function buildPrereqSection(mod, ci, mi, allMods) {
+function buildSubModulesSection(node) {
   var section = document.createElement('div');
-  section.className = 'tree-prereq-section';
+  section.className = 'tree-editor-subsection';
 
-  /* Label + add button on same row */
   var topRow = document.createElement('div');
-  topRow.style.cssText = 'display:flex;align-items:center;gap:8px';
+  topRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
   var lbl = document.createElement('span');
-  lbl.className = 'tree-field-label'; lbl.textContent = 'PREREQUISITES';
+  lbl.className = 'tree-field-label'; lbl.textContent = 'SUB-MODULES';
   var addBtn = document.createElement('button');
-  addBtn.className = 'btn-sm'; addBtn.textContent = '+ ADD';
-  (function (c, m) { addBtn.addEventListener('click', function () { addPrereq(c, m); }); })(ci, mi);
+  addBtn.className = 'btn-sm'; addBtn.textContent = '+ ADD SUB-MODULE';
+  (function (n) { addBtn.addEventListener('click', function () { addSubModule(n); }); })(node);
   topRow.appendChild(lbl); topRow.appendChild(addBtn);
   section.appendChild(topRow);
 
-  /* One row per existing prereq */
-  var prereqs  = mod.prerequisites || [];
-  var availMods = allMods.filter(function (m) { return m.id !== mod.id; });
+  var kids = node.subModules || [];
+  if (!kids.length) {
+    var none = document.createElement('span');
+    none.style.cssText = 'font-size:9px;color:var(--text-3)';
+    none.textContent   = 'None';
+    section.appendChild(none);
+    return section;
+  }
 
-  if (!prereqs.length) {
+  kids.forEach(function (child, ci) {
+    var row = document.createElement('div');
+    row.className = 'tree-prereq-row';
+
+    var titleBtn = document.createElement('button');
+    titleBtn.className = 'btn-sm';
+    titleBtn.style.cssText = 'flex:1;text-align:left';
+    titleBtn.textContent = child.title || '(untitled)';
+    (function (id) { titleBtn.addEventListener('click', function () { selectNode(id); }); })(child.id);
+
+    var upBtn = document.createElement('button');
+    upBtn.className = 'btn-sm'; upBtn.textContent = '↑'; upBtn.disabled = ci === 0;
+    (function (n, i) { upBtn.addEventListener('click', function () { moveSiblingUp(n, i); }); })(node, ci);
+
+    var dnBtn = document.createElement('button');
+    dnBtn.className = 'btn-sm'; dnBtn.textContent = '↓'; dnBtn.disabled = ci === kids.length - 1;
+    (function (n, i) { dnBtn.addEventListener('click', function () { moveSiblingDown(n, i); }); })(node, ci);
+
+    var delBtn = document.createElement('button');
+    delBtn.className = 'btn-sm btn-sm-danger'; delBtn.textContent = '×';
+    (function (n, i, title) {
+      delBtn.addEventListener('click', function () {
+        if (confirm('Remove "' + (title || 'unnamed') + '" and everything nested under it?')) removeChildNode(n, i);
+      });
+    })(node, ci, child.title);
+
+    row.appendChild(titleBtn); row.appendChild(upBtn); row.appendChild(dnBtn); row.appendChild(delBtn);
+    section.appendChild(row);
+  });
+
+  return section;
+}
+
+function buildGradingItemsSection(node) {
+  var section = document.createElement('div');
+  section.className = 'tree-editor-subsection';
+
+  var topRow = document.createElement('div');
+  topRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+  var lbl = document.createElement('span');
+  lbl.className = 'tree-field-label'; lbl.textContent = 'GRADING ITEMS';
+  topRow.appendChild(lbl);
+  section.appendChild(topRow);
+
+  var items = node.gradingItems || [];
+
+  if (items.length <= 1) {
+    var single = items[0];
+    if (!single) {
+      var addSingleBtn = document.createElement('button');
+      addSingleBtn.className = 'btn-sm';
+      addSingleBtn.textContent = '+ ADD GRADING ITEM';
+      (function (n) { addSingleBtn.addEventListener('click', function () { addFirstGradingItem(n); }); })(node);
+      section.appendChild(addSingleBtn);
+      return section;
+    }
+
+    var passRow = document.createElement('div');
+    passRow.className = 'tree-id-row';
+    var passLabel = document.createElement('span');
+    passLabel.className = 'tree-field-label'; passLabel.textContent = 'PASS';
+    var gradeSel = document.createElement('select');
+    gradeSel.className = 'grade-select';
+    ['U', 'F', 'G', 'E'].forEach(function (g) {
+      var opt = document.createElement('option');
+      opt.value = g; opt.textContent = g;
+      if ((single.min_pass_grade || 'G') === g) opt.selected = true;
+      gradeSel.appendChild(opt);
+    });
+    gradeSel.addEventListener('change', function () { single.min_pass_grade = this.value; });
+    passRow.appendChild(passLabel); passRow.appendChild(gradeSel);
+    section.appendChild(passRow);
+
+    var splitBtn = document.createElement('button');
+    splitBtn.className = 'btn-sm';
+    splitBtn.style.cssText = 'margin-top:6px';
+    splitBtn.textContent = '+ SPLIT INTO MULTIPLE ITEMS';
+    (function (n) { splitBtn.addEventListener('click', function () { splitIntoMultipleItems(n); }); })(node);
+    section.appendChild(splitBtn);
+    return section;
+  }
+
+  items.forEach(function (item, ii) {
+    var row = document.createElement('div');
+    row.className = 'tree-prereq-row';
+
+    var labelInput = document.createElement('input');
+    labelInput.className   = 'tree-input';
+    labelInput.style.flex  = '1';
+    labelInput.placeholder = 'Item label (e.g. Level 1)';
+    labelInput.value       = item.label || '';
+    labelInput.addEventListener('input', function () { item.label = this.value; });
+
+    var gradeSel = document.createElement('select');
+    gradeSel.className = 'grade-select';
+    ['U', 'F', 'G', 'E'].forEach(function (g) {
+      var opt = document.createElement('option');
+      opt.value = g; opt.textContent = g + ' PASS';
+      if ((item.min_pass_grade || 'G') === g) opt.selected = true;
+      gradeSel.appendChild(opt);
+    });
+    gradeSel.addEventListener('change', function () { item.min_pass_grade = this.value; });
+
+    var delBtn = document.createElement('button');
+    delBtn.className = 'btn-sm btn-sm-danger'; delBtn.textContent = '×';
+    (function (n, i) {
+      delBtn.addEventListener('click', function () {
+        if (confirm('Remove this grading item? Any recorded pilot grades under it will be orphaned.')) removeGradingItem(n, i);
+      });
+    })(node, ii);
+
+    row.appendChild(labelInput); row.appendChild(gradeSel); row.appendChild(delBtn);
+    section.appendChild(row);
+  });
+
+  var addBtn = document.createElement('button');
+  addBtn.className = 'btn-sm';
+  addBtn.style.cssText = 'margin-top:6px';
+  addBtn.textContent = '+ ADD GRADING ITEM';
+  (function (n) { addBtn.addEventListener('click', function () { addGradingItem(n); }); })(node);
+  section.appendChild(addBtn);
+
+  return section;
+}
+
+function buildRequirementsSection(node) {
+  var section = document.createElement('div');
+  section.className = 'tree-prereq-section';
+
+  var topRow = document.createElement('div');
+  topRow.style.cssText = 'display:flex;align-items:center;gap:8px';
+  var lbl = document.createElement('span');
+  lbl.className = 'tree-field-label'; lbl.textContent = 'REQUIREMENTS';
+  var addBtn = document.createElement('button');
+  addBtn.className = 'btn-sm'; addBtn.textContent = '+ ADD';
+  (function (n) { addBtn.addEventListener('click', function () { addRequirement(n); }); })(node);
+  topRow.appendChild(lbl); topRow.appendChild(addBtn);
+  section.appendChild(topRow);
+
+  var reqs = node.requirements || [];
+  var availModules = Object.keys(_treeEditorIndex.modules)
+    .filter(function (id) { return id !== node.id; })
+    .map(function (id) { return _treeEditorIndex.modules[id]; });
+
+  if (!reqs.length) {
     var none = document.createElement('span');
     none.style.cssText = 'font-size:9px;color:var(--text-3);margin-top:4px;display:block';
     none.textContent   = 'None';
     section.appendChild(none);
   } else {
-    prereqs.forEach(function (prereq, pi) {
-      section.appendChild(buildPrereqRow(prereq, pi, ci, mi, availMods));
+    reqs.forEach(function (req, ri) {
+      section.appendChild(buildRequirementRow(node, req, ri, availModules));
     });
   }
 
   return section;
 }
 
-function buildPrereqRow(prereq, pi, ci, mi, availMods) {
+function buildRequirementRow(node, req, ri, availModules) {
   var row = document.createElement('div');
   row.className = 'tree-prereq-row';
 
-  /* Module select */
   var modSel = document.createElement('select');
   modSel.className = 'grade-select';
   modSel.style.flex = '1';
-  if (!availMods.length) {
+  if (!availModules.length) {
     var noOpt = document.createElement('option');
     noOpt.value = ''; noOpt.textContent = '(no other modules yet)';
     modSel.appendChild(noOpt);
   } else {
-    availMods.forEach(function (m) {
+    availModules.forEach(function (m) {
       var opt = document.createElement('option');
       opt.value = m.id;
-      opt.textContent = (m.title || m.id);
-      if (prereq.module_id === m.id) opt.selected = true;
+      opt.textContent = skillsCore.breadcrumb(_treeEditorIndex, m.id).join(' › ');
+      if (req.module_id === m.id) opt.selected = true;
       modSel.appendChild(opt);
     });
   }
-  modSel.addEventListener('change', function () { prereq.module_id = this.value; });
+  modSel.addEventListener('change', function () {
+    var newTarget = this.value;
+    var candidate = JSON.parse(JSON.stringify(_treeEditor));
+    var idxCand   = skillsCore.buildIndex(candidate);
+    idxCand.modules[node.id].requirements[ri].module_id = newTarget;
+    if (skillsCore.detectRequirementCycle(idxCand)) {
+      showToast('That would create a circular requirement', true);
+      this.value = req.module_id;
+      return;
+    }
+    req.module_id = newTarget;
+  });
 
-  /* Min grade select */
   var gradeSel = document.createElement('select');
   gradeSel.className = 'grade-select';
   ['U', 'F', 'G', 'E'].forEach(function (g) {
     var opt = document.createElement('option');
     opt.value = g; opt.textContent = g + '+';
-    if ((prereq.min_grade || 'G') === g) opt.selected = true;
+    if ((req.min_grade || 'G') === g) opt.selected = true;
     gradeSel.appendChild(opt);
   });
-  gradeSel.addEventListener('change', function () { prereq.min_grade = this.value; });
+  gradeSel.addEventListener('change', function () { req.min_grade = this.value; });
 
   var delBtn = document.createElement('button');
   delBtn.className = 'btn-sm btn-sm-danger'; delBtn.textContent = '×';
-  (function (c, m, p) { delBtn.addEventListener('click', function () { removePrereq(c, m, p); }); })(ci, mi, pi);
+  (function (n, i) { delBtn.addEventListener('click', function () { removeRequirement(n, i); }); })(node, ri);
 
   row.appendChild(modSel); row.appendChild(gradeSel); row.appendChild(delBtn);
   return row;
 }
 
-/* ── Tree mutation helpers (all re-render) ──────────────── */
-function addCategory() {
-  (_treeEditor.categories = _treeEditor.categories || []).push({
-    id: 'cat-' + Date.now(), name: '', weight: 0, modules: [],
+function buildNodeControlsRow(node) {
+  var wrap = document.createElement('div');
+  wrap.className = 'tree-node-controls';
+
+  var parentId  = _treeEditorIndex.parentOf[node.id];
+  var parentObj = parentId ? _treeEditorIndex.modules[parentId] : null;
+  var siblings  = siblingsArrayOf(parentObj);
+  var idx       = siblings.findIndex(function (n) { return n.id === node.id; });
+
+  var upBtn = document.createElement('button');
+  upBtn.className = 'btn-sm'; upBtn.textContent = '↑ MOVE UP'; upBtn.disabled = idx <= 0;
+  upBtn.addEventListener('click', function () { moveSiblingUp(parentObj, idx); });
+
+  var dnBtn = document.createElement('button');
+  dnBtn.className = 'btn-sm'; dnBtn.textContent = 'MOVE DOWN ↓'; dnBtn.disabled = (idx === -1 || idx >= siblings.length - 1);
+  dnBtn.addEventListener('click', function () { moveSiblingDown(parentObj, idx); });
+
+  var delBtn = document.createElement('button');
+  delBtn.className = 'btn-sm btn-sm-danger';
+  delBtn.textContent = 'DELETE MODULE';
+  delBtn.style.marginLeft = 'auto';
+  delBtn.addEventListener('click', function () {
+    if (confirm('Remove "' + (node.title || 'unnamed') + '" and everything nested under it?')) {
+      removeChildNode(parentObj, idx);
+    }
   });
-  renderTreeEditor();
+
+  wrap.appendChild(upBtn); wrap.appendChild(dnBtn); wrap.appendChild(delBtn);
+  return wrap;
 }
-function removeCategory(ci) {
-  _treeEditor.categories.splice(ci, 1);
-  renderTreeEditor();
+
+/* ── Tree mutation helpers ───────────────────────────────── */
+function siblingsArrayOf(parentNode) {
+  return parentNode ? (parentNode.subModules = parentNode.subModules || []) : (_treeEditor.tree = _treeEditor.tree || []);
 }
-function moveCategoryUp(ci) {
-  var a = _treeEditor.categories;
-  if (ci < 1) return;
-  var t = a[ci - 1]; a[ci - 1] = a[ci]; a[ci] = t;
-  renderTreeEditor();
+
+function newModuleStub(id) {
+  return { id: id, title: '', description: '', requirements: [], subModules: [], gradingItems: [{ id: id, label: '', min_pass_grade: 'G' }] };
 }
-function moveCategoryDown(ci) {
-  var a = _treeEditor.categories;
-  if (ci >= a.length - 1) return;
-  var t = a[ci + 1]; a[ci + 1] = a[ci]; a[ci] = t;
-  renderTreeEditor();
+
+function addRootModule() {
+  var id = 'mod-' + Date.now();
+  (_treeEditor.tree = _treeEditor.tree || []).push(newModuleStub(id));
+  rebuildTreeEditorIndex();
+  _outlineSelectedId = id;
+  renderTreeOutline();
+  renderTreeDetail();
 }
-function addModule(ci) {
-  var cat = _treeEditor.categories[ci];
-  if (!cat) return;
-  (cat.modules = cat.modules || []).push({
-    id: 'mod-' + Date.now(), title: '', description: '', min_pass_grade: 'G', prerequisites: [],
-  });
-  renderTreeEditor();
+
+function addSubModule(parentNode) {
+  var id = 'mod-' + Date.now();
+  (parentNode.subModules = parentNode.subModules || []).push(newModuleStub(id));
+  _outlineExpanded[parentNode.id] = true;
+  rebuildTreeEditorIndex();
+  _outlineSelectedId = id;
+  renderTreeOutline();
+  renderTreeDetail();
 }
-function removeModule(ci, mi) {
-  _treeEditor.categories[ci].modules.splice(mi, 1);
-  renderTreeEditor();
+
+function removeChildNode(parentNode, index) {
+  var arr = siblingsArrayOf(parentNode);
+  var removedId = arr[index] && arr[index].id;
+  arr.splice(index, 1);
+  if (_outlineSelectedId === removedId) _outlineSelectedId = parentNode ? parentNode.id : null;
+  rebuildTreeEditorIndex();
+  renderTreeOutline();
+  renderTreeDetail();
 }
-function moveModuleUp(ci, mi) {
-  var a = _treeEditor.categories[ci].modules;
-  if (mi < 1) return;
-  var t = a[mi - 1]; a[mi - 1] = a[mi]; a[mi] = t;
-  renderTreeEditor();
+
+function moveSiblingUp(parentNode, index) {
+  var arr = siblingsArrayOf(parentNode);
+  if (index < 1) return;
+  var t = arr[index - 1]; arr[index - 1] = arr[index]; arr[index] = t;
+  renderTreeOutline();
+  renderTreeDetail();
 }
-function moveModuleDown(ci, mi) {
-  var a = _treeEditor.categories[ci].modules;
-  if (mi >= a.length - 1) return;
-  var t = a[mi + 1]; a[mi + 1] = a[mi]; a[mi] = t;
-  renderTreeEditor();
+function moveSiblingDown(parentNode, index) {
+  var arr = siblingsArrayOf(parentNode);
+  if (index < 0 || index >= arr.length - 1) return;
+  var t = arr[index + 1]; arr[index + 1] = arr[index]; arr[index] = t;
+  renderTreeOutline();
+  renderTreeDetail();
 }
-function addPrereq(ci, mi) {
-  var mod      = _treeEditor.categories[ci].modules[mi];
-  var allIds   = flatModules().map(function (m) { return m.id; });
-  var existing = (mod.prerequisites || []).map(function (p) { return p.module_id; });
-  var first    = allIds.find(function (id) { return id !== mod.id && !existing.includes(id); }) || '';
-  (mod.prerequisites = mod.prerequisites || []).push({ module_id: first, min_grade: 'G' });
-  renderTreeEditor();
+
+function addFirstGradingItem(node) {
+  node.gradingItems = [{ id: node.id, label: '', min_pass_grade: 'G' }];
+  rebuildTreeEditorIndex();
+  renderTreeOutline();
+  renderTreeDetail();
 }
-function removePrereq(ci, mi, pi) {
-  _treeEditor.categories[ci].modules[mi].prerequisites.splice(pi, 1);
-  renderTreeEditor();
+
+function splitIntoMultipleItems(node) {
+  if (!confirm('Splitting into multiple items changes this module\'s grading-item id(s). Any grade already recorded under the old id will be orphaned. Continue?')) return;
+  var old = (node.gradingItems && node.gradingItems[0]) || { min_pass_grade: 'G' };
+  var id1 = skillsCore.gradingItemId(node.id, 'level-1', _treeEditorIndex);
+  var id2 = skillsCore.gradingItemId(node.id, 'level-2', _treeEditorIndex);
+  node.gradingItems = [
+    { id: id1, label: 'Level 1', min_pass_grade: old.min_pass_grade || 'G' },
+    { id: id2, label: 'Level 2', min_pass_grade: 'G' },
+  ];
+  rebuildTreeEditorIndex();
+  renderTreeOutline();
+  renderTreeDetail();
+}
+
+function addGradingItem(node) {
+  var label = 'Item ' + ((node.gradingItems || []).length + 1);
+  var id    = skillsCore.gradingItemId(node.id, label, _treeEditorIndex);
+  (node.gradingItems = node.gradingItems || []).push({ id: id, label: label, min_pass_grade: 'G' });
+  rebuildTreeEditorIndex();
+  renderTreeOutline();
+  renderTreeDetail();
+}
+
+function removeGradingItem(node, ii) {
+  node.gradingItems.splice(ii, 1);
+  if (node.gradingItems.length === 1 && node.gradingItems[0].id !== node.id) {
+    showToast('Only one grading item left — collapsed back to a single grade (old grades under it are orphaned)', true);
+    node.gradingItems[0] = { id: node.id, label: '', min_pass_grade: node.gradingItems[0].min_pass_grade };
+  }
+  rebuildTreeEditorIndex();
+  renderTreeOutline();
+  renderTreeDetail();
+}
+
+function addRequirement(node) {
+  var candidates = Object.keys(_treeEditorIndex.modules).filter(function (id) { return id !== node.id; });
+  if (!candidates.length) { showToast('No other modules exist yet to require', true); return; }
+  var existing = (node.requirements || []).map(function (r) { return r.module_id; });
+  var first    = candidates.find(function (id) { return existing.indexOf(id) === -1; }) || candidates[0];
+  (node.requirements = node.requirements || []).push({ module_id: first, min_grade: 'G' });
+  renderTreeDetail();
+}
+function removeRequirement(node, ri) {
+  node.requirements.splice(ri, 1);
+  renderTreeDetail();
 }
 
 function saveSkillTree() {
   var msg = document.getElementById('treeEditorMsg');
+
+  var err = skillsCore.validateTree(_treeEditor);
+  if (err) {
+    if (msg) { msg.textContent = 'Error: ' + err; msg.className = 'tree-editor-msg err'; }
+    showToast(err, true);
+    return;
+  }
 
   var tok = getToken();
   fetch('/api/skill-tree', {
@@ -1343,14 +1389,17 @@ function saveSkillTree() {
       return;
     }
     _tree       = result.body;
+    _treeIndex  = skillsCore.buildIndex(_tree);
     _treeEditor = JSON.parse(JSON.stringify(_tree));
-    renderTreeEditor();
+    rebuildTreeEditorIndex();
+    renderTreeOutline();
+    renderTreeDetail();
     if (msg) { msg.textContent = 'Saved.'; msg.className = 'tree-editor-msg ok'; }
     refreshActiveDetail();
     renderPilotList();
     showToast('Skill tree saved');
-  }).catch(function (err) {
-    if (msg) { msg.textContent = 'Error: ' + err.message; msg.className = 'tree-editor-msg err'; }
+  }).catch(function (err2) {
+    if (msg) { msg.textContent = 'Error: ' + err2.message; msg.className = 'tree-editor-msg err'; }
   });
 }
 

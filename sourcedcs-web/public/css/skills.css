@@ -574,43 +574,6 @@
 .tree-editor-msg.ok  { color: var(--green); }
 .tree-editor-msg.err { color: var(--red); }
 
-/* Weight indicator */
-.tree-weight-bar {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 8px 12px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-.tree-sq-weights {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.tree-sq-weight-chip {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.tree-sq-weight-name {
-  font-size: 9px;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-.tree-weight-total {
-  font-family: 'Orbitron', monospace;
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 2px;
-}
-.tree-weight-total.ok  { color: var(--green); }
-.tree-weight-total.err { color: var(--red); }
-:root.movie .tree-weight-total.ok { color: var(--accent); }
-
 /* Shared input style for tree editor */
 .tree-input {
   font-family: 'IBM Plex Mono', monospace;
@@ -625,33 +588,70 @@
 :root.movie .tree-input:focus { border-color: var(--accent); }
 .tree-input::placeholder { color: var(--text-3); }
 
-/* Category cards */
-.tree-cat-list  { display: flex; flex-direction: column; gap: 12px; }
-.tree-cat-card  {
+/* ── Tree editor: outline (left) + detail panel (right) ─── */
+.tree-editor-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 0;
   border: 1px solid var(--border-strong);
-  background: var(--bg);
+  min-height: 320px;
 }
-.tree-cat-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
+.tree-outline-pane {
+  border-right: 1px solid var(--border);
+  padding: 10px;
+  overflow-y: auto;
+  max-height: 560px;
 }
-.tree-cat-name-input {
+.tree-detail-pane {
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 560px;
+}
+.tree-outline-list { display: flex; flex-direction: column; }
+.outline-row {
+  padding-right: 8px;
+  gap: 6px;
+}
+.outline-toggle {
+  display: inline-block;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+.outline-row-label {
   flex: 1;
-  min-width: 120px;
-  font-family: 'Orbitron', monospace;
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  letter-spacing: .5px;
 }
-.tree-weight-input {
-  width: 56px;
-  text-align: right;
+.outline-badge {
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.outline-badge-sq { color: var(--blue); border-color: var(--blue); }
+
+.tree-breadcrumb {
+  font-size: 9px;
+  color: var(--text-3);
+  margin-bottom: 10px;
+  letter-spacing: .5px;
+}
+.tree-detail-title-input {
+  font-size: 14px;
+  font-weight: 700;
+  width: 100%;
+  margin-bottom: 8px;
+}
+.tree-editor-subsection {
+  margin-top: 14px;
 }
 
 /* ID rows */
@@ -675,40 +675,10 @@
   font-size: 9px;
   color: var(--text-2);
 }
-
-/* Module list */
-.tree-mod-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 8px 10px;
-}
-.tree-mod-card {
-  border: 1px solid var(--border);
-  margin-bottom: 8px;
-  background: var(--bg2);
-}
-.tree-mod-card:last-child { margin-bottom: 0; }
-.tree-mod-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
-}
-.tree-mod-title-input {
-  flex: 1;
-  min-width: 100px;
-  font-size: 10px;
-  font-weight: 600;
-}
-.tree-mod-body {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.tree-inherited-note {
+  font-size: 9px;
+  color: var(--text-3);
+  flex-shrink: 0;
 }
 
 /* Description textarea */
@@ -716,6 +686,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  margin-top: 8px;
 }
 .tree-textarea {
   font-family: 'IBM Plex Mono', monospace;
@@ -733,21 +704,23 @@
 :root.movie .tree-textarea:focus { border-color: var(--accent); }
 .tree-textarea::placeholder { color: var(--text-3); }
 
-/* Pass grade row */
-.tree-pass-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Prerequisites */
+/* Sub-modules / grading items / requirements — shared row style */
 .tree-prereq-section { display: flex; flex-direction: column; gap: 4px; }
 .tree-prereq-row {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-bottom: 4px;
 }
 .tree-prereq-row select { flex: 1; }
+
+.tree-node-controls {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
+}
 
 /* ── No-content states ──────────────────────────────────── */
 .skills-login-prompt {
@@ -792,4 +765,6 @@
   .admin-sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: 260px; }
   .skill-modules { grid-template-columns: 1fr; }
   .score-divider { display: none; }
+  .tree-editor-layout { grid-template-columns: 1fr; }
+  .tree-outline-pane { border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
 }
