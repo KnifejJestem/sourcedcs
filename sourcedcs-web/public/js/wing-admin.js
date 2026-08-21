@@ -24,6 +24,8 @@ var _roleLabels = [];
 var _pilots     = [];
 var _search     = '';
 var _filter     = '';
+var _sortKey    = null;
+var _sortDir    = 1; /* 1 = ascending, -1 = descending */
 
 /* ── Bootstrap ──────────────────────────────────────────── */
 (function () {
@@ -68,6 +70,10 @@ var _filter     = '';
   document.getElementById('squadronFilter').addEventListener('change', function (e) {
     _filter = e.target.value;
     renderTable();
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('#membersTable th.sortable'), function (th) {
+    th.addEventListener('click', function () { setSort(th.dataset.sort); });
   });
 
   document.getElementById('activityMode').addEventListener('change', loadActivityOverview);
@@ -140,6 +146,10 @@ function filteredMembers() {
         (m.linkedPilot ? m.linkedPilot.name + ' ' + m.linkedPilot.callsign : '')).toLowerCase();
       if (hay.indexOf(_search) === -1) return false;
     }
+    /* Any category other than "ALL SQUADRONS" narrows to a specific slice
+       of the roster — members who've left Discord are clutter there unless
+       that's literally the slice being asked for. */
+    if (_filter && _filter !== '__left_discord' && m.status === 'LEFT_DISCORD') return false;
     if (_filter === '__unassigned')    return !m.squadron;
     if (_filter === '__mismatch')      return !!m.nameMismatch;
     if (_filter === '__left_discord')  return m.status === 'LEFT_DISCORD';
@@ -148,6 +158,58 @@ function filteredMembers() {
     if (_filter === '__on_vacation')   return m.status === 'ON_VACATION';
     if (_filter)                       return m.squadron === _filter;
     return true;
+  });
+}
+
+/* ── Sorting ────────────────────────────────────────────── */
+var SORT_ACCESSORS = {
+  callsign: function (m) { return (m.callsign || m.username || m.id || '').toLowerCase(); },
+  discord:  function (m) { return (m.globalName || m.username || '').toLowerCase(); },
+  squadron: function (m) { return (squadronDisplayName(m.squadronOverride || m.squadron) || '').toLowerCase(); },
+  role:     function (m) { return (m.roleOverride || m.role || '').toLowerCase(); },
+  status:   function (m) { return m.status || ''; },
+  score:    function (m) { return m.activityScore; },
+  vacation: function (m) { return (m.vacations || []).length; },
+  voice:    function (m) { return m.inCall ? Infinity : (m.lastCallEnd ? new Date(m.lastCallEnd).getTime() : -Infinity); },
+};
+
+function setSort(key) {
+  if (_sortKey === key) {
+    _sortDir = -_sortDir;
+  } else {
+    _sortKey = key;
+    _sortDir = 1;
+  }
+  renderTable();
+}
+
+function sortMembers(list) {
+  var accessor = SORT_ACCESSORS[_sortKey];
+  if (!accessor) return list;
+  var sorted = list.slice();
+  sorted.sort(function (a, b) {
+    var av = accessor(a), bv = accessor(b);
+    var aEmpty = (av == null || av === '');
+    var bEmpty = (bv == null || bv === '');
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;  /* empty/unknown values always sort last */
+    if (bEmpty) return -1;
+    var cmp = (typeof av === 'number' && typeof bv === 'number') ? (av - bv) : String(av).localeCompare(String(bv));
+    return cmp * _sortDir;
+  });
+  return sorted;
+}
+
+function updateSortHeaders() {
+  Array.prototype.forEach.call(document.querySelectorAll('#membersTable th.sortable'), function (th) {
+    var arrow = th.querySelector('.sort-arrow');
+    if (th.dataset.sort === _sortKey) {
+      th.classList.add('sort-active');
+      arrow.textContent = _sortDir === 1 ? '▲' : '▼';
+    } else {
+      th.classList.remove('sort-active');
+      arrow.textContent = '';
+    }
   });
 }
 
@@ -176,8 +238,9 @@ function renderTable() {
     statusCounts.LEFT_DISCORD + ' left discord · ' +
     unassigned + ' unassigned · ' + mismatches + ' name mismatch' + (mismatches === 1 ? '' : 'es');
 
-  var list = filteredMembers();
+  var list = sortMembers(filteredMembers());
   var tbody = document.getElementById('membersBody');
+  updateSortHeaders();
 
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-3)">No members match.</td></tr>';

@@ -938,6 +938,11 @@ footer {
 .roster-table tr:hover td { background: var(--bg2); }
 :root.movie .roster-table tr:hover td { background: rgba(57,255,122,.02); }
 
+.roster-table th.sortable { cursor: pointer; user-select: none; }
+.roster-table th.sortable:hover { color: var(--text-2); }
+.roster-table th.sort-active { color: var(--text); }
+.sort-arrow { display: inline-block; margin-left: 4px; font-size: 8px; }
+
 .callsign {
   font-weight: 600;
   letter-spacing: 1.5px;
