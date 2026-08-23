@@ -13,7 +13,6 @@ function setTheme(t) {
   setLink('toolWikiLink',     typeof WIKI_URL     !== 'undefined' ? WIKI_URL     : null);
   setLink('toolAtoLink',      typeof ATO_URL      !== 'undefined' ? ATO_URL      : null);
   setLink('toolOlympusLink',  typeof OLYMPUS_URL  !== 'undefined' ? OLYMPUS_URL  : null);
-  setLink('toolAsacsLink',    typeof ASACS_URL    !== 'undefined' ? ASACS_URL    : null);
   setLink('footerDiscordLink', typeof DISCORD_URL  !== 'undefined' ? DISCORD_URL  : null);
   setLink('footerWikiLink',   typeof WIKI_URL     !== 'undefined' ? WIKI_URL     : null);
   setLink('footerAtoLink',    typeof ATO_URL      !== 'undefined' ? ATO_URL      : null);
