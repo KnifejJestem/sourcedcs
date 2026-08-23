@@ -18,10 +18,18 @@ const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 // renderer never needs crc-sync's bearer token directly — only the
 // cross-origin OAuth code exchange in auth-callback.html talks to crc-sync
 // straight from the browser.
-const CRC_SYNC_URL      = process.env.CRC_SYNC_URL || 'wss://asacs.sourcedcs.page';
-const CRC_SYNC_HTTP_URL = CRC_SYNC_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
-const CASDOOR_CLIENT_ID = process.env.CASDOOR_CLIENT_ID || '';
-const CASDOOR_ENDPOINT  = process.env.CASDOOR_ENDPOINT  || '';
+// Mutable at runtime (not just at startup) — the renderer's connection
+// widget (app/public/js/sync.js) can override these via POST /api/sync-config
+// so a squadron member can point at a different crc-sync/Casdoor without
+// hand-editing config.json. config.json's values are just the defaults.
+const syncConfig = {
+  crcSyncUrl:      process.env.CRC_SYNC_URL || 'wss://asacs.sourcedcs.page',
+  casdoorClientId: process.env.CASDOOR_CLIENT_ID || '',
+  casdoorEndpoint: process.env.CASDOOR_ENDPOINT || '',
+};
+function syncHttpUrl() {
+  return syncConfig.crcSyncUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -36,7 +44,7 @@ const MIME = {
 // Authorization header and (for POST) body, and relaying the response back
 // verbatim. Used for every crc-sync HTTP endpoint the renderer needs.
 function proxyToSync(req, res, syncPath) {
-  const target = new URL(syncPath, CRC_SYNC_HTTP_URL);
+  const target = new URL(syncPath, syncHttpUrl());
   const mod    = target.protocol === 'https:' ? https : http;
   const headers = { 'Content-Type': 'application/json' };
   if (req.headers.authorization) headers.Authorization = req.headers.authorization;
@@ -58,10 +66,35 @@ const httpServer = http.createServer((req, res) => {
   if (req.url === '/js/config.js') {
     res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(
-      'var CRC_SYNC_URL      = ' + JSON.stringify(CRC_SYNC_URL)      + ';\n' +
-      'var CASDOOR_CLIENT_ID = ' + JSON.stringify(CASDOOR_CLIENT_ID) + ';\n' +
-      'var CASDOOR_ENDPOINT  = ' + JSON.stringify(CASDOOR_ENDPOINT)  + ';\n'
+      'var CRC_SYNC_URL      = ' + JSON.stringify(syncConfig.crcSyncUrl)      + ';\n' +
+      'var CASDOOR_CLIENT_ID = ' + JSON.stringify(syncConfig.casdoorClientId) + ';\n' +
+      'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n'
     );
+  }
+
+  // ── Connection widget (app/public/js/sync.js) pushes overrides here so
+  // this local server's proxies stay consistent with whatever the renderer
+  // is actually using — local-only endpoint, no auth needed (matches the
+  // trust model of the rest of this process, which only ever listens on
+  // localhost).
+  if (req.url === '/api/sync-config' && req.method === 'POST') {
+    let body = '';
+    req.on('data', d => { body += d; });
+    req.on('end', () => {
+      let cfg;
+      try { cfg = JSON.parse(body); } catch (_) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'invalid JSON' }));
+      }
+      if (typeof cfg.crcSyncUrl === 'string' && /^wss?:\/\/.+/.test(cfg.crcSyncUrl)) {
+        syncConfig.crcSyncUrl = cfg.crcSyncUrl.replace(/\/+$/, '');
+      }
+      if (typeof cfg.casdoorClientId === 'string') syncConfig.casdoorClientId = cfg.casdoorClientId;
+      if (typeof cfg.casdoorEndpoint === 'string') syncConfig.casdoorEndpoint = cfg.casdoorEndpoint.replace(/\/+$/, '');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(syncConfig));
+    });
+    return;
   }
 
   // ── crc-sync proxies (ticket mint + the three on-demand RPCs) ────────────

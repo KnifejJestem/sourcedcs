@@ -1,6 +1,7 @@
 'use strict';
 
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
@@ -27,6 +28,14 @@ function logLines(prefix, stream) {
 function spawnLxsrs() {
     const freqArgs = config.freqs.flatMap(f => ['--freq', f]);
 
+    // extraResources (see package.json's build.linux.extraResources) puts
+    // python-pkg under process.resourcesPath in a packaged app, not next to
+    // main.js inside the asar — only the dev (unpackaged) run has it at
+    // __dirname/python-pkg.
+    const pythonPkgDir = app.isPackaged
+        ? path.join(process.resourcesPath, 'python-pkg')
+        : path.join(__dirname, 'python-pkg');
+
     const proc = spawn('python3', [
         '-m', 'lxsrs_v2',
         ...freqArgs,
@@ -39,7 +48,7 @@ function spawnLxsrs() {
         cwd: path.join(__dirname),
         env: {
             ...process.env,
-            PYTHONPATH: path.join(__dirname, 'python-pkg'),
+            PYTHONPATH: pythonPkgDir,
         },
     });
 
@@ -97,6 +106,29 @@ app.on('ready', async () => {
     win.loadURL(`http://localhost:${config.wsPort}`);
     win.on('closed', () => { win = null; });
 
+    // ── Autoupdate ────────────────────────────────────────────────────────
+    // publish config (package.json's build.publish) points electron-updater
+    // at sourcedcs-web's generic-provider /downloads endpoint. Errors are
+    // swallowed to a console log only — a failed update check must never
+    // block using the app.
+    autoUpdater.on('error', err => console.error('[autoupdate] error:', err.message));
+    autoUpdater.on('update-downloaded', (info) => {
+        dialog.showMessageBox(win, {
+            type: 'info',
+            title: 'CRC Update Ready',
+            message: `A new version (${info.version}) has been downloaded.`,
+            detail: 'Restart CRC now to install it, or it will install automatically on next launch.',
+            buttons: ['Restart Now', 'Later'],
+            defaultId: 0,
+            cancelId: 1,
+        }).then(({ response }) => {
+            if (response === 0) autoUpdater.quitAndInstall();
+        });
+    });
+    // checkForUpdates() rather than checkForUpdatesAndNotify() — the
+    // update-downloaded handler above already shows a dialog, no need for
+    // electron-updater's own OS-notification on top of it.
+    autoUpdater.checkForUpdates().catch(err => console.error('[autoupdate] check failed:', err.message));
 
 });
 

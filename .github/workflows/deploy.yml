@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   workflow_run:
-    workflows: ["Build and Push atobrief Docker Image", "Build and Push sourcedcs-web Docker Image"]
+    workflows: ["Build and Push atobrief Docker Image", "Build and Push sourcedcs-web Docker Image", "Build and Push crc-sync Docker Image"]
     types:
       - completed
   workflow_dispatch:

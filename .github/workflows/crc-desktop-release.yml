@@ -1,0 +1,76 @@
+name: Build and Publish crc-desktop Release
+
+on:
+  push:
+    tags:
+      - 'crc-desktop-v*'
+    paths:
+      - 'crc-desktop/**'
+      - '.github/workflows/crc-desktop-release.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+          - os: ubuntu-latest
+            target: linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: crc-desktop
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set package version from tag
+        if: startsWith(github.ref, 'refs/tags/crc-desktop-v')
+        shell: bash
+        run: npm version --no-git-tag-version "${GITHUB_REF_NAME#crc-desktop-v}"
+
+      - name: Build (Windows)
+        if: matrix.target == 'win'
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Build (Linux)
+        if: matrix.target == 'linux'
+        run: npx electron-builder --linux AppImage --publish never
+
+      - name: Upload installer + manifest to sourcedcs-web
+        shell: bash
+        working-directory: crc-desktop/dist
+        run: |
+          set -e
+          shopt -s nullglob
+          files=(*.exe *.AppImage *.yml *.blockmap)
+          for f in "${files[@]}"; do
+            echo "Uploading $f"
+            curl --fail -sS \
+              -H "Authorization: Bearer ${{ secrets.RELEASES_UPLOAD_TOKEN }}" \
+              -F "file=@${f}" \
+              https://sourcedcs.page/api/releases/upload
+          done
+
+  trigger-crc-sync-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger crc-sync rebuild + redeploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run crc-sync-docker.yml --ref main --repo ${{ github.repository }}

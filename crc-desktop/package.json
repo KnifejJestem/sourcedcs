@@ -1,15 +1,53 @@
 {
   "name": "crc-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "pack:linux": "electron-packager . crc --platform=linux --arch=x64 --out=dist --overwrite --ignore='^/dist'",
-    "pack:win":   "electron-packager . crc --platform=win32 --arch=x64 --out=dist --overwrite --ignore='^/dist' --ignore='^/python-pkg'"
+    "pack:linux": "electron-builder --linux AppImage --publish never",
+    "pack:win": "electron-builder --win nsis --publish never"
   },
   "devDependencies": {
-    "electron": "^30.0.0",
-    "electron-packager": "^17.0.0"
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "build": {
+    "appId": "page.sourcedcs.crc",
+    "productName": "CRC",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "config.json",
+      "app/**/*",
+      "!app/node_modules/**/*",
+      "!app/public/node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility",
+      "extraResources": [
+        {
+          "from": "python-pkg",
+          "to": "python-pkg",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://sourcedcs.page/downloads"
+      }
+    ]
   }
-
 }

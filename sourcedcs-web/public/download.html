@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download CRC — SOURCE DCS</title>
+  <meta name="description" content="Download CRC, SOURCE DCS's desktop GCI/datalink client, for Windows or Linux.">
+  <link rel="icon" href="sourcelogobg.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/download.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <a class="header-logo-link" href="/">
+    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    <div class="header-title">SOURCEDCS</div>
+  </a>
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
+    <a class="nav-link" href="/#about">ABOUT</a>
+    <a class="nav-link" href="/#subsquadrons">SQUADRONS</a>
+    <a class="nav-link" href="/#join">JOIN</a>
+    <a class="nav-link" href="/download.html">DOWNLOAD</a>
+  </nav>
+  <div class="header-spacer"></div>
+  <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
+    <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
+    <div class="hdr-toggle-group">
+      <span class="hdr-toggle-label">DISPLAY</span>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="dl-hero">
+  <div class="dl-hero-inner">
+    <div class="section-label">DESKTOP CLIENT</div>
+    <h1 class="dl-hero-title">DOWNLOAD CRC</h1>
+    <p class="dl-hero-sub">Multiplayer GCI / datalink client for DCS &middot; Windows &amp; Linux</p>
+  </div>
+</div>
+
+<div class="dl-main">
+  <div class="dl-main-inner">
+    <div class="dl-version" id="dlVersion">CHECKING FOR RELEASES&hellip;</div>
+
+    <div class="dl-cards" id="dlCards">
+      <div class="dl-card dl-unavailable">
+        <div class="dl-card-platform">WINDOWS</div>
+        <div class="dl-card-meta" data-role="meta">No release available yet</div>
+      </div>
+      <div class="dl-card dl-unavailable">
+        <div class="dl-card-platform">LINUX</div>
+        <div class="dl-card-meta" data-role="meta">No release available yet</div>
+      </div>
+    </div>
+
+    <p class="dl-note">
+      CRC checks for updates automatically on launch and will offer to
+      install them in the background — you only need to download and run
+      the installer once. Windows builds are unsigned, so Windows may show
+      a SmartScreen warning on first install; this is expected for a
+      community tool distributed outside the Microsoft Store.
+    </p>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand-area"><img class="footer-logo" src="sourcelogobg.png" alt="SOURCE"><span class="footer-brand">SOURCEDCS</span></div>
+    <div class="footer-links-row">
+      <a class="footer-link" href="/">Home</a>
+      <span class="footer-sep">&middot;</span>
+      <a class="footer-link" id="footerDiscordLink" href="#" target="_blank" rel="noopener">Discord</a>
+      <span class="footer-sep">&middot;</span>
+      <a class="footer-link" id="footerWikiLink" href="#" target="_blank" rel="noopener">Wiki</a>
+      <span class="footer-sep">&middot;</span>
+      <a class="footer-link" href="schedule.html">Schedule</a>
+      <span class="footer-sep">&middot;</span>
+      <a class="footer-link" id="footerGithubLink" href="#" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <div class="footer-copy"><span class="footer-text">MIT License</span><span class="footer-sep">&middot;</span><span class="footer-text">&copy; 2025 SOURCEDCS</span></div>
+  </div>
+</footer>
+
+<script src="/js/config.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/download.js"></script>
+</body>
+</html>

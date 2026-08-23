@@ -230,6 +230,7 @@ services:
       - APPLY_CHANNEL_ID=${APPLY_CHANNEL_ID}
       - GRADING_CHANNEL_ID=${GRADING_CHANNEL_ID}
       - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
+      - RELEASES_UPLOAD_TOKEN=${RELEASES_UPLOAD_TOKEN}
     networks:
       - web
     volumes:
@@ -253,15 +254,13 @@ services:
       - web
 
   # ─────────────────────────────────────────
-  # CRC-SYNC (crc-desktop multiplayer sync + view-only web GCI)
+  # CRC-SYNC (crc-desktop multiplayer sync backend)
   # Replaces the retired asacs-link — see crc-sync/ for the service source
   # and root README.md for the architecture. Casdoor-authed; sole gRPC/SRS
   # client to server.sourcedcs.page on behalf of every crc-desktop instance.
   # ─────────────────────────────────────────
   crc-sync:
-    build:
-      context: ../crc-sync
-      dockerfile: Dockerfile
+    image: ghcr.io/niknam3/sourcedcs/crc-sync:${TAG:-latest}
     container_name: crc-sync
     restart: unless-stopped
     environment:

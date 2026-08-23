@@ -6,6 +6,7 @@ const multer    = require('multer');
 const path      = require('path');
 const fs        = require('fs');
 const https     = require('https');
+const crypto    = require('crypto');
 const voiceGateway = require('./discord-gateway');
 const activityDailyJob = require('./activity-daily-job');
 const skillsCore = require('./public/js/skills-core.js');
@@ -34,9 +35,11 @@ const MEMBERS_FILE               = path.join(DATA_DIR, 'members.json');
 const BOOKING_RESOURCES_FILE     = path.join(DATA_DIR, 'booking-resources.json');
 const BOOKINGS_FILE              = path.join(DATA_DIR, 'bookings.json');
 const UPLOADS_DIR        = path.join(DATA_DIR, 'uploads');
+const RELEASES_DIR       = path.join(DATA_DIR, 'releases');
 
-if (!fs.existsSync(DATA_DIR))    fs.mkdirSync(DATA_DIR,    { recursive: true });
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+if (!fs.existsSync(DATA_DIR))     fs.mkdirSync(DATA_DIR,     { recursive: true });
+if (!fs.existsSync(UPLOADS_DIR))  fs.mkdirSync(UPLOADS_DIR,  { recursive: true });
+if (!fs.existsSync(RELEASES_DIR)) fs.mkdirSync(RELEASES_DIR, { recursive: true });
 
 function loadJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
@@ -115,6 +118,22 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const ok = /^image\/(jpeg|png|webp|gif)$/.test(file.mimetype);
     cb(ok ? null : new Error('Only JPEG, PNG, WebP or GIF files are allowed'), ok);
+  },
+});
+
+/* Release installers/manifests — CI-uploaded, land in the data volume under
+   their real filenames (not randomized) so electron-updater's generic
+   provider can find latest.yml/latest-linux.yml and the installer they
+   reference by exact name. */
+const uploadRelease = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, RELEASES_DIR),
+    filename:    (_req, file, cb) => cb(null, path.basename(file.originalname)),
+  }),
+  limits:     { fileSize: 300 * 1024 * 1024 }, /* 300 MB */
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(exe|AppImage|yml|blockmap)$/i.test(file.originalname);
+    cb(ok ? null : new Error('Only .exe, .AppImage, .yml or .blockmap files are allowed'), ok);
   },
 });
 
@@ -720,6 +739,12 @@ const OLYMPUS_URL = process.env.OLYMPUS_URL  || 'https://olympus.sourcedcs.page'
 const ASACS_URL   = process.env.ASACS_URL    || 'https://asacs.sourcedcs.page';
 const GITHUB_URL  = process.env.GITHUB_URL   || 'https://github.com/NikNam3/sourcedcs';
 
+/* ─── Release uploads (CI, not Casdoor) ─────────────────── */
+/* crc-desktop's release CI has no interactive Casdoor session, so uploading
+   installers/manifests is gated by a separate shared-secret bearer token
+   instead of requireAuth/requireAdmin. */
+const RELEASES_UPLOAD_TOKEN = process.env.RELEASES_UPLOAD_TOKEN || '';
+
 /* ─── Casdoor token exchange helper ────────────────────── */
 /* Exchanges an authorization code for an access token by calling Casdoor's
    token endpoint server-side. The client_secret never leaves the server. */
@@ -825,6 +850,17 @@ function requireBookingAdmin(req, res, next) {
   next();
 }
 
+function requireReleaseUpload(req, res, next) {
+  const auth  = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  const expected = Buffer.from(RELEASES_UPLOAD_TOKEN);
+  const actual   = Buffer.from(token);
+  const ok = RELEASES_UPLOAD_TOKEN && expected.length === actual.length &&
+    crypto.timingSafeEqual(expected, actual);
+  if (!ok) return res.status(401).json({ error: 'Invalid or missing release upload token' });
+  next();
+}
+
 /* ─── Dynamic config for client ─────────────────────────── */
 /* Serves Casdoor connection settings as a JS file so the client reads
    them from environment variables rather than hardcoded values. */
@@ -860,12 +896,59 @@ app.use('/gallery-uploads', express.static(UPLOADS_DIR, {
   dotfiles: 'ignore',
 }));
 
+/* Serve crc-desktop installers + electron-updater manifests (latest.yml,
+   latest-linux.yml) — the exact path electron-updater's generic provider
+   polls, matching crc-desktop's package.json build.publish.url. Short
+   maxAge since latest.yml changes on every release and stale caching would
+   make electron-updater miss a new version. */
+app.use('/downloads', express.static(RELEASES_DIR, {
+  maxAge:   '5m',
+  etag:     true,
+  dotfiles: 'ignore',
+}));
+
+/* Minimal reader for electron-builder's latest.yml/latest-linux.yml — both
+   are a small, flat, known schema (version/path/sha512/size/releaseDate at
+   the top level, plus a `files` array with the same per-file fields), so a
+   couple of regexes cover it without pulling in a YAML dependency this repo
+   doesn't otherwise need. */
+function readReleaseManifest(filename) {
+  let raw;
+  try { raw = fs.readFileSync(path.join(RELEASES_DIR, filename), 'utf8'); }
+  catch { return null; }
+  // `size` only appears nested under the `files:` list entries, not at the
+  // top level, so this intentionally doesn't anchor to line-start like
+  // version/path do.
+  const version = (raw.match(/^version:\s*(\S+)/m) || [])[1];
+  const file     = (raw.match(/^path:\s*(\S+)/m) || [])[1];
+  const size     = (raw.match(/\bsize:\s*(\d+)/) || [])[1];
+  if (!version || !file) return null;
+  return { version, url: '/downloads/' + file, size: size ? parseInt(size, 10) : null };
+}
+
 /* ─── API router ────────────────────────────────────────── */
 const api = express.Router();
 
 /* Health check */
 api.get('/health', (_req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
+});
+
+/* ── crc-desktop releases ─────────────────────────────────
+   /api/releases/upload is called by the crc-desktop-release GitHub Actions
+   workflow (see .github/workflows/crc-desktop-release.yml), one file per
+   request (installer, then its latest*.yml). /api/releases/latest backs the
+   public download page. */
+api.post('/releases/upload', writeOpsLimiter, requireReleaseUpload, uploadRelease.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  res.json({ ok: true, filename: req.file.filename, size: req.file.size });
+});
+
+api.get('/releases/latest', (_req, res) => {
+  res.json({
+    win:   readReleaseManifest('latest.yml'),
+    linux: readReleaseManifest('latest-linux.yml'),
+  });
 });
 
 /* ── Auth: exchange authorization code for access token ── */
