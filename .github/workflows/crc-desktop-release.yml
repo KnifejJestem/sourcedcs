@@ -66,6 +66,12 @@ jobs:
 
   trigger-crc-sync-release:
     needs: build
+    # Always run this, even if a build/upload leg fails: crc-sync is a
+    # shared dependency for every crc-desktop install, not something that
+    # should go stale just because one platform's release upload had a
+    # transient failure (e.g. the server not yet having a config fix this
+    # very deploy chain is responsible for landing).
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
