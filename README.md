@@ -1,19 +1,23 @@
 # SOURCE DCS
 
-Open-source tooling and infrastructure for the SOURCE virtual aviation squadron. This monorepo contains the squadron website, a tactical briefing application, a DCS datalink/GCI server, and a Python converter that turns raw DCS mission files into brief packages.
+Open-source tooling and infrastructure for the SOURCE virtual aviation squadron. This monorepo contains the squadron website, a tactical briefing application, a DCS multiplayer GCI/datalink client + its sync backend, and a Python converter that turns raw DCS mission files into brief packages.
 
 ---
 
 ## Repository Layout
 
 ```
-sourcedcs-web/    Squadron website — Node.js / Express
+sourcedcs-web/    Squadron website — Node.js / Express (also hosts crc-desktop downloads)
 atobrief/         Tactical briefing app — Node.js / Express + Socket.IO
-asacs_link/       DCS GCI datalink server — Node.js / Express + WebSocket
+crc-sync/         crc-desktop's multiplayer sync backend — Node.js / Express + WebSocket
+crc-desktop/      DCS GCI/datalink desktop client — Electron
+lxsrs_v2/         Linux SRS Standalone client library, bundled into crc-desktop — Python 3
 tools/miztoyaml/  .miz → YAML converter — Python 3
 infra/            Docker Compose production stack (Nginx, MariaDB, Casdoor, MediaWiki)
 docs/             Reference documentation
 ```
+
+> `asacs_link` no longer exists in this repo — it was retired and replaced by `crc-sync` (backend) + `crc-desktop` (client). If you find references to it elsewhere, they're stale.
 
 ---
 
@@ -66,27 +70,45 @@ Load a YAML package via the upload screen (drag-drop or file picker) or join an 
 
 ---
 
-### asacs_link — DCS GCI Datalink Server
+### crc-sync — crc-desktop Multiplayer Sync Backend
 
-Reads live unit telemetry written by a DCS `Export.lua` script, applies coalition-based realism filtering, and streams position data to WebSocket clients at 2 Hz. Includes a web-based GCI dashboard.
+Central sync backend for `crc-desktop`: the sole gRPC (DCS telemetry) and SRS-transponder client on behalf of every connected desktop client, broadcasting merged track state + a collaborative overlay (manual IFF declarations, renames, track numbers) over a Casdoor-authed WebSocket. Replaces the retired `asacs_link`.
 
 **Quick start**
 
 ```bash
-cd asacs_link
+cd crc-sync
 npm install
-ASACS_DCS_FILES_PATH="/path/to/DCS/SavedGames/" npm start   # → http://localhost:3000
+npm start          # → http://localhost:3000
+npm test
 ```
 
-Copy the Lua files from `asacs_link/dcs/` to your DCS Saved Games folder:
+See [`crc-sync/README.md`](crc-sync/README.md) for architecture details.
 
-```
-Scripts/mygci_export.lua              ← unit telemetry via Export.lua
-Scripts/Hooks/mygci_hook.lua          ← hook loader
-Mods/services/MyGCI/lua/mygci_events.lua  ← mission metadata + player events
+---
+
+### crc-desktop — DCS GCI/Datalink Desktop Client ("CRC")
+
+Electron desktop client that connects to `crc-sync` for the live tactical picture. Bundles a local Express server and, on Linux, an SRS Standalone radio bridge (`lxsrs_v2`) with its own first-run Python environment setup.
+
+**Quick start**
+
+```bash
+cd crc-desktop
+npm install
+npm install --prefix app   # app/ is its own package -- see crc-desktop/README.md
+npm start
+npm test
 ```
 
-See [`asacs_link/README.md`](asacs_link/README.md) for the full setup guide, WebSocket protocol, and realism model.
+**Building an installer**
+
+```bash
+npm run pack:linux   # AppImage
+npm run pack:win     # NSIS installer
+```
+
+Production installers are built and published by CI on a `crc-desktop-vX.Y.Z` tag push, hosted at [sourcedcs.page/download.html](https://sourcedcs.page/download.html), and autoupdate via `electron-updater`. See [`crc-desktop/README.md`](crc-desktop/README.md) for the packaging gotchas (there are a couple of sharp edges — read it before touching `package.json`'s `build` config) and the root [`CLAUDE.md`](CLAUDE.md) for the full CI/deploy pipeline.
 
 ---
 
@@ -132,7 +154,7 @@ The production stack is in `infra/` and runs with Docker Compose.
 | nginx | Reverse proxy + SSL termination (Let's Encrypt via Certbot) |
 | main-website | `sourcedcs-web` container |
 | atobrief | `atobrief` container |
-| asacs-link | `asacs_link` container |
+| crc-sync | `crc-sync` container |
 | casdoor | SSO identity provider (OAuth 2.0 / JWT) |
 | mediawiki | Squadron wiki |
 | mariadb | Shared database (MediaWiki + Casdoor) |
@@ -148,6 +170,8 @@ docker compose up -d
 
 See `.env.example` for a full list of environment variables.
 
+`main-website`, `atobrief`, and `crc-sync` are built and pushed by their own GitHub Actions workflow on push to `main`/`dev`; a fourth workflow then SSHes in, `git pull`s, and redeploys automatically. See `CLAUDE.md`'s "How the docker-image services deploy" section before changing anything in this pipeline — there are two non-obvious gotchas in it that have caused real outages.
+
 ---
 
 ## Documentation
@@ -156,8 +180,10 @@ See `.env.example` for a full list of environment variables.
 |----------|-------------|
 | [`docs/atobrief/yaml-format.md`](docs/atobrief/yaml-format.md) | ATO brief YAML package schema reference |
 | [`docs/atobrief/weather-txt.md`](docs/atobrief/weather-txt.md) | `weather.txt` supplemental METAR/TAF format |
-| [`asacs_link/README.md`](asacs_link/README.md) | ASACS Link setup, WebSocket protocol, unit object reference |
+| [`crc-desktop/README.md`](crc-desktop/README.md) | crc-desktop dev setup, packaging gotchas, Python SRS bridge, autoupdate |
+| [`crc-sync/README.md`](crc-sync/README.md) | crc-sync architecture and deploy |
 | [`sourcedcs-web/CASDOOR_SETUP.md`](sourcedcs-web/CASDOOR_SETUP.md) | Casdoor SSO configuration guide |
+| [`CLAUDE.md`](CLAUDE.md) | Full commands/architecture reference, including the crc-desktop release pipeline and docker-image deploy chain |
 
 ---
 
