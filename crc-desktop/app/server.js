@@ -1,17 +1,27 @@
 'use strict';
 require('dotenv').config();
-const http = require('http');
-const fs   = require('fs');
-const path = require('path');
-
-const GrpcClient = require('./src/grpc-client');
-const SrsClient  = require('./src/srs-client');
-const TrackStore = require('./src/tracks');
-const WsServer   = require('./src/ws-server');
+const http  = require('http');
+const https = require('https');
+const fs    = require('fs');
+const path  = require('path');
 
 const PUBLIC_DIR       = path.join(__dirname, 'public');
 const DATA_DIR         = path.join(__dirname, 'data');
 const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
+
+// crc-sync is the sole gRPC/SRS client now (see crc-sync/server.js) — this
+// local server no longer runs GrpcClient/SrsClient/TrackStore/WsServer at
+// all. The renderer connects straight to crc-sync's /feed WebSocket for
+// telemetry + the collaborative overlay (app/public/js/sync.js); the few
+// on-demand, per-action RPCs (ATIS transmit, SRS client list, airport
+// weather, WS connect tickets) are still proxied through here so the
+// renderer never needs crc-sync's bearer token directly — only the
+// cross-origin OAuth code exchange in auth-callback.html talks to crc-sync
+// straight from the browser.
+const CRC_SYNC_URL      = process.env.CRC_SYNC_URL || 'wss://asacs.sourcedcs.page';
+const CRC_SYNC_HTTP_URL = CRC_SYNC_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+const CASDOOR_CLIENT_ID = process.env.CASDOOR_CLIENT_ID || '';
+const CASDOOR_ENDPOINT  = process.env.CASDOOR_ENDPOINT  || '';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -22,10 +32,45 @@ const MIME = {
   '.svg':  'image/svg+xml',
 };
 
-// ── HTTP server (static files + WebSocket upgrade) ────────────────────────
+// Reverse-proxies one request to crc-sync, forwarding the client's
+// Authorization header and (for POST) body, and relaying the response back
+// verbatim. Used for every crc-sync HTTP endpoint the renderer needs.
+function proxyToSync(req, res, syncPath) {
+  const target = new URL(syncPath, CRC_SYNC_HTTP_URL);
+  const mod    = target.protocol === 'https:' ? https : http;
+  const headers = { 'Content-Type': 'application/json' };
+  if (req.headers.authorization) headers.Authorization = req.headers.authorization;
+
+  const preq = mod.request(target, { method: req.method, headers }, (pres) => {
+    res.writeHead(pres.statusCode, { 'Content-Type': pres.headers['content-type'] || 'application/json' });
+    pres.pipe(res);
+  });
+  preq.on('error', () => {
+    if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'crc-sync unreachable' }));
+  });
+  if (req.method === 'POST') req.pipe(preq);
+  else preq.end();
+}
 
 const httpServer = http.createServer((req, res) => {
-  // ── SRS radio API proxy → lxsrs_v2 HTTP API ──────────────────────────────
+  // ── Dynamic client config ─────────────────────────────────────────────────
+  if (req.url === '/js/config.js') {
+    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(
+      'var CRC_SYNC_URL      = ' + JSON.stringify(CRC_SYNC_URL)      + ';\n' +
+      'var CASDOOR_CLIENT_ID = ' + JSON.stringify(CASDOOR_CLIENT_ID) + ';\n' +
+      'var CASDOOR_ENDPOINT  = ' + JSON.stringify(CASDOOR_ENDPOINT)  + ';\n'
+    );
+  }
+
+  // ── crc-sync proxies (ticket mint + the three on-demand RPCs) ────────────
+  if (req.url === '/api/ws-ticket' && req.method === 'POST')      return proxyToSync(req, res, '/api/ws-ticket');
+  if (req.url === '/api/atis-transmit' && req.method === 'POST')  return proxyToSync(req, res, '/api/atis-transmit');
+  if (req.url === '/api/srs-clients')                              return proxyToSync(req, res, '/api/srs-clients');
+  if (req.url.startsWith('/api/apt-weather'))                      return proxyToSync(req, res, req.url);
+
+  // ── SRS radio API proxy → lxsrs_v2 HTTP API (local pilot audio, unrelated to crc-sync) ─
   if (req.url.startsWith('/srs-api/')) {
     const upstreamPath = req.url.slice('/srs-api'.length);
     const opts = {
@@ -60,65 +105,6 @@ const httpServer = http.createServer((req, res) => {
     }
     if (req.method === 'POST') req.pipe(upstream);
     else upstream.end();
-    return;
-  }
-
-  // ── ATIS TTS transmit ─────────────────────────────────────────────────────
-  if (req.method === 'POST' && req.url === '/api/atis-transmit') {
-    let body = '';
-    req.on('data', d => { body += d; });
-    req.on('end', () => {
-      let opts;
-      try { opts = JSON.parse(body); } catch (_) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'invalid JSON' }));
-      }
-      grpcClient.transmitAtis(opts)
-        .then(r => {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true, duration_ms: r && r.duration_ms }));
-        })
-        .catch(err => {
-          res.writeHead(503, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
-        });
-    });
-    return;
-  }
-
-  // ── SRS debug: list connected clients + frequencies ──────────────────────
-  if (req.url === '/api/srs-clients') {
-    grpcClient.getSrsClients()
-      .then(data => {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(data));
-      })
-      .catch(err => {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      });
-    return;
-  }
-
-  // ── Airport weather API ───────────────────────────────────────────────────
-  if (req.url.startsWith('/api/apt-weather')) {
-    const qs  = new URL(req.url, 'http://x').searchParams;
-    const lat = parseFloat(qs.get('lat'));
-    const lon = parseFloat(qs.get('lon'));
-    const alt = parseFloat(qs.get('alt')) || 0;
-    if (isNaN(lat) || isNaN(lon)) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'lat/lon required' }));
-    }
-    grpcClient.getAptWeather(lat, lon, alt)
-      .then(data => {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(data));
-      })
-      .catch(err => {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      });
     return;
   }
 
@@ -175,74 +161,7 @@ const httpServer = http.createServer((req, res) => {
   });
 });
 
-// ── Core components ───────────────────────────────────────────────────────
-
-const store      = new TrackStore();
-const grpcClient = new GrpcClient();
-const srsClient  = new SrsClient();
-const wsServer   = new WsServer();
-
-wsServer.attach(httpServer, store, () => grpcClient.triggerMissionFetch());
-
-// ── gRPC → store + ws ─────────────────────────────────────────────────────
-
-grpcClient.on('unit', (unitData) => {
-  store.update(unitData, srsClient.getTransponder(unitData.player));
-});
-
-grpcClient.on('gone', (id) => {
-  store.remove(id);
-});
-
-grpcClient.on('mission-load', (missionData) => {
-  store.clear();
-  wsServer.setMissionData(missionData);
-  wsServer.broadcastInit();
-  console.log(`[crc] mission init — ${missionData.airports.length} airports`);
-});
-
-grpcClient.on('status', (state) => {
-  wsServer.setGrpcStatus(state);
-  wsServer.broadcastStatus();
-});
-
-grpcClient.on('radar-locks', (locks) => {
-  wsServer.broadcastRadarLocks(locks);
-});
-
-grpcClient.on('weather', (data) => {
-  wsServer.setWeather(data);
-  wsServer.broadcastWeather();
-});
-
-grpcClient.on('game-time', (datetime) => {
-  wsServer.setGameTime(datetime);
-  wsServer.broadcastGameTime();
-});
-
-// ── SRS → ws ─────────────────────────────────────────────────────────────
-
-srsClient.on('status', (state) => {
-  wsServer.setSrsStatus(state);
-  wsServer.broadcastStatus();
-});
-
-// ── Stale track reaper ────────────────────────────────────────────────────
-// Evicts units not heard from in 12 s (handles players logging out on the
-// ground where DCS never emits a 'gone' event for the slot).
-setInterval(() => {
-  const n = store.expireStale();
-  if (n > 0) console.log(`[crc] expired ${n} stale track(s)`);
-}, 5000);
-
-// ── Start ─────────────────────────────────────────────────────────────────
-// Delta broadcasts are now driven by per-client timers inside WsServer,
-// using the active view's sweepRate. No global interval needed.
-
 const port = parseInt(process.env.WS_PORT) || 3100;
 httpServer.listen(port, () => {
   console.log(`[crc] http://localhost:${port}`);
 });
-
-grpcClient.connect();
-srsClient.connect();

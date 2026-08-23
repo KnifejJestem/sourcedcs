@@ -1,16 +1,13 @@
 {
   "name": "crc-server",
   "version": "0.1.0",
-  "description": "CRC bridge: DCS-gRPC + SRS → WebSocket",
+  "description": "crc-desktop's local server: static hosting + on-demand crc-sync proxies + local SRS radio bridge",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@grpc/grpc-js": "^1.14.3",
-    "@grpc/proto-loader": "^0.8.0",
-    "dotenv": "^16.4.0",
-    "ws": "^8.20.0"
+    "dotenv": "^16.4.0"
   }
 }

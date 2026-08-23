@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authenticating… — CRC</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0e0a;
+      color: #8aab8a;
+      font-family: 'Courier New', Courier, monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 18px;
+      text-align: center;
+    }
+    .cb-title { font-size: 16px; letter-spacing: 3px; color: #39ff7a; }
+    .cb-status { font-size: 11px; letter-spacing: 1.5px; }
+    .cb-error { font-size: 11px; color: #ff5555; max-width: 380px; line-height: 1.6; }
+    .cb-spinner {
+      width: 18px; height: 18px;
+      border: 2px solid #2a3a2a;
+      border-top-color: #39ff7a;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="cb-title">CRC SYNC</div>
+<div class="cb-spinner" id="spinner"></div>
+<div class="cb-status" id="cbStatus">AUTHENTICATING...</div>
+<div class="cb-error" id="cbError" style="display:none"></div>
+
+<script src="/js/config.js"></script>
+<script>
+(function() {
+  var status = document.getElementById('cbStatus');
+  var errEl  = document.getElementById('cbError');
+  var spin   = document.getElementById('spinner');
+
+  function fail(msg) {
+    spin.style.display  = 'none';
+    status.textContent  = 'AUTHENTICATION FAILED';
+    errEl.style.display = '';
+    errEl.textContent   = msg || 'An unknown error occurred. Please close this window and try again.';
+  }
+
+  var params = {};
+  window.location.search.slice(1).split('&').forEach(function(pair) {
+    var idx = pair.indexOf('=');
+    if (idx > 0) params[decodeURIComponent(pair.slice(0, idx))] = decodeURIComponent(pair.slice(idx + 1));
+  });
+
+  var savedState = null;
+  try { savedState = sessionStorage.getItem('crc-desktop-oauth-state'); } catch (e) {}
+  if (params.state && !savedState) { fail('Session state missing — possible CSRF attack or session expired.'); return; }
+  if (savedState && params.state && params.state !== savedState) { fail('State mismatch — possible CSRF attack.'); return; }
+  try { sessionStorage.removeItem('crc-desktop-oauth-state'); } catch (e) {}
+
+  if (params.error) { fail('Auth error: ' + (params.error_description || params.error)); return; }
+
+  var code = params.code;
+  if (!code) { fail('No authorization code received. The login may have been cancelled.'); return; }
+
+  var redirectUri = window.location.origin + '/auth-callback.html';
+  // crc-sync's own token exchange, called cross-origin — this popup is
+  // served by crc-desktop's local server, crc-sync is a remote host.
+  var httpBase = (typeof CRC_SYNC_URL !== 'undefined' && CRC_SYNC_URL ? CRC_SYNC_URL : 'wss://asacs.sourcedcs.page')
+    .replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+
+  fetch(httpBase + '/api/auth/token', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ code: code, redirectUri: redirectUri }),
+  })
+  .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+  .then(function(result) {
+    if (!result.ok || !result.data.access_token) {
+      fail(result.data.error || 'No access token received from crc-sync.');
+      return;
+    }
+    try { localStorage.setItem('crc-desktop-sync-token', result.data.access_token); } catch (e) {}
+    status.textContent = 'LOGGED IN — YOU CAN CLOSE THIS WINDOW';
+    spin.style.display = 'none';
+    setTimeout(function() { window.close(); }, 800);
+  })
+  .catch(function(err) {
+    fail('Network error during login. (' + (err.message || err) + ')');
+  });
+})();
+</script>
+</body>
+</html>

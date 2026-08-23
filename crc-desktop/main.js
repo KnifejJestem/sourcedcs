@@ -58,15 +58,15 @@ app.on('ready', async () => {
     }
 
     // set env vars that server.js reads
-    process.env.DCS_GRPC_HOST            = config.dcsGrpcHost;
-    process.env.DCS_GRPC_PROTO_PATH      = path.join(__dirname, 'app', 'protos');
-    process.env.DCS_GRPC_POLL_RATE       = String(config.dcsGrpcPollRate ?? 0);
-    process.env.SRS_HOST                 = config.srsHost;
-    process.env.SRS_PORT                 = String(config.srsPort);
-    process.env.SRS_RADIO_API_PORT       = String(config.srsApiPort);
-    process.env.WS_PORT                  = String(config.wsPort);
-    process.env.WS_BROADCAST_INTERVAL_MS = String(config.wsBroadcastIntervalMs);
-    process.env.SOURCEDCS_WEB_URL        = config.sourcedcsWebUrl || '';
+    // DCS_GRPC_*/SRS_HOST/SRS_PORT are gone — crc-sync is now the sole
+    // gRPC/SRS-transponder client (see crc-sync/server.js); this local
+    // server only proxies a handful of on-demand RPCs to it.
+    process.env.CRC_SYNC_URL       = config.crcSyncUrl || 'wss://asacs.sourcedcs.page';
+    process.env.CASDOOR_CLIENT_ID  = config.casdoorClientId || '';
+    process.env.CASDOOR_ENDPOINT   = config.casdoorEndpoint || '';
+    process.env.SRS_RADIO_API_PORT = String(config.srsApiPort);
+    process.env.WS_PORT            = String(config.wsPort);
+    process.env.SOURCEDCS_WEB_URL  = config.sourcedcsWebUrl || '';
 
     require('./app/server.js');
 
@@ -78,6 +78,16 @@ app.on('ready', async () => {
         webPreferences: {
             contextIsolation: true,
         },
+    });
+
+    // Allow the renderer to pop up a Casdoor login window (app/public/js/sync.js
+    // calls window.open on the Casdoor authorize URL) — everything else stays
+    // blocked, matching Electron's secure-by-default posture.
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        if (process.env.CASDOOR_ENDPOINT && url.startsWith(process.env.CASDOOR_ENDPOINT + '/login/oauth/authorize')) {
+            return { action: 'allow', overrideBrowserWindowOptions: { width: 480, height: 640, parent: win, modal: true } };
+        }
+        return { action: 'deny' };
     });
 
     win.webContents.on('did-finish-load', () => {

@@ -1,7 +1,10 @@
 'use strict';
 
 // ── Geo / kinematic math ───────────────────────────────────────────────────
-// Pure functions — no globals, no side effects.
+// Pure functions — no globals, no side effects. Unchanged: these run
+// per-track locally in every client (crc-desktop and the crc-sync web view
+// alike) purely for trail/heading rendering, independent of the shared
+// multiplayer state below.
 
 function haversineM(lat1, lon1, lat2, lon2) {
   const R  = 6371000;
@@ -88,118 +91,38 @@ function checkOnGround(track) {
   return false;
 }
 
-// ── Track numbers ─────────────────────────────────────────────────────────
-// Auto-assigned TN##### identifiers for enemy-coalition tracks.
-// Generated once per track ID and persisted so they stay stable across sessions.
+// ── Track numbers & renames ─────────────────────────────────────────────────
+// Moved server-side (crc-sync's src/collab-store.js + resolve.js). Track
+// numbers are no longer a manual client action either — crc-sync assigns
+// TN##### automatically the moment an enemy track is first resolved for
+// anyone, exactly like this file used to do locally on-demand, just now
+// guaranteed identical for every viewer. These functions keep their
+// original names/signatures — every call site in ui.js/geojson.js/app.js
+// is unchanged.
 
-const trackNumbers = new Map(); // trackId (string) → "TN#####"
-
-function loadTrackNumbers() {
-  try {
-    const raw = localStorage.getItem('crc-desktop-track-numbers');
-    if (!raw) return;
-    for (const [id, tn] of Object.entries(JSON.parse(raw))) {
-      if (tn && typeof tn === 'string') trackNumbers.set(id, tn);
-    }
-  } catch (_) {}
-}
-
-function saveTrackNumbers() {
-  const obj = {};
-  for (const [id, tn] of trackNumbers) obj[id] = tn;
-  localStorage.setItem('crc-desktop-track-numbers', JSON.stringify(obj));
-}
-
-function clearAllTrackNumbers() {
-  trackNumbers.clear();
-  localStorage.removeItem('crc-desktop-track-numbers');
-}
-
-function getOrAssignTrackNumber(id) {
-  const key = String(id);
-  if (trackNumbers.has(key)) return trackNumbers.get(key);
-  const used = new Set(trackNumbers.values());
-  let tn;
-  do { tn = 'TN' + String(Math.floor(10000 + Math.random() * 90000)); } while (used.has(tn));
-  trackNumbers.set(key, tn);
-  saveTrackNumbers();
-  return tn;
-}
-
-// ── Track renames ─────────────────────────────────────────────────────────
-// User-assigned custom callsigns, persisted across sessions.
-// Lower priority than squawk→callsign mappings.
-
-const trackRenames = new Map(); // trackId (string) → callsign string
-
-function loadTrackRenames() {
-  try {
-    const raw = localStorage.getItem('crc-desktop-track-renames');
-    if (!raw) return;
-    for (const [id, name] of Object.entries(JSON.parse(raw))) {
-      if (name && typeof name === 'string') trackRenames.set(id, name);
-    }
-  } catch (_) {}
-}
-
-function saveTrackRenames() {
-  const obj = {};
-  for (const [id, name] of trackRenames) obj[id] = name;
-  localStorage.setItem('crc-desktop-track-renames', JSON.stringify(obj));
-}
+// No-ops: state now arrives from crc-sync on every (re)connect, and crc-sync
+// clears the shared overlay for everyone on mission-load — a client no
+// longer loads/clears its own local copy.
+function loadTrackNumbers() {}
+function clearAllTrackNumbers() {}
+function loadTrackRenames() {}
+function clearAllTrackRenames() {}
 
 function setTrackRename(id, name) {
   const clean = (name || '').trim().toUpperCase();
-  if (clean) trackRenames.set(String(id), clean);
-  else       trackRenames.delete(String(id));
-  saveTrackRenames();
+  if (clean) sendToSync({ type: 'rename', trackId: String(id), name: clean });
+  else       sendToSync({ type: 'clearRename', trackId: String(id) });
 }
 
 function clearTrackRename(id) {
-  trackRenames.delete(String(id));
-  saveTrackRenames();
+  sendToSync({ type: 'clearRename', trackId: String(id) });
 }
 
-function clearAllTrackRenames() {
-  trackRenames.clear();
-  localStorage.removeItem('crc-desktop-track-renames');
-}
-
-// Resolves the display callsign for a track.
-// Priority: squawkMap (exact) → squawkSeq (range) → custom rename → TN##### (enemy) → raw callsign
+// Resolves the display callsign for a track. crc-sync resolves this
+// server-side (squawk map -> squawk range -> rename -> auto TN##### for
+// enemy tracks -> raw callsign, see crc-sync/src/resolve.js, ported from
+// what this function used to compute locally) and attaches the result
+// directly as `callsign` on every track it sends.
 function resolveCallsign(track) {
-  if (track.squawk != null) {
-    const sq = Number(track.squawk);
-
-    // Exact squawk→callsign mapping (highest priority)
-    if (settings.squawkMap) {
-      const mapped = settings.squawkMap[String(sq)];
-      if (mapped) return mapped;
-    }
-
-    // Sequential range mapping
-    if (settings.squawkSeq) {
-      for (const [baseCode, baseName] of Object.entries(settings.squawkSeq)) {
-        const base   = parseInt(baseCode, 10);
-        const offset = sq - base;
-        if (offset >= 0 && offset <= 98) {
-          return baseName + (offset + 1);
-        }
-      }
-    }
-  }
-
-  // User-assigned custom rename (lower priority than squawk mapping)
-  const rename = trackRenames.get(String(track.id));
-  if (rename) return rename;
-
-  // Enemy-coalition tracks get a persistent random track number (TN#####)
-  if (typeof userCoalition !== 'undefined'
-      && track.coalition != null
-      && track.coalition !== 1          // not neutral
-      && track.coalition !== userCoalition) {
-    return getOrAssignTrackNumber(track.id);
-  }
-
-  return track.callsign;
+  return (track && track.callsign) || '';
 }

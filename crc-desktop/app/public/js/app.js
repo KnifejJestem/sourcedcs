@@ -556,11 +556,18 @@ function normaliseTrack(t) {
   return t.id === String(t.id) ? t : { ...t, id: String(t.id) };
 }
 
-function connect() {
-  const ws = new WebSocket(`ws://${window.location.host}`);
-  _ws = ws;
+async function connect() {
+  // crc-sync is a required dependency (no offline/solo mode) — getSyncFeedUrl
+  // returns null and shows a login gate if we're not authenticated yet; the
+  // existing reconnect timer below just keeps retrying until login completes.
+  const url = await getSyncFeedUrl();
+  if (!url) { setTimeout(connect, 2000); return; }
 
-  ws.onopen = () => console.log('[ws] connected');
+  const ws = new WebSocket(url);
+  _ws = ws;
+  _setSyncSocket(ws);
+
+  ws.onopen = () => console.log('[ws] connected to crc-sync');
 
   ws.onmessage = (e) => {
     let msg;
@@ -630,7 +637,7 @@ function connect() {
   };
 
   ws.onclose = () => {
-    if (_ws === ws) _ws = null;
+    if (_ws === ws) { _ws = null; _setSyncSocket(null); }
     grpcStatus = 'disconnected';
     srsStatus  = 'disconnected';
     updateStatusUI();

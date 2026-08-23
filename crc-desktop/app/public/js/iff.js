@@ -14,7 +14,10 @@ const IFF_COLOR_DEFAULTS = {
 };
 
 // ── User coalition ────────────────────────────────────────────────────────
-// 3 = BLUE (default), 2 = RED. Flips who is "own" vs "enemy".
+// 3 = BLUE (default), 2 = RED. Local-only display preference (radar-lock
+// filtering, own-side UI theme) — no longer drives the shared IFF picture,
+// which crc-sync now resolves from a single fixed squadron-wide coalition
+// (CRCSYNC_COALITION on the server). Kept exactly as before.
 
 let userCoalition = 3;
 
@@ -36,78 +39,38 @@ function toggleUserCoalition() {
 
 function getUserCoalition() { return userCoalition; }
 
-// ── Manual IFF overrides ──────────────────────────────────────────────────
-// Map<trackId (string), IFF state> — persisted across sessions.
-
-const iffOverrides = new Map();
-
-function loadIffOverrides() {
-  try {
-    const raw = localStorage.getItem('crc-desktop-iff-overrides');
-    if (!raw) return;
-    for (const [id, state] of Object.entries(JSON.parse(raw))) {
-      if (IFF_STATES.includes(state)) iffOverrides.set(id, state);
-    }
-  } catch (_) {}
-}
-
-function saveIffOverrides() {
-  const obj = {};
-  for (const [id, state] of iffOverrides) obj[id] = state;
-  localStorage.setItem('crc-desktop-iff-overrides', JSON.stringify(obj));
-}
+// ── IFF declarations ───────────────────────────────────────────────────────
+// Moved server-side (crc-sync's src/collab-store.js + resolve.js) so every
+// connected controller sees the same declarations. These functions keep
+// their original names/signatures — every call site in ui.js/geojson.js/
+// app.js is unchanged — but now send a mutation to crc-sync (via sendToSync,
+// defined in sync.js) instead of writing to a local Map/localStorage.
 
 function setIffOverride(id, state) {
   if (!IFF_STATES.includes(state)) return;
-  iffOverrides.set(String(id), state);
-  saveIffOverrides();
+  sendToSync({ type: 'declare', trackId: String(id), state });
 }
 
 function clearIffOverride(id) {
-  iffOverrides.delete(String(id));
-  saveIffOverrides();
+  sendToSync({ type: 'clearDeclare', trackId: String(id) });
 }
 
-function clearAllIffOverrides() {
-  iffOverrides.clear();
-  localStorage.removeItem('crc-desktop-iff-overrides');
-}
+// No-op: state now arrives from crc-sync on every (re)connect via the
+// 'snapshot'/'delta' messages, there's nothing to load from localStorage.
+function loadIffOverrides() {}
 
-// ── Transponder check ─────────────────────────────────────────────────────
-// Active = squawk is a finite number in the valid 4-digit range 0–7777.
+// No-op: crc-sync clears the shared overlay for everyone on mission-load
+// (src/collab-store.js clear()) — a client no longer clears its own copy.
+function clearAllIffOverrides() {}
 
-function isTransponderActive(track) {
-  if (track.squawk == null) return false;
-  const sq = Number(track.squawk);
-  return Number.isFinite(sq) && sq >= 0 && sq <= 7777;
-}
+// ── Effective IFF state ─────────────────────────────────────────────────────
+// crc-sync resolves this server-side (auto classification + declaration
+// override merged) and attaches it directly to each track as `iffState` —
+// see crc-sync/src/resolve.js, ported from what this function used to
+// compute locally.
 
-// ── Auto IFF computation ──────────────────────────────────────────────────
-
-function computeAutoIff(track) {
-  const own   = userCoalition;
-  const enemy = own === 3 ? 2 : 3;
-
-  if (track.coalition === own) {
-    if (!track.player)              return 'friendly'; // AI = always friendly
-    if (isTransponderActive(track)) return 'friendly'; // player + transponder
-    // player, no active transponder
-    return checkOnGround(track) ? 'friendly' : 'bogey';
-  }
-
-  if (track.coalition === enemy) {
-    return checkOnGround(track) ? 'invisible' : 'bogey';
-  }
-
-  // Coalition 1 (neutral) or unknown
-  return 'neutral';
-}
-
-// Returns the effective IFF state: manual override first, then auto.
 function getIff(track) {
-  const override = iffOverrides.get(String(track.id));
-  if (override) return override;
-  return computeAutoIff(track);
+  return (track && track.iffState) || 'neutral';
 }
 
 // CSS colour for an IFF state — reads live from settings so colour picker
