@@ -22,7 +22,7 @@ services:
     command: >
       /bin/sh -c "
       echo 'resolver 127.0.0.11 valid=30s;
-      client_max_body_size 50M;
+      client_max_body_size 350M;
       map \$$http_upgrade \$$connection_upgrade {
         default upgrade;
         \"\" close;
@@ -230,7 +230,7 @@ services:
       - APPLY_CHANNEL_ID=${APPLY_CHANNEL_ID}
       - GRADING_CHANNEL_ID=${GRADING_CHANNEL_ID}
       - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
-      - RELEASE_UPDATE_TOKEN=${RELEASE_UPDATE_TOKEN}
+      - RELEASE_UPLOAD_TOKEN=${RELEASE_UPLOAD_TOKEN}
     networks:
       - web
     volumes:
