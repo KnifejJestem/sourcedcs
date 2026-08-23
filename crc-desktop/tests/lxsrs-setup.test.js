@@ -116,7 +116,19 @@ function withStubOnPath(binDir, fn) {
   return Promise.resolve(fn()).finally(() => { process.env.PATH = originalPath; });
 }
 
-test('ensureLxsrsVenv: successful install writes the completion marker and returns venvPython', async () => {
+// stubPython3's fake is a POSIX shell script (#!/bin/sh + chmod +x) --
+// Windows has no concept of executing that (no shebang interpretation, no
+// exec bit; PATH resolution there is extension-based) and PATH itself
+// isn't ':'-joined. spawn('python3', ...) just fails to find/run it, which
+// happens to produce the same `null` result some of these tests expect
+// anyway (for the wrong reason) and not others. Skip rather than chase a
+// second, Windows-specific fake interpreter: ensureLxsrsVenv only ever
+// runs on Linux in production (main.js's `if (IS_LINUX)` guard).
+const SKIP_STUB_ON_WINDOWS = process.platform === 'win32'
+  ? 'stubPython3 is a POSIX shell script; ensureLxsrsVenv is Linux-only in production'
+  : false;
+
+test('ensureLxsrsVenv: successful install writes the completion marker and returns venvPython', { skip: SKIP_STUB_ON_WINDOWS }, async () => {
   const root = tmpDir();
   const venvDir = path.join(root, 'venv');
   stubPython3(path.join(root, 'stub-bin'), 0);
@@ -129,7 +141,7 @@ test('ensureLxsrsVenv: successful install writes the completion marker and retur
   assert.ok(logs.some(l => l.includes('done')));
 });
 
-test('ensureLxsrsVenv: failed pip install does not write the marker and returns null', async () => {
+test('ensureLxsrsVenv: failed pip install does not write the marker and returns null', { skip: SKIP_STUB_ON_WINDOWS }, async () => {
   const root = tmpDir();
   const venvDir = path.join(root, 'venv');
   stubPython3(path.join(root, 'stub-bin'), 1); // pip install "fails"
@@ -142,7 +154,7 @@ test('ensureLxsrsVenv: failed pip install does not write the marker and returns 
   assert.ok(logs.some(l => l.includes('failed to set up')));
 });
 
-test('ensureLxsrsVenv: a half-finished venv from an interrupted run is retried, not silently reused', async () => {
+test('ensureLxsrsVenv: a half-finished venv from an interrupted run is retried, not silently reused', { skip: SKIP_STUB_ON_WINDOWS }, async () => {
   // This is the exact failure mode found while testing crc-desktop v1.0.9:
   // a first attempt got killed mid pip-install, leaving venvPython present
   // with no third-party deps and no marker; a second launch reused it as-is
