@@ -36,6 +36,12 @@ function spawnLxsrs() {
         ? path.join(process.resourcesPath, 'python-pkg')
         : path.join(__dirname, 'python-pkg');
 
+    // __dirname resolves inside app.asar when packaged, which is a single
+    // file on disk (not a real directory) -- spawn()'s cwd can't chdir into
+    // it (ENOTDIR). userData is also where lxsrs can actually write its
+    // log/state files; resourcesPath is read-only inside the AppImage mount.
+    const runtimeCwd = app.isPackaged ? app.getPath('userData') : path.join(__dirname);
+
     const proc = spawn('python3', [
         '-m', 'lxsrs_v2',
         ...freqArgs,
@@ -45,7 +51,7 @@ function spawnLxsrs() {
         '--play-audio',
         '--api-port', String(config.srsApiPort),
     ], {
-        cwd: path.join(__dirname),
+        cwd: runtimeCwd,
         env: {
             ...process.env,
             PYTHONPATH: pythonPkgDir,
