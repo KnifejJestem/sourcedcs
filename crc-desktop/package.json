@@ -5,7 +5,7 @@
   "scripts": {
     "start": "electron .",
     "pack:linux": "electron-builder --linux AppImage --publish never",
-    "pack:win": "electron-builder --win nsis --publish never"
+    "pack:win":   "electron-builder --win nsis --publish never"
   },
   "devDependencies": {
     "electron": "^43.4.1",
@@ -18,14 +18,16 @@
     "appId": "page.sourcedcs.crc",
     "productName": "CRC",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "app": "."
     },
     "files": [
+      "package.json",
       "main.js",
       "config.json",
       "app/**/*",
-      "!app/node_modules/**/*",
-      "!app/public/node_modules/**/*"
+      "!app/package.json",
+      "!app/package-lock.json"
     ],
     "win": {
       "target": "nsis"
@@ -37,9 +39,7 @@
         {
           "from": "python-pkg",
           "to": "python-pkg",
-          "filter": [
-            "**/*"
-          ]
+          "filter": ["**/*"]
         }
       ]
     },
