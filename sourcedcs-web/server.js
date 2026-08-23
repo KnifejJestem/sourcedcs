@@ -919,11 +919,14 @@ function readReleaseManifest(filename) {
   // `size` only appears nested under the `files:` list entries, not at the
   // top level, so this intentionally doesn't anchor to line-start like
   // version/path do.
+  // `.+` (not `\S+`) for path — electron-builder's Windows installer
+  // filenames contain spaces (e.g. "CRC Setup 1.0.7.exe"), which a
+  // whitespace-delimited match would truncate at the first space.
   const version = (raw.match(/^version:\s*(\S+)/m) || [])[1];
-  const file     = (raw.match(/^path:\s*(\S+)/m) || [])[1];
+  const file     = (raw.match(/^path:\s*(.+?)\r?$/m) || [])[1];
   const size     = (raw.match(/\bsize:\s*(\d+)/) || [])[1];
   if (!version || !file) return null;
-  return { version, url: '/downloads/' + file, size: size ? parseInt(size, 10) : null };
+  return { version, url: '/downloads/' + encodeURIComponent(file), size: size ? parseInt(size, 10) : null };
 }
 
 /* ─── API router ────────────────────────────────────────── */
