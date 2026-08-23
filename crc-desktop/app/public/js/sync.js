@@ -16,6 +16,17 @@ function getSyncToken() {
   try { return localStorage.getItem(SYNC_TOKEN_KEY); } catch (_) { return null; }
 }
 
+// Header object for any fetch() to this app's own local server that proxies
+// through to a crc-sync route guarded by requireAuth (e.g. /api/apt-weather,
+// /api/atis-transmit, /api/srs-clients) -- app/server.js's proxyToSync()
+// only forwards an Authorization header if the browser's own request to it
+// already had one; callers that skip this get "Authentication required"
+// back from crc-sync even though the user is fully logged in.
+function _syncAuthHeaders() {
+  const token = getSyncToken();
+  return token ? { Authorization: 'Bearer ' + token } : {};
+}
+
 function clearSyncToken() {
   try { localStorage.removeItem(SYNC_TOKEN_KEY); } catch (_) {}
 }
@@ -203,6 +214,23 @@ function _initConnTab() {
   btn.addEventListener('mouseleave', () => { btn.style.opacity = '0.7'; });
   btn.addEventListener('click', showConnWidget);
   document.body.appendChild(btn);
+
+  // #srs-radio-panel is a full-width bar pinned to the bottom of the
+  // screen (position:fixed; bottom:0; left:0; right:0) whose height varies
+  // with how many radios are monitored — a fixed `bottom:8px` for this
+  // button sat inside that panel's footprint and got hidden under it.
+  // Track the panel's live height (srs-radio.js already does this
+  // internally for its own map-resize logic, but that's a private closure
+  // in a different file) so this button always floats just above it.
+  const radioPanel = document.getElementById('srs-radio-panel');
+  if (radioPanel) {
+    const syncBtnPosition = () => {
+      const h = radioPanel.getBoundingClientRect().height;
+      btn.style.bottom = (h + 8) + 'px';
+    };
+    new ResizeObserver(syncBtnPosition).observe(radioPanel);
+    syncBtnPosition();
+  }
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', _initConnTab);

@@ -1138,7 +1138,7 @@ function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
 
   document.getElementById('awp-close').addEventListener('click', closeAptWeatherPanel);
 
-  fetch(`/api/apt-weather?lat=${lat}&lon=${lon}&alt=${elevM}`)
+  fetch(`/api/apt-weather?lat=${lat}&lon=${lon}&alt=${elevM}`, { headers: _syncAuthHeaders() })
     .then(r => r.json())
     .then(d => {
       const body = document.getElementById('awp-body');
@@ -1413,7 +1413,7 @@ function initAprtPanel() {
 
     fetch('/api/atis-transmit', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ..._syncAuthHeaders() },
       body: JSON.stringify({ ssml: text, frequency: Math.round(freqMhz * 1e6), coalition: coal, position: pos }),
     })
       .then(r => r.json())
@@ -1499,7 +1499,7 @@ function _fetchAndShowAprtWeather(apt) {
   _loadAprtManualWx(apt);
   _updateAprtRefCard();
 
-  fetch(`/api/apt-weather?lat=${apt.lat}&lon=${apt.lon}&alt=${apt.elev || 0}`)
+  fetch(`/api/apt-weather?lat=${apt.lat}&lon=${apt.lon}&alt=${apt.elev || 0}`, { headers: _syncAuthHeaders() })
     .then(r => r.json())
     .then(d => {
       if (!d.error) {
