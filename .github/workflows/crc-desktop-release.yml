@@ -36,6 +36,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install app/ dependencies
+        # app/ is its own package (app/package.json -- "crc-server", the
+        # local server bundled into the packaged app) with its own
+        # node_modules (dotenv). It's gitignored like any node_modules, so
+        # a fresh CI checkout never has it -- without this, the packaged
+        # asar is missing app/node_modules/dotenv and app/server.js fails
+        # to start with "Cannot find module 'dotenv'".
+        working-directory: crc-desktop/app
+        run: npm ci
+
       - name: Set package version from tag
         if: startsWith(github.ref, 'refs/tags/crc-desktop-v')
         shell: bash
