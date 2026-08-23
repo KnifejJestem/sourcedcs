@@ -7,6 +7,16 @@ on:
       - completed
   workflow_dispatch:
 
+concurrency:
+  # One deploy at a time per branch, queued rather than dropped. Without
+  # this, several of these can trigger in quick succession (e.g. a burst of
+  # crc-desktop-v* tags, each firing crc-sync-docker.yml -> this workflow)
+  # and run concurrently against the same server, racing the same `docker
+  # compose up -d` recreate step -- this once left a stale temp-renamed
+  # container blocking every subsequent deploy with a name conflict.
+  group: deploy-${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'dev' && 'dev' || 'main' }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -36,4 +46,4 @@ jobs:
             # here with a mariadb:11 TLS handshake timeout blocking a nginx
             # config change that had nothing to do with mariadb.
             docker compose pull main-website atobrief crc-sync
-            docker compose up -d
+            docker compose up -d --remove-orphans
