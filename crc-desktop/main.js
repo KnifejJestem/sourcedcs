@@ -82,7 +82,7 @@ app.on('ready', async () => {
     win = new BrowserWindow({
         width:  1400,
         height: 900,
-        title:  'CRC',
+        title:  `CRC v${app.getVersion()}`,
         autoHideMenuBar: true,
         webPreferences: {
             contextIsolation: true,
