@@ -59,7 +59,7 @@ jobs:
           for f in "${files[@]}"; do
             echo "Uploading $f"
             curl --fail -sS \
-              -H "Authorization: Bearer ${{ secrets.RELEASES_UPLOAD_TOKEN }}" \
+              -H "Authorization: Bearer ${{ secrets.RELEASE_UPDATE_TOKEN }}" \
               -F "file=@${f}" \
               https://sourcedcs.page/api/releases/upload
           done

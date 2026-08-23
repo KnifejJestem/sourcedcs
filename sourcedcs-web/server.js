@@ -743,7 +743,7 @@ const GITHUB_URL  = process.env.GITHUB_URL   || 'https://github.com/NikNam3/sour
 /* crc-desktop's release CI has no interactive Casdoor session, so uploading
    installers/manifests is gated by a separate shared-secret bearer token
    instead of requireAuth/requireAdmin. */
-const RELEASES_UPLOAD_TOKEN = process.env.RELEASES_UPLOAD_TOKEN || '';
+const RELEASE_UPDATE_TOKEN = process.env.RELEASE_UPDATE_TOKEN || '';
 
 /* ─── Casdoor token exchange helper ────────────────────── */
 /* Exchanges an authorization code for an access token by calling Casdoor's
@@ -853,9 +853,9 @@ function requireBookingAdmin(req, res, next) {
 function requireReleaseUpload(req, res, next) {
   const auth  = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  const expected = Buffer.from(RELEASES_UPLOAD_TOKEN);
+  const expected = Buffer.from(RELEASE_UPDATE_TOKEN);
   const actual   = Buffer.from(token);
-  const ok = RELEASES_UPLOAD_TOKEN && expected.length === actual.length &&
+  const ok = RELEASE_UPDATE_TOKEN && expected.length === actual.length &&
     crypto.timingSafeEqual(expected, actual);
   if (!ok) return res.status(401).json({ error: 'Invalid or missing release upload token' });
   next();
