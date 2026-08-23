@@ -5,6 +5,7 @@ const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
+const fs   = require('fs');
 
 const config = require('./config.json');
 
@@ -25,7 +26,76 @@ function logLines(prefix, stream) {
 
 // ── Process launchers ─────────────────────────────────────────────────────
 
-function spawnLxsrs() {
+// lxsrs_v2's third-party deps (numpy, opuslib, ...) include compiled C
+// extensions tied to the exact CPython ABI they were built against —
+// bundling pre-built wheels at package time can't work reliably since we
+// don't know which Python version an end user's system will have (Fedora,
+// Ubuntu, Arch, ... all ship different ones, and none match whatever CI's
+// runner happens to have). Instead, on first run we create a venv against
+// whichever `python3` is actually on this machine and pip-install into
+// that, so the compiled wheels pip resolves are always ABI-correct for the
+// system that's about to run them. lxsrs_v2 itself stays PYTHONPATH-loaded
+// from the bundled python-pkg source (see pythonPkgDir below) — only its
+// third-party dependencies need the venv.
+//
+// pynput is deliberately NOT here: it's only used for the alternate
+// --ptt-mode pynput (hold-to-talk) path, which we never pass (we use the
+// default stdin/Enter-toggle PTT), and lxsrs_v2's client.py already
+// lazy-imports it itself with its own error handling for that path. On
+// Linux pynput hard-requires evdev, which has no prebuilt wheel on PyPI —
+// every install would need a C compiler + matching kernel headers, which
+// most end-user desktops don't have. Skipping it avoids that failure mode
+// entirely for a dependency we don't use.
+const LXSRS_VENV_DEPS = ['numpy', 'sounddevice', 'opuslib'];
+
+function runCmd(cmd, args, opts) {
+    return new Promise((resolve, reject) => {
+        const proc = spawn(cmd, args, opts);
+        logLines('lxsrs-setup', proc.stdout);
+        logLines('lxsrs-setup', proc.stderr);
+        proc.on('error', reject);
+        proc.on('exit', code => {
+            if (code === 0) resolve();
+            else reject(new Error(`${cmd} ${args.join(' ')} exited with code ${code}`));
+        });
+    });
+}
+
+// Returns the venv's python3 path once its deps are installed, or null if
+// setup failed (in which case the SRS radio feature is skipped rather than
+// crashing the app).
+async function ensureLxsrsVenv() {
+    const venvDir      = path.join(app.getPath('userData'), 'lxsrs-venv');
+    const venvPython    = path.join(venvDir, 'bin', 'python3');
+    // Written only after pip install actually succeeds — venvPython alone
+    // existing isn't proof setup finished (e.g. the app quit or lost
+    // network mid pip-install on a previous run); checking just for that
+    // would silently reuse a half-installed venv missing its deps forever.
+    const completeMarker = path.join(venvDir, '.setup-complete');
+
+    if (fs.existsSync(completeMarker)) return venvPython;
+
+    console.log('[lxsrs-setup] setting up a Python environment for the SRS radio bridge...');
+    try {
+        await runCmd('python3', ['-m', 'venv', venvDir]);
+        await runCmd(venvPython, ['-m', 'pip', 'install', '--no-input', '--disable-pip-version-check', ...LXSRS_VENV_DEPS]);
+        fs.writeFileSync(completeMarker, new Date().toISOString());
+        console.log('[lxsrs-setup] done.');
+        return venvPython;
+    } catch (err) {
+        console.error(
+            '[lxsrs-setup] failed to set up the SRS radio Python environment:', err.message,
+            `— SRS radio will be unavailable this session. To fix manually, run:\n` +
+            `  python3 -m venv "${venvDir}" && "${venvPython}" -m pip install ${LXSRS_VENV_DEPS.join(' ')}`
+        );
+        return null;
+    }
+}
+
+async function spawnLxsrs() {
+    const venvPython = await ensureLxsrsVenv();
+    if (!venvPython) return null;
+
     const freqArgs = config.freqs.flatMap(f => ['--freq', f]);
 
     // extraResources (see package.json's build.linux.extraResources) puts
@@ -42,7 +112,7 @@ function spawnLxsrs() {
     // log/state files; resourcesPath is read-only inside the AppImage mount.
     const runtimeCwd = app.isPackaged ? app.getPath('userData') : path.join(__dirname);
 
-    const proc = spawn('python3', [
+    const proc = spawn(venvPython, [
         '-m', 'lxsrs_v2',
         ...freqArgs,
         '--tx-freq',  config.txFreq,
@@ -71,7 +141,12 @@ app.on('ready', async () => {
     console.log(`[crc] CRC v${app.getVersion()} starting (${process.platform})`);
 
     if (IS_LINUX) {
-        pyProc = spawnLxsrs();
+        // Not awaited: first-run venv setup (network pip install) can take
+        // a while and must not block the window from appearing. SRS radio
+        // simply becomes available a little later than the rest of the app.
+        spawnLxsrs()
+            .then(proc => { pyProc = proc; })
+            .catch(err => console.error('[lxsrs] unexpected error:', err.message));
     }
 
     // set env vars that server.js reads
