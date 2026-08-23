@@ -62,6 +62,8 @@ function spawnLxsrs() {
 // ── App lifecycle ─────────────────────────────────────────────────────────
 
 app.on('ready', async () => {
+    console.log(`[crc] CRC v${app.getVersion()} starting (${process.platform})`);
+
     if (IS_LINUX) {
         pyProc = spawnLxsrs();
     }
