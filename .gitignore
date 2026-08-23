@@ -29,7 +29,7 @@ share/python-wheels/
 *.yaml
 *.miz
 .env
-mediawiki/LocalSettings.php
+infra/mediawiki/LocalSettings.php
 
 MANIFEST
 
@@ -197,6 +197,9 @@ infra/.env.example
 sourcedcs-web/data/gallery.json
 sourcedcs-web/data/uploads/
 infra/mediawiki/LocalSettings.php
+<<<<<<< HEAD
 
+=======
+>>>>>>> aeace0d (fixed gitigonre)
 # debug data
 /tools/data/
