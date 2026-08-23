@@ -13,6 +13,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 
 COPY server.js             ./
+COPY releases.js           ./
 COPY discord-gateway.js    ./
 COPY activity-score.js     ./
 COPY activity-daily-job.js ./
