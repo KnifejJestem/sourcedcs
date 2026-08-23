@@ -116,11 +116,17 @@ function resolveCallsign(track, collabEntry, assignTrackNumber) {
 
 // Given a raw track (from TrackStore) and its CollaborativeStore overlay
 // entry (or null), returns the fully-resolved fields a client just renders.
+// Alongside the merged/resolved fields (iffState, callsign) this also sends
+// the raw declaration (iffOverride, rename) separately — a client needs to
+// know "is there an active manual override" (e.g. to highlight the matching
+// button in a controls panel) independent of the resolved display value.
 function resolveTrack(track, collabEntry, missionData, assignTrackNumber) {
   return {
     ...track,
     iffState:    resolveIff(track, collabEntry, missionData),
+    iffOverride: (collabEntry && collabEntry.iff)         ? collabEntry.iff.state         : null,
     callsign:    resolveCallsign(track, collabEntry, assignTrackNumber),
+    rename:      (collabEntry && collabEntry.rename)      ? collabEntry.rename.value      : null,
     trackNumber: (collabEntry && collabEntry.trackNumber) ? collabEntry.trackNumber.value : null,
   };
 }

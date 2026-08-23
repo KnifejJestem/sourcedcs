@@ -39,6 +39,12 @@ const SWEEP_INTERVAL  = 50;  // ms between sweep ticks
 const latestFromServer = new Map(); // id → track (raw server data)
 const tracks           = new Map(); // id → track (displayed)
 window.getAllTracks    = () => [...latestFromServer.values()];
+// Un-sweep-gated lookup for UI that should reflect crc-sync's shared state
+// immediately (IFF declarations, renames, track numbers) rather than waiting
+// for the simulated radar beam to illuminate the track — see ui.js's track
+// panel, which uses this for everything except telemetry (alt/hdg/spd/vs),
+// which stays sweep-gated on purpose (that IS the radar-realism simulation).
+window.getLatestTrack   = (id) => latestFromServer.get(String(id)) || null;
 const history          = new Map(); // id → [{lat, lon, alt, timestamp}, ...]
 const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
 

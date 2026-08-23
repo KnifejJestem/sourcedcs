@@ -838,24 +838,24 @@ function initTrackPanel() {
   }
 
   function _refreshIffButtons() {
-    const cols     = iffColors();
-    const override = iffOverrides.get(String(_trackPanelId));
+    const cols = iffColors();
+    // Fresh (non-sweep-gated) lookup: an IFF declaration is crc-sync's
+    // shared state, not a radar return, so it should reflect immediately —
+    // not wait for the simulated radar beam to next illuminate this track.
+    const t        = _trackPanelId != null ? window.getLatestTrack(_trackPanelId) : null;
+    const override = t ? t.iffOverride : null;
     $panel.querySelectorAll('.tp-iff-btn').forEach(btn => {
       const col = cols[btn.dataset.state] || '#888888';
       btn.style.color       = col;
       btn.style.borderColor = col + '55';
       btn.classList.toggle('iff-active', btn.dataset.state === override);
     });
-    // also update the iff state badge
-    if (_trackPanelId != null) {
-      const t = tracks.get(String(_trackPanelId));
-      if (t) _refreshIffState(t);
-    }
+    if (t) _refreshIffState(t);
   }
 
   function _refreshCallsign() {
     if (_trackPanelId == null) return;
-    const t = tracks.get(String(_trackPanelId));
+    const t = window.getLatestTrack(_trackPanelId);
     if (t) document.getElementById('tp-callsign').textContent = resolveCallsign(t);
   }
 
@@ -943,6 +943,11 @@ function updateTrackPanel() {
   const t = tracks.get(_trackPanelId);
   if (!t) return; // track faded out — leave panel open with last values
 
+  // crc-sync's shared state (IFF/callsign/rename) should reflect immediately,
+  // independent of the sweep-gated `t` used for telemetry below — see
+  // window.getLatestTrack's definition in app.js.
+  const fresh = window.getLatestTrack(_trackPanelId) || t;
+
   const hist     = history.get(_trackPanelId) || [];
   const { heading, speedKt } = kinematics(hist);
   const fpm      = verticalFpm(hist);
@@ -951,7 +956,7 @@ function updateTrackPanel() {
   const spec     = aircraftTypes && aircraftTypes[t.type];
 
   // Header
-  const cs = resolveCallsign(t);
+  const cs = resolveCallsign(fresh);
   document.getElementById('tp-callsign').textContent = cs;
   document.getElementById('tp-type').textContent     = (spec && spec.label) || t.type || '';
 
@@ -971,7 +976,7 @@ function updateTrackPanel() {
     t.squawk != null ? String(t.squawk).padStart(4,'0') : '—';
 
   // IFF state badge
-  _refreshIffState(t);
+  _refreshIffState(fresh);
 
   // IFF buttons
   if (initTrackPanel._refreshIffButtons) initTrackPanel._refreshIffButtons();
@@ -979,7 +984,7 @@ function updateTrackPanel() {
   // Rename input (only pre-fill if it's not focused)
   const $ri = document.getElementById('tp-rename-input');
   if ($ri && document.activeElement !== $ri) {
-    $ri.value = trackRenames.get(_trackPanelId) || '';
+    $ri.value = fresh.rename || '';
   }
 
   // Flight plan (fetched once per callsign change; compare uppercase to avoid case-drift stalls)

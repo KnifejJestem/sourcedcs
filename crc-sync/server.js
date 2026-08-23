@@ -59,6 +59,11 @@ app.get('/js/config.js', (_req, res) => {
 // ── Auth: code exchange (browser-facing, cross-origin from crc-desktop) ────
 const MAX_AUTH_CODE_LEN    = 512;
 const MAX_REDIRECT_URI_LEN = 512;
+// Browsers send an OPTIONS preflight before the actual POST (since the real
+// request carries a Content-Type header) — app.post() alone never sees that
+// preflight, so it needs its own route or the preflight gets no CORS headers
+// and the browser blocks the real request before it's ever sent.
+app.options('/api/auth/token', corsForLocalhost);
 app.post('/api/auth/token', corsForLocalhost, authLimiter, async (req, res) => {
   const { code, redirectUri } = req.body || {};
   if (!code || typeof code !== 'string' || code.length > MAX_AUTH_CODE_LEN) {
