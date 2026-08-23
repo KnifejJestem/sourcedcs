@@ -203,3 +203,4 @@ infra/mediawiki/LocalSettings.php
 >>>>>>> aeace0d (fixed gitigonre)
 # debug data
 /tools/data/
+infra/mediawiki/LocalSettings.php
