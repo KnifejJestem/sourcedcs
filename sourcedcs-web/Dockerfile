@@ -12,15 +12,13 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 
-COPY server.js             ./
-COPY releases.js           ./
-COPY discord-gateway.js    ./
-COPY activity-score.js     ./
-COPY activity-daily-job.js ./
-COPY package.json          ./
-COPY config.json           ./
-COPY public/                ./public/
-COPY scripts/               ./scripts/
+# Whole (filtered) context rather than a per-file list -- an explicit list
+# silently drops any new top-level module from the image if someone forgets
+# to add it here (releases.js did exactly this once). .dockerignore is the
+# actual exclusion list; keep it in sync when adding new top-level
+# directories that shouldn't ship (most importantly: never remove `data`
+# from it -- see its own comment there).
+COPY . .
 
 RUN mkdir -p /app/data && chown -R node:node /app/data
 
