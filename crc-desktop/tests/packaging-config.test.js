@@ -74,6 +74,45 @@ test('every app/package.json dependency is actually present in app/node_modules'
   assert.deepEqual(missing, [], `app/node_modules is missing: ${missing.join(', ')} -- run "npm ci" inside crc-desktop/app first`);
 });
 
+test('every local require in main.js is covered by build.files', () => {
+  // Regression: this is the general form of the "package.json and main.js
+  // must be listed explicitly" bug above -- lxsrs-setup.js was extracted
+  // out of main.js into its own file (to make it unit-testable) and never
+  // added to `files`. Unlike the hardcoded check above, THIS test would
+  // have caught that the moment the require() was added, without anyone
+  // needing to remember to add a matching assertion for every new file --
+  // it parses main.js's own require('./...') calls and checks each one
+  // actually resolves to something covered by `files`, instead of hardcoding
+  // filenames. The bug shipped a build that crashed instantly on launch
+  // with "Cannot find module './lxsrs-setup'" on every platform.
+  const mainJs = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  const localRequires = [...mainJs.matchAll(/require\(['"]\.\/([^'"]+)['"]\)/g)].map(m => m[1]);
+  assert.ok(localRequires.length > 0, 'sanity check: main.js should have at least one local require for this test to mean anything');
+
+  const files = (pkg.build && pkg.build.files) || [];
+  const root = path.join(__dirname, '..');
+
+  for (const req of localRequires) {
+    const resolved = ['', '.js', '.json']
+      .map(ext => req + ext)
+      .find(candidate => fs.existsSync(path.join(root, candidate)));
+    assert.ok(resolved, `main.js requires './${req}' but no matching .js/.json file exists on disk`);
+
+    const topLevelDir = resolved.includes('/') ? resolved.split('/')[0] : null;
+    const covered = topLevelDir
+      // Nested path (e.g. app/server.js) -- this repo only ever covers a
+      // whole directory with a `<dir>/**/*` glob, never lists nested files
+      // individually, so a prefix match is the right (and sufficient) check.
+      ? files.some(f => f.startsWith(topLevelDir + '/'))
+      // Flat top-level file -- a custom `files` array replaces
+      // electron-builder's defaults rather than extending them, so it must
+      // be listed explicitly; nothing here falls back to a default include.
+      : files.includes(resolved);
+
+    assert.ok(covered, `main.js requires './${req}' (resolves to ${resolved}) but it isn't covered by build.files -- the packaged app will crash with "Cannot find module './${req}'"`);
+  }
+});
+
 test('linux.syncDesktopName is paired with a top-level desktopName', () => {
   // Regression: desktopName only takes effect when read from the *root*
   // package.json (app.isPackaged's `packager.info.metadata.desktopName`

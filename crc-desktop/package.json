@@ -28,6 +28,7 @@
     "files": [
       "package.json",
       "main.js",
+      "lxsrs-setup.js",
       "config.json",
       "app/**/*",
       "!app/package.json",
