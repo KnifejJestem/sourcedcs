@@ -6,10 +6,10 @@ const multer    = require('multer');
 const path      = require('path');
 const fs        = require('fs');
 const https     = require('https');
-const crypto    = require('crypto');
 const voiceGateway = require('./discord-gateway');
 const activityDailyJob = require('./activity-daily-job');
 const skillsCore = require('./public/js/skills-core.js');
+const { parseReleaseManifest, checkReleaseUploadToken } = require('./releases.js');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -853,11 +853,9 @@ function requireBookingAdmin(req, res, next) {
 function requireReleaseUpload(req, res, next) {
   const auth  = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  const expected = Buffer.from(RELEASE_UPLOAD_TOKEN);
-  const actual   = Buffer.from(token);
-  const ok = RELEASE_UPLOAD_TOKEN && expected.length === actual.length &&
-    crypto.timingSafeEqual(expected, actual);
-  if (!ok) return res.status(401).json({ error: 'Invalid or missing release upload token' });
+  if (!checkReleaseUploadToken(token, RELEASE_UPLOAD_TOKEN)) {
+    return res.status(401).json({ error: 'Invalid or missing release upload token' });
+  }
   next();
 }
 
@@ -907,26 +905,11 @@ app.use('/downloads', express.static(RELEASES_DIR, {
   dotfiles: 'ignore',
 }));
 
-/* Minimal reader for electron-builder's latest.yml/latest-linux.yml — both
-   are a small, flat, known schema (version/path/sha512/size/releaseDate at
-   the top level, plus a `files` array with the same per-file fields), so a
-   couple of regexes cover it without pulling in a YAML dependency this repo
-   doesn't otherwise need. */
 function readReleaseManifest(filename) {
   let raw;
   try { raw = fs.readFileSync(path.join(RELEASES_DIR, filename), 'utf8'); }
   catch { return null; }
-  // `size` only appears nested under the `files:` list entries, not at the
-  // top level, so this intentionally doesn't anchor to line-start like
-  // version/path do.
-  // `.+` (not `\S+`) for path — electron-builder's Windows installer
-  // filenames contain spaces (e.g. "CRC Setup 1.0.7.exe"), which a
-  // whitespace-delimited match would truncate at the first space.
-  const version = (raw.match(/^version:\s*(\S+)/m) || [])[1];
-  const file     = (raw.match(/^path:\s*(.+?)\r?$/m) || [])[1];
-  const size     = (raw.match(/\bsize:\s*(\d+)/) || [])[1];
-  if (!version || !file) return null;
-  return { version, url: '/downloads/' + encodeURIComponent(file), size: size ? parseInt(size, 10) : null };
+  return parseReleaseManifest(raw);
 }
 
 /* ─── API router ────────────────────────────────────────── */

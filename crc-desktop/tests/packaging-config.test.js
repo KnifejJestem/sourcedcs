@@ -1,0 +1,87 @@
+'use strict';
+
+/* Static sanity checks on package.json's electron-builder config and on
+   app/'s own dependency tree. Both encode real regressions hit while
+   shipping crc-desktop's packaging pipeline -- see each test's comment for
+   which bug it reproduces. These are cheap (no electron-builder run, no
+   Electron download) so they run on every `npm test`; a full "actually
+   package and inspect the asar" check would be far slower and isn't
+   needed to catch either bug class here. */
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+const appPkgPath = path.join(__dirname, '..', 'app', 'package.json');
+const appPkg = fs.existsSync(appPkgPath) ? JSON.parse(fs.readFileSync(appPkgPath, 'utf8')) : null;
+
+test('build.directories.app is pinned to the project root', () => {
+  // Regression: app/ has its own package.json (app/server.js's "crc-server"
+  // package), which matches electron-builder's built-in "two package.json
+  // structure" convention -- left unset, it auto-detects app/ as the real
+  // app root and packages everything relative to THAT, silently dropping
+  // main.js (and config.json, and the root package.json's own "main"
+  // entry) from the asar entirely. See computeDefaultAppDirectory in
+  // electron-builder's own source for the auto-detection this overrides.
+  assert.equal(pkg.build && pkg.build.directories && pkg.build.directories.app, '.');
+});
+
+test('build.files includes package.json and main.js explicitly', () => {
+  // Regression: a custom `files` array replaces electron-builder's
+  // defaults entirely rather than extending them. Without these listed,
+  // electron-builder fell back to whatever package.json *did* get matched
+  // by the glob (app/package.json, via `app/**/*`) as the app's entry-point
+  // manifest, and it declares "main": "server.js" -- the exact symptom
+  // hit was "Application entry file server.js ... was not found".
+  const files = (pkg.build && pkg.build.files) || [];
+  assert.ok(files.includes('package.json'), 'files must explicitly include package.json');
+  assert.ok(files.includes('main.js'), 'files must explicitly include main.js');
+});
+
+test('build.files does not exclude app/node_modules', () => {
+  // Regression: app/server.js does `require('dotenv')`, resolved from
+  // app/node_modules/dotenv. An earlier version of this files array had
+  // "!app/node_modules/**/*", which packaged an app/server.js that could
+  // never find dotenv at runtime ("Cannot find module 'dotenv'").
+  const files = (pkg.build && pkg.build.files) || [];
+  const excludesAppNodeModules = files.some(f => /^!.*app\/node_modules/.test(f));
+  assert.equal(excludesAppNodeModules, false);
+});
+
+test('app/package.json exists and declares at least one dependency', () => {
+  // Sanity check the fixture the next test depends on hasn't drifted away
+  // (e.g. app/ getting restructured without updating this suite).
+  assert.ok(appPkg, 'app/package.json should exist -- app/server.js is packaged as its own "crc-server" package');
+  assert.ok(Object.keys(appPkg.dependencies || {}).length > 0);
+});
+
+test('every app/package.json dependency is actually present in app/node_modules', () => {
+  // Regression: app/node_modules is gitignored like any node_modules, so a
+  // fresh CI checkout never has it. crc-desktop-release.yml originally
+  // only ran `npm ci` at the crc-desktop root, never inside app/ -- the
+  // packaged asar was missing app/node_modules/dotenv, and app/server.js
+  // crashed on startup with "Cannot find module 'dotenv'". Run this
+  // *after* `npm ci --prefix app` runs (see the CI workflow's "Install
+  // app/ dependencies" step and this repo's own `npm test`, which needs
+  // the same) -- on a clean checkout with no app/node_modules yet, this
+  // test is *supposed* to fail loudly rather than let packaging silently
+  // ship a broken app/server.js.
+  if (!appPkg) return; // covered by the previous test
+  const missing = Object.keys(appPkg.dependencies || {})
+    .filter(dep => !fs.existsSync(path.join(__dirname, '..', 'app', 'node_modules', dep)));
+  assert.deepEqual(missing, [], `app/node_modules is missing: ${missing.join(', ')} -- run "npm ci" inside crc-desktop/app first`);
+});
+
+test('linux.syncDesktopName is paired with a top-level desktopName', () => {
+  // Regression: desktopName only takes effect when read from the *root*
+  // package.json (app.isPackaged's `packager.info.metadata.desktopName`
+  // in electron-builder's LinuxTargetHelper) -- it does nothing placed
+  // under build.linux, where it's easy to mistakenly nest it alongside
+  // syncDesktopName.
+  const syncsDesktopName = !!(pkg.build && pkg.build.linux && pkg.build.linux.syncDesktopName);
+  if (syncsDesktopName) {
+    assert.ok(pkg.desktopName, 'syncDesktopName is set but no top-level desktopName exists for it to sync');
+  }
+});
