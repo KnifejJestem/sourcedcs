@@ -29,5 +29,11 @@ jobs:
             git pull --ff-only
             cd infra
             export TAG=${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'dev' && 'dev' || 'latest' }}
-            docker compose pull
+            # Only pull the images we actually publish. Pulling every service
+            # (mariadb, casdoor, certbot, nginx) on every deploy means one
+            # transient registry hiccup on a completely unrelated, unchanged
+            # base image aborts the whole deploy under set -e -- as happened
+            # here with a mariadb:11 TLS handshake timeout blocking a nginx
+            # config change that had nothing to do with mariadb.
+            docker compose pull main-website atobrief crc-sync
             docker compose up -d
