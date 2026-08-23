@@ -1,5 +1,5 @@
 {
-  "crcSyncUrl": "ws://localhost:3000",
+  "crcSyncUrl": "wss://asacs.sourcedcs.page",
   "casdoorClientId": "b8d31289a6431a479afc",
   "casdoorEndpoint": "https://auth.sourcedcs.page",
   "srsHost": "server.sourcedcs.page",
