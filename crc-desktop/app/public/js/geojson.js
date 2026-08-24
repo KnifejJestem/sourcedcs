@@ -351,7 +351,7 @@ function buildDrawings() {
   const features = [];
 
   for (const d of missionData.drawings) {
-    if (d.primitiveType === 'TextBox') continue;
+    if (d.primitiveType === 'TextBox') continue; // rendered by buildTextMarks() instead
 
     const color     = settings.lightMode ? 'rgba(40,40,40,0.85)' : 'rgba(255,255,255,0.75)';
     const fillColor = 'rgba(0,0,0,0)';
@@ -386,6 +386,92 @@ function buildDrawings() {
   return { type: 'FeatureCollection', features };
 }
 
+// Parses an ICAO-style FPL message built by sourcedcs-web's form1801.js:
+//   line 2 (index 2): "-<DEP ICAO><HHMM>"                     e.g. "-UGKO1630"
+//   line 3 (index 3): "-<speed><level> <ROUTE>"               e.g. "-N0450F350 DCT DEVOL UL9 KONAN DCT"
+//   line 4 (index 4): "-<DEST ICAO><EET>[ <ALTN1>][ <ALTN2>]" e.g. "-UGTB0130"
+// The full filed route is dep → route waypoints → dest, not just field 15's
+// enroute string — a route of "DCT ERGEP DCT" is genuinely just one enroute
+// fix, but the plotted line still needs to start/end at the filed airports.
+// Each token is resolved against the mission's navpoints/airports by
+// name/ICAO; airway identifiers (e.g. "UL9") simply won't match anything and
+// are dropped — no special casing needed since there's no airway geometry to
+// plot them against.
+function parseFiledRouteWaypoints(fplMessage) {
+  if (!fplMessage) return { points: [], matched: 0, total: 0 };
+  const lines = fplMessage.split('\n');
+
+  const byName = new Map();
+  for (const w of (missionData && missionData.waypoints) || []) {
+    if (w.name) byName.set(w.name.toUpperCase(), w);
+  }
+  for (const a of (missionData && missionData.airports) || []) {
+    if (a.icao) byName.set(a.icao.toUpperCase(), a);
+    if (a.name) byName.set(a.name.toUpperCase(), a);
+  }
+
+  const resolve = (tok) => {
+    const hit = byName.get(tok.toUpperCase());
+    return hit && hit.lat != null && hit.lon != null ? { lat: hit.lat, lon: hit.lon } : null;
+  };
+
+  const tokens = [];
+  // Dep/dest lines are "-<ICAO letters><digits...>" with no separator —
+  // the ICAO is the leading run of letters.
+  const depMatch  = (lines[2] || '').match(/^-([A-Za-z]+)/);
+  const destMatch = (lines[4] || '').match(/^-([A-Za-z]+)/);
+  if (depMatch) tokens.push(depMatch[1]);
+
+  const routeMatch = (lines[3] || '').match(/^-\S+\s+(.*)$/);
+  if (routeMatch) {
+    for (const t of routeMatch[1].trim().split(/\s+/)) {
+      if (t && t.toUpperCase() !== 'DCT') tokens.push(t);
+    }
+  }
+  if (destMatch) tokens.push(destMatch[1]);
+
+  const points = [];
+  for (const tok of tokens) {
+    const p = resolve(tok);
+    if (p) points.push(p);
+  }
+  return { points, matched: points.length, total: tokens.length };
+}
+
+function buildFiledRoute(points) {
+  if (!points || points.length < 2) return { type: 'FeatureCollection', features: [] };
+  return {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: points.map(p => [p.lon, p.lat]) },
+      properties: {},
+    }],
+  };
+}
+
+// DCS mission-editor "Text" objects (primitiveType TextBox). Kept as its own
+// source/layer rather than folded into buildDrawings() so it can be toggled
+// independently of shape drawings.
+function buildTextMarks() {
+  if (!settings.textMarksEnabled || !missionData || !missionData.drawings || !missionData.drawings.length)
+    return { type: 'FeatureCollection', features: [] };
+
+  const color = settings.lightMode ? 'rgba(40,40,40,0.9)' : 'rgba(255,255,255,0.85)';
+  const features = [];
+
+  for (const d of missionData.drawings) {
+    if (d.primitiveType !== 'TextBox' || !d.text || d.lat == null || d.lon == null) continue;
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
+      properties: { text: d.text, color },
+    });
+  }
+
+  return { type: 'FeatureCollection', features };
+}
+
 // Approach vector: 15 nm extended centreline from FAF to threshold.
 // Shown whenever an airport is selected and a runway course has been entered.
 function buildApproachVector() {
@@ -410,6 +496,68 @@ function buildApproachVector() {
       },
     ],
   };
+}
+
+// Extended centerline for APP-control: independent of the topbar-driven
+// buildApproachVector() above (different airport-selection state — the APRT
+// panel's _aprtSelectedApt, not the topbar's selectedApt/approachRwyCourse —
+// and no real runway geometry exists to unify them on). Only drawn when an
+// APP radar for the APRT panel's airport is enabled and a runway heading has
+// been entered there.
+// Distance-tick spacing in nm, coarser at low zoom so ticks don't merge into
+// noise once the centerline's whole length is only a few screen pixels long.
+// majorNm is always a multiple of minorNm, marking the round-number distances
+// (5, 10, ...) with a longer crossbar than the fine in-between ticks.
+function _extCenterlineTickPlan(zoom) {
+  if (zoom >= 11) return { minorNm: 1, majorNm: 5 };
+  if (zoom >= 9)  return { minorNm: 2, majorNm: 10 };
+  if (zoom >= 7)  return { minorNm: 5, majorNm: 10 };
+  return { minorNm: 10, majorNm: 20 };
+}
+
+function buildExtendedCenterline() {
+  if (!_aprtSelectedApt || _aprtRwyHeading == null) return { type: 'FeatureCollection', features: [] };
+  if (!enabledRadarIds.has('app:' + _aprtSelectedApt.name)) return { type: 'FeatureCollection', features: [] };
+
+  // The runway number is a magnetic heading (real-world convention) — the
+  // map's geometry math (projectPos/bearingDeg) is all true-bearing, so it
+  // needs the same true = magnetic - magVar conversion the BRA readout uses
+  // in reverse (ui.js: displayed magnetic = true + magVar).
+  const magVar      = settings.magVar || 0;
+  const trueHeading = ((_aprtRwyHeading - magVar) % 360 + 360) % 360;
+  const reciprocal  = (trueHeading + 180) % 360;
+
+  const lengthNm = settings.extCenterlineNm || 25;
+  const lengthM  = lengthNm * 1852;
+  const [startLat, startLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, lengthM);
+  const color = settings.lightMode ? 'rgba(40,40,40,0.7)' : 'rgba(255,255,255,0.5)';
+
+  const features = [{
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates: [[startLon, startLat], [_aprtSelectedApt.lon, _aprtSelectedApt.lat]] },
+    properties: { color, kind: 'centerline' },
+  }];
+
+  const zoom = (typeof map !== 'undefined' && map.getZoom) ? map.getZoom() : 8;
+  const { minorNm, majorNm } = _extCenterlineTickPlan(zoom);
+  const MINOR_HALF_WIDTH_M = 350; // ~0.19 nm each side — fine in-between ticks
+  const MAJOR_HALF_WIDTH_M = 700; // ~0.38 nm each side — round-number ticks (5, 10, ...)
+
+  for (let i = 1; i * minorNm < lengthNm; i++) {
+    const d       = i * minorNm;
+    const isMajor = (i * minorNm) % majorNm === 0; // majorNm is always a multiple of minorNm
+    const halfWidthM = isMajor ? MAJOR_HALF_WIDTH_M : MINOR_HALF_WIDTH_M;
+    const [tLat, tLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, d * 1852);
+    const [aLat, aLon] = projectPos(tLat, tLon, (trueHeading + 90) % 360, halfWidthM);
+    const [bLat, bLon] = projectPos(tLat, tLon, (trueHeading + 270) % 360, halfWidthM);
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: [[aLon, aLat], [bLon, bLat]] },
+      properties: { color, kind: 'tick' },
+    });
+  }
+
+  return { type: 'FeatureCollection', features };
 }
 
 function _makeRing(lat, lon, radiusM, ringType) {
@@ -606,6 +754,7 @@ function _doUpdateMap() {
   map.getSource('units').setData(buildDots());
   map.getSource('bullseye').setData(buildBullseye());
   map.getSource('approach-vec').setData(buildApproachVector());
+  map.getSource('ext-centerline').setData(buildExtendedCenterline());
   map.getSource('datalink-locks').setData(buildDatalinkLines());
   if (!settings.radarDebug) {
     map.getSource('radar-debug').setData({ type: 'FeatureCollection', features: [] });

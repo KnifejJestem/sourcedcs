@@ -22,7 +22,10 @@ npm test   # node --test tests/*.test.js
 - `tests/lxsrs-setup.test.js` — the ENOTDIR crash from spawning with a cwd inside `app.asar`, and a first-run Python venv setup that silently got reused after being interrupted mid `pip install`.
 - `tests/packaging-config.test.js` — `package.json`'s electron-builder `build` config having the wrong shape (see "Two package.json structure" below), and `app/`'s own dependencies not actually being installed.
 
-Both are cheap, fast, offline checks — no Electron download, no real Python/pip. They will not catch every packaging bug (they don't run `electron-builder` itself or launch the packaged binary); when changing anything under `build` in `package.json`, also do a real local packaging + launch test (below) before pushing a release tag.
+Both are cheap, fast, offline checks — no Electron download, no real Python/pip. They will not catch every packaging bug (they don't run `electron-builder` itself or launch the packaged binary). Two scripts wrap the two levels of confidence you actually want:
+
+- `npm run dev-check` — fast, in-place: runs `npm test` then `npm start`, so you can click through whatever you're working on in the real Electron window. Doesn't touch your existing `app/node_modules` or Python venv (those are real dev state), so it won't catch a fresh-checkout regression by itself — that's what `release-check` is for.
+- `npm run release-check` — slower, run once before tagging a release: checks out a clean `HEAD` into an isolated `git worktree`, does the same two `npm ci`s CI does, runs the tests, packages a Linux AppImage, and actually launches it, failing if it crashes or logs a fatal error. This is the step that would have caught the v1.1.2 crash (`lxsrs-setup.js` missing from `build.files`) before it shipped. It only verifies the Linux/AppImage leg — CI remains the source of truth for the Windows/NSIS leg.
 
 ## Packaging
 
@@ -31,7 +34,7 @@ npm run pack:linux   # electron-builder AppImage, unpublished, into dist/
 npm run pack:win     # electron-builder NSIS installer, unpublished, into dist/
 ```
 
-Then actually launch the packaged binary (`dist/*.AppImage` or the installed `.exe`) before trusting it — `npm test` and a successful `electron-builder` run both pass even when the packaged app is broken (this has happened more than once; see below).
+Then actually launch the packaged binary (`dist/*.AppImage` or the installed `.exe`) before trusting it — `npm test` and a successful `electron-builder` run both pass even when the packaged app is broken (this has happened more than once; see below). `npm run release-check` (above) automates exactly this for the Linux leg.
 
 ### Two package.json structure — the most common way to break packaging
 

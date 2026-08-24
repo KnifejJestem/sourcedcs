@@ -136,6 +136,7 @@ function initSettings() {
     fadeGrace:      document.getElementById('set-fade-grace'),
     fadeGraceVal:   document.getElementById('set-fade-grace-val'),
     radarDebug:     document.getElementById('set-radar-debug'),
+    textMarks:      document.getElementById('set-text-marks'),
     scale:          document.getElementById('set-scale'),
     scaleVal:       document.getElementById('set-scale-val'),
     lightMode:      document.getElementById('set-light-mode'),
@@ -155,6 +156,7 @@ function initSettings() {
   els.scaleVal.textContent = parseFloat(settings.scale).toFixed(1) + '×';
   els.lightMode.checked  = settings.lightMode;
   els.radarDebug.checked   = settings.radarDebug;
+  els.textMarks.checked    = settings.textMarksEnabled;
   applyLightMode();
 
   const persist = (key, val) => { settings[key] = val; saveSettings(); updateMap(); };
@@ -194,6 +196,13 @@ function initSettings() {
     applyLightMode();
   });
   els.radarDebug.addEventListener('change',   () => persist('radarDebug',   els.radarDebug.checked));
+  els.textMarks.addEventListener('change', () => {
+    settings.textMarksEnabled = els.textMarks.checked;
+    saveSettings();
+    // Text marks are static (mission-derived), unlike the continuously
+    // re-rendered per-tick layers persist() feeds — update the source directly.
+    if (missionData) map.getSource('text-marks').setData(buildTextMarks());
+  });
 
   // ── Bullseye override ────────────────────────────────────────────────
   initBullseyeSettings();
@@ -423,6 +432,17 @@ function initColorSettings() {
   if ($hideGroundUnits) {
     $hideGroundUnits.checked = settings.hideGroundUnits ?? false;
     $hideGroundUnits.addEventListener('change', () => { settings.hideGroundUnits = $hideGroundUnits.checked; saveSettings(); updateMap(); });
+  }
+
+  const $extCenterlineNm = document.getElementById('set-ext-centerline-nm');
+  if ($extCenterlineNm) {
+    $extCenterlineNm.value = settings.extCenterlineNm ?? 25;
+    $extCenterlineNm.addEventListener('input', () => {
+      const v = parseInt($extCenterlineNm.value, 10);
+      settings.extCenterlineNm = Number.isFinite(v) && v > 0 ? v : 25;
+      saveSettings();
+      updateMap();
+    });
   }
 }
 
@@ -904,16 +924,31 @@ function closeTrackPanel() {
   _fplFetchCallsign = null;
   const $fplSec = document.getElementById('tp-fpl-section');
   if ($fplSec) $fplSec.style.display = 'none';
+  _clearFiledRoute();
 }
 
 // Fetch and display the flight plan for the resolved callsign of the current track.
 // Aborts silently if the panel is closed or a newer fetch has started.
 let _fplFetchCallsign = null;
+let _currentFplMessage = null;
+let _filedRouteShown   = false;
+
+function _clearFiledRoute() {
+  _filedRouteShown = false;
+  if (mapReady) map.getSource('filed-route').setData({ type: 'FeatureCollection', features: [] });
+  const $btn    = document.getElementById('tp-fpl-route-btn');
+  const $status = document.getElementById('tp-fpl-route-status');
+  if ($btn) $btn.textContent = 'OVERLAY ROUTE';
+  if ($status) $status.textContent = '';
+}
 
 function _refreshTrackFpl(callsign) {
   const $section = document.getElementById('tp-fpl-section');
   const $msg     = document.getElementById('tp-fpl-msg');
   if (!$section || !$msg) return;
+
+  _currentFplMessage = null;
+  _clearFiledRoute();
 
   if (!callsign) {
     $section.style.display = 'none';
@@ -930,6 +965,7 @@ function _refreshTrackFpl(callsign) {
         return;
       }
       $msg.textContent       = body.fplMessage;
+      _currentFplMessage     = body.fplMessage;
       $section.style.display = 'block';
     })
     .catch(() => {
@@ -937,6 +973,30 @@ function _refreshTrackFpl(callsign) {
       $section.style.display = 'none';
     });
 }
+
+(function initFiledRouteButton() {
+  const $btn    = document.getElementById('tp-fpl-route-btn');
+  const $status = document.getElementById('tp-fpl-route-status');
+  if (!$btn) return;
+
+  $btn.addEventListener('click', () => {
+    if (_filedRouteShown) { _clearFiledRoute(); return; }
+
+    if (!_currentFplMessage) return;
+    const { points, matched, total } = parseFiledRouteWaypoints(_currentFplMessage);
+    if (matched < 2) {
+      if ($status) $status.textContent = total > 0
+        ? `only ${matched} of ${total} waypoints resolved — can't plot a route`
+        : 'no route waypoints found';
+      return;
+    }
+
+    map.getSource('filed-route').setData(buildFiledRoute(points));
+    _filedRouteShown = true;
+    $btn.textContent = 'HIDE ROUTE';
+    if ($status) $status.textContent = `${matched} of ${total} waypoints plotted`;
+  });
+})();
 
 function updateTrackPanel() {
   if (_trackPanelId == null) return;
@@ -1204,6 +1264,22 @@ function initZuluClock() {
 
 let _aprtSelectedApt = null;
 
+// Numeric heading parsed from the APRT panel's runway field, for the
+// extended APP-radar centerline (geojson.js buildExtendedCenterline()).
+// Cached rather than read from the DOM every map-update tick.
+let _aprtRwyHeading = null;
+
+function _updateAprtRwyHeading() {
+  const raw = ((document.getElementById('aprt-atis-rwy') || {}).value || '').toUpperCase().trim();
+  const m = raw.match(/^(\d{1,2})([LRC]?)$/);
+  _aprtRwyHeading = m ? parseInt(m[1], 10) * 10 : null;
+  if (typeof updateMap === 'function') updateMap();
+}
+
+// Per-app-session id so crc-sync can tell "my own next 5s loop tick" apart
+// from a different controller's client transmitting on the same frequency.
+const _atisOwnerId = crypto.randomUUID();
+
 function _updateAprtRefCard() {
   const $card = document.getElementById('aprt-ref-card');
   if (!$card) return;
@@ -1346,6 +1422,8 @@ function initAprtPanel() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', _updateAprtRefCard);
   });
+  const $rwyField = document.getElementById('aprt-atis-rwy');
+  if ($rwyField) $rwyField.addEventListener('input', _updateAprtRwyHeading);
 
   // Theater settings
   const $transAlt   = document.getElementById('aprt-transition-alt');
@@ -1395,6 +1473,18 @@ function initAprtPanel() {
     clearTimeout(_atisPauseTimer);
     if ($tx) { $tx.textContent = 'TRANSMIT'; $tx.classList.remove('aprt-btn-active'); $tx.disabled = false; }
     if ($status) { $status.textContent = 'STOPPED'; $status.className = 'aprt-atis-status'; }
+
+    // Best-effort: tell crc-sync to cancel/release this frequency so a
+    // still-in-flight transmit doesn't keep playing and the frequency frees
+    // up for another client immediately, instead of waiting out the TTL.
+    const freqMhz = parseFloat(document.getElementById('aprt-atis-freq').value);
+    if (freqMhz) {
+      fetch('/api/atis-transmit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ..._syncAuthHeaders() },
+        body: JSON.stringify({ stop: true, frequency: Math.round(freqMhz * 1e6), ownerId: _atisOwnerId }),
+      }).catch(() => {});
+    }
   }
 
   function _doAtisTransmit() {
@@ -1414,11 +1504,21 @@ function initAprtPanel() {
     fetch('/api/atis-transmit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ..._syncAuthHeaders() },
-      body: JSON.stringify({ ssml: text, frequency: Math.round(freqMhz * 1e6), coalition: coal, position: pos }),
+      body: JSON.stringify({
+        ssml: text, frequency: Math.round(freqMhz * 1e6), coalition: coal, position: pos,
+        ownerId: _atisOwnerId,
+      }),
     })
-      .then(r => r.json())
-      .then(d => {
+      .then(r => r.json().then(d => ({ status: r.status, d })))
+      .then(({ status, d }) => {
         if (!_atisLooping) return;
+        if (status === 409) {
+          _atisLooping = false;
+          clearTimeout(_atisPauseTimer);
+          if ($tx) { $tx.textContent = 'TRANSMIT'; $tx.classList.remove('aprt-btn-active'); $tx.disabled = false; }
+          if ($status) { $status.textContent = 'IN USE (another client)'; $status.className = 'aprt-atis-status err'; }
+          return;
+        }
         if (!d.ok) { _stopAtisLoop(); if ($status) { $status.textContent = d.error || 'Error'; $status.className = 'aprt-atis-status err'; } return; }
         if ($status) { $status.textContent = 'WAITING…'; $status.className = 'aprt-atis-status'; }
         _atisPauseTimer = setTimeout(_doAtisTransmit, 5000);

@@ -118,6 +118,8 @@ const DEFAULTS = {
   braColor:      '#4488cc',
   magVar:        0,
   radarDebug:    false,
+  textMarksEnabled: false, // DCS mission-editor Text objects, shown as a map layer
+  extCenterlineNm: 25, // extended APP-radar centerline length
   squawkMap:     {},
   squawkSeq:     {}, // sequential ranges: { "1101": "HAT1" } → 1101→HAT11, 1102→HAT12…
   scale:         1.0,
@@ -609,6 +611,7 @@ async function connect() {
           map.getSource('bullseye').setData(buildBullseye());
           map.getSource('navpoints').setData(buildNavpoints());
           map.getSource('drawings').setData(buildDrawings());
+          map.getSource('text-marks').setData(buildTextMarks());
         }
         // Rebuild radar panel so airport radars reflect the new mission
         buildRadarPanelContent();

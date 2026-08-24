@@ -65,6 +65,38 @@ function initMap() {
       },
     });
 
+    // ── DCS mission-editor text marks (TextBox drawings) ───────────────────
+    map.addSource('text-marks', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'text-marks-labels', type: 'symbol', source: 'text-marks',
+      layout: {
+        'text-field':            ['get', 'text'],
+        'text-font':             ['Roboto Regular', 'Noto Sans Regular'],
+        'text-size':             10,
+        'text-anchor':           'left',
+        'text-offset':           [0.4, 0],
+        'text-allow-overlap':    false,
+        'text-ignore-placement': false,
+      },
+      paint: {
+        'text-color':      ['get', 'color'],
+        'text-halo-color': '#000000',
+        'text-halo-width': 1,
+      },
+    });
+
+    // ── Filed route overlay (from the track panel's FPL section) ───────────
+    map.addSource('filed-route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'filed-route-line', type: 'line', source: 'filed-route',
+      paint: {
+        'line-color':     '#cc66cc',
+        'line-width':     1.5,
+        'line-opacity':   0.85,
+        'line-dasharray': [3, 2],
+      },
+    });
+
     // ── Nav/waypoints ─────────────────────────────────────────────────────
     map.addSource('navpoints', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
@@ -160,6 +192,21 @@ function initMap() {
     map.addLayer({
       id: 'approach-vec-line', type: 'line', source: 'approach-vec',
       paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.8, 'line-width': 1.5, 'line-dasharray': [8, 4] },
+    });
+
+    // ── Extended centerline (APP-radar control, APRT-panel-driven) ────────
+    map.addSource('ext-centerline', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'ext-centerline-line', type: 'line', source: 'ext-centerline',
+      filter: ['==', ['get', 'kind'], 'centerline'],
+      paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.8, 'line-width': 1.5, 'line-dasharray': [8, 4] },
+    });
+    // Distance ticks — solid (not dashed) so they read as clear crossbars
+    // rather than blending into the dashed centerline's own dash pattern.
+    map.addLayer({
+      id: 'ext-centerline-ticks', type: 'line', source: 'ext-centerline',
+      filter: ['==', ['get', 'kind'], 'tick'],
+      paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.8, 'line-width': 1.5 },
     });
 
     // ── Measure line ─────────────────────────────────────────────────────
@@ -353,6 +400,10 @@ function initMap() {
       }
     });
 
+    // Refreshes the extended centerline's zoom-dependent tick spacing as soon
+    // as a zoom gesture settles, rather than waiting for the next track tick.
+    map.on('zoomend', () => updateMap());
+
     // Click on empty map → close track panel + weather panel
     // (or, in bullseye pick mode, set the target coalition's override position)
     map.on('click', (e) => {
@@ -427,6 +478,7 @@ function initMap() {
       map.getSource('bullseye').setData(buildBullseye());
       map.getSource('navpoints').setData(buildNavpoints());
       map.getSource('drawings').setData(buildDrawings());
+      map.getSource('text-marks').setData(buildTextMarks());
     }
   });
 }
@@ -514,6 +566,8 @@ function applyMapTheme() {
   map.setPaintProperty('measure-label', 'text-halo-width', light ? 0 : 1.5);
   // Rebuild drawings so line color (white vs dark) updates
   if (missionData) map.getSource('drawings').setData(buildDrawings());
+  map.setPaintProperty('text-marks-labels', 'text-halo-color', light ? '#ffffff' : '#000000');
+  if (missionData) map.getSource('text-marks').setData(buildTextMarks());
   // Re-register coalition icons with theme-correct colors
   updateIcons(light);
 }

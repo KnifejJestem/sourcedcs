@@ -609,6 +609,7 @@
       border: 1px solid var(--ui-border-2); padding: 6px 8px;
       white-space: pre-wrap; word-break: break-all; margin: 0;
     }
+    .tp-fpl-status { font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.05em; }
     #tp-fpl-section { display: none; }
 
     /* ── Settings panel ── */
@@ -1396,6 +1397,10 @@
   <div class="tp-section" id="tp-fpl-section">
     <div class="tp-section-label">Flight Plan</div>
     <pre class="tp-fpl-pre" id="tp-fpl-msg"></pre>
+    <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+      <button class="tp-rename-btn" id="tp-fpl-route-btn">OVERLAY ROUTE</button>
+      <span class="tp-fpl-status" id="tp-fpl-route-status"></span>
+    </div>
   </div>
 </div>
 
@@ -1752,9 +1757,9 @@
     <div class="setting-label">Labels</div>
     <div class="setting-group">
       <div class="setting-row">
-        <span>Radar debug</span>
+        <span>DCS text marks</span>
         <label class="toggle">
-          <input type="checkbox" id="set-radar-debug" />
+          <input type="checkbox" id="set-text-marks" />
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -1920,6 +1925,30 @@
         <span>Hide ground units</span>
         <label class="toggle">
           <input type="checkbox" id="set-hide-ground-units" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Extended Centerline</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Length (nm)</span>
+        <input type="number" id="set-ext-centerline-nm" min="1" max="100" step="1" style="width:60px" placeholder="25" />
+      </div>
+    </div>
+    <div style="font-size:10px; color:var(--ui-text-dim); line-height:1.6; margin-top:4px;">
+      Drawn from the APRT panel's runway when an APP radar for that airport is enabled.
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Debug</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Radar debug</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-radar-debug" />
           <span class="toggle-slider"></span>
         </label>
       </div>

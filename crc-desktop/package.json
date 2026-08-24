@@ -8,6 +8,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
+    "dev-check": "npm test && npm start",
+    "release-check": "bash scripts/release-check.sh",
     "pack:linux": "electron-builder --linux AppImage --publish never",
     "pack:win":   "electron-builder --win nsis --publish never"
   },
