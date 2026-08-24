@@ -583,6 +583,7 @@ if ok and layers then
             lineColor     = obj.lineColorString,
             fillColor     = obj.fillColorString,
             closed        = obj.closed,
+            text          = obj.text,
           }
           -- Origin lat/lon for circle center or anchor
           if ox ~= 0 or oy ~= 0 then
@@ -709,8 +710,11 @@ return net.lua2json(result)
 
   // Transmit ATIS text via SRS TTS.
   // opts: { text, frequencyHz, coalition, lat, lon, alt, clientName }
+  // Returns { call, promise } rather than just a promise — the caller (the
+  // /api/atis-transmit handler) needs the ClientUnaryCall handle to be able
+  // to cancel an in-flight transmit when a client sends a stop signal.
   transmitAtis(opts) {
-    if (!this._srsSvc) return Promise.reject(new Error('not connected'));
+    if (!this._srsSvc) return { call: null, promise: Promise.reject(new Error('not connected')) };
     const coalMap = { 2: 2, 3: 3 }; // red=2, blue=3
     const req = {
       ssml:            opts.ssml || opts.text,
@@ -725,13 +729,15 @@ return net.lua2json(result)
       req.position = { lat: pos.lat, lon: pos.lon, alt: pos.alt || 0 };
     }
     console.log('[srs] Transmit req:', JSON.stringify(req));
-    return new Promise((resolve, reject) => {
-      this._srsSvc.Transmit(req, (err, res) => {
+    let call;
+    const promise = new Promise((resolve, reject) => {
+      call = this._srsSvc.Transmit(req, (err, res) => {
         if (err) { console.error('[srs] Transmit error:', err.message); return reject(err); }
         console.log('[srs] Transmit ok:', JSON.stringify(res));
         resolve(res);
       });
     });
+    return { call, promise };
   }
 
   getStatus() { return this._state; }

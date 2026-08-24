@@ -10,6 +10,7 @@ const GrpcClient      = require('./src/grpc-client');
 const SrsClient       = require('./src/srs-client');
 const TrackStore      = require('./src/tracks');
 const CollaborativeStore = require('./src/collab-store');
+const AtisStore       = require('./src/atis-store');
 const WsHub           = require('./src/ws-hub');
 const resolvePkg      = require('./src/resolve');
 const auth            = require('./src/auth');
@@ -98,6 +99,7 @@ app.post('/api/ws-ticket', auth.requireAuth, (req, res) => {
 // ── Core components ──────────────────────────────────────────────────────
 const trackStore  = new TrackStore();
 const collabStore = new CollaborativeStore();
+const atisStore   = new AtisStore();
 const grpcClient  = new GrpcClient();
 const srsClient   = new SrsClient();
 const wsHub       = new WsHub(trackStore, collabStore);
@@ -144,10 +146,31 @@ grpcClient.on('radar-locks', (locks) => wsHub.broadcastRadarLocks(locks));
 srsClient.on('status', (state) => wsHub.setSrsStatus(state));
 
 // ── On-demand RPC proxy endpoints (per-action, not shared streams) ─────────
+// ownerId is a client-generated id (one per crc-desktop app session), used to
+// tell "my own next 5s loop tick" apart from "a different controller's
+// client" — see src/atis-store.js for why this needs to live here at all.
 app.post('/api/atis-transmit', auth.requireAuth, (req, res) => {
-  grpcClient.transmitAtis(req.body || {})
-    .then(r => res.json({ ok: true, duration_ms: r && r.duration_ms }))
-    .catch(err => res.status(503).json({ error: err.message }));
+  const body = req.body || {};
+  const freq = body.frequency || body.frequencyHz;
+  const { ownerId, stop } = body;
+  if (!ownerId || freq == null) {
+    return res.status(400).json({ error: 'ownerId and frequency are required' });
+  }
+
+  if (stop) {
+    atisStore.stop(freq, ownerId);
+    return res.json({ ok: true });
+  }
+
+  if (!atisStore.canStart(freq, ownerId)) {
+    return res.status(409).json({ error: 'Another client is already transmitting on this frequency' });
+  }
+
+  const { call, promise } = grpcClient.transmitAtis(body);
+  atisStore.start(freq, ownerId, call);
+  promise
+    .then(r => { atisStore.finish(freq, call); res.json({ ok: true, duration_ms: r && r.duration_ms }); })
+    .catch(err => { atisStore.finish(freq, call); res.status(503).json({ error: err.message }); });
 });
 
 app.get('/api/srs-clients', auth.requireAuth, (_req, res) => {
