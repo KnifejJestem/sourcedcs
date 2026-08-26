@@ -1,7 +1,7 @@
 'use strict';
 
 const { WebSocketServer, WebSocket } = require('ws');
-const { resolveTrack } = require('./resolve');
+const { resolveTrack, getSquawkConfig, setSquawkMapping, deleteSquawkMapping } = require('./resolve');
 const { consumeTicket } = require('./auth');
 
 const VERSION  = 1;
@@ -64,6 +64,7 @@ class WsHub {
   _statusMsg()  { return { version: VERSION, type: 'status', grpc: this._grpcStatus, srs: this._srsStatus }; }
   _weatherMsg() { return { version: VERSION, type: 'weather', pressurePa: this._weather.pressurePa, tempK: this._weather.tempK }; }
   _gameTimeMsg(){ return { version: VERSION, type: 'game-time', datetime: this._gameTime }; }
+  _squawkMapMsg() { return { version: VERSION, type: 'squawk-map', ...getSquawkConfig() }; }
   _initMsg() {
     return {
       version:   VERSION,
@@ -113,6 +114,7 @@ class WsHub {
     if (this._missionData) ws.send(JSON.stringify(this._initMsg()));
     if (this._weather)     ws.send(JSON.stringify(this._weatherMsg()));
     if (this._gameTime)    ws.send(JSON.stringify(this._gameTimeMsg()));
+    ws.send(JSON.stringify(this._squawkMapMsg()));
     ws.send(JSON.stringify({
       version: VERSION,
       type:    'snapshot',
@@ -165,7 +167,22 @@ class WsHub {
   _onMessage(ws, session, raw) {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    if (!msg || typeof msg.trackId === 'undefined') return;
+    if (!msg) return;
+
+    // Squawk-map edits are global config, not track-scoped — handle them
+    // before the trackId-gated switch below and broadcast to everyone
+    // immediately (they don't ride the per-session 500ms track-delta tick,
+    // since they're not part of TrackStore/CollaborativeStore's delta log).
+    if (msg.type === 'squawkMapSet') {
+      if (setSquawkMapping(msg.kind, msg.code, msg.name)) this._broadcast(this._squawkMapMsg());
+      return;
+    }
+    if (msg.type === 'squawkMapDelete') {
+      if (deleteSquawkMapping(msg.kind, msg.code)) this._broadcast(this._squawkMapMsg());
+      return;
+    }
+
+    if (typeof msg.trackId === 'undefined') return;
     const id = String(msg.trackId);
 
     switch (msg.type) {

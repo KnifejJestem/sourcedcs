@@ -9,7 +9,7 @@ const fs   = require('fs');
 
 const config = require('./config.json');
 const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv } = require('./lxsrs-setup');
-const { writePendingPatchNotes, readAndClearPendingPatchNotes } = require('./patch-notes');
+const { writePendingPatchNotes, readAndClearPendingPatchNotes, readLastPatchNotes } = require('./patch-notes');
 
 const IS_LINUX = process.platform === 'linux';
 const IS_WIN   = process.platform === 'win32';
@@ -65,7 +65,12 @@ async function spawnLxsrs() {
 app.on('ready', async () => {
     console.log(`[crc] CRC v${app.getVersion()} starting (${process.platform})`);
 
-    const patchNotesPath = path.join(app.getPath('userData'), 'pending-patch-notes.json');
+    const patchNotesPath     = path.join(app.getPath('userData'), 'pending-patch-notes.json');
+    // Unlike patchNotesPath above (cleared the moment it's shown, at most once
+    // per update), this copy persists indefinitely so a "what's new" button
+    // in the UI can re-show the last update's notes on demand — see
+    // patch-notes.js's readLastPatchNotes.
+    const lastPatchNotesPath = path.join(app.getPath('userData'), 'last-patch-notes.json');
 
     if (IS_LINUX) {
         // Not awaited: first-run venv setup (network pip install) can take
@@ -168,6 +173,7 @@ app.on('ready', async () => {
         sendUpdateStatus({ state: 'ready', version: info.version });
         try {
             writePendingPatchNotes(patchNotesPath, { version: info.version, notes: info.releaseNotes });
+            writePendingPatchNotes(lastPatchNotesPath, { version: info.version, notes: info.releaseNotes });
         } catch (err) {
             console.error('[patch-notes] failed to persist pending patch notes:', err.message);
         }
@@ -193,6 +199,14 @@ app.on('ready', async () => {
 // Renderer's topbar update dot calls this directly when clicked while in
 // the 'ready' state — the click itself is the restart confirmation.
 ipcMain.on('update-restart-now', () => autoUpdater.quitAndInstall());
+
+// Backs the "what's new" button in the topbar — returns { version, notes }
+// for the most recent update, or null if none has ever landed on this
+// install. Path is only known inside this 'ready' handler's closure, so
+// re-derive it the same way rather than hoisting a shared variable.
+ipcMain.handle('get-last-patch-notes', () => {
+    return readLastPatchNotes(path.join(app.getPath('userData'), 'last-patch-notes.json'));
+});
 
 app.on('window-all-closed', () => {
     app.quit();

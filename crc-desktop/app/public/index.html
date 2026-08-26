@@ -313,7 +313,7 @@
     #apt-display.active { color: var(--ui-active); }
     #apt-display:hover  { color: var(--ui-text-bright); }
 
-    #btn-settings, #btn-radars, #btn-coalition {
+    #btn-settings, #btn-radars, #btn-coalition, #btn-patch-notes {
       background: none;
       border: 1px solid var(--ui-border-2);
       color: var(--ui-text);
@@ -323,7 +323,8 @@
       padding: 3px 8px;
       cursor: pointer;
     }
-    #btn-settings:hover, #btn-radars:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    #btn-settings:hover, #btn-radars:hover, #btn-patch-notes:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    #btn-patch-notes { display: none; }
 
     /* ── Floating buttons below topbar (top-left) ── */
     #float-btns {
@@ -1498,6 +1499,7 @@
              letter-spacing:0.06em; padding:2px 5px; outline:none; text-align:center;" />
   </div>
   <span id="zulu-clock" style="margin-left:auto; color:var(--ui-text-dim); letter-spacing:0.1em; font-size:10px;">00:00:00Z</span>
+  <button id="btn-patch-notes" title="Show the latest update's patch notes">WHAT'S NEW</button>
   <button id="btn-settings">SETTINGS</button>
 </div>
 

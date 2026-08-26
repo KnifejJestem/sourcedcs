@@ -86,6 +86,42 @@ function initUpdateStatus() {
     if ($statusUpdate.classList.contains('clickable')) window.crcUpdate.restartNow();
   });
   window.crcUpdate.onStatus(renderUpdateStatus);
+  initPatchNotesButton();
+}
+
+// "WHAT'S NEW" — the one-time dialog main.js shows right after an autoupdate
+// lands is easy to miss (native message box, fires during startup). This
+// button re-shows the same notes at any time, for as long as they're the
+// most recent update's — see patch-notes.js's readLastPatchNotes.
+function _showPatchNotesModal(version, notes) {
+  if (document.getElementById('crc-patch-notes-modal')) return;
+  const el = document.createElement('div');
+  el.id = 'crc-patch-notes-modal';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(5,8,5,0.75);display:flex;' +
+    'align-items:center;justify-content:center;z-index:100000;font-family:"Courier New",monospace;';
+  const safeNotes = notes.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  el.innerHTML = `
+    <div style="background:#0d130d;border:1px solid #2a3a2a;padding:22px;width:420px;max-height:70vh;
+      display:flex;flex-direction:column;gap:14px;color:#c8d8c8;">
+      <div style="font-size:13px;letter-spacing:2px;color:#39ff7a;">WHAT'S NEW IN CRC v${version}</div>
+      <div style="font-size:11px;line-height:1.6;white-space:pre-wrap;overflow-y:auto;color:#c8d8c8;">${safeNotes}</div>
+      <button id="crc-patch-notes-close" style="align-self:flex-end;padding:7px 16px;background:#132313;color:#39ff7a;
+        border:1px solid #2a3a2a;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:1px;">CLOSE</button>
+    </div>`;
+  document.body.appendChild(el);
+  document.getElementById('crc-patch-notes-close').addEventListener('click', () => el.remove());
+  el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+}
+
+function initPatchNotesButton() {
+  const $btn = document.getElementById('btn-patch-notes');
+  if (!$btn || !window.crcUpdate.getPatchNotes) return;
+
+  window.crcUpdate.getPatchNotes().then((info) => {
+    if (!info) return; // no update has ever landed on this install yet
+    $btn.style.display = '';
+    $btn.addEventListener('click', () => _showPatchNotesModal(info.version, info.notes));
+  }).catch(() => {});
 }
 
 function checkStale() {
@@ -887,6 +923,7 @@ function renderSquawkMapList(listEl, inp, inpN, seqToggle) {
       if (isSeq) delete settings.squawkSeq[code];
       else       delete settings.squawkMap[code];
       saveSettings();
+      sendToSync({ type: 'squawkMapDelete', kind: isSeq ? 'seq' : 'exact', code });
       renderSquawkMapList(listEl, inp, inpN, seqToggle);
       updateMap();
     });
@@ -902,6 +939,7 @@ function renderSquawkMapList(listEl, inp, inpN, seqToggle) {
       if (isSeq) delete settings.squawkSeq[code];
       else       delete settings.squawkMap[code];
       saveSettings();
+      sendToSync({ type: 'squawkMapDelete', kind: isSeq ? 'seq' : 'exact', code });
       renderSquawkMapList(listEl, inp, inpN, seqToggle);
       updateMap();
     });
@@ -911,6 +949,22 @@ function renderSquawkMapList(listEl, inp, inpN, seqToggle) {
 
   for (const code of allKeys) listEl.appendChild(makeRow(code, exact[code], false));
   for (const code of seqKeys)  listEl.appendChild(makeRow(code, seq[code],  true));
+}
+
+// Re-renders the Calls panel's mapping list from current `settings` state,
+// if the panel happens to be open — called from app.js when a 'squawk-map'
+// broadcast arrives from crc-sync (someone, possibly this client, changed a
+// mapping) so every connected controller's list stays live, not just the
+// one who made the edit.
+function refreshCallsPanel() {
+  const panel = document.getElementById('calls-panel');
+  if (!panel || !panel.classList.contains('open')) return;
+  renderSquawkMapList(
+    document.getElementById('sqmap-list'),
+    document.getElementById('sqmap-code-input'),
+    document.getElementById('sqmap-name-input'),
+    document.getElementById('sqmap-seq-toggle'),
+  );
 }
 
 function initCallsPanel() {
@@ -941,7 +995,8 @@ function initCallsPanel() {
     const name = inpN.value.trim().toUpperCase();
     if (!code || code === 'NaN' || !name) return;
 
-    if (seqToggle && seqToggle.checked) {
+    const kind = (seqToggle && seqToggle.checked) ? 'seq' : 'exact';
+    if (kind === 'seq') {
       if (!settings.squawkSeq) settings.squawkSeq = {};
       settings.squawkSeq[code] = name;
     } else {
@@ -949,6 +1004,7 @@ function initCallsPanel() {
       settings.squawkMap[code] = name;
     }
     saveSettings();
+    sendToSync({ type: 'squawkMapSet', kind, code, name });
     inp.value  = '';
     inpN.value = '';
     renderSquawkMapList(list, inp, inpN, seqToggle);

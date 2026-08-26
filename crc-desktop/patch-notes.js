@@ -68,4 +68,30 @@ function readAndClearPendingPatchNotes(filePath, currentVersion) {
   return parsed;
 }
 
-module.exports = { normalizeReleaseNotes, writePendingPatchNotes, readAndClearPendingPatchNotes };
+// Separate from the one-shot "pending" file above: this copy is never
+// cleared, so a "what's new" button in the UI can re-show the last update's
+// notes at any time instead of the controller having to catch the one-time
+// dialog on the exact launch after an autoupdate lands.
+function readLastPatchNotes(filePath) {
+  let raw;
+  try {
+    raw = fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return null;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed.version !== 'string' || typeof parsed.notes !== 'string') return null;
+  return parsed;
+}
+
+module.exports = {
+  normalizeReleaseNotes, writePendingPatchNotes, readAndClearPendingPatchNotes,
+  readLastPatchNotes,
+};

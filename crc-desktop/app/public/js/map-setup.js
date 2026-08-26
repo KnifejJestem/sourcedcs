@@ -131,7 +131,6 @@ function initMap() {
         'line-color':     '#cc66cc',
         'line-width':     1.5,
         'line-opacity':   0.85,
-        'line-dasharray': [3, 2],
       },
     });
 
@@ -205,11 +204,11 @@ function initMap() {
       paint: { 'circle-radius': 1.5, 'circle-color': ['get', 'color'], 'circle-opacity': ['get', 'opacity'], 'circle-stroke-width': 0 },
     });
 
-    // ── PPL dashed lines ─────────────────────────────────────────────────
+    // ── PPL (projected position line) ─────────────────────────────────────
     map.addSource('ppl', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
       id: 'ppl-lines', type: 'line', source: 'ppl',
-      paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.45, 'line-width': 1, 'line-dasharray': [5, 4] },
+      paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.45, 'line-width': 1 },
     });
 
     // ── Datalink radar lock lines ────────────────────────────────────────────

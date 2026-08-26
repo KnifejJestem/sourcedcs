@@ -31,7 +31,27 @@ class SrsClient extends EventEmitter {
   // Returns {squawk, squawkStatus, mode4} or null
   getTransponder(playerName) {
     if (!playerName) return null;
-    return this._transponders.get(playerName) || null;
+    const entry = this._transponders.get(playerName);
+    if (!entry) return null;
+
+    // The ident latch is normally reconciled in _applyClient when a fresh SRS
+    // message arrives, but this getter is polled once per gRPC tick — much
+    // more often than SRS pushes radio-state updates, which only fire on an
+    // actual change. If the pilot's ident pulse was the last state change
+    // SRS ever sent (no follow-up "back to normal" message), nothing would
+    // otherwise clear the latch and the ident flash would stick until the
+    // pilot recycles the transponder to force a new message. Check the
+    // expiry here too so it clears on its own once the 5s grace period
+    // elapses, regardless of whether SRS sends anything more.
+    if (entry.squawkStatus === 2) {
+      const until = this._identLatch.get(playerName);
+      if (!until || Date.now() >= until) {
+        this._identLatch.delete(playerName);
+        entry.squawkStatus = 1;
+      }
+    }
+
+    return entry;
   }
 
   getStatus() { return this._state; }

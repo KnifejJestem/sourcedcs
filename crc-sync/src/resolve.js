@@ -23,14 +23,64 @@ const IFF_STATES = ['friendly', 'neutral', 'bogey', 'bandit', 'hostile'];
 
 const USER_COALITION = parseInt(process.env.CRCSYNC_COALITION, 10) === 2 ? 2 : 3; // 3=BLUE (default), 2=RED
 
+// Overridable so tests can exercise the mutate/persist path against a temp
+// file instead of the real squadron-wide config (same env-var-override
+// pattern as CRCSYNC_COALITION above).
+const SQUAWK_MAP_PATH = process.env.CRCSYNC_SQUAWK_MAP_PATH || path.join(__dirname, '../config/squawk-map.json');
+const SQUAWK_NAME_MAX_LEN = 20;
+
 let squawkMap = {};
 let squawkSeq = {};
 try {
-  const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '../config/squawk-map.json'), 'utf8'));
+  const cfg = JSON.parse(fs.readFileSync(SQUAWK_MAP_PATH, 'utf8'));
   squawkMap = cfg.squawkMap || {};
   squawkSeq = cfg.squawkSeq || {};
 } catch (e) {
   console.warn('[resolve] failed to load config/squawk-map.json, using empty maps:', e.message);
+}
+
+function _persistSquawkConfig() {
+  try {
+    fs.writeFileSync(SQUAWK_MAP_PATH, JSON.stringify({ squawkMap, squawkSeq }, null, 2));
+  } catch (e) {
+    console.warn('[resolve] failed to persist config/squawk-map.json:', e.message);
+  }
+}
+
+// ── Squawk → callsign mapping: squadron-wide, server-authoritative ──────────
+// Editable live from any connected client's SQWK C/S panel (ws-hub.js's
+// 'squawkMapSet'/'squawkMapDelete' messages) — this used to be a per-client
+// localStorage setting (crc-desktop's ui.js), which meant an edit only ever
+// changed what the editing client itself saw and never what resolveCallsign
+// actually returns to anyone. Persisted back to config/squawk-map.json so it
+// survives a restart, same as the file's original hand-edited role.
+
+function getSquawkConfig() {
+  return { squawkMap: { ...squawkMap }, squawkSeq: { ...squawkSeq } };
+}
+
+// Returns true on success, false if the input was invalid (caller just drops it).
+function setSquawkMapping(kind, code, name) {
+  if (kind !== 'exact' && kind !== 'seq') return false;
+  const codeNum = Number(code);
+  if (!Number.isInteger(codeNum) || codeNum < 0 || codeNum > 7777) return false;
+  const clean = String(name || '').trim().toUpperCase().slice(0, SQUAWK_NAME_MAX_LEN);
+  if (!clean) return false;
+
+  const map = kind === 'exact' ? squawkMap : squawkSeq;
+  map[String(codeNum)] = clean;
+  _persistSquawkConfig();
+  return true;
+}
+
+function deleteSquawkMapping(kind, code) {
+  const map = kind === 'exact' ? squawkMap : kind === 'seq' ? squawkSeq : null;
+  if (!map) return false;
+  const key = String(Number(code));
+  if (!(key in map)) return false;
+  delete map[key];
+  _persistSquawkConfig();
+  return true;
 }
 
 function haversineM(lat1, lon1, lat2, lon2) {
@@ -131,4 +181,7 @@ function resolveTrack(track, collabEntry, missionData, assignTrackNumber) {
   };
 }
 
-module.exports = { resolveTrack, resolveIff, resolveCallsign, computeAutoIff, checkOnGround, haversineM, IFF_STATES, USER_COALITION };
+module.exports = {
+  resolveTrack, resolveIff, resolveCallsign, computeAutoIff, checkOnGround, haversineM, IFF_STATES, USER_COALITION,
+  getSquawkConfig, setSquawkMapping, deleteSquawkMapping,
+};

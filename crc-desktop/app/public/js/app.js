@@ -400,13 +400,19 @@ setInterval(() => {
       for (const [id, t] of latestFromServer) {
         if (t.category === 3 && !radar.seesGround) continue;
         if (t.category === 4 && !radar.seesShips) continue;
-        if (radar.noGroundAircraft && (t.category === 1 || t.category === 2) && onGroundCache.get(id)) continue;
+        const isGroundContact = (t.category === 1 || t.category === 2) && onGroundCache.get(id);
+        if (radar.noGroundAircraft && isGroundContact) continue;
         const distM = haversineM(radar.lat, radar.lon, t.lat, t.lon);
         if (distM > radar.rangeM) continue;
         const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
         const diff = Math.abs(((bearing - sweepAngle + 540) % 360) - 180);
         if (diff > SWEEP_BEAM_DEG) continue;
-        if (losHasLineOfSight(radar.lat, radar.lon, radar.elevM, t.lat, t.lon, t.alt) === false) continue;
+        // Real-world DEM terrain masking doesn't apply within an airfield's own
+        // footprint: DCS grades airports flat regardless of what the actual
+        // terrain there looks like, so a ground contact sitting a few meters
+        // from the tower can get spuriously blocked by an unrelated real-world
+        // bump the sim doesn't model — see checkOnGround's GROUND_RADIUS_M.
+        if (!isGroundContact && losHasLineOfSight(radar.lat, radar.lon, radar.elevM, t.lat, t.lon, t.alt) === false) continue;
 
         const prevSweep = lastSweepMs.get(id) || 0;
         tracks.set(id, t);
@@ -427,13 +433,15 @@ setInterval(() => {
       for (const [id, t] of latestFromServer) {
         if (t.category === 3 && !radar.seesGround) continue;
         if (t.category === 4 && !radar.seesShips) continue;
-        if (radar.noGroundAircraft && (t.category === 1 || t.category === 2) && onGroundCache.get(id)) continue;
+        const isGroundContact = (t.category === 1 || t.category === 2) && onGroundCache.get(id);
+        if (radar.noGroundAircraft && isGroundContact) continue;
         const distM = haversineM(radar.lat, radar.lon, t.lat, t.lon);
         if (distM > radar.rangeM) continue;
         const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
         const diff = Math.abs(((bearing - beamAngle + 540) % 360) - 180);
         if (diff > SWEEP_BEAM_DEG) continue;
-        if (losHasLineOfSight(radar.lat, radar.lon, radar.elevM, t.lat, t.lon, t.alt) === false) continue;
+        // See the 360°-sweep branch above for why ground contacts skip real terrain LOS.
+        if (!isGroundContact && losHasLineOfSight(radar.lat, radar.lon, radar.elevM, t.lat, t.lon, t.alt) === false) continue;
 
         const prevSweep = lastSweepMs.get(id) || 0;
         tracks.set(id, t);
@@ -522,11 +530,24 @@ function applyDelta(updated, gone) {
     latestFromServer.delete(id);
     // Displayed track stays in `tracks` and fades out naturally via lastSweepMs
   }
+  let metaChanged = false;
   for (const t of updated) {
     latestFromServer.set(t.id, t);
-    // Do NOT update tracks here — position only updates when the radar beam hits the track.
+    // Do NOT update position/kinematics here — those only update when the
+    // radar beam hits the track. But IFF/callsign/rename/track-number are
+    // the controller's own declarations (or a resolution of them), not
+    // something a beam needs to "reveal" — refresh them on an
+    // already-displayed track immediately so the map icon doesn't sit on
+    // stale IFF color/label until the next sweep happens to pass over it.
+    const displayed = tracks.get(t.id);
+    if (displayed) {
+      for (const key of ['iffState', 'iffOverride', 'callsign', 'rename', 'trackNumber']) {
+        if (displayed[key] !== t[key]) { displayed[key] = t[key]; metaChanged = true; }
+      }
+    }
   }
   invalidateRadarsCache();
+  if (metaChanged) updateMap();
 }
 
 // ── Zoom + pan limits ─────────────────────────────────────────────────────
@@ -632,6 +653,16 @@ async function connect() {
         refreshAprtAptList();
         break;
       }
+      case 'squawk-map':
+        // Squadron-wide config (crc-sync/config/squawk-map.json), pushed on
+        // connect and whenever anyone edits it from the SQWK C/S panel —
+        // authoritative, so it overwrites whatever this client had cached.
+        settings.squawkMap = msg.squawkMap || {};
+        settings.squawkSeq = msg.squawkSeq || {};
+        saveSettings();
+        refreshCallsPanel();
+        updateMap();
+        break;
       case 'snapshot':
         applySnapshot((msg.tracks || []).map(normaliseTrack));
         break;
