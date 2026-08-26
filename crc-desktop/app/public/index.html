@@ -82,11 +82,12 @@
 
     .sep { color: var(--ui-sep); }
 
-    #status-grpc, #status-srs {
+    #status-grpc, #status-srs, #status-update {
       display: flex;
       align-items: center;
       gap: 5px;
     }
+    #status-update.clickable { cursor: pointer; }
 
     .dot {
       width: 6px; height: 6px;
@@ -96,6 +97,15 @@
     .dot.connected    { background: #4a9a4a; box-shadow: 0 0 4px #4a9a4a88; }
     .dot.reconnecting { background: #9a7a4a; box-shadow: 0 0 4px #9a7a4a88; }
     .dot.disconnected { background: #6a3a3a; }
+    .dot.checking, .dot.downloading { background: #4a6a9a; box-shadow: 0 0 4px #4a6a9a88; }
+    .dot.ready {
+      background: #4a9a4a;
+      animation: update-ready-pulse 1s ease-in-out infinite alternate;
+    }
+    @keyframes update-ready-pulse {
+      from { box-shadow: 0 0 2px #4a9a4a66; }
+      to   { box-shadow: 0 0 8px #4a9a4aee; }
+    }
 
     /* Radar panel */
     #radars-panel {
@@ -169,6 +179,46 @@
       padding: 4px 6px; margin-bottom: 10px; outline: none;
     }
     #radar-search::placeholder { color: var(--ui-text-dim); }
+
+    /* LOS terrain profile chart */
+    #los-profile-panel {
+      position: fixed;
+      top: 32px; left: 240px;
+      width: 300px;
+      background: var(--ui-bg-solid);
+      border-right: 1px solid var(--ui-border);
+      border-bottom: 1px solid var(--ui-border);
+      z-index: 31;
+      padding: 10px 12px 12px;
+      display: none;
+    }
+    #los-profile-panel.open { display: block; }
+    .los-profile-title {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .los-profile-title span { color: var(--ui-text-bright); }
+    #los-profile-canvas { display: block; width: 100%; height: 130px; }
+    .los-profile-legend {
+      display: flex;
+      gap: 12px;
+      font-size: 9px;
+      letter-spacing: 0.05em;
+      color: var(--ui-text-dim);
+      margin-top: 6px;
+    }
+    .los-swatch {
+      display: inline-block;
+      width: 8px; height: 8px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .los-swatch.terrain { background: #8a6a3a; }
+    .los-swatch.sight   { background: #33aa55; }
+    .los-swatch.blocked { background: #cc4444; }
 
     /* Floating bullseye BRA (follows cursor) */
     #cursor-bra {
@@ -1353,6 +1403,17 @@
   <div id="radar-groups"></div>
 </div>
 
+<!-- LOS terrain profile — shown while hovering a row in the radar panel -->
+<div id="los-profile-panel">
+  <div class="los-profile-title">LOS Profile — <span id="los-profile-radar-label"></span></div>
+  <canvas id="los-profile-canvas" width="300" height="130"></canvas>
+  <div class="los-profile-legend">
+    <span><i class="los-swatch terrain"></i>Terrain</span>
+    <span><i class="los-swatch sight"></i>Sight line</span>
+    <span><i class="los-swatch blocked"></i>Blocked</span>
+  </div>
+</div>
+
 <!-- Airport selection dropdown -->
 <div id="apt-dropdown">
   <div id="apt-search-row">
@@ -1418,6 +1479,11 @@
     <span id="lbl-srs">SRS</span>
   </div>
   <span class="sep">|</span>
+  <div id="status-update" style="display:none">
+    <div class="dot" id="dot-update"></div>
+    <span id="lbl-update">UPDATE</span>
+  </div>
+  <span class="sep" id="update-sep" style="display:none">|</span>
   <button id="btn-radars">RADARS <span id="radar-count-badge">0</span></button>
   <span class="sep">|</span>
   <button id="btn-coalition">BLUE</button>
@@ -1632,6 +1698,18 @@
         <span>Light Mode</span>
         <label class="toggle">
           <input type="checkbox" id="set-light-mode" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Map Overlays</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Elevation Contours</span>
+        <label class="toggle">
+          <input type="checkbox" id="set-elevation" />
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -2108,6 +2186,8 @@
 <script src="./js/icons.js"></script>
 <script src="./js/ui.js"></script>
 <script src="./js/map-setup.js"></script>
+<script src="./js/elevation.js"></script>
+<script src="./js/los.js"></script>
 <script src="./js/views/crc.js"></script>
 <script src="./js/views/airport.js"></script>
 <script src="./js/views/approach.js"></script>

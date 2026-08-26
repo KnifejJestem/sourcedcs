@@ -25,12 +25,14 @@
     "productName": "CRC",
     "directories": {
       "output": "dist",
-      "app": "."
+      "app": ".",
+      "buildResources": "build-assets"
     },
     "files": [
       "package.json",
       "main.js",
       "lxsrs-setup.js",
+      "patch-notes.js",
       "config.json",
       "app/**/*",
       "!app/package.json",

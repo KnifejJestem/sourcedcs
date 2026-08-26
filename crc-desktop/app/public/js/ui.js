@@ -51,6 +51,43 @@ function updateNoAwacsUI() {
   $noAwacsOver.classList.toggle('visible', !!noRadarsActive);
 }
 
+// ── Update status (electron-updater, via preload IPC bridge) ──────────────
+
+const $statusUpdate = document.getElementById('status-update');
+const $updateSep    = document.getElementById('update-sep');
+const $dotUpdate    = document.getElementById('dot-update');
+const $lblUpdate    = document.getElementById('lbl-update');
+
+function renderUpdateStatus(status) {
+  const state = status && status.state;
+  const show  = state && state !== 'idle';
+  $statusUpdate.style.display = show ? '' : 'none';
+  $updateSep.style.display    = show ? '' : 'none';
+  if (!show) return;
+
+  $dotUpdate.className = 'dot';
+  $statusUpdate.classList.toggle('clickable', state === 'ready');
+
+  if (state === 'checking') {
+    $dotUpdate.classList.add('checking');
+    $lblUpdate.textContent = 'CHECKING';
+  } else if (state === 'downloading') {
+    $dotUpdate.classList.add('downloading');
+    $lblUpdate.textContent = `${status.percent ?? 0}%`;
+  } else if (state === 'ready') {
+    $dotUpdate.classList.add('ready');
+    $lblUpdate.textContent = 'UPDATE READY';
+  }
+}
+
+function initUpdateStatus() {
+  if (!window.crcUpdate) return; // defensive: absent if preload failed to load
+  $statusUpdate.addEventListener('click', () => {
+    if ($statusUpdate.classList.contains('clickable')) window.crcUpdate.restartNow();
+  });
+  window.crcUpdate.onStatus(renderUpdateStatus);
+}
+
 function checkStale() {
   const isStale  = grpcStatus === 'reconnecting'
     && lastUpdateMs != null
@@ -140,6 +177,7 @@ function initSettings() {
     scale:          document.getElementById('set-scale'),
     scaleVal:       document.getElementById('set-scale-val'),
     lightMode:      document.getElementById('set-light-mode'),
+    elevation:      document.getElementById('set-elevation'),
   };
 
   els.pplEnabled.checked = settings.pplEnabled;
@@ -155,6 +193,7 @@ function initSettings() {
   els.scale.value        = settings.scale;
   els.scaleVal.textContent = parseFloat(settings.scale).toFixed(1) + '×';
   els.lightMode.checked  = settings.lightMode;
+  els.elevation.checked  = settings.showElevation;
   els.radarDebug.checked   = settings.radarDebug;
   els.textMarks.checked    = settings.textMarksEnabled;
   applyLightMode();
@@ -195,7 +234,16 @@ function initSettings() {
     saveSettings();
     applyLightMode();
   });
-  els.radarDebug.addEventListener('change',   () => persist('radarDebug',   els.radarDebug.checked));
+  els.elevation.addEventListener('change', () => {
+    settings.showElevation = els.elevation.checked;
+    saveSettings();
+    if (settings.showElevation) updateElevationContours();
+    else clearElevationContours();
+  });
+  els.radarDebug.addEventListener('change',   () => {
+    persist('radarDebug', els.radarDebug.checked);
+    if (!els.radarDebug.checked) hideLosProfile();
+  });
   els.textMarks.addEventListener('change', () => {
     settings.textMarksEnabled = els.textMarks.checked;
     saveSettings();
@@ -525,6 +573,8 @@ function buildRadarPanelContent(filter) {
       $row.appendChild($check);
       $row.appendChild($label);
       $row.appendChild($range);
+      $row.addEventListener('mouseenter', () => showLosProfile(r));
+      $row.addEventListener('mouseleave', () => hideLosProfile());
       $groups.appendChild($row);
     }
   }
@@ -578,13 +628,141 @@ function initRadarPanel() {
     }
   });
   document.addEventListener('click', (e) => {
-    if (!$panel.contains(e.target) && e.target !== $btn) $panel.classList.remove('open');
+    if (!$panel.contains(e.target) && e.target !== $btn) {
+      $panel.classList.remove('open');
+      hideLosProfile();
+    }
   });
 
   if ($search) {
     $search.addEventListener('input', () => buildRadarPanelContent($search.value));
     $search.addEventListener('click', e => e.stopPropagation());
   }
+}
+
+// ── LOS terrain profile chart ─────────────────────────────────────────────
+// Shown while hovering a radar row in the RADARS panel: a terrain-vs-distance
+// chart along that radar's current (live) beam bearing, with the curvature-
+// adjusted sight line and the point where terrain first blocks it.
+
+let losProfileRadarId = null;
+let losProfileTimer   = null;
+
+function currentBeamBearing(radar) {
+  const now = Date.now();
+  if (!radarSweepStart.has(radar.id)) return radar.heading || 0;
+  if (radar.angleFromNose === 360) {
+    return ((now - radarSweepStart.get(radar.id)) % radar.sweepMs) / radar.sweepMs * 360;
+  }
+  const halfAngle = radar.angleFromNose / 2;
+  const cycleMs   = radar.sweepMs * 2;
+  const phase     = ((now - radarSweepStart.get(radar.id)) % cycleMs) / cycleMs;
+  const tNorm     = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
+  return (radar.heading - halfAngle + tNorm * radar.angleFromNose + 360) % 360;
+}
+
+function showLosProfile(radar) {
+  if (!settings.radarDebug) return;
+  const $panel = document.getElementById('los-profile-panel');
+  const $label = document.getElementById('los-profile-radar-label');
+  if (!$panel) return;
+  losProfileRadarId = radar.id;
+  if ($label) $label.textContent = radar.label;
+  $panel.classList.add('open');
+  drawLosProfile();
+  clearInterval(losProfileTimer);
+  losProfileTimer = setInterval(drawLosProfile, 200);
+}
+
+function hideLosProfile() {
+  losProfileRadarId = null;
+  clearInterval(losProfileTimer);
+  losProfileTimer = null;
+  const $panel = document.getElementById('los-profile-panel');
+  if ($panel) $panel.classList.remove('open');
+}
+
+function drawLosProfile() {
+  const $canvas = document.getElementById('los-profile-canvas');
+  if (!$canvas || !losProfileRadarId) return;
+  const radar = getAllRadars().find(r => r.id === losProfileRadarId);
+  if (!radar) { hideLosProfile(); return; }
+
+  const bearing = currentBeamBearing(radar);
+  const { points, blockedAtM } = losBeamProfile(radar, bearing, radar.rangeM);
+
+  const ctx = $canvas.getContext('2d');
+  const W = $canvas.width, H = $canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const known = points.filter(p => p.terrainM != null);
+  if (known.length < 2) {
+    ctx.fillStyle = '#888';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('Loading terrain data…', 8, H / 2);
+    return;
+  }
+
+  let minH = radar.elevM, maxH = radar.elevM;
+  for (const p of points) {
+    if (p.terrainM != null) { minH = Math.min(minH, p.terrainM); maxH = Math.max(maxH, p.terrainM); }
+    minH = Math.min(minH, p.sightM);
+    maxH = Math.max(maxH, p.sightM);
+  }
+  const pad = (maxH - minH) * 0.1 || 10;
+  minH -= pad; maxH += pad;
+
+  const xOf = d => (d / radar.rangeM) * W;
+  const yOf = h => H - ((h - minH) / (maxH - minH)) * H;
+
+  // Terrain fill (gaps where a tile is still loading are simply skipped)
+  ctx.beginPath();
+  let started = false;
+  let lastX = 0;
+  for (const p of points) {
+    if (p.terrainM == null) continue;
+    const x = xOf(p.d), y = yOf(p.terrainM);
+    if (!started) { ctx.moveTo(x, H); ctx.lineTo(x, y); started = true; }
+    else ctx.lineTo(x, y);
+    lastX = x;
+  }
+  if (started) {
+    ctx.lineTo(lastX, H);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(138, 106, 58, 0.45)';
+    ctx.fill();
+    ctx.strokeStyle = '#8a6a3a';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Reference sight line
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = xOf(p.d), y = yOf(p.sightM);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#33aa55';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Blocked-at marker
+  if (blockedAtM < radar.rangeM - 1) {
+    const x = xOf(blockedAtM);
+    ctx.strokeStyle = '#cc4444';
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Radar antenna marker
+  ctx.fillStyle = '#4488cc';
+  ctx.beginPath();
+  ctx.arc(xOf(0), yOf(radar.elevM), 3, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 // ── Airport selector ──────────────────────────────────────────────────────

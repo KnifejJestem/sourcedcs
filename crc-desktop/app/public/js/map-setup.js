@@ -17,6 +17,44 @@ function initMap() {
   map.on('load', () => {
     initIcons();
 
+    // ── Elevation contour overlay (computed from terrain-RGB DEM) ───────────
+    // Toggleable via Settings → General → Map Overlays. Lines-only overlay —
+    // no colored terrain fill — so it reads as reference hachures under the
+    // tracks rather than a full topo basemap. MapTiler's ready-made contour
+    // vector tileset only has data at zoom 9+ (its tile server 400s below
+    // that), so contours are instead traced ourselves from MapTiler's
+    // terrain-RGB elevation tiles (available at every zoom) — see
+    // elevation.js. These two sources start empty; elevation.js populates
+    // them on demand, so visibility is entirely data-driven (no
+    // layout.visibility toggling needed here).
+    map.addSource('elevation-contours', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addSource('elevation-contour-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'elevation-contours-lines',
+      type: 'line',
+      source: 'elevation-contours',
+      paint: {
+        'line-color': '#8a6a3a',
+        'line-width':   ['case', ['get', 'isIndex'], 1.4, 0.6],
+        'line-opacity': ['case', ['get', 'isIndex'], 0.75, 0.4],
+      },
+    });
+    map.addLayer({
+      id: 'elevation-contours-labels',
+      type: 'symbol',
+      source: 'elevation-contour-labels',
+      layout: {
+        'text-field': ['get', 'text'],
+        'text-font': ['Roboto Medium', 'Noto Sans Regular'],
+        'text-size': 10,
+      },
+      paint: {
+        'text-color': '#8a6a3a',
+        'text-halo-color': '#000000',
+        'text-halo-width': 1,
+      },
+    });
+
     // ── Radar debug overlay ──────────────────────────────────────────────
     // Sweep lines / cone edges for active radars (debug mode only).
     map.addSource('radar-debug', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -473,6 +511,7 @@ function initMap() {
     mapReady = true;
     applyScale();
     applyMapTheme();
+    initElevationContours();
     if (missionData) {
       map.getSource('airports').setData(buildAirports());
       map.getSource('bullseye').setData(buildBullseye());
@@ -536,6 +575,12 @@ function applyMapTheme() {
   map.setPaintProperty('Aeroway', 'line-color', light
     ? ['match', ['get', 'class'], 'runway', '#8a9a8a', 'taxiway', '#aabaa8', '#9aaa98']
     : ['match', ['get', 'class'], 'runway', '#4a5a4a', 'taxiway', '#2a3a2a', '#1a2a1a']);
+
+  // Elevation contour lines + height labels
+  const contourColor = light ? '#8a6a3a' : '#a08050';
+  map.setPaintProperty('elevation-contours-lines',  'line-color', contourColor);
+  map.setPaintProperty('elevation-contours-labels', 'text-color', contourColor);
+  map.setPaintProperty('elevation-contours-labels', 'text-halo-color', light ? '#ffffff' : '#000000');
 
   // Text labels — halo flips so text stays readable
   const labelPaint = light

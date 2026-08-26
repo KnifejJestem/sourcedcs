@@ -68,6 +68,8 @@ Installers are built and published by `.github/workflows/crc-desktop-release.yml
 
 Installed apps autoupdate via `electron-updater` (`main.js`) against the generic HTTP provider configured in `package.json`'s `build.publish` — no code changes needed here to ship a new version, just push the tag.
 
+**Patch notes**: before tagging a release, edit `build-assets/release-notes.md` to describe what's new. `electron-builder` auto-detects a `release-notes.md` in its "build resources" directory by convention and embeds its contents into `latest.yml`/`latest-linux.yml` as `UpdateInfo.releaseNotes` — that directory defaults to `build/`, but this repo's root `.gitignore` ignores every `build/` dir, so `package.json`'s `build.directories.buildResources` repoints it at `build-assets/` instead (don't move `release-notes.md` back under `build/`, it'll stop being tracked). `main.js` persists those notes to a file in `userData` when the update finishes downloading (the download happens in the *old* process, before restart, so there's no window left to show a dialog in yet), then reads and clears that file on the next launch once `app.getVersion()` confirms the update actually landed, showing a one-time "What's New in CRC vX.Y.Z" dialog. See `patch-notes.js` (Electron-free, unit tested in `tests/patch-notes.test.js`) for the read/write logic. If `release-notes.md` is left unchanged or empty, no notes are persisted and no dialog appears — this is opt-in per release, not a hard requirement.
+
 ## config.json fields
 
 | Field | Purpose |

@@ -31,6 +31,13 @@ const EMERGENCY_COLOR  = { gen: '#cc2222', radio: '#b8a000', hijack: '#cc6600' }
 const SWEEP_BEAM_DEG  = 4;   // rotating beam width in degrees
 const SWEEP_INTERVAL  = 50;  // ms between sweep ticks
 
+// Assumed antenna/mast height (meters) above field elevation / waterline —
+// DCS doesn't report actual radar tower height, so ground-based radars need
+// an assumed offset or terrain LOS masking would make them unrealistically
+// easy to block (airborne radars use their own live altitude instead).
+const AIRPORT_RADAR_HEIGHT_M = 15;
+const SHIP_RADAR_HEIGHT_M    = 40;
+
 // ── State ─────────────────────────────────────────────────────────────────
 
 // latestFromServer: all track data as received from server (no filtering).
@@ -124,6 +131,7 @@ const DEFAULTS = {
   squawkSeq:     {}, // sequential ranges: { "1101": "HAT1" } → 1101→HAT11, 1102→HAT12…
   scale:         1.0,
   lightMode:     false,
+  showElevation: false, // computed contour lines + height labels (elevation.js), zoom-independent
   fadeGraceMs:    10000, // ms at full brightness after last sweep before fading starts
   navDeclutter:    true,  // hide navpoints whose names contain digits
   navDeclutter5:   true,  // hide navpoints whose names are not exactly 5 letters
@@ -291,14 +299,16 @@ function _buildAllRadars() {
 
     radars.push({
       id: `apt:${apt.name}`, type: 'airport', label: aptLabel,
-      lat: apt.lat, lon: apt.lon, rangeM: 40 * 1852, sweepMs: 2000,
+      lat: apt.lat, lon: apt.lon, elevM: (apt.elev || 0) + AIRPORT_RADAR_HEIGHT_M,
+      rangeM: 40 * 1852, sweepMs: 2000,
       seesGround: true, seesShips: false, noGroundAircraft: false,
       angleFromNose: 360, heading: 0,
     });
 
     radars.push({
       id: `app:${apt.name}`, type: 'approach', label: aptLabel + ' APP',
-      lat: apt.lat, lon: apt.lon, rangeM: 80 * 1852, sweepMs: 3000,
+      lat: apt.lat, lon: apt.lon, elevM: (apt.elev || 0) + AIRPORT_RADAR_HEIGHT_M,
+      rangeM: 80 * 1852, sweepMs: 3000,
       seesGround: false, seesShips: false, noGroundAircraft: true,
       angleFromNose: 360, heading: 0,
     });
@@ -314,7 +324,7 @@ function _buildAllRadars() {
     radars.push({
       id: `crc:${t.id}`, type: radarType, label: resolveCallsign(t),
       sublabel: spec.label || t.type,
-      lat: t.lat, lon: t.lon,
+      lat: t.lat, lon: t.lon, elevM: t.alt,
       rangeM: spec.radar.rangeNm * 1852, sweepMs: spec.radar.sweepMs,
       seesGround: false, seesShips: true, noGroundAircraft: true,
       angleFromNose: spec.radar.angleFromNose, heading: t.heading || 0,
@@ -335,7 +345,7 @@ function _buildAllRadars() {
       id: `carrier:${t.id}`, type: 'carrier',
       label:    resolveCallsign(t) || (spec && spec.label) || t.type,
       sublabel: (spec && spec.label) || t.type,
-      lat: t.lat, lon: t.lon,
+      lat: t.lat, lon: t.lon, elevM: t.alt + SHIP_RADAR_HEIGHT_M,
       rangeM: radarSpec.rangeNm * 1852, sweepMs: radarSpec.sweepMs,
       seesGround: false, seesShips: true, noGroundAircraft: true,
       angleFromNose: 360, heading: 0,
@@ -396,6 +406,7 @@ setInterval(() => {
         const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
         const diff = Math.abs(((bearing - sweepAngle + 540) % 360) - 180);
         if (diff > SWEEP_BEAM_DEG) continue;
+        if (losHasLineOfSight(radar.lat, radar.lon, radar.elevM, t.lat, t.lon, t.alt) === false) continue;
 
         const prevSweep = lastSweepMs.get(id) || 0;
         tracks.set(id, t);
@@ -422,6 +433,7 @@ setInterval(() => {
         const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
         const diff = Math.abs(((bearing - beamAngle + 540) % 360) - 180);
         if (diff > SWEEP_BEAM_DEG) continue;
+        if (losHasLineOfSight(radar.lat, radar.lon, radar.elevM, t.lat, t.lon, t.alt) === false) continue;
 
         const prevSweep = lastSweepMs.get(id) || 0;
         tracks.set(id, t);
@@ -689,6 +701,7 @@ loadTrackNumbers();
 loadStaticData();
 initMap();
 initSettings();
+initUpdateStatus();
 initTrackPanel();
 initCallsPanel();
 initRadarPanel();

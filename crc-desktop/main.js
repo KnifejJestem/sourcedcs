@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const http = require('http');
@@ -9,6 +9,7 @@ const fs   = require('fs');
 
 const config = require('./config.json');
 const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv } = require('./lxsrs-setup');
+const { writePendingPatchNotes, readAndClearPendingPatchNotes } = require('./patch-notes');
 
 const IS_LINUX = process.platform === 'linux';
 const IS_WIN   = process.platform === 'win32';
@@ -64,6 +65,8 @@ async function spawnLxsrs() {
 app.on('ready', async () => {
     console.log(`[crc] CRC v${app.getVersion()} starting (${process.platform})`);
 
+    const patchNotesPath = path.join(app.getPath('userData'), 'pending-patch-notes.json');
+
     if (IS_LINUX) {
         // Not awaited: first-run venv setup (network pip install) can take
         // a while and must not block the window from appearing. SRS radio
@@ -93,6 +96,7 @@ app.on('ready', async () => {
         autoHideMenuBar: true,
         webPreferences: {
             contextIsolation: true,
+            preload: path.join(__dirname, 'app', 'preload.js'),
         },
     });
 
@@ -106,20 +110,67 @@ app.on('ready', async () => {
         return { action: 'deny' };
     });
 
+    let lastUpdateStatus = { state: 'idle' };
+    function sendUpdateStatus(status) {
+        lastUpdateStatus = status;
+        if (win && !win.isDestroyed()) win.webContents.send('update-status', status);
+    }
+
     win.webContents.on('did-finish-load', () => {
         win.webContents.insertCSS('* { outline: none !important; }');
+        // Replay current status so a renderer that attaches its listener
+        // after checkForUpdates() already fired (or after a page reload)
+        // doesn't miss whatever state we're already in.
+        sendUpdateStatus(lastUpdateStatus);
     });
 
     win.loadURL(`http://localhost:${config.wsPort}`);
     win.on('closed', () => { win = null; });
+
+    // ── "What's new" — shown once, on the first launch after an autoupdate
+    // actually lands (see patch-notes.js for why this can't happen at
+    // download time: the process that downloaded the update isn't the one
+    // running the new version).
+    try {
+        const pendingPatchNotes = readAndClearPendingPatchNotes(patchNotesPath, app.getVersion());
+        if (pendingPatchNotes) {
+            dialog.showMessageBox(win, {
+                type: 'info',
+                title: `What's New in CRC v${pendingPatchNotes.version}`,
+                message: `CRC has been updated to v${pendingPatchNotes.version}.`,
+                detail: pendingPatchNotes.notes,
+                buttons: ['OK'],
+            });
+        }
+    } catch (err) {
+        console.error('[patch-notes] failed to read pending patch notes:', err.message);
+    }
 
     // ── Autoupdate ────────────────────────────────────────────────────────
     // publish config (package.json's build.publish) points electron-updater
     // at sourcedcs-web's generic-provider /downloads endpoint. Errors are
     // swallowed to a console log only — a failed update check must never
     // block using the app.
-    autoUpdater.on('error', err => console.error('[autoupdate] error:', err.message));
+    autoUpdater.on('error', err => {
+        console.error('[autoupdate] error:', err.message);
+        sendUpdateStatus({ state: 'idle' });
+    });
+    autoUpdater.on('checking-for-update', () => sendUpdateStatus({ state: 'checking' }));
+    // update-available maps to the same 'checking' UI state rather than its
+    // own visual state — download-progress events start firing almost
+    // immediately after, so a distinct state here would just be a flash.
+    autoUpdater.on('update-available', (info) => sendUpdateStatus({ state: 'checking', version: info.version }));
+    autoUpdater.on('update-not-available', () => sendUpdateStatus({ state: 'idle' }));
+    autoUpdater.on('download-progress', (progress) => {
+        sendUpdateStatus({ state: 'downloading', percent: Math.round(progress.percent) });
+    });
     autoUpdater.on('update-downloaded', (info) => {
+        sendUpdateStatus({ state: 'ready', version: info.version });
+        try {
+            writePendingPatchNotes(patchNotesPath, { version: info.version, notes: info.releaseNotes });
+        } catch (err) {
+            console.error('[patch-notes] failed to persist pending patch notes:', err.message);
+        }
         dialog.showMessageBox(win, {
             type: 'info',
             title: 'CRC Update Ready',
@@ -138,6 +189,10 @@ app.on('ready', async () => {
     autoUpdater.checkForUpdates().catch(err => console.error('[autoupdate] check failed:', err.message));
 
 });
+
+// Renderer's topbar update dot calls this directly when clicked while in
+// the 'ready' state — the click itself is the restart confirmation.
+ipcMain.on('update-restart-now', () => autoUpdater.quitAndInstall());
 
 app.on('window-all-closed', () => {
     app.quit();

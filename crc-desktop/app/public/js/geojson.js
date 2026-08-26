@@ -663,12 +663,23 @@ function buildRadarDebug(radars) {
       // Rotating beam: single line in current sweep direction
       if (!radarSweepStart.has(radar.id)) continue;
       const angle = ((now - radarSweepStart.get(radar.id)) % radar.sweepMs) / radar.sweepMs * 360;
-      const [endLat, endLon] = projectPos(radar.lat, radar.lon, angle, radar.rangeM);
+      const visibleM = losVisibleRangeM(radar, angle, radar.rangeM);
+      const [vLat, vLon] = projectPos(radar.lat, radar.lon, angle, visibleM);
       features.push({
         type: 'Feature',
-        geometry: { type: 'LineString', coordinates: [[radar.lon, radar.lat], [endLon, endLat]] },
+        geometry: { type: 'LineString', coordinates: [[radar.lon, radar.lat], [vLon, vLat]] },
         properties: { color, opacity: 0.75 },
       });
+      if (visibleM < radar.rangeM - 1) {
+        // Faint continuation showing where the beam would nominally reach
+        // if terrain weren't blocking it — makes the amount of masking legible.
+        const [endLat, endLon] = projectPos(radar.lat, radar.lon, angle, radar.rangeM);
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: [[vLon, vLat], [endLon, endLat]] },
+          properties: { color, opacity: 0.15 },
+        });
+      }
     } else {
       // Nose radar: animated sweep beam + faint static cone edges
       if (!radarSweepStart.has(radar.id)) continue;
@@ -679,12 +690,21 @@ function buildRadarDebug(radars) {
       const beamAngle = (radar.heading - halfAngle + tNorm * radar.angleFromNose + 360) % 360;
 
       // Current beam line (bright)
-      const [bLat, bLon] = projectPos(radar.lat, radar.lon, beamAngle, radar.rangeM);
+      const beamVisibleM = losVisibleRangeM(radar, beamAngle, radar.rangeM);
+      const [bLat, bLon] = projectPos(radar.lat, radar.lon, beamAngle, beamVisibleM);
       features.push({
         type: 'Feature',
         geometry: { type: 'LineString', coordinates: [[radar.lon, radar.lat], [bLon, bLat]] },
         properties: { color, opacity: 0.75 },
       });
+      if (beamVisibleM < radar.rangeM - 1) {
+        const [endLat, endLon] = projectPos(radar.lat, radar.lon, beamAngle, radar.rangeM);
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: [[bLon, bLat], [endLon, endLat]] },
+          properties: { color, opacity: 0.15 },
+        });
+      }
 
       // Left and right cone edge lines (faint reference)
       const [l1, o1] = projectPos(radar.lat, radar.lon, (radar.heading - halfAngle + 360) % 360, radar.rangeM);
