@@ -685,6 +685,11 @@ function createCirclePolygon(centerLng, centerLat, radiusNM, points = 64) {
 function updateCarrierZones() {
   if (!mapReady) return;
 
+  if (settings.ccacczEnabled === false) {
+      map.getSource('carrier-zones').setData({ type: 'FeatureCollection', features: [] });
+      return;
+    }
+
   const features = [];
 
   for (const [id, track] of tracks.entries()) {
