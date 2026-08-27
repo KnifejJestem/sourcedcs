@@ -3,15 +3,15 @@
 
   "E-3A": {
     "label": "E-3A Sentry",
-    "radar": { "angleFromNose": 360, "rangeNm": 250, "sweepMs": 10000 }
+    "radar": { "angleFromNose": 360, "rangeNm": 216, "sweepMs": 10000 }
   },
   "A-50": {
     "label": "A-50 Mainstay",
     "radar": { "angleFromNose": 360, "rangeNm": 200, "sweepMs": 10000 }
   },
-  "E-2C": {
-    "label": "E-2C Hawkeye",
-    "radar": { "angleFromNose": 360, "rangeNm": 150, "sweepMs": 10000 }
+  "E-2D": {
+    "label": "E-2D Hawkeye",
+    "radar": { "angleFromNose": 360, "rangeNm": 335, "sweepMs": 10000 }
   },
   "KJ-2000": {
     "label": "KJ-2000",
@@ -38,41 +38,21 @@
     "label": "F-15E Strike Eagle",
     "radar": { "angleFromNose": 120, "rangeNm": 80, "sweepMs": 3500 }
   },
-  "F-16C bl.50": {
-    "label": "F-16C Viper",
-    "radar": { "angleFromNose": 120, "rangeNm": 50, "sweepMs": 3000 }
-  },
   "F-16C_50": {
     "label": "F-16C Viper",
-    "radar": { "angleFromNose": 120, "rangeNm": 50, "sweepMs": 3000 }
+    "radar": { "angleFromNose": 120, "rangeNm": 37, "sweepMs": 3000 }
   },
   "FA-18C_hornet": {
     "label": "F/A-18C Hornet",
-    "radar": { "angleFromNose": 120, "rangeNm": 40, "sweepMs": 3000 }
+    "radar": { "angleFromNose": 120, "rangeNm": 70, "sweepMs": 3000 }
   },
-  "FA-18C": {
-    "label": "F/A-18C Hornet",
-    "radar": { "angleFromNose": 120, "rangeNm": 40, "sweepMs": 3000 }
-  },
-  "F/A-18C": {
-    "label": "F/A-18C Hornet",
-    "radar": { "angleFromNose": 120, "rangeNm": 40, "sweepMs": 3000 }
-  },
-  "F-35A": {
-    "label": "F-35A Lightning II",
-    "radar": { "angleFromNose": 120, "rangeNm": 80, "sweepMs": 3000 }
-  },
-  "F-35B": {
-    "label": "F-35B Lightning II",
-    "radar": { "angleFromNose": 120, "rangeNm": 80, "sweepMs": 3000 }
-  },
-  "F-35C": {
-    "label": "F-35C Lightning II",
-    "radar": { "angleFromNose": 120, "rangeNm": 80, "sweepMs": 3000 }
+  "F-4E-45MC": {
+    "label": "F-4E",
+    "radar": { "angleFromNose": 120, "rangeNm": 45, "sweepMs": 3000 }
   },
   "F-35": {
     "label": "F-35 Lightning II",
-    "radar": { "angleFromNose": 120, "rangeNm": 80, "sweepMs": 3000 }
+    "radar": { "angleFromNose": 120, "rangeNm": 80, "sweepMs": 1000 }
   },
   "M-2000C": {
     "label": "Mirage 2000C",
@@ -199,13 +179,11 @@
   },
 
   "_comment_carriers": "Carrier / large ship types — use carrierRadar key so they are treated as carrier sensors (illuminates ships, 360°).",
-  "CVN_74": { "label": "CVN-74 Stennis",  "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "CVN_75": { "label": "CVN-75 H.S Truman",  "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "Stennis":  { "label": "USS Stennis",    "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "Nimitz":   { "label": "USS Nimitz",     "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "CVN_71":   { "label": "CVN-71 T.Roosevelt", "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "CVN_72":   { "label": "CVN-72 A.Lincoln",   "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "CVN_73":   { "label": "CVN-73 G.Washington","carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
+  "CVN_74": { "label": "CVN-74 Stennis",  "carrierRadar": { "rangeNm": 215, "sweepMs": 4000 } },
+  "CVN_75": { "label": "CVN-75 H.S Truman",  "carrierRadar": { "rangeNm": 215, "sweepMs": 4000 } },
+  "CVN_71":   { "label": "CVN-71 T.Roosevelt", "carrierRadar": { "rangeNm": 215, "sweepMs": 4000 } },
+  "CVN_72":   { "label": "CVN-72 A.Lincoln",   "carrierRadar": { "rangeNm": 215, "sweepMs": 4000 } },
+  "CVN_73":   { "label": "CVN-73 G.Washington","carrierRadar": { "rangeNm": 215, "sweepMs": 4000 } },
   "CV_59":    { "label": "CV-59 Forrestal","carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "LHA_Tarawa":{ "label": "LHA Tarawa",    "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "Kuznetsov":{ "label": "Kuznetsov",      "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } }
