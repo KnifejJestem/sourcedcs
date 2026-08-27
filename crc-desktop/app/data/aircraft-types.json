@@ -204,7 +204,10 @@
   "Stennis":  { "label": "USS Stennis",    "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "Nimitz":   { "label": "USS Nimitz",     "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "CVN_71":   { "label": "CVN-71 T.Roosevelt", "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
-  "CVN_72":   { "label": "CVN-72 A.Lincoln",   "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
+  "CVN_72": {
+    "label": "CVN-72 A.Lincoln",
+    "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 }
+  },
   "CVN_73":   { "label": "CVN-73 G.Washington","carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "CV_59":    { "label": "CV-59 Forrestal","carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },
   "LHA_Tarawa":{ "label": "LHA Tarawa",    "carrierRadar": { "rangeNm": 100, "sweepMs": 5000 } },

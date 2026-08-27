@@ -289,7 +289,7 @@ function getAllRadars() {
 }
 
 function _buildAllRadars() {
-  const radars   = [];
+  const radars = [];
   const airports = (missionData && missionData.airports) || [];
 
   for (const apt of airports) {
@@ -339,11 +339,11 @@ function _buildAllRadars() {
   const SHIP_RADAR_DEFAULT = { rangeNm: 40, sweepMs: 5000 };
   for (const t of latestFromServer.values()) {
     if (t.category !== 4) continue;
-    const spec      = aircraftTypes[t.type];
+    const spec = aircraftTypes[t.type];
     const radarSpec = (spec && spec.carrierRadar) || SHIP_RADAR_DEFAULT;
     radars.push({
       id: `carrier:${t.id}`, type: 'carrier',
-      label:    resolveCallsign(t) || (spec && spec.label) || t.type,
+      label: resolveCallsign(t) || (spec && spec.label) || t.type,
       sublabel: (spec && spec.label) || t.type,
       lat: t.lat, lon: t.lon, elevM: t.alt + SHIP_RADAR_HEIGHT_M,
       rangeM: radarSpec.rangeNm * 1852, sweepMs: radarSpec.sweepMs,
@@ -351,8 +351,23 @@ function _buildAllRadars() {
       angleFromNose: 360, heading: 0,
       onGround: false,
     });
-  }
+    const isCarrier = (t.type && t.type.includes('CVN')) || (spec && spec.label && spec.label.includes('CVN'));
 
+    if (isCarrier) {
+      radars.push({
+        id: `icls:${t.id}`, type: 'carrier',
+        label: `${resolveCallsign(t) || (spec && spec.label) || t.type} ICLS RDR`,
+        sublabel: 'ICLS',
+        lat: t.lat, lon: t.lon, elevM: t.alt + SHIP_RADAR_HEIGHT_M,
+        rangeM: 8 * 1852,
+        sweepMs: 10,
+        seesGround: false, seesShips: false, noGroundAircraft: true,
+        angleFromNose: 35,
+        heading: (t.heading || 0) + 171, // Binds to ship heading with the 171° BRC angle offset
+        onGround: false,
+      });
+    }
+  }
   return radars;
 }
 
