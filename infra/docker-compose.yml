@@ -52,7 +52,7 @@ services:
         \"~*tagfilter%3Dvisualeditor\" 1;
         \"~*action=feedrecentchanges\" 1;
       }
-      limit_req_zone \$$binary_remote_addr zone=wiki:10m rate=1r/s;
+      limit_req_zone \$$binary_remote_addr zone=wiki:10m rate=5r/s;
       limit_req_zone \$$binary_remote_addr zone=wikiauth:5m rate=1r/s;
       server {
         listen 80;
@@ -82,7 +82,7 @@ services:
           proxy_set_header X-Forwarded-Proto https;
         }
         location / {
-          limit_req zone=wiki burst=5 nodelay;
+          limit_req zone=wiki burst=30 nodelay;
           set \$$upstream mediawiki;
           proxy_pass http://\$$upstream:80;
           proxy_set_header Host $$host;
