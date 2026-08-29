@@ -26,7 +26,7 @@ If someone reports a 403 on `wiki.sourcedcs.page`, check these in order:
 | 403 on any URL, any UA | `deny 74.7.227.48;` / `deny 74.7.243.248;` — GPTBot's IPs at incident time | nginx wiki `server{}` block |
 | 403, UA contains GPTBot/Amazonbot/MJ12bot/DotBot/Bytespider/l9scan/RootEvidence/crusader-worker/Dataprovider | `map $http_user_agent $bad_bot` + `if ($bad_bot) return 403;` | nginx http-level `map` + wiki `server{}` |
 | 403 on RecentChanges/feedrecentchanges-style URLs | `map $args $scraper_sig` matching `tagfilter=visualeditor` (incl. URL-encoded) or `action=feedrecentchanges` | nginx http-level `map` + wiki `server{}` |
-| 503 under rapid requests to the wiki | `limit_req_zone` — 1r/s, burst 5 on `location /`, burst 3 on `Special:PluggableAuthLogin` | nginx wiki `server{}` |
+| 503 under rapid requests to the wiki | `limit_req_zone` — 5r/s, burst 30 on `location /`, 1r/s burst 3 on `Special:PluggableAuthLogin` | nginx wiki `server{}` |
 
 The two `deny` IPs are a stopgap (GPTBot's IPs rotate) — the UA rule is the durable
 control. The scraper-signature rule has no IP/UA fingerprint to key off (residential
@@ -39,6 +39,19 @@ Cloudflare or any other reverse proxy is ever placed in front of this box, every
 request will appear to come from the proxy's IP, and rate limiting will then either
 block everyone or no one — switch to a `real_ip`-resolved variable before that
 happens.
+
+**Fast-follow (same day):** the original `1r/s, burst 5 nodelay` on `location /`
+was too tight for real browsing — `location /` catches every request from a page
+load, not just the abusive endpoint, and a single page render (Citizen skin CSS/JS
+bundles, icon assets, etc.) easily fires more than 5 near-simultaneous requests from
+one client IP. With `nodelay`, anything past the burst gets an immediate `503`
+instead of queuing, which silently broke skin icons for real users while the main
+page still loaded fine (the first request within the burst succeeded). Since the
+actual attack (bot UAs, scraper signature) is blocked upstream of this limiter
+already, its remaining job is just a generic abuse backstop, so it was safe to
+relax to `5r/s, burst 30`. `Special:PluggableAuthLogin`'s own tighter `1r/s, burst 3`
+was left alone — a real user hits that endpoint at most once per login, so there's
+no equivalent legitimate-burst concern there.
 
 ### robots.txt
 
