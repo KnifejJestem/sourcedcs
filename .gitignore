@@ -193,14 +193,14 @@ website/data/roster.json
 website/data/squadrons.json
 vendor/
 /.claude
-infra/.env.example
 sourcedcs-web/data/gallery.json
 sourcedcs-web/data/uploads/
-infra/mediawiki/LocalSettings.php
-<<<<<<< HEAD
 
-=======
->>>>>>> aeace0d (fixed gitigonre)
 # debug data
 /tools/data/
-infra/mediawiki/LocalSettings.php
+
+# mediawiki backup artifacts (contain DB dumps / LocalSettings.php / .env — never commit)
+infra/mediawiki_backup_*/
+infra/mediawiki-backup-*.sql
+infra/mediawiki_backup_*.tar.gz
+infra/*.sql

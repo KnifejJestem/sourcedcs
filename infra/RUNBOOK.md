@@ -1,0 +1,225 @@
+# infra RUNBOOK
+
+## 2026-08-29 — wiki scraper incident: what's blocked and why
+
+The droplet hit a load average of ~145 (1 vCPU) with 811 MB swap in use. Root cause,
+from ~300k nginx access log lines:
+
+1. A distributed residential-proxy scraper swarm (~66% of requests) hitting
+   `Special:RecentChanges` with `tagfilter=visualeditor` (or its URL-encoded form
+   inside `returntoquery`) and a randomized `from=` timestamp — each URL unique, so
+   nothing caches, and each is a full MediaWiki parse + DB scan.
+2. GPTBot (96,636 requests from `74.7.227.48` and `74.7.243.248`) and Amazonbot
+   (26,342 requests).
+3. A PluggableAuth failure loop: bots hit `Special:PluggableAuthLogin`, PluggableAuth
+   redirects to Casdoor, Casdoor fails, MediaWiki renders a fatal-error login page
+   containing another login link, repeat.
+4. Apache's `mpm_prefork` default `MaxRequestWorkers 150` (~45MB RSS/child) demands
+   ~6.75GB on a 2GB box.
+
+### What's now blocking traffic at nginx (wiki vhost only — `infra/docker-compose.yml`, `nginx` service `command:`)
+
+If someone reports a 403 on `wiki.sourcedcs.page`, check these in order:
+
+| Symptom | Cause | Where |
+|---|---|---|
+| 403 on any URL, any UA | `deny 74.7.227.48;` / `deny 74.7.243.248;` — GPTBot's IPs at incident time | nginx wiki `server{}` block |
+| 403, UA contains GPTBot/Amazonbot/MJ12bot/DotBot/Bytespider/l9scan/RootEvidence/crusader-worker/Dataprovider | `map $http_user_agent $bad_bot` + `if ($bad_bot) return 403;` | nginx http-level `map` + wiki `server{}` |
+| 403 on RecentChanges/feedrecentchanges-style URLs | `map $args $scraper_sig` matching `tagfilter=visualeditor` (incl. URL-encoded) or `action=feedrecentchanges` | nginx http-level `map` + wiki `server{}` |
+| 503 under rapid requests to the wiki | `limit_req_zone` — 1r/s, burst 5 on `location /`, burst 3 on `Special:PluggableAuthLogin` | nginx wiki `server{}` |
+
+The two `deny` IPs are a stopgap (GPTBot's IPs rotate) — the UA rule is the durable
+control. The scraper-signature rule has no IP/UA fingerprint to key off (residential
+proxy swarm), so it can only be stopped by the URL pattern itself; if the swarm
+changes its query parameters, this rule will stop matching and needs updating.
+
+**`$binary_remote_addr` caveat:** the bot-UA blocking and rate limiting above key off
+the client's real IP. This is only correct while nginx is the public edge. If
+Cloudflare or any other reverse proxy is ever placed in front of this box, every
+request will appear to come from the proxy's IP, and rate limiting will then either
+block everyone or no one — switch to a `real_ip`-resolved variable before that
+happens.
+
+### robots.txt
+
+Served directly by nginx (`location = /robots.txt` in the wiki `server{}` block, not
+by MediaWiki) so it still works when the wiki container is down. Disallows GPTBot and
+Amazonbot outright (they do honor robots.txt — this is what actually stops them,
+versus the 403 wall above which they'll still keep hitting). Has no effect on the
+residential-proxy swarm, which doesn't fetch or honor robots.txt.
+
+### Apache worker cap
+
+Confirmed via `docker run --rm mediawiki:1.43 apache2ctl -V`: the image runs
+`mpm_prefork` (mod_php, not php-fpm), so the `mpm_prefork_module` tuning applies
+directly. `infra/mediawiki/apache/zz-mpm.conf` is mounted to
+`/etc/apache2/conf-enabled/zz-mpm.conf` — confirmed via
+`apache2ctl -t -D DUMP_INCLUDES` to load after every other `conf-enabled` file
+(alphabetical `zz-` prefix), so its values win. `ServerLimit` is set alongside
+`MaxRequestWorkers` (both 8) since prefork silently clamps `MaxRequestWorkers` to
+`ServerLimit`'s default otherwise.
+
+### MediaWiki caching
+
+`infra/mediawiki/LocalSettings.perf.php` (tracked in git — contains no secrets) sets
+`$wgMiserMode = true` (disables expensive dynamic special pages — the single
+highest-value MediaWiki-side change for this incident) and
+`$wgMainCacheType`/`$wgParserCacheType = CACHE_ACCEL`.
+
+**APCu is already present** in the `mediawiki:1.43` base image (verified: `php -m`
+lists `apcu`, default `apc.shm_size=32M`) — no Dockerfile or php.ini change was
+needed. OPcache is also already enabled by default.
+
+**Important — `LocalSettings.perf.php` is not auto-loaded.** `LocalSettings.php`
+itself is intentionally gitignored (it holds DB credentials and the Casdoor OAuth
+secret — see "Secrets" below) and is not part of this repo checkout. One-time manual
+step on the host, required for these settings to take effect:
+
+```bash
+echo "require_once '/var/www/html/LocalSettings.perf.php';" >> infra/mediawiki/LocalSettings.php
+docker compose restart mediawiki
+```
+
+Do this once per host. `docker-compose.yml` mounts `LocalSettings.perf.php`
+read-only into the container at that exact path, so nothing else needs to change on
+future recreates. (An `auto_prepend_file` php.ini approach was considered instead —
+rejected because MediaWiki assigns `$wgMiserMode` etc. from its own defaults
+*between* php.ini auto_prepend and the point `LocalSettings.php` is required, which
+would silently clobber values set any earlier. `require_once` from the end of
+`LocalSettings.php` is the only load-order-safe place.)
+
+### Stale upstream resolution (nginx → mediawiki)
+
+Already handled in the existing config before this change — `resolver 127.0.0.11`
+plus `set $upstream mediawiki; proxy_pass http://$upstream:80;` in every vhost
+already forces per-request DNS re-resolution (Docker's embedded DNS), so a
+`mediawiki` (or any other backend) container recreate doesn't require an nginx
+restart. This PR only tightens `resolver ... valid=30s` to `valid=10s ipv6=off` for
+faster pickup. No `proxy_pass` here carries a URI suffix, so the
+variable-in-proxy_pass caveat (losing automatic `$request_uri` passthrough) doesn't
+apply — verified by testing every vhost's config end to end (see "How this was
+tested" below).
+
+### Log rotation
+
+`x-logging` anchor added in `docker-compose.yml`, applied to every service
+(`json-file`, `max-size: 50m`, `max-file: 3`). Takes effect on next recreate of each
+container — pure compose config, no host file (`/etc/docker/daemon.json`) touched.
+
+## Secrets incident (found during this work, unrelated to the scraper issue)
+
+`infra/mediawiki_backup_20260623_110448.tar.gz`, `infra/mediawiki-backup-20260710-1726.sql`,
+and `infra/mediawiki_backup_20260623_110351/all_databases.sql` were committed to git
+(commit `9c5adf2`, on `origin/main`). The `.tar.gz` bundled `.env.backup` in full —
+i.e. `MYSQL_ROOT_PASSWORD`, `WIKI_DB_PASSWORD`, `CASDOOR_DB_PASSWORD`,
+`CASDOOR_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `RELEASE_UPLOAD_TOKEN` — plus
+`LocalSettings.php` and a full DB dump. Per the repo owner: these specific
+credentials were already rotated a while ago, so the live exposure is stale, but the
+values still sit in git history.
+
+This PR removes the three files from the working tree/repo going forward and adds
+gitignore patterns (`infra/mediawiki_backup_*/`, `infra/mediawiki-backup-*.sql`,
+`infra/mediawiki_backup_*.tar.gz`, `infra/*.sql`) so `infra/backup_mediawiki.sh`
+output can't land in the repo again. It does **not** rewrite git history — that's a
+separate, more disruptive decision (force-push implications for anyone with a local
+clone) left to the repo owner if/when they want it. `infra/backup_mediawiki.sh` still
+bundles `.env` and `LocalSettings.php` into its output archive by design (it's meant
+as a disaster-recovery bundle) — the fix here is only "don't commit the output
+directory," not "stop the script from including secrets in a backup file that's
+supposed to be a full restore point." Keep backup archives out of the repo and off
+of anywhere with broader read access than the restore operation needs.
+
+The `.gitignore` also had an unresolved git merge-conflict marker
+(`<<<<<<< HEAD` / `=======` / `>>>>>>> aeace0d`) committed in it, and three duplicate
+`infra/mediawiki/LocalSettings.php` lines. Cleaned up as part of the same touch.
+
+## Discovery findings (from this task)
+
+1. Compose files: everything lives in the single `infra/docker-compose.yml` — no
+   separate compose files per service.
+2. nginx config is generated entirely inline in `docker-compose.yml`'s `nginx`
+   service `command:` (a shell heredoc writing `/etc/nginx/conf.d/default.conf`) —
+   there is no standalone `nginx.conf` and no `conf.d/` include pattern beyond that
+   one generated file. Both the `http{}`-level directives (`resolver`,
+   `client_max_body_size`, the new `map`/`limit_req_zone` blocks) and every
+   `server{}` block (including the `wiki.sourcedcs.page` one, matched via
+   `server_name '$WIKI_DOMAIN'`) live in that same generated file/command block.
+3. `infra/mediawiki/Dockerfile` builds `FROM mediawiki:1.43` (official image, Debian
+   + Apache + mod_php) plus PluggableAuth, OpenIDConnect, and the Citizen skin.
+4. `LocalSettings.php` is not in this repo checkout — it's gitignored on purpose
+   (see "Secrets incident" above) and lives only on the host, volume-mounted in.
+5. APCu and OPcache are both already installed and enabled in the base image (see
+   "MediaWiki caching" above) — this ruled out the Dockerfile changes the spec
+   anticipated as a fallback.
+
+## How this was tested
+
+No access to the live droplet from this environment (it's a separate host). Instead,
+validated locally with real `docker compose` / `docker` / the actual
+`infra/mediawiki` Dockerfile build:
+
+- Built an isolated copy of the full compose stack (`docker compose -p wikitest`)
+  with the real `nginx` service and stub backends (self-signed certs, `alpine sleep
+  infinity` containers standing in for mediawiki/casdoor/main-website/atobrief/
+  crc-sync/mariadb) to get the *actual* generated `/etc/nginx/conf.d/default.conf`
+  and run the real `nginx -t` — this config is built via a fragile hand-escaped
+  shell heredoc (`\$$`/`$$` doubling for compose variable interpolation), so
+  hand-verifying the escaping by inspection was not trustworthy; every change here
+  was validated against the real generated file.
+- Confirmed via that harness: `nginx -t` passes; `curl -A 'GPTBot/1.4'` → 403 on the
+  wiki vhost only (502, not 403, on other vhosts — confirming the bot/scraper rules
+  are correctly scoped to `wiki.sourcedcs.page` and don't affect
+  auth/main/atobrief/asacs); the `tagfilter=visualeditor` scraper signature → 403;
+  `robots.txt` served with real newlines (the escaping needed `\\n`, not `\n`, to
+  survive the heredoc — plain `\n` collapsed to a bare `n`, caught by testing);
+  rapid requests to `/` and to `Special:PluggableAuthLogin` return 503 once their
+  respective burst allowances are exhausted.
+- Built the actual `infra/mediawiki` image locally and confirmed: `apache2ctl -V`
+  reports `mpm_prefork`; `apache2ctl -t` passes with `zz-mpm.conf` mounted;
+  `apache2ctl -t -D DUMP_INCLUDES` confirms it loads last among `conf-enabled`
+  files; `php -l` passes on `LocalSettings.perf.php`; the container starts cleanly
+  (Apache reaches "resuming normal operations") with all three new mounts
+  (`LocalSettings.perf.php`, `zz-mpm.conf`, plus the existing `LocalSettings.php`
+  mount) in place; confirmed `CACHE_ACCEL` is defined by MediaWiki core
+  (`includes/Defines.php`) before `LocalSettings.php` is required, so the perf
+  file's use of that constant resolves correctly in the real boot sequence (it
+  cannot be tested via a bare `php -r` one-liner outside MediaWiki's own bootstrap,
+  which is what a first attempt at this check hit and which is a test-harness
+  artifact, not a real issue).
+- Did not stand up a full DB-backed MediaWiki instance, so no live page load or
+  `$wgMiserMode`/cache-hit behavior was exercised end-to-end — only config
+  correctness and container startup.
+
+## Deploying this on the actual droplet
+
+```bash
+git pull --ff-only
+cd infra
+docker exec nginx nginx -t          # confirm current config is still fine before touching anything
+# apply the one-time LocalSettings.php hookup (see "MediaWiki caching" above) if not already done
+docker compose up -d mediawiki      # recreate to pick up zz-mpm.conf + LocalSettings.perf.php mounts
+sleep 5
+docker exec nginx nginx -s reload   # or: docker compose up -d nginx to recreate with the new generated config
+```
+
+Then verify per the spec's section 5 (scraper-signature 403, bot-UA 403, normal
+traffic 200, robots.txt served, worker count ≤ 9), and watch `vmstat 1` for ~10
+minutes — success is `r` in single digits, `si`/`so` near zero, load average
+trending back toward 1.
+
+## Out of scope — reported, not fixed
+
+- **PluggableAuth fatal-error loop.** The rate limit on
+  `Special:PluggableAuthLogin` damps it but doesn't fix the underlying Casdoor auth
+  failure. No access to the live host's logs from this environment to pull
+  `docker logs mediawiki | grep -i pluggableauth` — do this on the droplet directly
+  when investigating that failure.
+- **Public read access** (`$wgGroupPermissions['*']['read'] = false;`) would end
+  this entire problem class — scrapers would hit a login wall on every URL. This is
+  a product decision (is the wiki publicly readable for recruitment purposes?), not
+  a technical one — not implemented here, flagged for the repo owner to decide.
+- **Host uptime / pending kernel updates.** 178 days up at incident time; a reboot
+  was explicitly out of scope for this task.
+- **Git history rewrite for the leaked secrets.** See "Secrets incident" above —
+  credentials already rotated, so treated as a lower-urgency cleanup left to the
+  repo owner rather than done unilaterally in this PR.

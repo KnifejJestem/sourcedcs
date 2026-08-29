@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
 
   # ─────────────────────────────────────────
@@ -7,6 +13,7 @@ services:
     image: nginx:alpine
     container_name: nginx
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "80:80"
       - "443:443"
@@ -21,12 +28,32 @@ services:
       - ASACS_DOMAIN=${ASACS_DOMAIN}
     command: >
       /bin/sh -c "
-      echo 'resolver 127.0.0.11 valid=30s;
+      echo 'resolver 127.0.0.11 valid=10s ipv6=off;
       client_max_body_size 350M;
       map \$$http_upgrade \$$connection_upgrade {
         default upgrade;
         \"\" close;
       }
+      map \$$http_user_agent \$$bad_bot {
+        default 0;
+        \"~*GPTBot\" 1;
+        \"~*Amazonbot\" 1;
+        \"~*MJ12bot\" 1;
+        \"~*DotBot\" 1;
+        \"~*Bytespider\" 1;
+        \"~*l9scan\" 1;
+        \"~*RootEvidence\" 1;
+        \"~*crusader-worker\" 1;
+        \"~*Dataprovider\" 1;
+      }
+      map \$$args \$$scraper_sig {
+        default 0;
+        \"~*tagfilter=visualeditor\" 1;
+        \"~*tagfilter%3Dvisualeditor\" 1;
+        \"~*action=feedrecentchanges\" 1;
+      }
+      limit_req_zone \$$binary_remote_addr zone=wiki:10m rate=1r/s;
+      limit_req_zone \$$binary_remote_addr zone=wikiauth:5m rate=1r/s;
       server {
         listen 80;
         server_name '$$WIKI_DOMAIN';
@@ -38,7 +65,24 @@ services:
         server_name '$$WIKI_DOMAIN';
         ssl_certificate /etc/letsencrypt/live/'$$WIKI_DOMAIN'/fullchain.pem;
         ssl_certificate_key /etc/letsencrypt/live/'$$WIKI_DOMAIN'/privkey.pem;
+        deny 74.7.227.48;
+        deny 74.7.243.248;
+        if (\$$bad_bot) { return 403; }
+        if (\$$scraper_sig) { return 403; }
+        location = /robots.txt {
+          add_header Content-Type text/plain;
+          return 200 \"User-agent: GPTBot\\nDisallow: /\\nUser-agent: Amazonbot\\nDisallow: /\\n\\nUser-agent: *\\nDisallow: /index.php?\\nDisallow: /api.php\\n\";
+        }
+        location = /index.php/Special:PluggableAuthLogin {
+          limit_req zone=wikiauth burst=3 nodelay;
+          set \$$upstream mediawiki;
+          proxy_pass http://\$$upstream:80;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-Proto https;
+        }
         location / {
+          limit_req zone=wiki burst=5 nodelay;
           set \$$upstream mediawiki;
           proxy_pass http://\$$upstream:80;
           proxy_set_header Host $$host;
@@ -137,6 +181,7 @@ services:
   certbot:
     image: certbot/certbot
     container_name: certbot
+    logging: *default-logging
     volumes:
       - certbot-webroot:/var/www/certbot
       - certbot-certs:/etc/letsencrypt
@@ -151,6 +196,7 @@ services:
     image: mariadb:11
     container_name: mariadb
     restart: unless-stopped
+    logging: *default-logging
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       WIKI_DB_PASSWORD: ${WIKI_DB_PASSWORD}
@@ -173,9 +219,12 @@ services:
     build: ./mediawiki
     container_name: mediawiki
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - mediawiki-images:/var/www/html/images
       - ./mediawiki/LocalSettings.php:/var/www/html/LocalSettings.php:ro
+      - ./mediawiki/LocalSettings.perf.php:/var/www/html/LocalSettings.perf.php:ro
+      - ./mediawiki/apache/zz-mpm.conf:/etc/apache2/conf-enabled/zz-mpm.conf:ro
       - ./mediawiki/extensions/CasdoorSync:/var/www/html/extensions/CasdoorSync
     depends_on:
       mariadb:
@@ -191,6 +240,7 @@ services:
     image: casbin/casdoor:latest
     container_name: casdoor
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - casdoor-conf:/conf
       - ./casdoor_entrypoint.sh:/casdoor_entrypoint.sh:ro
@@ -213,6 +263,7 @@ services:
     image: ghcr.io/niknam3/sourcedcs/sourcedcs-web:${TAG:-latest}
     container_name: main-website
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - NODE_ENV=production
       - PORT=7000
@@ -243,6 +294,7 @@ services:
     image: ghcr.io/niknam3/sourcedcs/atobrief:${TAG:-latest}
     container_name: atobrief
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - NODE_ENV=production
       - PORT=4000
@@ -263,6 +315,7 @@ services:
     image: ghcr.io/niknam3/sourcedcs/crc-sync:${TAG:-latest}
     container_name: crc-sync
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - NODE_ENV=production
       - PORT=3000
