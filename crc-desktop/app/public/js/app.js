@@ -351,6 +351,21 @@ function _buildAllRadars() {
       angleFromNose: 360, heading: 0,
       onGround: false,
     });
+    const isCarrier = (t.type && t.type.includes('CVN')) || (spec && spec.label && spec.label.includes('CVN'));
+    if (isCarrier) {
+      radars.push({
+        id: `app:${t.id}`, type: 'carrier',
+        label: `${resolveCallsign(t) || (spec && spec.label) || t.type} APP RDR`,
+        sublabel: (spec && spec.label) || t.type,
+        lat: t.lat, lon: t.lon, elevM: t.alt + 45,
+        rangeM: 50 * 1852,
+        sweepMs: 4000,
+        seesGround: false, seesShips: false, noGroundAircraft: true,
+        angleFromNose: 360,
+        heading: 0,
+        onGround: false,
+      });
+    }
   }
 
   return radars;
