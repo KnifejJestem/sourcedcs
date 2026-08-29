@@ -6,6 +6,10 @@
   <title>CRC</title>
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+  <!-- Docking layout engine (replaces hand-positioned fixed panels). UMD bundle
+       exports to the (hyphenated, bracket-access-only) global `dockview-core`
+       and injects its own base CSS on load. -->
+  <script src="https://cdn.jsdelivr.net/npm/dockview-core@5.1.0/dist/dockview-core.js"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -55,7 +59,20 @@
       overflow: hidden;
     }
 
-    #map { width: 100vw; height: calc(100vh - 62px); } /* 32px topbar + ~30px radio panel; JS ResizeObserver overrides */
+    /* Dockview grid fills everything below the topbar; the map is just its
+       default center panel now, sized to whatever the grid gives it. */
+    #dock-root { position: fixed; top: 32px; left: 0; right: 0; bottom: 0; }
+    #map { width: 100%; height: 100%; }
+    /* Legacy panel content (track/calls/settings/aprt/radars) used to hide
+       itself via position:fixed + transform:translateX(-100%) before it was
+       migrated into dockview — now that they're plain in-flow divs sized to
+       whatever dockview gives them, a panel that dock.js hasn't mounted yet
+       this session (never opened) has nowhere else to go and renders inline
+       wherever it sits in the HTML source instead. This class is the
+       replacement "hidden until dockview actually places it" state —
+       mountExistingPanel() (dock.js) removes it the one time each panel is
+       first created. */
+    .dock-unmounted { display: none !important; }
 
     /* ── Top bar ── */
     #topbar {
@@ -108,35 +125,20 @@
     }
 
     /* Radar panel */
+    /* Position/visibility now owned by dockview (dock.js). */
     #radars-panel {
-      position: fixed;
-      top: 32px; left: 0;
-      width: 240px;
-      max-height: calc(100vh - 32px);
       background: var(--ui-bg-solid);
-      border-right: 1px solid var(--ui-border);
-      z-index: 30;
+      width: 100%; height: 100%;
       padding: 14px 14px 20px;
-      transform: translateX(-100%);
-      transition: transform 0.2s ease;
       overflow-y: auto;
+      box-sizing: border-box;
     }
-    #radars-panel.open { transform: translateX(0); }
     .radar-panel-title {
       font-size: 10px;
       letter-spacing: 0.1em;
       color: var(--ui-text-dim);
       text-transform: uppercase;
       margin-bottom: 12px;
-    }
-    .radar-group-heading {
-      font-size: 9px;
-      letter-spacing: 0.12em;
-      color: var(--ui-text-dim);
-      text-transform: uppercase;
-      padding: 8px 0 4px;
-      border-bottom: 1px solid var(--ui-border-4);
-      margin-bottom: 4px;
     }
     .radar-row {
       display: flex;
@@ -148,6 +150,8 @@
       color: var(--ui-text-bright);
     }
     .radar-row.disabled { color: var(--ui-text-dim); }
+    .radar-row.radar-row-add { cursor: pointer; }
+    .radar-row.radar-row-add:hover { color: var(--ui-active); }
     .radar-check { accent-color: var(--ui-active); cursor: pointer; flex-shrink: 0; }
     .radar-row-label { flex: 1; }
     .radar-row-range {
@@ -176,14 +180,43 @@
       width: 100%; box-sizing: border-box;
       background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
       color: var(--ui-text-input); font-family: inherit; font-size: 10px;
-      padding: 4px 6px; margin-bottom: 10px; outline: none;
+      padding: 4px 6px; margin-top: 10px; outline: none;
     }
     #radar-search::placeholder { color: var(--ui-text-dim); }
+    #radar-search-results {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 2px;
+    }
 
-    /* LOS terrain profile chart */
+    /* ── Panels section (radar-driven + manual dockable-panel control) ── */
+    .panel-ctrl-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0;
+      font-size: 11px; letter-spacing: 0.05em;
+      color: var(--ui-text-bright);
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .panel-ctrl-row:last-child { border-bottom: none; }
+    .panel-ctrl-label { flex: 1; cursor: pointer; }
+    .panel-ctrl-status {
+      font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--ui-text-dim);
+    }
+    .panel-ctrl-status.is-open { color: var(--ui-active); }
+    .panel-pin-btn {
+      background: none; border: 1px solid var(--ui-border-2); color: var(--ui-text-dim);
+      font-family: inherit; font-size: 9px; letter-spacing: 0.08em;
+      padding: 2px 6px; cursor: pointer;
+    }
+    .panel-pin-btn:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    .panel-pin-btn.pinned { border-color: var(--ui-active); color: var(--ui-active); }
+
+    /* LOS terrain profile chart — positioned dynamically by showLosProfile()
+       (ui.js), relative to the hovered row, since the radar panel is now a
+       dockable panel that can be anywhere on screen. */
     #los-profile-panel {
       position: fixed;
-      top: 32px; left: 240px;
       width: 300px;
       background: var(--ui-bg-solid);
       border-right: 1px solid var(--ui-border);
@@ -313,7 +346,7 @@
     #apt-display.active { color: var(--ui-active); }
     #apt-display:hover  { color: var(--ui-text-bright); }
 
-    #btn-settings, #btn-radars, #btn-coalition, #btn-patch-notes {
+    #btn-radars, #btn-coalition, #btn-patch-notes {
       background: none;
       border: 1px solid var(--ui-border-2);
       color: var(--ui-text);
@@ -323,47 +356,18 @@
       padding: 3px 8px;
       cursor: pointer;
     }
-    #btn-settings:hover, #btn-radars:hover, #btn-patch-notes:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    #btn-radars:hover, #btn-patch-notes:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
     #btn-patch-notes { display: none; }
 
-    /* ── Floating buttons below topbar (top-left) ── */
-    #float-btns {
-      position: fixed;
-      top: 42px; left: 12px;
-      z-index: 20;
-      display: flex;
-      gap: 6px;
-    }
-    #btn-calls, #btn-aprt {
-      background: none;
-      border: 1px solid var(--ui-border-2);
-      color: var(--ui-text);
-      font-family: inherit;
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      padding: 4px 8px;
-      cursor: pointer;
-    }
-    #btn-calls:hover,
-    #btn-aprt:hover  { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
-    #btn-aprt.active { border-color: var(--ui-active); color: var(--ui-active); }
-
     /* ── APRT / Theater side panel ── */
+    /* Position/visibility now owned by dockview (dock.js). */
     #aprt-panel {
-      position: fixed;
-      top: 32px; left: 0;
-      width: 310px;
-      height: calc(100vh - 32px);
       background: var(--ui-bg-solid);
-      border-right: 1px solid var(--ui-border);
-      z-index: 29;
+      width: 100%; height: 100%;
       display: flex;
       flex-direction: column;
-      transform: translateX(-100%);
-      transition: transform 0.2s ease;
       overflow: hidden;
     }
-    #aprt-panel.open { transform: translateX(0); }
     .aprt-panel-header {
       display: flex;
       align-items: center;
@@ -559,22 +563,15 @@
     #btn-coalition.coalition-red:hover    { color: #ee6666; border-color: #cc4444; }
 
     /* ── Track info panel ── */
+    /* Position/visibility now owned by dockview (dock.js) — this is a tab in
+       the left group, sized to whatever the grid gives that group. */
     #track-panel {
-      position: fixed;
-      top: 32px; left: 0;
-      width: 260px;
       background: var(--ui-bg-solid);
-      border-right: 1px solid var(--ui-border);
-      border-bottom: 1px solid var(--ui-border);
-      z-index: 25;
-      transform: translateX(-100%);
-      transition: transform 0.15s ease, top 0.15s ease;
+      width: 100%; height: 100%;
+      overflow-y: auto;
       font-size: 11px;
       letter-spacing: 0.05em;
     }
-    #track-panel.open { transform: translateX(0); }
-    /* Push down when calls-panel is open */
-    #track-panel.below-calls { top: 32px; }
     .tp-header {
       display: flex; align-items: baseline; gap: 6px;
       padding: 10px 12px 6px;
@@ -664,22 +661,15 @@
     #tp-fpl-section { display: none; }
 
     /* ── Settings panel ── */
+    /* Position/visibility now owned by dockview (dock.js). */
     #settings-panel {
-      position: fixed;
-      top: 32px; right: 0;
-      width: 320px;
-      height: calc(100vh - 32px);
       background: var(--ui-bg-solid);
-      border-left: 1px solid var(--ui-border);
-      z-index: 30;
+      width: 100%; height: 100%;
       padding: 0;
-      transform: translateX(100%);
-      transition: transform 0.2s ease;
       overflow: hidden;
       display: flex;
       flex-direction: column;
     }
-    #settings-panel.open { transform: translateX(0); }
 
     /* Tabs */
     .settings-tabs {
@@ -926,20 +916,14 @@
     }
 
     /* ── Squawk callsign panel ── */
+    /* Position/visibility now owned by dockview (dock.js) — this is a tab in
+       the left group, sized to whatever the grid gives that group. */
     #calls-panel {
-      position: fixed;
-      top: 32px; left: 0;
-      width: 260px;
-      max-height: calc(100vh - 32px);
       background: var(--ui-bg-solid);
-      border-right: 1px solid var(--ui-border);
-      z-index: 30;
+      width: 100%; height: 100%;
       padding: 16px;
-      transform: translateX(-100%);
-      transition: transform 0.2s ease;
       overflow-y: auto;
     }
-    #calls-panel.open { transform: translateX(0); }
     .calls-title {
       font-size: 10px; letter-spacing: 0.1em; color: var(--ui-text-dim);
       text-transform: uppercase; margin-bottom: 12px;
@@ -1072,12 +1056,11 @@
     #srs-freq-modal-confirm:hover { background: rgba(138,170,106,0.08) !important; }
 
     /* ── SRS Radio panel ── */
+    /* Position/visibility now owned by dockview (dock.js). */
     #srs-radio-panel {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      z-index: 30;
       background: var(--ui-bg-solid);
-      border-top: 1px solid var(--ui-border-3);
+      width: 100%; height: 100%;
+      overflow-y: auto;
       font-size: 11px;
       font-family: 'Courier New', monospace;
       letter-spacing: 0.05em;
@@ -1385,14 +1368,15 @@
 </head>
 <body>
 
-<div id="map"></div>
+<div id="dock-root"></div>
 
 <!-- Floating bullseye BRA label (follows mouse cursor) -->
 <div id="cursor-bra"></div>
 
-<!-- Radar selection panel -->
-<div id="radars-panel">
-  <div class="radar-panel-title">Active Radars</div>
+<!-- Radar selection panel — also the one control surface for which auxiliary
+     dockable panels are shown (see the "Panels" section below); this is why
+     it's the only panel-toggling button left in the topbar. -->
+<div id="radars-panel" class="dock-unmounted">
   <div class="datalink-row" id="datalink-row">
     <span class="datalink-label">DATALINK</span>
     <label class="toggle">
@@ -1400,8 +1384,15 @@
       <span class="toggle-slider"></span>
     </label>
   </div>
-  <input type="text" id="radar-search" placeholder="Search airports…" autocomplete="off" />
-  <div id="radar-groups"></div>
+
+  <div class="radar-panel-title">Active Radars</div>
+  <div id="radar-active-list"></div>
+
+  <input type="text" id="radar-search" placeholder="Add radar…" autocomplete="off" />
+  <div id="radar-search-results"></div>
+
+  <div class="radar-panel-title" style="margin-top: 14px;">Panels</div>
+  <div id="panel-controls"></div>
 </div>
 
 <!-- LOS terrain profile — shown while hovering a row in the radar panel -->
@@ -1424,7 +1415,7 @@
 </div>
 
 <!-- Track info panel -->
-<div id="track-panel">
+<div id="track-panel" class="dock-unmounted">
   <div class="tp-header">
     <span class="tp-callsign" id="tp-callsign">—</span>
     <span class="tp-type-label" id="tp-type"></span>
@@ -1485,7 +1476,9 @@
     <span id="lbl-update">UPDATE</span>
   </div>
   <span class="sep" id="update-sep" style="display:none">|</span>
-  <button id="btn-radars">RADARS <span id="radar-count-badge">0</span></button>
+  <!-- Label text is set from dock.js's PANEL_TITLES (single source of truth
+       for panel names) rather than hardcoded here. -->
+  <button id="btn-radars"><span id="btn-radars-label"></span> <span id="radar-count-badge">0</span></button>
   <span class="sep">|</span>
   <button id="btn-coalition">BLUE</button>
   <span class="sep" id="apt-sep">|</span>
@@ -1500,13 +1493,6 @@
   </div>
   <span id="zulu-clock" style="margin-left:auto; color:var(--ui-text-dim); letter-spacing:0.1em; font-size:10px;">00:00:00Z</span>
   <button id="btn-patch-notes" title="Show the latest update's patch notes">WHAT'S NEW</button>
-  <button id="btn-settings">SETTINGS</button>
-</div>
-
-<!-- Floating buttons below topbar, top-left -->
-<div id="float-btns">
-  <button id="btn-calls">SQWK C/S</button>
-  <button id="btn-aprt">APRT</button>
 </div>
 
 <!-- Stale data warning -->
@@ -1524,7 +1510,7 @@
 </div>
 
 <!-- Squawk → callsign mapping panel -->
-<div id="calls-panel">
+<div id="calls-panel" class="dock-unmounted">
   <div class="calls-title">Squawk Callsign Map</div>
   <div class="sqmap-add-row">
     <input type="text" id="sqmap-code-input" maxlength="4" placeholder="1101" />
@@ -1542,7 +1528,7 @@
 <div id="apt-weather-panel"></div>
 
 <!-- Airport / Theater manager panel -->
-<div id="aprt-panel">
+<div id="aprt-panel" class="dock-unmounted">
 
   <div class="aprt-panel-header">
     <span class="aprt-panel-title">AIRPORT / THEATER</span>
@@ -1681,7 +1667,7 @@
 </div>
 
 <!-- Settings panel -->
-<div id="settings-panel">
+<div id="settings-panel" class="dock-unmounted">
 
   <div class="settings-tabs">
     <button class="stab active" data-pane="general">GENERAL</button>
@@ -2126,6 +2112,15 @@
   <!-- ── Tools tab ─────────────────────────────────────────────────────── -->
   <div id="stab-tools" class="stab-pane" style="display:none">
 
+    <div class="setting-label">Connection</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span></span>
+        <button class="setting-btn" id="set-conn-settings">CONNECTION SETTINGS</button>
+      </div>
+    </div>
+
+    <div class="hr"></div>
     <div class="setting-label">Altitude Calculator</div>
     <div class="setting-group">
       <div class="setting-row">
@@ -2166,7 +2161,7 @@
   </div>
 </div>
 
-<div id="srs-radio-panel">
+<div id="srs-radio-panel" class="dock-unmounted">
   <div id="srs-main-row">
     <div id="srs-dot-wrap">
       <div class="dot disconnected" id="srs-dot"></div>
@@ -2190,9 +2185,7 @@
 <script src="./js/map-setup.js"></script>
 <script src="./js/elevation.js"></script>
 <script src="./js/los.js"></script>
-<script src="./js/views/crc.js"></script>
-<script src="./js/views/airport.js"></script>
-<script src="./js/views/approach.js"></script>
+<script src="./js/dock.js"></script>
 <script src="./js/app.js"></script>
 <script src="./js/srs-radio.js"></script>
 </body>

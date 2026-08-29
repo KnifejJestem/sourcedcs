@@ -89,7 +89,8 @@ let _ws              = null;
 let approachRwyCourse = null; // used for approach-vector line
 
 // Radar selector — opt-in: only radars in this set are used for tracking.
-// Default: all off.  User enables radars from the RADARS panel.
+// Default: all off.  User enables radars from the Panels control (topbar
+// button — see dock.js's PANEL_TITLES for its current label).
 const enabledRadarIds = new Set();
 
 // ── Static data ───────────────────────────────────────────────────────────
@@ -537,7 +538,7 @@ function applySnapshot(trackList) {
   lastUpdateMs = Date.now();
   updateMap();
   // Rebuild panel in case AWACS/carrier tracks changed the available radar list
-  buildRadarPanelContent();
+  refreshRadarPanelData();
 }
 
 function applyDelta(updated, gone) {
@@ -662,7 +663,7 @@ async function connect() {
           map.getSource('text-marks').setData(buildTextMarks());
         }
         // Rebuild radar panel so airport radars reflect the new mission
-        buildRadarPanelContent();
+        refreshRadarPanelData();
         updateRadarBadge();
         // Refresh APRT panel airport list if panel is open
         refreshAprtAptList();
@@ -745,17 +746,16 @@ loadIffOverrides();
 loadTrackRenames();
 loadTrackNumbers();
 loadStaticData();
-initMap();
-initSettings();
+// Settings is now a lazily-mounted dockable panel (see dock.js) — it may
+// never mount if the user never opens it, but the light/dark theme it
+// controls is app-wide and must apply unconditionally at boot.
+applyLightMode();
+initDock();
 initUpdateStatus();
-initTrackPanel();
-initCallsPanel();
-initRadarPanel();
 initAptSelector();
 initRwyInput();
 initCoalitionBtn();
 initZuluClock();
-initAprtPanel();
 updateTopbarUI();
 connect();
 

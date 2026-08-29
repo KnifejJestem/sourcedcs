@@ -177,15 +177,6 @@ function updateMeasureLine(lng1, lat1, lng2, lat2) {
 
 function initSettings() {
   const panel   = document.getElementById('settings-panel');
-  const btnOpen = document.getElementById('btn-settings');
-
-  btnOpen.addEventListener('click', (e) => {
-    e.stopPropagation();
-    panel.classList.toggle('open');
-  });
-  document.addEventListener('click', (e) => {
-    if (!panel.contains(e.target) && e.target !== btnOpen) panel.classList.remove('open');
-  });
 
   // ── Tab switching ─────────────────────────────────────────────────────
   panel.querySelectorAll('.stab').forEach(btn => {
@@ -313,8 +304,9 @@ function startBullseyePick(side) {
     $pickBanner.textContent = `CLICK MAP TO SET ${side.toUpperCase()} BULLSEYE — ESC TO CANCEL`;
     $pickBanner.classList.add('visible');
   }
-  // Close the panel so the map underneath is clickable.
-  document.getElementById('settings-panel').classList.remove('open');
+  // Settings now docks beside the map rather than overlaying it, so unlike
+  // the old fixed-position panel there's nothing to close for the map to
+  // become clickable.
 }
 
 function cancelBullseyePick() {
@@ -536,94 +528,217 @@ function applyLightMode() {
 }
 
 // ── Radar selection panel ─────────────────────────────────────────────────
-// Groups all available radars by type; user can toggle each on/off.
-// New radars auto-enabled (opt-out model); disabled IDs saved to localStorage.
+// Active radars listed short and flat; everything else found via search.
 
-const TYPE_ORDER  = ['airport', 'approach', 'awacs', 'fighter', 'carrier'];
 const TYPE_LABELS = { airport: 'AIRPORT', approach: 'APPROACH', awacs: 'AWACS', fighter: 'FIGHTER', carrier: 'CARRIER' };
 const TYPE_RANGE_LABEL = (r) => {
   const nm = Math.round(r.rangeM / 1852);
   return `${nm}nm`;
 };
 
-function buildRadarPanelContent(filter) {
-  const $groups = document.getElementById('radar-groups');
-  if (!$groups) return;
+// Single entry point for enabling/disabling a radar — keeps the existing
+// side effects (persistence, sweep/zoom recompute, map refresh) and adds
+// the radar → panel implication hook (dock.js's notifyRadarToggled).
+function setRadarEnabled(radar, enabled) {
+  if (enabled) enabledRadarIds.add(radar.id);
+  else enabledRadarIds.delete(radar.id);
+  saveEnabledRadars();
+  updateTopbarUI();
+  resetSweepState();
+  updateMap();
+  updateZoomLimits();
+  notifyRadarToggled(radar, enabled);
+}
 
-  const term  = (filter || '').trim().toLowerCase();
-  const all   = getAllRadars();
-  const byType = {};
-  for (const r of all) {
-    if (term && !r.label.toLowerCase().includes(term) &&
-        !(r.sublabel || '').toLowerCase().includes(term)) continue;
-    if (!byType[r.type]) byType[r.type] = [];
-    byType[r.type].push(r);
-  }
-  for (const g of Object.values(byType)) {
-    g.sort((a, b) => a.label.localeCompare(b.label));
-  }
+// Called from app.js when the underlying radar list itself changes (new
+// mission data, or the AWACS/carrier-derived radar set changing) rather
+// than a user toggling one — refreshes both the active list and whatever
+// search is currently in progress, without clearing/losing that search.
+function refreshRadarPanelData() {
+  renderActiveRadars();
+  const $search = document.getElementById('radar-search');
+  renderRadarSearchResults($search ? $search.value : '');
+}
 
-  $groups.innerHTML = '';
+// Only the radars actually in use — the point of this list is to stay
+// short and calm rather than showing every airport in the theater at once.
+// Turning one off here is the "remove" action (no separate delete control).
+function renderActiveRadars() {
+  const $list = document.getElementById('radar-active-list');
+  if (!$list) return;
+  $list.innerHTML = '';
 
-  for (const type of TYPE_ORDER) {
-    const group = byType[type];
-    if (!group || group.length === 0) continue;
+  const active = getAllRadars()
+    .filter(r => enabledRadarIds.has(r.id))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
-    const $heading = document.createElement('div');
-    $heading.className = 'radar-group-heading';
-    $heading.textContent = TYPE_LABELS[type] || type.toUpperCase();
-    $groups.appendChild($heading);
-
-    for (const r of group) {
-      const enabled  = enabledRadarIds.has(r.id);
-      const isGnd    = !!r.onGround;
-
-      const $row = document.createElement('div');
-      $row.className = 'radar-row' + (enabled && !isGnd ? '' : ' disabled');
-
-      const $check = document.createElement('input');
-      $check.type      = 'checkbox';
-      $check.checked   = enabled;
-      $check.className = 'radar-check';
-      $check.addEventListener('change', (e) => {
-        e.stopPropagation();
-        if ($check.checked) enabledRadarIds.add(r.id);
-        else                enabledRadarIds.delete(r.id);
-        saveEnabledRadars();
-        $row.classList.toggle('disabled', !$check.checked || isGnd);
-        updateTopbarUI();
-        resetSweepState();
-        updateMap();
-        updateZoomLimits();
-      });
-
-      const $label = document.createElement('span');
-      $label.className = 'radar-row-label';
-      $label.textContent = r.label;
-
-      const $range = document.createElement('span');
-      $range.className = 'radar-row-range';
-      $range.textContent = TYPE_RANGE_LABEL(r) + (isGnd ? ' GND' : '');
-      if (isGnd) $range.style.color = '#886633';
-
-      $row.appendChild($check);
-      $row.appendChild($label);
-      $row.appendChild($range);
-      $row.addEventListener('mouseenter', () => showLosProfile(r));
-      $row.addEventListener('mouseleave', () => hideLosProfile());
-      $groups.appendChild($row);
-    }
-  }
-
-  if ($groups.childElementCount === 0) {
+  if (active.length === 0) {
     const $empty = document.createElement('div');
     $empty.className = 'radar-empty';
-    $empty.textContent = term ? 'No match.' : 'No radar sources available.';
-    $groups.appendChild($empty);
+    $empty.textContent = 'No active radars — search below to add one.';
+    $list.appendChild($empty);
+    return;
+  }
+
+  for (const r of active) {
+    const isGnd = !!r.onGround;
+    const $row = document.createElement('div');
+    $row.className = 'radar-row' + (isGnd ? ' disabled' : '');
+
+    const $check = document.createElement('input');
+    $check.type      = 'checkbox';
+    $check.checked   = true;
+    $check.className = 'radar-check';
+    $check.title     = 'Uncheck to remove';
+    $check.addEventListener('change', () => {
+      setRadarEnabled(r, false);
+      renderActiveRadars();
+      renderPanelControls();
+    });
+
+    const $label = document.createElement('span');
+    $label.className = 'radar-row-label';
+    $label.textContent = r.label;
+
+    const $range = document.createElement('span');
+    $range.className = 'radar-row-range';
+    $range.textContent = TYPE_RANGE_LABEL(r) + (isGnd ? ' GND' : '');
+    if (isGnd) $range.style.color = '#886633';
+
+    $row.appendChild($check);
+    $row.appendChild($label);
+    $row.appendChild($range);
+    $row.addEventListener('mouseenter', () => showLosProfile(r, $row));
+    $row.addEventListener('mouseleave', () => hideLosProfile());
+    $list.appendChild($row);
   }
 }
 
-// Updates the RADARS button badge (number of active radars)
+// Results only appear while the user is actually typing — an empty search
+// box shows nothing, keeping the panel quiet the rest of the time. Already-
+// active radars are excluded since they're already visible above.
+function renderRadarSearchResults(term) {
+  const $results = document.getElementById('radar-search-results');
+  if (!$results) return;
+  $results.innerHTML = '';
+
+  const q = (term || '').trim().toLowerCase();
+  if (!q) return;
+
+  const matches = getAllRadars()
+    .filter(r => !enabledRadarIds.has(r.id))
+    .filter(r => r.label.toLowerCase().includes(q) || (r.sublabel || '').toLowerCase().includes(q))
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .slice(0, 30); // a broad match (e.g. a single letter) shouldn't dump the whole theater back in
+
+  if (matches.length === 0) {
+    const $empty = document.createElement('div');
+    $empty.className = 'radar-empty';
+    $empty.textContent = 'No match.';
+    $results.appendChild($empty);
+    return;
+  }
+
+  for (const r of matches) {
+    const $row = document.createElement('div');
+    $row.className = 'radar-row radar-row-add';
+
+    const $label = document.createElement('span');
+    $label.className = 'radar-row-label';
+    $label.textContent = r.label;
+
+    const $type = document.createElement('span');
+    $type.className = 'radar-row-range';
+    $type.textContent = TYPE_LABELS[r.type] || r.type.toUpperCase();
+
+    $row.appendChild($label);
+    $row.appendChild($type);
+    $row.addEventListener('mouseenter', () => showLosProfile(r, $row));
+    $row.addEventListener('mouseleave', () => hideLosProfile());
+    $row.addEventListener('click', () => {
+      setRadarEnabled(r, true);
+      const $search = document.getElementById('radar-search');
+      if ($search) $search.value = '';
+      renderRadarSearchResults('');
+      renderActiveRadars();
+      renderPanelControls();
+    });
+    $results.appendChild($row);
+  }
+}
+
+// The panels this radar list can drive open/closed. Airport is radar-linked
+// (see dock.js's RADAR_TYPE_TO_PANEL) — its row shows live open/closed
+// status plus a pin instead of a plain switch. Settings/Squawk C/S/Radio
+// have no radar tie and stay simple manual toggles. Labels read from
+// dock.js's PANEL_TITLES (the single source of truth for panel names) — a
+// function, not a top-level const, because dock.js loads after this file
+// and PANEL_TITLES wouldn't exist yet if this array were built at parse
+// time instead of when a panel actually needs rendering.
+function panelControlRows() {
+  return [
+    { id: 'settings', label: PANEL_TITLES.settings, radarLinked: false },
+    { id: 'airport',  label: PANEL_TITLES.airport,  radarLinked: true },
+    { id: 'calls',    label: PANEL_TITLES.calls,    radarLinked: false },
+    { id: 'radio',    label: PANEL_TITLES.radio,    radarLinked: false },
+  ];
+}
+
+function renderPanelControls() {
+  const $panels = document.getElementById('panel-controls');
+  if (!$panels) return;
+  $panels.innerHTML = '';
+
+  for (const { id, label, radarLinked } of panelControlRows()) {
+    const $row = document.createElement('div');
+    $row.className = 'panel-ctrl-row';
+
+    const $label = document.createElement('span');
+    $label.className = 'panel-ctrl-label';
+    $label.textContent = label;
+    $label.addEventListener('click', () => {
+      toggleDockPanel(id, !isDockPanelOpen(id));
+      renderPanelControls();
+    });
+    $row.appendChild($label);
+
+    if (radarLinked) {
+      const open = isDockPanelOpen(id);
+      const $status = document.createElement('span');
+      $status.className = 'panel-ctrl-status' + (open ? ' is-open' : '');
+      $status.textContent = open ? 'OPEN' : '—';
+      $row.appendChild($status);
+
+      const $pin = document.createElement('button');
+      $pin.className = 'panel-pin-btn' + (isPanelPinned(id) ? ' pinned' : '');
+      $pin.textContent = 'PIN';
+      $pin.title = 'Keep open regardless of radar state';
+      $pin.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setPanelPinned(id, !isPanelPinned(id));
+        renderPanelControls();
+      });
+      $row.appendChild($pin);
+    } else {
+      const $toggle = document.createElement('label');
+      $toggle.className = 'toggle';
+      const $cb = document.createElement('input');
+      $cb.type = 'checkbox';
+      $cb.checked = isDockPanelOpen(id);
+      $cb.addEventListener('click', e => e.stopPropagation());
+      $cb.addEventListener('change', () => toggleDockPanel(id, $cb.checked));
+      const $slider = document.createElement('span');
+      $slider.className = 'toggle-slider';
+      $toggle.appendChild($cb);
+      $toggle.appendChild($slider);
+      $row.appendChild($toggle);
+    }
+
+    $panels.appendChild($row);
+  }
+}
+
+// Updates the topbar Panels-control button's badge (number of active radars)
 function updateRadarBadge() {
   const $badge = document.getElementById('radar-count-badge');
   if (!$badge) return;
@@ -631,15 +746,14 @@ function updateRadarBadge() {
   $badge.textContent = n;
 }
 
+// Now a normal dockview panel, reached via the topbar Panels-control button
+// (dock.js's wireRadarsPanelButton/toggleOrFocusPanel) — no open/close
+// class toggling or outside-click handling needed here any more.
 function initRadarPanel() {
-  const $btn      = document.getElementById('btn-radars');
-  const $panel    = document.getElementById('radars-panel');
-  const $search   = document.getElementById('radar-search');
   const $dlToggle = document.getElementById('datalink-toggle');
   const $dlRow    = document.getElementById('datalink-row');
-  if (!$btn || !$panel) return;
+  const $search   = document.getElementById('radar-search');
 
-  // Initialise datalink toggle
   if ($dlToggle) {
     $dlToggle.checked = settings.datalink ?? false;
     if ($dlRow) $dlRow.classList.toggle('active', !!settings.datalink);
@@ -654,32 +768,33 @@ function initRadarPanel() {
     });
   }
 
-  $btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const opening = !$panel.classList.contains('open');
-    $panel.classList.toggle('open');
-    if (opening) {
-      if ($search) { $search.value = ''; setTimeout(() => $search.focus(), 60); }
-      buildRadarPanelContent('');
-    }
-  });
-  document.addEventListener('click', (e) => {
-    if (!$panel.contains(e.target) && e.target !== $btn) {
-      $panel.classList.remove('open');
-      hideLosProfile();
-    }
-  });
-
   if ($search) {
-    $search.addEventListener('input', () => buildRadarPanelContent($search.value));
-    $search.addEventListener('click', e => e.stopPropagation());
+    $search.addEventListener('input', () => renderRadarSearchResults($search.value));
   }
+
+  renderActiveRadars();
+  renderRadarSearchResults('');
+  renderPanelControls();
+
+  return {
+    // Refresh every time the tab becomes active — active-radar list, search
+    // (cleared), and panel statuses/pins may all have drifted while this
+    // panel was in the background (e.g. a radar toggled elsewhere, or a
+    // panel closed/pinned from its own tab).
+    onShow: () => {
+      if ($search) { $search.value = ''; setTimeout(() => $search.focus(), 60); }
+      renderActiveRadars();
+      renderRadarSearchResults('');
+      renderPanelControls();
+    },
+    onClose: hideLosProfile,
+  };
 }
 
 // ── LOS terrain profile chart ─────────────────────────────────────────────
-// Shown while hovering a radar row in the RADARS panel: a terrain-vs-distance
-// chart along that radar's current (live) beam bearing, with the curvature-
-// adjusted sight line and the point where terrain first blocks it.
+// Shown while hovering a radar row in the Panels control: a terrain-vs-
+// distance chart along that radar's current (live) beam bearing, with the
+// curvature-adjusted sight line and the point where terrain first blocks it.
 
 let losProfileRadarId = null;
 let losProfileTimer   = null;
@@ -697,13 +812,23 @@ function currentBeamBearing(radar) {
   return (radar.heading - halfAngle + tNorm * radar.angleFromNose + 360) % 360;
 }
 
-function showLosProfile(radar) {
+// `triggerEl` is the hovered row — the radar panel is a dockable panel now
+// (can be anywhere on screen), so position next to whatever's actually
+// being hovered instead of a fixed offset from the panel's old hardcoded
+// left-edge location.
+function showLosProfile(radar, triggerEl) {
   if (!settings.radarDebug) return;
   const $panel = document.getElementById('los-profile-panel');
   const $label = document.getElementById('los-profile-radar-label');
   if (!$panel) return;
   losProfileRadarId = radar.id;
   if ($label) $label.textContent = radar.label;
+  if (triggerEl) {
+    const rowRect   = triggerEl.getBoundingClientRect();
+    const panelRect = triggerEl.closest('#radars-panel')?.getBoundingClientRect();
+    $panel.style.top  = Math.max(32, rowRect.top) + 'px';
+    $panel.style.left = (panelRect ? panelRect.right : rowRect.right) + 8 + 'px';
+  }
   $panel.classList.add('open');
   drawLosProfile();
   clearInterval(losProfileTimer);
@@ -951,14 +1076,15 @@ function renderSquawkMapList(listEl, inp, inpN, seqToggle) {
   for (const code of seqKeys)  listEl.appendChild(makeRow(code, seq[code],  true));
 }
 
-// Re-renders the Calls panel's mapping list from current `settings` state,
-// if the panel happens to be open — called from app.js when a 'squawk-map'
-// broadcast arrives from crc-sync (someone, possibly this client, changed a
-// mapping) so every connected controller's list stays live, not just the
-// one who made the edit.
+// Re-renders the Calls panel's mapping list from current `settings` state —
+// called from app.js when a 'squawk-map' broadcast arrives from crc-sync
+// (someone, possibly this client, changed a mapping) so every connected
+// controller's list stays live, not just the one who made the edit. Always
+// re-renders regardless of whether the tab is currently active: dockview
+// keeps hidden tab content live in the DOM, and the list is cheap enough
+// that gating on visibility (as the old fixed-panel code did) isn't worth
+// the complexity of asking dockview whether this tab happens to be active.
 function refreshCallsPanel() {
-  const panel = document.getElementById('calls-panel');
-  if (!panel || !panel.classList.contains('open')) return;
   renderSquawkMapList(
     document.getElementById('sqmap-list'),
     document.getElementById('sqmap-code-input'),
@@ -967,27 +1093,16 @@ function refreshCallsPanel() {
   );
 }
 
+// Returns { onShow } for dock.js's mountExistingPanel to call whenever this
+// panel's tab becomes active, so the list reflects any edits made while it
+// was in the background — same refresh-on-open behavior the old toggle-open
+// handler used to trigger.
 function initCallsPanel() {
-  const btn      = document.getElementById('btn-calls');
-  const panel    = document.getElementById('calls-panel');
   const list     = document.getElementById('sqmap-list');
   const inp      = document.getElementById('sqmap-code-input');
   const inpN     = document.getElementById('sqmap-name-input');
   const addBtn   = document.getElementById('sqmap-add');
   const seqToggle = document.getElementById('sqmap-seq-toggle');
-
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const open = panel.classList.toggle('open');
-    if (open) renderSquawkMapList(list, inp, inpN, seqToggle);
-    _repositionTrackPanel();
-  });
-  document.addEventListener('click', (e) => {
-    if (!panel.contains(e.target) && e.target !== btn) {
-      panel.classList.remove('open');
-      _repositionTrackPanel();
-    }
-  });
 
   addBtn.addEventListener('click', () => {
     const raw  = inp.value.trim().replace(/\D/g, '');
@@ -1015,6 +1130,8 @@ function initCallsPanel() {
   [inp, inpN].forEach(el => el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addBtn.click();
   }));
+
+  return { onShow: () => renderSquawkMapList(list, inp, inpN, seqToggle) };
 }
 
 // ── Track info panel ─────────────────────────────────────────────────────
@@ -1025,7 +1142,6 @@ let _trackPanelId = null; // currently displayed track id (string), or null
 
 function initTrackPanel() {
   const $panel   = document.getElementById('track-panel');
-  const $calls   = document.getElementById('calls-panel');
   if (!$panel) return;
 
   // Close button
@@ -1083,14 +1199,6 @@ function initTrackPanel() {
   });
   $renameInput.addEventListener('click', e => e.stopPropagation());
 
-  // Reposition when calls-panel transitions open/closed
-  if ($calls) {
-    const reposition = () => _repositionTrackPanel();
-    $calls.addEventListener('transitionend', reposition);
-    // Also watch toggle via MutationObserver for class changes
-    new MutationObserver(reposition).observe($calls, { attributes: true, attributeFilter: ['class'] });
-  }
-
   function _refreshIffButtons() {
     const cols = iffColors();
     // Fresh (non-sweep-gated) lookup: an IFF declaration is crc-sync's
@@ -1115,6 +1223,8 @@ function initTrackPanel() {
 
   // Expose so updateTrackPanel can call them
   initTrackPanel._refreshIffButtons = _refreshIffButtons;
+
+  return { onClose: closeTrackPanel };
 }
 
 function _refreshIffState(t) {
@@ -1131,29 +1241,22 @@ function _refreshIffState(t) {
   $badge.appendChild(span);
 }
 
-function _repositionTrackPanel() {
-  const $panel = document.getElementById('track-panel');
-  const $calls = document.getElementById('calls-panel');
-  if (!$panel) return;
-  if ($calls && $calls.classList.contains('open')) {
-    $panel.style.top = (32 + $calls.offsetHeight) + 'px';
-  } else {
-    $panel.style.top = '32px';
-  }
-}
-
 function showTrackPanel(id) {
-  const $panel = document.getElementById('track-panel');
-  if (!$panel) return;
   _trackPanelId = String(id);
-  _repositionTrackPanel();
-  $panel.classList.add('open');
+  // Track Info is a normal closable panel now (see dock.js's REQUIRED_PANELS
+  // comment) — clicking a track is its reopen path, so get-or-create it
+  // rather than assuming it's already there.
+  if (dock) ensureTrackPanel().api.setActive();
   updateTrackPanel();
 }
 
+// Clears the currently-displayed track's data. Track Info now lives as a
+// permanent tab in the left dockview group rather than a panel that can be
+// hidden outright, so "closing" it just blanks its content — it no longer
+// forces the view away to whatever tab the user had open before (dockview
+// owns tab switching, and yanking focus away on every empty-map click would
+// be more surprising than useful).
 function closeTrackPanel() {
-  const $panel = document.getElementById('track-panel');
-  if ($panel) $panel.classList.remove('open');
   _trackPanelId    = null;
   _fplFetchCallsign = null;
   const $fplSec = document.getElementById('tp-fpl-section');
@@ -1343,6 +1446,13 @@ function showGroundLabelPopup(id, clientX, clientY) {
 // ── Tools tab: altitude calculator ────────────────────────────────────────
 
 function initToolsTab() {
+  // Was a small floating "SYNC ⚙" tab pinned above the SRS radio bar
+  // (sync.js's _initConnTab) — moved here now that both panels involved
+  // are normal dockview panels rather than fixed-position divs with a
+  // hand-tracked height relationship between them.
+  const btnConn = document.getElementById('set-conn-settings');
+  if (btnConn) btnConn.addEventListener('click', showConnWidget);
+
   const btnCalc = document.getElementById('tool-alt-calc');
   const result  = document.getElementById('tool-alt-result');
 
@@ -1588,28 +1698,19 @@ function _updateAprtRefCard() {
 }
 
 function initAprtPanel() {
-  const $btn    = document.getElementById('btn-aprt');
   const $panel  = document.getElementById('aprt-panel');
   const $close  = document.getElementById('aprt-close');
   const $search = document.getElementById('aprt-search');
-  if (!$btn || !$panel) return;
+  if (!$panel) return;
 
-  $btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const opening = !$panel.classList.contains('open');
-    $panel.classList.toggle('open');
-    $btn.classList.toggle('active', $panel.classList.contains('open'));
-    if (opening) {
-      if ($search) { $search.value = ''; setTimeout(() => $search.focus(), 40); }
-      _renderAprtAptList('');
-    }
-  });
+  _renderAprtAptList('');
 
   if ($close) {
+    // Closing now means leaving this dockable panel entirely, same as
+    // unchecking it from the radars-panel's Panels list.
     $close.addEventListener('click', (e) => {
       e.stopPropagation();
-      $panel.classList.remove('open');
-      $btn.classList.remove('active');
+      toggleDockPanel('airport', false);
     });
   }
 

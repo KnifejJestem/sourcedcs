@@ -661,19 +661,9 @@
   setInterval(_pollDevices, POLL_DEVICES);
   _pollState();
 
-  // ── Map resize: keep #map from overlapping the radio panel ─────────────────
-  const _mapEl   = document.getElementById('map');
-  const _panelEl = document.getElementById('srs-radio-panel');
-  if (_mapEl && _panelEl) {
-    const _syncMapHeight = () => {
-      const ph = _panelEl.getBoundingClientRect().height;
-      _mapEl.style.height = `calc(100vh - 32px - ${ph}px)`;
-      if (typeof map !== 'undefined' && map && typeof map.resize === 'function') {
-        map.resize();
-      }
-    };
-    new ResizeObserver(_syncMapHeight).observe(_panelEl);
-    _syncMapHeight();
-  }
+  // Map sizing is owned by dock.js's dockview grid now (see #dock-root in
+  // index.html) — until this panel itself is migrated into that grid (a
+  // later phase), it still overlaps the map's bottom edge as a fixed
+  // overlay rather than reserving space for itself.
 
 })();

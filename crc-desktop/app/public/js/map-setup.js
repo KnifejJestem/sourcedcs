@@ -3,9 +3,9 @@
 // ── Map initialisation ────────────────────────────────────────────────────
 // Sets up all MapLibre sources, layers, and event handlers.
 
-function initMap() {
+function initMap(container) {
   map = new maplibregl.Map({
-    container: 'map',
+    container,
     style: '/crc-desktop-scope-style.json',
     center: [35.4258, 37.0021],
     zoom: 7,

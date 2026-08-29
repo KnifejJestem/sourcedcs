@@ -127,8 +127,9 @@ function hideLoginGate() {
 }
 
 // ── Connection settings widget ──────────────────────────────────────────
-// Always reachable via the small "SYNC" tab in the bottom-left corner, plus
-// from the login gate above when there's nothing to connect to yet.
+// Always reachable via Settings → Tools → Connection Settings (ui.js's
+// initToolsTab), plus from the login gate above when there's nothing to
+// connect to yet.
 
 function _connFieldRow(label, id, value) {
   return `<label style="display:flex;flex-direction:column;gap:4px;font-size:10px;letter-spacing:1px;">
@@ -201,42 +202,11 @@ function showConnWidget() {
   });
 }
 
-function _initConnTab() {
-  if (document.getElementById('crc-conn-tab')) return;
-  const btn = document.createElement('button');
-  btn.id = 'crc-conn-tab';
-  btn.textContent = 'SYNC ⚙';
-  btn.title = 'Connection settings';
-  btn.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:9998;padding:5px 10px;' +
-    'background:#0d130d;color:#5a7a5a;border:1px solid #2a3a2a;cursor:pointer;' +
-    'font-family:"Courier New",monospace;font-size:10px;letter-spacing:1px;border-radius:2px;opacity:0.7;';
-  btn.addEventListener('mouseenter', () => { btn.style.opacity = '1'; });
-  btn.addEventListener('mouseleave', () => { btn.style.opacity = '0.7'; });
-  btn.addEventListener('click', showConnWidget);
-  document.body.appendChild(btn);
-
-  // #srs-radio-panel is a full-width bar pinned to the bottom of the
-  // screen (position:fixed; bottom:0; left:0; right:0) whose height varies
-  // with how many radios are monitored — a fixed `bottom:8px` for this
-  // button sat inside that panel's footprint and got hidden under it.
-  // Track the panel's live height (srs-radio.js already does this
-  // internally for its own map-resize logic, but that's a private closure
-  // in a different file) so this button always floats just above it.
-  const radioPanel = document.getElementById('srs-radio-panel');
-  if (radioPanel) {
-    const syncBtnPosition = () => {
-      const h = radioPanel.getBoundingClientRect().height;
-      btn.style.bottom = (h + 8) + 'px';
-    };
-    new ResizeObserver(syncBtnPosition).observe(radioPanel);
-    syncBtnPosition();
-  }
-}
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', _initConnTab);
-} else {
-  _initConnTab();
-}
+// The connection-settings trigger used to be a small floating "SYNC ⚙" tab
+// here, hand-positioned above the SRS radio bar's fixed bottom edge (with a
+// ResizeObserver to track its height). Both panels are normal dockview
+// panels now — the trigger lives in Settings → Tools instead (wired in
+// ui.js's initToolsTab, calling showConnWidget directly).
 
 // Apply overrides immediately (not just lazily inside getSyncFeedUrl) so
 // the CASDOOR_ENDPOINT/CASDOOR_CLIENT_ID an early LOG IN click uses, and
